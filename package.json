@@ -1,0 +1,45 @@
+{
+  "name": "jamcli",
+  "version": "1.0.0",
+  "description": "Enterprise-Grade AI CLI for Local Development",
+  "type": "module",
+  "bin": {
+    "jamcli": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "postbuild": "chmod +x dist/index.js",
+    "start": "node dist/index.js",
+    "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
+    "test:history": "node --import tsx scripts/test-history.ts"
+  },
+  "dependencies": {
+    "clipboardy": "^5.0.1",
+    "diff": "^5.2.0",
+    "dotenv": "^16.4.5",
+    "env-paths": "^3.0.0",
+    "fast-glob": "^3.3.3",
+    "fs-extra": "^11.2.0",
+    "ink": "^6.5.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.0.0",
+    "string-width": "^8.1.0",
+    "uuid": "^13.0.0",
+    "vm2": "^3.9.19",
+    "zod": "^3.22.4",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/diff": "^5.0.9",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.11.24",
+    "@types/react": "^19.0.0",
+    "@types/uuid": "^10.0.0",
+    "tsup": "^8.0.2",
+    "tsx": "^4.16.5",
+    "typescript": "^5.4.0"
+  },
+  "module": "src/index.tsx",
+  "private": true
+}
