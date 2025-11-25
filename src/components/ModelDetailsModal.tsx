@@ -20,6 +20,11 @@ export const ModelDetailsModal = ({ visible, model }: ModelDetailsModalProps) =>
     >
       <Box flexDirection="column" gap={1} paddingX={1}>
         <Text color="gray">Identifier: {model.id}</Text>
+        {typeof model.supports_tool_calling === 'boolean' && (
+          <Text color={model.supports_tool_calling ? 'green' : 'yellow'}>
+            Tool calling: {model.supports_tool_calling ? 'Supported' : 'Not advertised'}
+          </Text>
+        )}
         {model.description ? (
           <Text>{model.description}</Text>
         ) : (

@@ -18,6 +18,14 @@ export interface ModelInfo {
   provider: 'ollama' | 'openai' | 'anthropic' | 'openrouter';
   name: string;
   description?: string;
+  supports_tool_calling?: boolean;
+}
+
+export interface ContextManagementConfig {
+  enabled: boolean;
+  max_tokens: number;
+  compression_threshold: number; // 0.0 - 1.0
+  strategy: 'summarize' | 'truncate';
 }
 
 export interface Config {
@@ -25,6 +33,8 @@ export interface Config {
   active_profile: string;
   telemetry: boolean;
   available_models?: ModelInfo[];
+  context_management?: ContextManagementConfig;
+  general?: GeneralConfig;
 }
 
 export type StatusTextStyleId = 'rainbow' | 'subtle' | 'minimal' | 'aurora' | 'mono' | `custom:${string}`;
@@ -80,4 +90,8 @@ export interface Profile {
   preferred_model?: string;
   preferred_provider?: 'ollama' | 'openai' | 'anthropic' | 'openrouter';
   temperature?: number;
+}
+
+export interface GeneralConfig {
+  show_tool_calling_models_only?: boolean;
 }

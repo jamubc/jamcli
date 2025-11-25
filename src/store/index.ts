@@ -37,7 +37,7 @@ interface ChatSlice {
   initializeHistory: (projectRoot?: string, sessionId?: string) => Promise<void>;
   persistTurn: () => Promise<void>;
   getSessionUsage: () => SessionUsage | null;
-  resumeSession: (sessionId: string) => Promise<boolean>;
+  resumeSession: (sessionId: string, projectRoot?: string) => Promise<boolean>;
 }
 
 interface ConfigSlice {
@@ -90,7 +90,8 @@ export const useStore = create<AppState>((set, get) => ({
   setStatus: (status) => set({ status }),
   
   initializeHistory: async (projectRoot?: string, sessionId?: string) => {
-    const historyService = new HistoryService(projectRoot, sessionId);
+    const resolvedRoot = projectRoot ?? process.cwd();
+    const historyService = new HistoryService(resolvedRoot, sessionId);
     try {
       await historyService.initialize();
     } catch (error) {
@@ -110,12 +111,13 @@ export const useStore = create<AppState>((set, get) => ({
     });
   },
   
-  resumeSession: async (sessionId: string) => {
+  resumeSession: async (sessionId: string, projectRoot?: string) => {
     const state = get();
-    
+    const resolvedRoot = projectRoot ?? process.cwd();
+
     try {
       // Create new history service with existing session ID
-      const historyService = new HistoryService(process.cwd(), sessionId);
+      const historyService = new HistoryService(resolvedRoot, sessionId);
       await historyService.initialize();
       
       // Load messages from that session
@@ -143,22 +145,29 @@ export const useStore = create<AppState>((set, get) => ({
     const state = get();
     if (!state.historyService) return;
     
-    // Get the most recent user-assistant exchange
+    // Find the latest assistant response and the preceding user message
     const messages = state.messages;
     if (messages.length < 2) return;
-    
-    const lastAssistant = messages[messages.length - 1];
-    const lastUser = messages[messages.length - 2];
-    
-    if (lastAssistant.role === 'assistant' && lastUser.role === 'user') {
-      await state.historyService.appendTurn(
-        [lastUser, lastAssistant],
-        lastAssistant.usage
-      );
-      
-      // Update session usage
-      set({ sessionUsage: state.historyService.getSessionUsage() });
+
+    let assistantIndex = messages.length - 1;
+    while (assistantIndex >= 0 && messages[assistantIndex].role !== 'assistant') {
+      assistantIndex -= 1;
     }
+    if (assistantIndex <= 0) return;
+
+    let userIndex = assistantIndex - 1;
+    while (userIndex >= 0 && messages[userIndex].role !== 'user') {
+      userIndex -= 1;
+    }
+    if (userIndex < 0) return;
+
+    const lastAssistant = messages[assistantIndex];
+    const lastUser = messages[userIndex];
+
+    await state.historyService.appendTurn([lastUser, lastAssistant], lastAssistant.usage);
+    
+    // Update session usage
+    set({ sessionUsage: state.historyService.getSessionUsage() });
   },
   
   getSessionUsage: () => {

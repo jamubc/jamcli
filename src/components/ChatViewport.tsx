@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Text, useStdout, Static } from 'ink';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Text, useStdout } from 'ink';
 import { useStore } from '../store/index.js';
 import { DEFAULT_SPINNER_FRAMES, useColorSpinner, useElapsedTimer, useShimmerTick } from '../hooks/useStatusIndicator.js';
 import type { Message } from '../store/index.js';
@@ -132,47 +132,6 @@ type ChatViewportProps = {
   statusStyle?: StatusStyleDefinition;
 };
 
-const MessageItem = ({ message, isStatic = false }: { message: Message; isStatic?: boolean }) => {
-    const meta = ROLE_META[message.role] || ROLE_META.user;
-    const prefix = `${meta.prefix} `;
-    
-    // Reasoning handling
-    const reasoningLines = message.reasoning ? message.reasoning.split(/\r?\n/) : [];
-    const hasReasoning = reasoningLines.length > 0;
-    // In history (static), we truncate reasoning to keep it compact.
-    // In active (streaming), we show all reasoning.
-    const shouldTruncateReasoning = isStatic; 
-    const displayedReasoning = hasReasoning
-      ? (shouldTruncateReasoning ? reasoningLines.slice(-MAX_REASONING_PREVIEW_LINES) : reasoningLines)
-      : [];
-
-    return (
-      <Box flexDirection="column" marginBottom={1}>
-        {hasReasoning && (
-          <Box flexDirection="column" marginLeft={2} marginBottom={1}>
-            <Text color="gray" italic>
-              {isStatic ? 'Thinking Process:' : 'Thinking...'}
-            </Text>
-            {displayedReasoning.map((line, rIdx) => (
-              <Text key={`reasoning-${rIdx}`} color="gray" dimColor>
-                {'│ ' + line}
-              </Text>
-            ))}
-          </Box>
-        )}
-        
-        <Box flexDirection="row">
-           <Box marginRight={1}>
-              <Text color={meta.color} bold>{meta.prefix}</Text>
-           </Box>
-           <Box flexDirection="column" flexGrow={1}>
-              <Text>{message.content}</Text>
-           </Box>
-        </Box>
-      </Box>
-    );
-};
-
 export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle', statusDetail, statusStyle }: ChatViewportProps) => {
   const { messages } = useStore();
   const { stdout } = useStdout();
@@ -212,12 +171,6 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
   const elapsed = useElapsedTimer(statusDetail?.startedAt, showStatusLine);
   const shimmerTick = useShimmerTick(showStatusLine && (statusStyle?.shimmer ?? true));
 
-  // Compute derived state
-  const lastMsg = messages[messages.length - 1];
-  const isLastMsgStreaming = lastMsg?.streaming;
-  const historyMessages = isLastMsgStreaming ? messages.slice(0, -1) : messages;
-  const activeMessage = isLastMsgStreaming ? lastMsg : null;
-
   const availableRows = terminalSize.rows ?? 24;
   const availableColumns = terminalSize.columns ?? 80;
   const reservedLines = computeReservedLines(availableRows) + reservedLineBoost;
@@ -225,7 +178,20 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
   const minVisibleLines = reservedLineBoost > 0 ? Math.max(3, Math.min(baseMinVisible, 6)) : baseMinVisible;
   const maxLines = Math.max(minVisibleLines, availableRows - reservedLines);
 
-  const visibleMessages = selectVisibleMessages(messages, maxLines, availableColumns);
+  const expandedMessages = useMemo(
+    () =>
+      messages.map((message) => ({
+        message,
+        contentLines: wrapContentLines(message.content, availableColumns),
+        reasoningLines: message.reasoning ? wrapContentLines(message.reasoning, availableColumns) : [],
+      })),
+    [messages, availableColumns]
+  );
+
+  const visibleMessages = useMemo(
+    () => selectVisibleMessages(messages, maxLines, availableColumns),
+    [messages, maxLines, availableColumns]
+  );
   const isTruncated = visibleMessages.length < messages.length || visibleMessages.some((msg) => msg.isContentTruncated);
 
   const phaseLabel = statusDetail?.phase === 'thinking' ? 'thinking' : 'replying';
@@ -239,34 +205,54 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
   if (isExpanded) {
     return (
       <Box flexDirection="column" flexGrow={1} gap={1} marginBottom={1}>
-         {messages.length === 0 && (
-            <Box flexDirection="column" alignItems="center" justifyContent="center" paddingY={2}>
-              <Text color="gray" bold>
-                {'Welcome to JamCLI <3'}
-              </Text>
-              <Text color="gray">Type or use /</Text>
-            </Box>
-         )}
+        {messages.length === 0 ? (
+          <Box flexDirection="column" alignItems="center" justifyContent="center" paddingY={2}>
+            <Text color="gray" bold>
+              {'Welcome to JamCLI <3'}
+            </Text>
+            <Text color="gray">Type or use /</Text>
+          </Box>
+        ) : (
+          <>
+            {expandedMessages.map(({ message, contentLines, reasoningLines }, index) => {
+              const meta = ROLE_META[message.role] || ROLE_META.user;
+              const prefix = `${meta.prefix} `;
+              const spacer = ' '.repeat(prefix.length);
+              const hasReasoning = reasoningLines.length > 0;
 
-         {historyMessages.length > 0 && (
-           <Static items={historyMessages}>
-             {(msg, index) => (
-               <MessageItem key={`${msg.timestamp}-${index}`} message={msg} isStatic={true} />
-             )}
-           </Static>
-         )}
+              return (
+                <Box key={`${message.timestamp}-${message.role}-${index}`} flexDirection="column" marginBottom={1}>
+                  {hasReasoning && (
+                    <Box flexDirection="column" marginLeft={2} marginBottom={1}>
+                      <Text color="gray" italic>
+                        {'Thinking...'}
+                      </Text>
+                      {reasoningLines.map((line, rIdx) => (
+                        <Text key={`expanded-reasoning-${index}-${rIdx}`} color="gray" dimColor>
+                          {'│ ' + line}
+                        </Text>
+                      ))}
+                    </Box>
+                  )}
 
-         {activeMessage && (
-           <MessageItem message={activeMessage} isStatic={false} />
-         )}
-         
-         {messages.length > 0 && (
+                  {contentLines.map((line, lineIdx) => (
+                    <Text key={`${message.timestamp}-${message.role}-${index}-${lineIdx}`} wrap="wrap">
+                      <Text color={meta.color} bold>
+                        {lineIdx === 0 ? prefix : spacer}
+                      </Text>
+                      <Text>{line}</Text>
+                    </Text>
+                  ))}
+
+                  {index < expandedMessages.length - 1 && <Text color="gray">....................</Text>}
+                </Box>
+              );
+            })}
             <Box marginTop={0} paddingTop={0}>
-              <Text color="cyan">
-                Full history visible. Press Ctrl+R to return to compact view.
-              </Text>
+              <Text color="cyan">Full history visible. Press Ctrl+R to return to compact view.</Text>
             </Box>
-         )}
+          </>
+        )}
       </Box>
     );
   }

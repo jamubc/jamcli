@@ -3,6 +3,8 @@ import path from 'path';
 import os from 'os';
 import {
   Config,
+  ContextManagementConfig,
+  GeneralConfig,
   McpConfig,
   ModelInfo,
   Profile,
@@ -37,12 +39,23 @@ const TOOL_DEFAULTS = Object.fromEntries(
   ])
 ) as Record<ToolName, ToolPermission>;
 
+const DEFAULT_CONTEXT_MANAGEMENT: ContextManagementConfig = {
+  enabled: false,
+  max_tokens: 8000,
+  compression_threshold: 0.9,
+  strategy: 'summarize',
+};
+
 const DEFAULT_CONFIG: Config = {
   api_registry: {
     ollama: { endpoint: 'http://localhost:11434' },
   },
   active_profile: 'default',
   telemetry: false,
+  general: {
+    show_tool_calling_models_only: false,
+  },
+  context_management: DEFAULT_CONTEXT_MANAGEMENT,
 };
 
 const DEFAULT_UI_CONFIG: UiConfig = {
@@ -133,7 +146,17 @@ export class ConfigService {
   }
 
   async getConfig(): Promise<Config> {
-    return fs.readJson(this.configPath);
+    const raw = await fs.readJson(this.configPath);
+    const normalized = this.normalizeConfig(raw);
+
+    // Persist defaults if we filled any gaps
+    const rawJson = JSON.stringify(raw);
+    const normalizedJson = JSON.stringify(normalized);
+    if (rawJson !== normalizedJson) {
+      await fs.writeJson(this.configPath, normalized, { spaces: 2 });
+    }
+
+    return normalized;
   }
 
   async initializeUiConfig() {
@@ -204,7 +227,8 @@ export class ConfigService {
   }
 
   async saveConfig(config: Config): Promise<void> {
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
+    const normalized = this.normalizeConfig(config);
+    await fs.writeJson(this.configPath, normalized, { spaces: 2 });
   }
 
   async getMcpConfig(): Promise<McpConfig> {
@@ -213,6 +237,10 @@ export class ConfigService {
       mcp.servers = [];
     }
     return mcp;
+  }
+
+  getMcpConfigPath(): string {
+    return this.mcpPath;
   }
 
   async getProfile(profileName: string): Promise<Profile> {
@@ -257,6 +285,30 @@ export class ConfigService {
   async removeProvider(provider: ProviderName): Promise<Config> {
     const config = await this.getConfig();
     delete config.api_registry[provider];
+    await fs.writeJson(this.configPath, config, { spaces: 2 });
+    return config;
+  }
+
+  async updateContextManagement(updates: Partial<ContextManagementConfig>): Promise<Config> {
+    const config = await this.getConfig();
+    const current = this.normalizeContextConfig(config.context_management);
+    const next = this.normalizeContextConfig({ ...current, ...updates });
+    config.context_management = next;
+    await fs.writeJson(this.configPath, config, { spaces: 2 });
+    return config;
+  }
+
+  async setTelemetry(enabled: boolean): Promise<Config> {
+    const config = await this.getConfig();
+    config.telemetry = Boolean(enabled);
+    await fs.writeJson(this.configPath, config, { spaces: 2 });
+    return config;
+  }
+
+  async updateGeneralSettings(updates: Partial<GeneralConfig>): Promise<Config> {
+    const config = await this.getConfig();
+    const current = this.normalizeGeneralConfig(config.general);
+    config.general = this.normalizeGeneralConfig({ ...current, ...updates });
     await fs.writeJson(this.configPath, config, { spaces: 2 });
     return config;
   }
@@ -393,5 +445,48 @@ export class ConfigService {
     } catch (error) {
       console.error('Failed to ensure MCP tool defaults', error);
     }
+  }
+
+  private normalizeContextConfig(config?: Partial<ContextManagementConfig>): ContextManagementConfig {
+    const base = { ...DEFAULT_CONTEXT_MANAGEMENT, ...config };
+    const maxTokensNumber = Number(base.max_tokens);
+    const max_tokens = Number.isFinite(maxTokensNumber) && maxTokensNumber > 0 ? Math.floor(maxTokensNumber) : DEFAULT_CONTEXT_MANAGEMENT.max_tokens;
+
+    const thresholdNumber = Number(base.compression_threshold);
+    const compression_threshold = Number.isFinite(thresholdNumber)
+      ? Math.min(Math.max(thresholdNumber, 0.5), 1)
+      : DEFAULT_CONTEXT_MANAGEMENT.compression_threshold;
+
+    const strategy: ContextManagementConfig['strategy'] = base.strategy === 'truncate' ? 'truncate' : 'summarize';
+
+    return {
+      enabled: Boolean(base.enabled),
+      max_tokens,
+      compression_threshold,
+      strategy,
+    };
+  }
+
+  private normalizeGeneralConfig(config?: Partial<GeneralConfig>): GeneralConfig {
+    return {
+      show_tool_calling_models_only: Boolean(config?.show_tool_calling_models_only),
+    };
+  }
+
+  private normalizeConfig(config: Config): Config {
+    const normalized: Config = {
+      ...DEFAULT_CONFIG,
+      ...config,
+    };
+
+    const registry = config.api_registry ?? DEFAULT_CONFIG.api_registry;
+    normalized.api_registry = { ...registry };
+
+    normalized.context_management = this.normalizeContextConfig(config.context_management);
+    normalized.general = this.normalizeGeneralConfig(config.general);
+    normalized.telemetry = Boolean(config.telemetry);
+    normalized.active_profile = config.active_profile || DEFAULT_CONFIG.active_profile;
+
+    return normalized;
   }
 }

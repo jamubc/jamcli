@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import clipboard from 'clipboardy';
+import { spawn } from 'child_process';
+import path from 'path';
 import { Header } from './Header.js';
 import { ChatViewport } from './ChatViewport.js';
 import { InputBar, SlashCommand } from './InputBar.js';
@@ -11,12 +13,15 @@ import { SessionSelectorModal } from './SessionSelectorModal.js';
 import { ConfigMenuScreen } from './ConfigMenuScreen.js';
 import { StatusStyleOption } from './StatusStyleModal.js';
 import { ProviderConfigModal } from './ProviderConfigModal.js';
+import { McpServerModal, type McpServerForm } from './McpServerModal.js';
 import { useStore } from '../store/index.js';
 import type { Message, TokenUsage } from '../store/index.js';
 import { useMenuNavigation } from '../hooks/useMenuNavigation.js';
 import { ConfigService } from '../services/ConfigService.js';
 import { ModelService } from '../services/ModelService.js';
 import { McpManager } from '../services/McpManager.js';
+import { McpTestService } from '../services/McpTestService.js';
+import { ContextManager } from '../services/ContextManager.js';
 import { LLMFactory } from '../services/LLMProvider.js';
 import { ActionParser } from '../services/ActionParser.js';
 import { FileSystemService } from '../services/FileSystemService.js';
@@ -26,6 +31,7 @@ import { HistoryService, SessionMetadata } from '../services/HistoryService.js';
 import type { Config, ModelInfo, Profile, ToolPermission, UiConfig } from '../types/config.js';
 import type { ToolCall, ToolResult, ToolName } from '../types/tools.js';
 import { ALL_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
+import type { McpServerConfig, McpTestResult } from '../types/mcp.js';
 import {
   DEFAULT_CUSTOM_STYLE,
   DEFAULT_STATUS_STYLE,
@@ -38,20 +44,23 @@ import {
   StatusSpinnerStyleDefinition,
   StatusTextStyleDefinition,
 } from '../styles/statusStyles.js';
+import { resolveJamcliProjectRoot } from '../utils/projectRoot.js';
+import { resolveAtReferences, type AtReference, type MissingAtReference } from '../utils/atReferences.js';
 
 let configService: ConfigService;
 let modelService: ModelService;
 let mcpManager: McpManager;
 
-const enterCompactMode = () => {
-  if (!process.stdout || !process.stdout.isTTY) return;
-  process.stdout.write('\x1b[?1049h\x1b[H');
+const resetTerminalViewport = () => {
+  if (!process.stdout) return;
+  // Clear screen + scrollback to keep the layout from mixing with prior runs.
+  process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
 };
 
-const enterExpandedMode = () => {
-  if (!process.stdout || !process.stdout.isTTY) return;
-  process.stdout.write('\x1b[?1049l');
-};
+const BRACKETED_PASTE_START = '\x1b[200~';
+const BRACKETED_PASTE_END = '\x1b[201~';
+
+const normalizePastedContent = (value: string) => value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
 const SLASH_COMMANDS: SlashCommand[] = [
   { name: '/model', description: 'Switch AI model' },
@@ -61,6 +70,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { name: '/tools', description: 'Manage AI tool permissions' },
   { name: '/mcp', description: 'Manage MCP servers and tools' },
   { name: '/config', description: 'Open configuration menu' },
+  { name: '/compact', description: 'Compress conversation history' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/help', description: 'Show help' },
   { name: '/exit', description: 'Exit JamCLI' },
@@ -120,6 +130,12 @@ type ConfigWizardState =
       mode: 'provider';
       provider: ProviderSlug;
       form: Record<string, string>;
+    }
+  | {
+      mode: 'mcp';
+      action: 'add' | 'edit';
+      server?: McpServerConfig;
+      form: McpServerForm;
     };
 
 const MAX_AGENT_STEPS = 8;
@@ -174,6 +190,19 @@ type StatusDetail = {
   modelName?: string;
   startedAt: number;
   message: string;
+};
+
+type CollapsedPastePreview = {
+  id: number;
+  content: string;
+  lineCount: number;
+  charCount: number;
+};
+
+type InlineNotice = {
+  message: string;
+  tone?: 'warning' | 'info';
+  kind?: 'clear_input' | 'sticky';
 };
 
 const TOOL_ALIAS_MAP: Record<string, ToolName> = {
@@ -298,6 +327,7 @@ export const Layout = () => {
   } = useStore();
 
   const [inputValue, setInputValue] = useState('');
+  const [collapsedPaste, setCollapsedPaste] = useState<CollapsedPastePreview | null>(null);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [modelMenuState, setModelMenuState] = useState<ModelMenuState>(initialModelMenuState);
@@ -307,10 +337,15 @@ export const Layout = () => {
   const [configWizard, setConfigWizard] = useState<ConfigWizardState>(null);
   const [isExpandedView, setIsExpandedView] = useState(false);
   const [exitConfirmation, setExitConfirmation] = useState(false);
+  const [autoApproveActions, setAutoApproveActions] = useState(false);
+  const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
+  const [mcpTestResults, setMcpTestResults] = useState<Record<string, McpTestResult>>({});
+  const testService = useMemo(() => new McpTestService(), []);
 
   const [statusDetail, setStatusDetail] = useState<StatusDetail | null>(null);
   const [statusStyle, setStatusStyle] = useState<StatusStyleDefinition>(DEFAULT_STATUS_STYLE);
   const [statusStyleOptions, setStatusStyleOptions] = useState<StatusStyleOption[]>([]);
+  const [inlineNotice, setInlineNotice] = useState<InlineNotice | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelReasonRef = useRef<'escape' | 'ctrl+c' | null>(null);
   const exitResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -322,6 +357,10 @@ export const Layout = () => {
   const prefetchingModelsRef = useRef(false);
   const returnToModelMenuRef = useRef(false);
   const inputValueRef = useRef('');
+  const pasteCounterRef = useRef(0);
+  const pasteBufferRef = useRef<{ active: boolean; data: string }>({ active: false, data: '' });
+  const prevContextEnabledRef = useRef<boolean | undefined>(undefined);
+  const inlineNoticeRef = useRef<InlineNotice | null>(null);
   const statusLineIndexRef = useRef(0);
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -329,6 +368,75 @@ export const Layout = () => {
     rows: stdout?.rows ?? 24,
     columns: stdout?.columns ?? 80,
   });
+  const projectRoot = useMemo(() => resolveJamcliProjectRoot(), []);
+  const defaultMcpConfigPath = useMemo(() => path.join(projectRoot, '.jamcli', 'mcp.json'), [projectRoot]);
+
+  useEffect(() => {
+    if (!stdout || !stdout.isTTY) return;
+    try {
+      stdout.write('\x1b[?2004h');
+    } catch {
+      // no-op
+    }
+    return () => {
+      try {
+        stdout.write('\x1b[?2004l');
+      } catch {
+        // no-op
+      }
+    };
+  }, [stdout]);
+
+  const showInlineNotice = useCallback((notice: InlineNotice) => {
+    inlineNoticeRef.current = notice;
+    setInlineNotice(notice);
+  }, []);
+
+  const clearInlineNotice = useCallback(() => {
+    inlineNoticeRef.current = null;
+    setInlineNotice(null);
+  }, []);
+
+  useEffect(() => {
+    if (!inputValue && inlineNoticeRef.current?.kind === 'clear_input') {
+      clearInlineNotice();
+    }
+  }, [clearInlineNotice, inputValue]);
+
+  useEffect(() => {
+    const ctxEnabled = config?.context_management?.enabled ?? false;
+    const previous = prevContextEnabledRef.current;
+    prevContextEnabledRef.current = ctxEnabled;
+    const thresholdPct = Math.round(((config?.context_management?.compression_threshold ?? 0.9) * 100));
+    const maxTokens = config?.context_management?.max_tokens ?? 8000;
+
+    if (previous === undefined && !ctxEnabled) return;
+    if (previous === ctxEnabled) return;
+
+    showInlineNotice({
+      message: ctxEnabled
+        ? `Context compression on (${thresholdPct}% of ${maxTokens} tokens).`
+        : 'Context compression off.',
+      tone: 'info',
+      kind: 'clear_input',
+    });
+  }, [config?.context_management, showInlineNotice]);
+
+  useEffect(() => {
+    if (!pendingAction) {
+      return;
+    }
+
+    const description =
+      pendingAction.type === 'shell_exec'
+        ? pendingAction.params.command
+        : `Edit ${pendingAction.params.path}`;
+    showInlineNotice({
+      message: `Action pending: ${description} | [1] [Yes] (Enter) [2] [Yes, don't ask again] [3] [No, change something]`,
+      tone: 'warning',
+      kind: 'sticky',
+    });
+  }, [pendingAction, showInlineNotice]);
 
   useEffect(() => {
     inputValueRef.current = inputValue;
@@ -355,7 +463,7 @@ export const Layout = () => {
       addMessage({ role: 'system', content: `Failed to load tools: ${error.message}`, timestamp: Date.now() });
       return false;
     }
-  }, [addMessage]);
+  }, [addMessage, configService]);
 
   const showMcpServers = useCallback(async () => {
     if (!mcpManager) {
@@ -428,6 +536,10 @@ export const Layout = () => {
       }
       try {
         await mcpManager.removeServer(id);
+        if (configService) {
+          const servers = await configService.listMcpServers();
+          setMcpServers(servers);
+        }
         addMessage({ role: 'system', content: `Removed MCP server: ${id}`, timestamp: Date.now() });
         await showMcpServers();
       } catch (error: any) {
@@ -568,6 +680,79 @@ export const Layout = () => {
       }
     },
     [addMessage, setActiveProfile]
+  );
+
+  const handleTextInputChange = useCallback(
+    (nextValue: string) => {
+      const previousValue = inputValueRef.current;
+      const hasStart = nextValue.includes(BRACKETED_PASTE_START);
+      const hasEnd = nextValue.includes(BRACKETED_PASTE_END);
+      const isCapturing = pasteBufferRef.current.active || hasStart || hasEnd;
+
+      const processPaste = (normalized: string) => {
+        if (!normalized.length) {
+          setCollapsedPaste(null);
+          setInputValue('');
+          return;
+        }
+
+        const lineCount = normalized.split('\n').length;
+        const width = terminalSize.columns ?? 80;
+        const shouldCollapse =
+          previousValue.length === 0 && (lineCount > 1 || normalized.length >= Math.max(width - 6, 80));
+
+        if (shouldCollapse) {
+          const nextId = pasteCounterRef.current + 1;
+          pasteCounterRef.current = nextId;
+          setCollapsedPaste({
+            id: nextId,
+            content: normalized,
+            lineCount,
+            charCount: normalized.length,
+          });
+          showInlineNotice({
+            message: `Pasted ${lineCount} lines (${normalized.length} chars). Enter inserts · Esc cancels.`,
+            tone: 'info',
+            kind: 'clear_input',
+          });
+          setInputValue('');
+        } else {
+          setCollapsedPaste(null);
+          setInputValue(normalized);
+        }
+      };
+
+      if (isCapturing) {
+        let chunk = nextValue;
+
+        if (hasStart) {
+          pasteBufferRef.current.active = true;
+          pasteBufferRef.current.data = '';
+          chunk = chunk.split(BRACKETED_PASTE_START).join('');
+        }
+
+        if (hasEnd) {
+          const beforeEnd = chunk.split(BRACKETED_PASTE_END)[0] || '';
+          pasteBufferRef.current.data += beforeEnd;
+          const normalized = normalizePastedContent(pasteBufferRef.current.data);
+          pasteBufferRef.current = { active: false, data: '' };
+          processPaste(normalized);
+          return;
+        }
+
+        if (pasteBufferRef.current.active) {
+          pasteBufferRef.current.data += chunk;
+          return;
+        }
+      }
+
+      if (collapsedPaste) {
+        setCollapsedPaste(null);
+      }
+
+      setInputValue(nextValue);
+    },
+    [collapsedPaste, showInlineNotice, terminalSize.columns]
   );
 
   const refreshStatusStyles = useCallback(
@@ -734,8 +919,16 @@ export const Layout = () => {
   }, [addMessage]);
 
   useEffect(() => {
+    resetTerminalViewport();
     const init = async () => {
-      configService = new ConfigService();
+      if (process.cwd() !== projectRoot) {
+        try {
+          process.chdir(projectRoot);
+        } catch (error) {
+          console.error('Failed to switch to project root:', error);
+        }
+      }
+      configService = new ConfigService(projectRoot);
       await configService.initialize();
       const loadedConfig = await configService.getConfig();
       const profile = await configService.getActiveProfile();
@@ -744,6 +937,7 @@ export const Layout = () => {
 
       modelService = new ModelService(configService);
       mcpManager = new McpManager({ configService });
+      await refreshMcpServers();
       try {
         const preloadModels = await modelService.listAvailableModels();
         setAvailableModels(preloadModels);
@@ -760,12 +954,12 @@ export const Layout = () => {
       }
 
       // Initialize history service
-      await initializeHistory();
+      await initializeHistory(projectRoot);
     };
 
     init();
     // Run once on mount; avoid tying to callbacks that change with state.
-  }, []);
+  }, [projectRoot]);
 
   const suggestionData = useMemo(() => {
     if (!inputValue.startsWith('/')) return { list: [] as SlashCommand[], hint: null as string | null };
@@ -983,6 +1177,7 @@ export const Layout = () => {
   }, [activeProfile?.preferred_model, pickStatusLine, status]);
 
   const isInputFocused =
+    !collapsedPaste &&
     !modelMenuState.open &&
     !sessionMenuState.open &&
     !configWizard &&
@@ -1003,6 +1198,13 @@ export const Layout = () => {
     : cwd;
 
   const currentModelName = activeProfile?.preferred_model || 'No Model';
+
+  const collapsedPasteSummary = collapsedPaste
+    ? {
+        label: `[Paste #${collapsedPaste.id} – ${collapsedPaste.lineCount} ${collapsedPaste.lineCount === 1 ? 'line' : 'lines'}]`,
+        detail: `${collapsedPaste.charCount.toLocaleString()} chars · Enter sends · Ctrl+E expands · Esc cancels`,
+      }
+    : null;
 
   const filteredModelList = useMemo(() => {
     const query = modelMenuState.searchQuery.trim().toLowerCase();
@@ -1157,7 +1359,6 @@ export const Layout = () => {
     
     // Give Ink a moment to unmount and restore terminal state if needed
     setTimeout(() => {
-      enterExpandedMode(); // Restore Main Screen on exit
       process.stdout.write(`${summary}\n`);
       process.exit(0);
     }, 50);
@@ -1222,9 +1423,9 @@ export const Layout = () => {
     setModelMenuState((prev) => ({ ...prev, open: false }));
   };
 
-  const openSessionMenu = async () => {
+  const openSessionMenu = useCallback(async () => {
     try {
-      const history = new HistoryService();
+      const history = new HistoryService(projectRoot);
       await history.initialize();
       const sessions = await history.listSessions(100); // Load more for search
       
@@ -1252,7 +1453,7 @@ export const Layout = () => {
         timestamp: Date.now(),
       });
     }
-  };
+  }, [addMessage, projectRoot, setSessionMenuState]);
 
   const closeSessionMenu = () => setSessionMenuState(initialSessionMenuState);
 
@@ -1317,7 +1518,7 @@ export const Layout = () => {
   };
 
   const handleSessionResume = async (sessionId: string) => {
-    const success = await resumeSession(sessionId);
+    const success = await resumeSession(sessionId, projectRoot);
     
     if (success) {
       const updatedMessages = useStore.getState().messages;
@@ -1378,6 +1579,40 @@ export const Layout = () => {
       return [];
     }
   }, [addMessage, setAvailableModels]);
+
+  const updateToolModelFilterSetting = useCallback(
+    async (enabled: boolean) => {
+      if (!configService) {
+        addMessage({
+          role: 'system',
+          content: 'Configuration service is still initializing. Try again shortly.',
+          timestamp: Date.now(),
+        });
+        return;
+      }
+      try {
+        const updatedConfig = await configService.updateGeneralSettings({
+          show_tool_calling_models_only: enabled,
+        });
+        setConfig(updatedConfig);
+        addMessage({
+          role: 'system',
+          content: enabled
+            ? 'Showing only tool-calling OpenRouter models.'
+            : 'Showing all OpenRouter models.',
+          timestamp: Date.now(),
+        });
+        await refreshAvailableModels();
+      } catch (error: any) {
+        addMessage({
+          role: 'system',
+          content: `Failed to update general settings: ${error.message}`,
+          timestamp: Date.now(),
+        });
+      }
+    },
+    [addMessage, refreshAvailableModels, setConfig]
+  );
 
   const reopenModelMenu = useCallback(async () => {
     const models = await refreshAvailableModels();
@@ -1515,6 +1750,214 @@ export const Layout = () => {
     }
   }, [addMessage, configWizard, openConfigMenu, refreshAvailableModels, setConfig]);
 
+  const refreshMcpServers = useCallback(async () => {
+    if (!configService) return [];
+    try {
+      const servers = await configService.listMcpServers();
+      setMcpServers(servers);
+      return servers;
+    } catch (error: any) {
+      addMessage({
+        role: 'system',
+        content: `Failed to load MCP servers: ${error.message}`,
+        timestamp: Date.now(),
+      });
+      return [];
+    }
+  }, [addMessage]);
+
+  const openAddMcpWizard = useCallback(() => {
+    setConfigWizard({
+      mode: 'mcp',
+      action: 'add',
+      form: {
+        id: '',
+        command: '',
+        args: '',
+        cwd: projectRoot,
+        env: '',
+        transport: 'stdio',
+      },
+    });
+  }, [projectRoot]);
+
+  const openEditMcpWizard = useCallback(
+    (server: McpServerConfig) => {
+      const envEntries = server.env
+        ? Object.entries(server.env)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('\n')
+        : '';
+      setConfigWizard({
+        mode: 'mcp',
+        action: 'edit',
+        server,
+        form: {
+          id: server.id,
+          command: server.command,
+          args: (server.args || []).join(' '),
+          cwd: server.cwd || projectRoot,
+          env: envEntries,
+          transport: server.transport === 'sse' ? 'sse' : 'stdio',
+        },
+      });
+    },
+    [projectRoot]
+  );
+
+  const handleMcpWizardSubmit = useCallback(async () => {
+    if (!configWizard || configWizard.mode !== 'mcp') return;
+    if (!mcpManager) {
+      addMessage({
+        role: 'system',
+        content: 'MCP manager is still initializing. Try again shortly.',
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    const form = configWizard.form;
+    const id = form.id.trim();
+    const command = form.command.trim();
+    if (!id || !command) {
+      addMessage({
+        role: 'system',
+        content: 'Provide both an ID and command for the MCP server.',
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    const args = form.args
+      .split(/\s+/)
+      .map((arg) => arg.trim())
+      .filter(Boolean);
+    const envLines = form.env
+      .split(/[;\r?\n]+/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    const env: Record<string, string> = {};
+    envLines.forEach((line) => {
+      const [key, ...rest] = line.split('=');
+      if (!key) return;
+      env[key.trim()] = rest.join('=').trim();
+    });
+
+    try {
+      const next: McpServerConfig = {
+        id,
+        command,
+        args,
+        env: Object.keys(env).length ? env : undefined,
+        cwd: form.cwd?.trim() || undefined,
+        transport: form.transport === 'sse' ? 'sse' : 'stdio',
+        enabled: true,
+      };
+      await mcpManager.upsertServer(next);
+      await refreshMcpServers();
+      addMessage({
+        role: 'system',
+        content: `${configWizard.action === 'add' ? 'Added' : 'Updated'} MCP server: ${id}`,
+        timestamp: Date.now(),
+      });
+      setConfigWizard(null);
+      await openConfigMenu();
+    } catch (error: any) {
+      addMessage({
+        role: 'system',
+        content: `Failed to save MCP server: ${error.message}`,
+        timestamp: Date.now(),
+      });
+    }
+  }, [addMessage, configWizard, mcpManager, refreshMcpServers, openConfigMenu]);
+
+  const handleTestMcpServer = useCallback(
+    async (server: McpServerConfig) => {
+      setMcpTestResults((prev) => ({
+        ...prev,
+        [server.id]: {
+          status: 'failed',
+          message: 'Testing...',
+          timestamp: Date.now(),
+        },
+      }));
+
+      try {
+        const result = await testService.testServer(server, projectRoot);
+        setMcpTestResults((prev) => ({ ...prev, [server.id]: result }));
+        addMessage({
+          role: 'system',
+          content: `MCP ${server.id} test: ${result.status === 'ok' ? 'OK' : 'FAILED'} - ${result.message}`,
+          timestamp: Date.now(),
+        });
+      } catch (error: any) {
+        setMcpTestResults((prev) => ({
+          ...prev,
+          [server.id]: {
+            status: 'failed',
+            message: error?.message || 'Test failed',
+            timestamp: Date.now(),
+          },
+        }));
+        addMessage({
+          role: 'system',
+          content: `MCP ${server.id} test failed: ${error?.message || 'Unknown error'}`,
+          timestamp: Date.now(),
+        });
+      }
+    },
+    [addMessage, projectRoot, testService]
+  );
+
+  const handleTestAllMcpServers = useCallback(async () => {
+    for (const server of mcpServers) {
+      await handleTestMcpServer(server);
+    }
+  }, [handleTestMcpServer, mcpServers]);
+
+  const copyMcpConfigPath = useCallback(async () => {
+    if (!configService) return;
+    try {
+      clipboard.writeSync(configService.getMcpConfigPath());
+      addMessage({
+        role: 'system',
+        content: 'MCP config path copied to clipboard.',
+        timestamp: Date.now(),
+      });
+    } catch (error: any) {
+      addMessage({
+        role: 'system',
+        content: `Failed to copy MCP path: ${error.message}`,
+        timestamp: Date.now(),
+      });
+    }
+  }, [addMessage]);
+
+  const openMcpConfigFile = useCallback(() => {
+    if (!configService) return;
+    const editor = process.env.EDITOR;
+    if (!editor) {
+      addMessage({
+        role: 'system',
+        content: 'Set $EDITOR to open the MCP config file.',
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    const proc = spawn(editor, [configService.getMcpConfigPath()], {
+      stdio: 'inherit',
+    });
+
+    proc.on('error', (error) => {
+      addMessage({
+        role: 'system',
+        content: `Failed to open editor: ${error.message}`,
+        timestamp: Date.now(),
+      });
+    });
+  }, [addMessage]);
+
   const handleConfigMenuSubmit = useCallback(
     () => {
       // Legacy handler, now handled by ConfigMenuScreen
@@ -1633,8 +2076,8 @@ export const Layout = () => {
     }
   };
 
-  const handleConfirmAction = async () => {
-    const action = useStore.getState().pendingAction;
+  const handleConfirmAction = async (pending?: Action) => {
+    const action = pending || useStore.getState().pendingAction;
     if (!action) return;
 
     setPendingAction(null);
@@ -1670,7 +2113,8 @@ export const Layout = () => {
     switch (command) {
       case '/clear':
         setIsConfigMenuOpen(false);
-        enterCompactMode();
+        resetTerminalViewport();
+        setIsExpandedView(false);
         useStore.setState({ messages: [] });
         return true;
       case '/help':
@@ -1818,6 +2262,57 @@ export const Layout = () => {
         await openConfigMenu();
         return true;
       }
+      case '/compact': {
+        setIsConfigMenuOpen(false);
+        const { messages: currentMessages, config: currentConfig, activeProfile: currentProfile } = useStore.getState();
+
+        if (status !== 'idle') {
+          addMessage({ role: 'system', content: 'Cannot compact while busy.', timestamp: Date.now() });
+          return true;
+        }
+
+        addMessage({ role: 'system', content: 'Compacting conversation history...', timestamp: Date.now() });
+        setStatus('thinking');
+
+        try {
+          const providerKey = currentProfile?.preferred_provider === 'openrouter' ? 'openrouter' : 'ollama';
+          const providerConfig =
+            providerKey === 'openrouter'
+              ? currentConfig?.api_registry.openrouter || {}
+              : currentConfig?.api_registry.ollama || {};
+
+          const provider = LLMFactory.createProvider(providerKey, providerConfig);
+          const modelId = currentProfile?.preferred_model || 'default';
+
+          const result = await ContextManager.manageContext(
+            currentMessages,
+            currentConfig?.context_management,
+            provider,
+            modelId,
+            true
+          );
+
+          if (result.context !== currentMessages) {
+            useStore.setState({ messages: result.context });
+            addMessage({
+              role: 'system',
+              content: result.systemNotice || 'Context compacted.',
+              timestamp: Date.now(),
+            });
+          } else {
+            addMessage({
+              role: 'system',
+              content: 'Context is already optimized or too short to compact.',
+              timestamp: Date.now(),
+            });
+          }
+        } catch (error: any) {
+          addMessage({ role: 'system', content: `Compaction failed: ${error.message}`, timestamp: Date.now() });
+        } finally {
+          setStatus('idle');
+        }
+        return true;
+      }
       case '/copy': {
         setIsConfigMenuOpen(false);
         const firstArg = args[0]?.toLowerCase();
@@ -1889,7 +2384,31 @@ export const Layout = () => {
     }
   };
 
+  const formatAtReferenceMessage = (reference: AtReference) => {
+    const header =
+      reference.type === 'file'
+        ? `📄 Included file: ${reference.displayPath}`
+        : `📂 Directory listing: ${reference.displayPath}`;
+    const meta =
+      reference.type === 'file'
+        ? `Size: ${reference.size?.toLocaleString() ?? 'unknown'} bytes${reference.truncated ? ' (truncated)' : ''}`
+        : `Entries: ${reference.listingCount ?? 'unknown'}${reference.truncated ? ' (partial)' : ''}`;
+    const content = reference.content || '<empty>';
+    const body = reference.type === 'file' && reference.truncated ? `${content}\n… <file truncated>` : content;
+    return `${header}\n${meta}\n\n${body}`;
+  };
+
+  const formatMissingAtReferenceMessage = (missing: MissingAtReference) =>
+    `⚠️ Unable to include ${missing.raw} (${missing.absolutePath}): ${missing.reason}`;
+
   const handleInputSubmit = async (rawValue: string) => {
+    if (collapsedPaste) {
+      setInputValue(collapsedPaste.content);
+      setCollapsedPaste(null);
+      clearInlineNotice();
+      return;
+    }
+
     const text = rawValue.trim();
     if (!text) {
       setInputValue('');
@@ -1907,10 +2426,28 @@ export const Layout = () => {
       return;
     }
 
+    const referenceOperations = await resolveAtReferences(text, projectRoot);
+    for (const operation of referenceOperations) {
+      const timestamp = Date.now();
+      if (operation.kind === 'missing') {
+        addMessage({
+          role: 'system',
+          content: formatMissingAtReferenceMessage(operation.missing),
+          timestamp,
+        });
+        continue;
+      }
+      addMessage({
+        role: 'system',
+        content: formatAtReferenceMessage(operation.reference),
+        timestamp,
+      });
+    }
+
     addMessage({ role: 'user', content: text, timestamp: Date.now() });
     setStatus('thinking');
 
-    const currentMessages = useStore.getState().messages;
+    const baseMessages = useStore.getState().messages;
     const controller = new AbortController();
     abortControllerRef.current = controller;
     cancelReasonRef.current = null;
@@ -1923,6 +2460,29 @@ export const Layout = () => {
           : config?.api_registry.ollama || {};
 
       const provider = LLMFactory.createProvider(providerKey as 'ollama' | 'openrouter', providerConfig);
+      const modelId = activeProfile?.preferred_model || 'default';
+
+      const managed = await ContextManager.manageContext(
+        baseMessages,
+        config?.context_management,
+        provider,
+        modelId,
+        false
+      );
+      const contextNotice = managed.systemNotice?.trim();
+      const contextForModel = managed.context;
+
+      if (contextNotice) {
+        showInlineNotice({
+          message: contextNotice,
+          tone: contextNotice.startsWith('⚠') ? 'warning' : 'info',
+          kind: 'sticky',
+        });
+      }
+
+      if (managed.context !== baseMessages) {
+        useStore.setState({ messages: managed.context });
+      }
 
       const conversationProvider = activeProfile?.preferred_provider || providerKey;
       const conversationModelName = activeProfile?.preferred_model || 'unknown-model';
@@ -1948,7 +2508,7 @@ export const Layout = () => {
       let finalUsage: TokenUsage | undefined;
       let hasStartedStreaming = false;
 
-      for await (const chunk of provider.streamChat(currentMessages, { 
+      for await (const chunk of provider.streamChat(contextForModel, { 
         model: activeProfile?.preferred_model, 
         signal: controller.signal,
         reasoning: 'auto' 
@@ -2010,7 +2570,16 @@ export const Layout = () => {
 
       const action = ActionParser.parse(fullContent);
       if (action) {
-        setPendingAction(action);
+        if (autoApproveActions) {
+          showInlineNotice({
+            message: 'Auto-approved tool action this session.',
+            tone: 'info',
+            kind: 'sticky',
+          });
+          await handleConfirmAction(action);
+        } else {
+          setPendingAction(action);
+        }
       }
     } catch (error: any) {
       if (error?.name === 'AbortError') {
@@ -2038,12 +2607,47 @@ export const Layout = () => {
     }
   };
 
+  const submitCollapsedPaste = () => {
+    if (!collapsedPaste) return;
+    const payload = collapsedPaste.content;
+    setCollapsedPaste(null);
+    void handleInputSubmit(payload);
+  };
+
+  const discardCollapsedPaste = () => {
+    if (!collapsedPaste) return;
+    setCollapsedPaste(null);
+    setInputValue('');
+  };
+
+  const expandCollapsedPaste = () => {
+    if (!collapsedPaste) return;
+    setInputValue(collapsedPaste.content);
+    setCollapsedPaste(null);
+  };
+
   const isProcessing = status === 'thinking' || status === 'streaming';
 
   useInput((input, key) => {
     const isCtrlC = input === '\u0003' || (key.ctrl && input?.toLowerCase() === 'c');
     // Ctrl+R typically sends \u0012 in raw mode
     const isCtrlR = key.ctrl && (input?.toLowerCase() === 'r' || key.raw === '\u0012');
+
+    if (collapsedPaste) {
+      if (key.return) {
+        submitCollapsedPaste();
+        return;
+      }
+      if (key.escape) {
+        discardCollapsedPaste();
+        return;
+      }
+      if (key.ctrl && input?.toLowerCase() === 'e') {
+        expandCollapsedPaste();
+        return;
+      }
+      return;
+    }
 
     if (exitConfirmation && !isCtrlC) {
       clearExitConfirmation();
@@ -2061,16 +2665,8 @@ export const Layout = () => {
 
     if (isCtrlR) {
       const previousValue = inputValue; // Capture current value
-      setIsExpandedView((prev) => {
-        const next = !prev;
-        if (next) {
-          enterExpandedMode();
-        } else {
-          enterCompactMode();
-        }
-        return next;
-      });
-      
+      setIsExpandedView((prev) => !prev);
+
       // Restore input value in next tick to overwrite any "r" or control char that TextInput might have captured
       setTimeout(() => {
         setInputValue(previousValue);
@@ -2143,10 +2739,20 @@ export const Layout = () => {
 
     if (pendingAction) {
       const normalized = input.toLowerCase();
-      if (normalized === 'y') {
+      if (key.return || normalized === '1' || normalized === 'y') {
         handleConfirmAction();
-      } else if (normalized === 'n' || normalized === 'd') {
+        clearInlineNotice();
+      } else if (normalized === '2') {
+        setAutoApproveActions(true);
+        showInlineNotice({
+          message: 'Auto-approving tool actions for this session.',
+          tone: 'info',
+          kind: 'sticky',
+        });
+        handleConfirmAction();
+      } else if (normalized === '3' || normalized === 'n' || normalized === 'd') {
         handleRejectAction();
+        clearInlineNotice();
       }
       return;
     }
@@ -2222,6 +2828,17 @@ export const Layout = () => {
           onUpdateSystemPrompt={(prompt) => void updateSystemPromptSetting(prompt)}
           isCommandMode={inputValue.startsWith('/')}
           systemPrompt={activeProfile?.system_prompt_override}
+          onToggleToolModelFilter={(enabled) => void updateToolModelFilterSetting(enabled)}
+          mcpServers={mcpServers}
+          mcpTestResults={mcpTestResults}
+          mcpConfigPath={configService?.getMcpConfigPath() || defaultMcpConfigPath}
+          onAddMcpServer={openAddMcpWizard}
+          onEditMcpServer={openEditMcpWizard}
+          onRemoveMcpServer={(server) => void removeMcpServer(server.id)}
+          onTestMcpServer={handleTestMcpServer}
+          onTestAllMcpServers={handleTestAllMcpServers}
+          onCopyMcpConfigPath={copyMcpConfigPath}
+          onOpenMcpConfig={openMcpConfigFile}
         />
       )}
       {configWizard?.mode === 'provider' && (
@@ -2241,6 +2858,17 @@ export const Layout = () => {
           onCancel={cancelConfigWizard}
         />
       )}
+      {configWizard?.mode === 'mcp' && (
+        <McpServerModal
+          visible={true}
+          action={configWizard.action}
+          server={configWizard.server}
+          form={configWizard.form}
+          onChange={(field, value) => updateConfigWizardForm(field, value)}
+          onSubmit={handleMcpWizardSubmit}
+          onCancel={cancelConfigWizard}
+        />
+      )}
       {sessionMenuState.open && (
         <SessionSelectorModal
           visible={sessionMenuState.open}
@@ -2255,25 +2883,34 @@ export const Layout = () => {
       )}
       {pendingAction && <ActionModal />}
       <Box flexDirection="column" gap={0}>
+        {isExpandedView && messages.length > 0 && (
+          <Box marginBottom={0} paddingBottom={0} paddingTop={0} marginTop={0}>
+            <Text color="cyan">Expanded mode. Press Ctrl+R to return to compact view.</Text>
+          </Box>
+        )}
         <InputBar
           value={inputValue}
           status={status}
           statusDetail={statusDetail}
           showStatusCard={false}
-          onChange={setInputValue}
+          onChange={handleTextInputChange}
           onSubmit={handleInputSubmit}
           suggestions={suggestions}
           showSuggestions={showSuggestions}
           selectedSuggestion={selectedSuggestion}
           isFocused={isInputFocused}
           suggestionHint={suggestionHint || undefined}
+          collapsedPasteSummary={collapsedPasteSummary}
           footer={
             exitConfirmation ? (
               <Text color="yellow">Press Ctrl+C again within 3s to exit JamCLI.</Text>
             ) : (() => {
               const PWD_MAX_LEN = 35;
               const MODEL_MAX_LEN = 30;
-              const PADDING_AND_GAPS = 4; // 2 for paddingX in InputBar + 2 gaps
+              const STATIC_BUFFER = 4; // InputBar padding plus spacing around the hint area
+              const SECTION_GAP = 1;
+              const MIN_HINT_RATIO = 0.5;
+              const MIN_VISIBLE_HINT = 6;
               
               const pwdStr = displayCwd.length > PWD_MAX_LEN 
                 ? `...${displayCwd.slice(-(PWD_MAX_LEN - 3))}` 
@@ -2283,19 +2920,43 @@ export const Layout = () => {
                 ? `${currentModelName.slice(0, MODEL_MAX_LEN - 3)}...` 
                 : currentModelName;
               
-              const availableForHints = Math.max(0, terminalSize.columns - pwdStr.length - modelStr.length - PADDING_AND_GAPS);
-              const hintTextRaw = "Use /help · Ctrl+R toggles full view · Press Ctrl+C to exit";
-              const hintStr = availableForHints >= hintTextRaw.length 
-                ? hintTextRaw 
-                : availableForHints > 5 
-                  ? hintTextRaw.slice(0, availableForHints - 1) + "…"
-                  : "";
+              const totalColumns = terminalSize.columns || 80;
+              const availableForHints = Math.max(
+                0,
+                totalColumns - pwdStr.length - modelStr.length - STATIC_BUFFER
+              );
+              const hintSourceText = inlineNotice?.message || "Use /help · Ctrl+R toggles full view · Press Ctrl+C to exit";
+              const hintLength = hintSourceText.length;
+              const fullHintFits = availableForHints >= hintLength;
+              const partialHintThreshold = Math.ceil(hintLength * MIN_HINT_RATIO);
+              let hintStr = "";
+
+              if (fullHintFits) {
+                hintStr = hintSourceText;
+              } else if (availableForHints >= Math.max(MIN_VISIBLE_HINT, partialHintThreshold)) {
+                const ellipsis = '...';
+                const sliceLength = Math.max(1, availableForHints - ellipsis.length);
+                hintStr = `${hintSourceText.slice(0, sliceLength).trimEnd()}${ellipsis}`;
+              }
+              const hintColor = inlineNotice
+                ? inlineNotice.tone === 'warning'
+                  ? 'yellow'
+                  : 'cyan'
+                : 'gray';
+
+              const pwdColor = 'cyan';
 
               return (
-                <Box flexDirection="row" justifyContent="space-between" width="100%">
-                  <Text color="gray">{pwdStr}</Text>
-                  {hintStr ? <Text color="gray">{hintStr}</Text> : <Text> </Text>}
-                  <Text color="gray">{modelStr}</Text>
+                <Box flexDirection="row" width="100%" alignItems="center">
+                  <Box flexShrink={0} marginRight={SECTION_GAP}>
+                    <Text color={pwdColor}>{pwdStr}</Text>
+                  </Box>
+                  <Box flexGrow={1} flexShrink={1} justifyContent="center">
+                    {hintStr ? <Text color={hintColor}>{hintStr}</Text> : <Text> </Text>}
+                  </Box>
+                  <Box flexShrink={0} marginLeft={SECTION_GAP}>
+                    <Text color="gray">{modelStr}</Text>
+                  </Box>
                 </Box>
               );
             })()

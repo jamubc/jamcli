@@ -40,8 +40,11 @@ export class ModelService {
 
     if (config.api_registry.openrouter) {
       const openRouterModels = await this.fetchOpenRouterModels(config);
-      if (openRouterModels.length > 0) {
-        models.push(...openRouterModels);
+      const filteredOpenRouter = config.general?.show_tool_calling_models_only
+        ? openRouterModels.filter((model) => model.supports_tool_calling)
+        : openRouterModels;
+      if (filteredOpenRouter.length > 0) {
+        models.push(...filteredOpenRouter);
       }
     }
 
@@ -90,12 +93,19 @@ export class ModelService {
 
       const json = await response.json();
       const data = Array.isArray(json.data) ? json.data : [];
-      const mapped = data.map((model: any): ModelInfo => ({
-        id: `openrouter:${model.id}`,
-        provider: 'openrouter',
-        name: model.name || model.id,
-        description: model.description || model.pricing?.prompt || 'OpenRouter model',
-      }));
+      const mapped = data.map((model: any): ModelInfo => {
+        const supportedParams = Array.isArray(model.supported_parameters)
+          ? model.supported_parameters.map((param: string) => param.toLowerCase())
+          : [];
+        const supportsTools = supportedParams.includes('tools') || supportedParams.includes('tool_choice');
+        return {
+          id: `openrouter:${model.id}`,
+          provider: 'openrouter',
+          name: model.name || model.id,
+          description: model.description || model.pricing?.prompt || 'OpenRouter model',
+          supports_tool_calling: supportsTools,
+        };
+      });
 
       this.openRouterCache = { timestamp: now, models: mapped };
       return mapped;

@@ -86,7 +86,7 @@ export const BUILTIN_TEXT_STYLES: Record<string, StatusTextStyleDefinition> = {
 export const BUILTIN_SPINNER_STYLES: Record<string, StatusSpinnerStyleDefinition> = {
   classic: {
     id: 'classic',
-    label: 'Classic spinner',
+    label: 'Classic Spinner',
     spinnerFrames: defaultSpinnerFrames,
     spinnerColors: ['cyan', 'white'],
     intervalMs: 80,

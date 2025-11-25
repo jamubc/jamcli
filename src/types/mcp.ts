@@ -19,3 +19,11 @@ export interface McpToolDescriptor {
   serverId?: string;
   serverTitle?: string;
 }
+
+export interface McpTestResult {
+  status: 'ok' | 'failed';
+  message: string;
+  latencyMs?: number;
+  timestamp: number;
+  toolCount?: number;
+}

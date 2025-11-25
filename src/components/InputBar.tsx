@@ -28,6 +28,10 @@ interface InputBarProps {
   placeholder?: string;
   suggestionHint?: string;
   footer?: React.ReactNode;
+  collapsedPasteSummary?: {
+    label: string;
+    detail?: string;
+  } | null;
 }
 
 const formatElapsed = (ms: number) => {
@@ -116,6 +120,7 @@ export const InputBar = ({
   placeholder,
   suggestionHint,
   footer,
+  collapsedPasteSummary,
 }: InputBarProps) => {
   return (
     <Box flexDirection="column" gap={1} width="100%">
@@ -142,13 +147,20 @@ export const InputBar = ({
       <Box flexDirection="column" gap={0} width="100%">
         <Box borderStyle="round" borderColor="cyan" paddingX={1}>
           <Text color="cyan">&gt; </Text>
-          <TextInput
-            value={value}
-            onChange={onChange}
-            onSubmit={onSubmit}
-            placeholder={placeholder || 'Type a message or / for commands...'}
-            focus={isFocused}
-          />
+          {collapsedPasteSummary ? (
+            <Box flexDirection="column" flexGrow={1} paddingLeft={1} gap={0}>
+              <Text color="yellow">{collapsedPasteSummary.label}</Text>
+              {collapsedPasteSummary.detail && <Text color="gray">{collapsedPasteSummary.detail}</Text>}
+            </Box>
+          ) : (
+            <TextInput
+              value={value}
+              onChange={onChange}
+              onSubmit={onSubmit}
+              placeholder={placeholder || 'Type a message or / for commands...'}
+              focus={isFocused}
+            />
+          )}
         </Box>
         {footer && (
           <Box paddingX={1} width="100%">

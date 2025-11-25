@@ -15,6 +15,25 @@ const renderShimmeringText = (text: string, palette: string[], shimmerEnabled: b
   });
 };
 
+const ColorSwatches = ({ label, colors }: { label: string; colors: string[] }) => {
+  const safeColors = colors.length ? colors : ['white'];
+  const titleCase = (value: string) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : value);
+
+  return (
+    <Box flexDirection="row" gap={1} alignItems="center">
+      <Text color="gray">{label}:</Text>
+      {safeColors.map((color, idx) => (
+        <Box key={`${label}-${color}-${idx}`} flexDirection="row" gap={1} alignItems="center">
+          <Text backgroundColor={color} color="black">
+            {'  '}
+          </Text>
+          <Text color="gray">{titleCase(color)}</Text>
+        </Box>
+      ))}
+    </Box>
+  );
+};
+
 export const StatusStylePreview = ({
   style,
   optionLabel,
@@ -31,96 +50,77 @@ export const StatusStylePreview = ({
   const palette = style.shimmerColors?.length ? style.shimmerColors : ['white'];
   const shimmerEnabled = style.shimmer ?? true;
   const spinnerPalette = style.spinnerColors?.length ? style.spinnerColors : palette;
-  const spinnerFrame = useColorSpinner(style.spinnerFrames, true, spinnerPalette, style.spinnerIntervalMs);
+  const [phase, setPhase] = useState<'thinking' | 'done'>('thinking');
+  const spinnerFrame = useColorSpinner(style.spinnerFrames, phase === 'thinking', spinnerPalette, style.spinnerIntervalMs);
   const shimmerTick = useShimmerTick(shimmerEnabled);
-  const [phase, setPhase] = useState<'thinking' | 'replying'>('thinking');
+  const normalizeFrame = (frame?: string) => {
+    if (!frame) return '';
+    if (!frame.includes('\n')) return frame;
+    const rows = frame.split('\n');
+    const middle = rows[Math.floor(rows.length / 2)]?.trim();
+    return middle || rows[0].trim() || frame.replace(/\s+/g, ' ').trim();
+  };
+  const rawFrame = spinnerFrame?.frame || style.spinnerFrames[0];
 
   useEffect(() => {
     const id = setInterval(() => {
-      setPhase((prev) => (prev === 'thinking' ? 'replying' : 'thinking'));
-    }, 1400);
+      setPhase((prev) => (prev === 'thinking' ? 'done' : 'thinking'));
+    }, 2000);
     return () => clearInterval(id);
   }, []);
 
-  const spinnerSample = style.spinnerFrames.slice(0, 8).join(' ');
-  const spinnerSuffix = style.spinnerFrames.length > 8 ? ' ...' : '';
-  const paletteSwatches = palette.map((color, idx) => (
-    <Text key={`${color}-${idx}`} color={color}>
-      []
-    </Text>
-  ));
-  const spinnerSwatches = spinnerPalette.map((color, idx) => (
-    <Text key={`${color}-spinner-${idx}`} color={color}>
-      []
-    </Text>
-  ));
-
-  const renderLine = (text: string, hint: string) => (
-    <Box flexDirection="row" gap={1} alignItems="center">
-      <Text color={spinnerFrame?.color || palette[0] || 'gray'}>{spinnerFrame?.frame || '•'}</Text>
-      <Text>{renderShimmeringText(text, palette, shimmerEnabled, shimmerTick)}</Text>
-      <Text color="gray">{hint}</Text>
-    </Box>
-  );
+  const indicatorFrame =
+    phase === 'thinking' ? normalizeFrame(rawFrame) || '⠦' : '✓';
+  const indicatorColor =
+    phase === 'thinking' ? spinnerFrame?.color || spinnerPalette[0] || 'cyan' : 'green';
+  const textPalette = phase === 'done' ? ['green', ...palette] : palette;
+  const previewText = phase === 'thinking' ? 'Thinking...' : 'Done';
+  const previewHint = phase === 'thinking' ? 'loading' : 'success';
 
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="row" justifyContent="space-between" alignItems="center">
         <Text bold color="cyan">
-          Live Preview
+          {optionLabel}
         </Text>
-        <Text color={isActive ? 'green' : 'yellow'}>{isActive ? 'active' : 'not applied'}</Text>
+        <Text color={isActive ? 'green' : 'yellow'}>
+          {isActive ? 'Active' : 'Preview (Not Saved)'}
+        </Text>
       </Box>
 
       <Box
-        width={17}
-        height={7}
-        borderStyle="single"
+        borderStyle="round"
         borderColor={isActive ? 'green' : 'gray'}
-        alignItems="center"
-        justifyContent="center"
+        paddingX={1}
+        paddingY={1}
+        flexDirection="column"
+        gap={1}
       >
-        <Text color={spinnerFrame?.color || spinnerPalette[0] || 'gray'}>
-          {spinnerFrame?.frame || '•'}
+        <Box flexDirection="row" gap={1} alignItems="center">
+          <Text color={indicatorColor}>{indicatorFrame}</Text>
+          <Text>{renderShimmeringText(previewText, textPalette, shimmerEnabled, shimmerTick)}</Text>
+          <Text color="gray">{previewHint}</Text>
+        </Box>
+        <Text color="gray" dimColor>
+          {'Cycles: ⠦ Thinking -> ✓ Done (every 2s)'}
         </Text>
       </Box>
 
-      <Box borderStyle="round" borderColor={isActive ? 'green' : 'gray'} paddingX={1} paddingY={0} flexDirection="column" gap={1}>
-        <Box flexDirection="row" justifyContent="space-between" alignItems="center">
-          <Text bold>{optionLabel}</Text>
-          <Text color="gray">{optionSource === 'custom' ? 'custom' : 'built-in'}</Text>
-        </Box>
-        {renderLine(
-          phase === 'thinking' ? 'Thinking through the prompt...' : 'Streaming the reply back to you',
-          phase === 'thinking' ? '(thinking)' : '(replying)'
-        )}
-      </Box>
+      <ColorSwatches label="Palette" colors={spinnerPalette} />
+      <ColorSwatches label="Text shimmer" colors={palette} />
 
-      <Box flexDirection="column" gap={0}>
+      <Box flexDirection="row" gap={1} alignItems="center">
+        <Text color="gray">Source:</Text>
+        <Text color={optionSource === 'custom' ? 'magenta' : 'gray'}>
+          {optionSource === 'custom' ? 'Custom style' : 'Built-in'}
+        </Text>
+        <Text color="gray">· Speed: {style.spinnerIntervalMs}ms</Text>
+      </Box>
+      {path && (
         <Text color="gray">
-          Spinner frames: {spinnerSample}
-          {spinnerSuffix}
+          Path: {path}
         </Text>
-        <Box flexDirection="row" gap={1} alignItems="center">
-          <Text color="gray">Shimmer:</Text>
-          <Text color={shimmerEnabled ? 'green' : 'yellow'}>{shimmerEnabled ? 'enabled' : 'disabled'}</Text>
-        </Box>
-        <Box flexDirection="row" gap={1} alignItems="center">
-          <Text color="gray">Palette:</Text>
-          {paletteSwatches}
-          {!shimmerEnabled && <Text color="gray">(shimmer off)</Text>}
-        </Box>
-        <Box flexDirection="row" gap={1} alignItems="center">
-          <Text color="gray">Spinner colors:</Text>
-          {spinnerSwatches}
-          <Text color="gray">· speed: {style.spinnerIntervalMs}ms</Text>
-        </Box>
-        {path && (
-          <Text color="gray">
-            Source file: {path}
-          </Text>
-        )}
-      </Box>
+      )}
     </Box>
   );
 };
