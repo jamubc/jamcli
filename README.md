@@ -21,6 +21,12 @@ X Git integration
 
 ⚠️ **Experimental**: Please be careful when working with AI systems, use at your own risk. Feedback, issues, and pull requests are absolutely welcome.
 
+<img width="837" height="291" alt="Screenshot1" src="https://github.com/user-attachments/assets/80ac7d8e-fe5a-4547-b4c7-94b283be83a0" />
+<img width="837" height="350" alt="Screenshot2" src="https://github.com/user-attachments/assets/75713839-1992-4d6b-a959-125b71742708" />
+<img width="837" height="242" alt="Screenshot3" src="https://github.com/user-attachments/assets/49779295-9338-4655-a4f1-2d8d8994f881" />
+<img width="1013" height="391" alt="Screenshot5" src="https://github.com/user-attachments/assets/50280caf-86a8-45ab-bc68-22fa7e58ac81" />
+
+
 ## Features
 
 - **Provider Agnostic**: Supports Ollama (default) and extensible for OpenAI/Anthropic.
