@@ -15,7 +15,7 @@ import { StatusStyleOption } from './StatusStyleModal.js';
 import { ProviderConfigModal } from './ProviderConfigModal.js';
 import { McpServerModal, type McpServerForm } from './McpServerModal.js';
 import { useStore } from '../store/index.js';
-import type { Message, TokenUsage } from '../store/index.js';
+import type { Action, Message, TokenUsage } from '../store/index.js';
 import { useMenuNavigation } from '../hooks/useMenuNavigation.js';
 import { ConfigService } from '../services/ConfigService.js';
 import { ModelService } from '../services/ModelService.js';
@@ -30,7 +30,7 @@ import { HistoryService, SessionMetadata } from '../services/HistoryService.js';
 import type { Config, ModelInfo, Profile, ToolPermission, UiConfig } from '../types/config.js';
 import type { ToolCall, ToolResult, ToolName } from '../types/tools.js';
 import { ALL_TOOL_NAMES, SAFE_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
-import type { McpServerConfig, McpTestResult } from '../types/mcp.js';
+import type { McpServerConfig, McpTestResult, McpToolDescriptor } from '../types/mcp.js';
 import {
   DEFAULT_CUSTOM_STYLE,
   DEFAULT_STATUS_STYLE,

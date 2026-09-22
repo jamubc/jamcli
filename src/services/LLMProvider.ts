@@ -95,6 +95,13 @@ function parseToolCalls(message: any): ToolCall[] | undefined {
   return calls.length ? calls : undefined;
 }
 
+function toProviderMessage(m: any) {
+  const out: any = { role: m.role, content: m.content ?? '' };
+  if (m.tool_calls) out.tool_calls = m.tool_calls;
+  if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
+  return out;
+}
+
 export class OllamaProvider implements ILLMProvider {
   private endpoint: string;
 
@@ -120,7 +127,7 @@ export class OllamaProvider implements ILLMProvider {
       signal: options.signal,
       body: JSON.stringify({
         model: options.model || 'llama3',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        messages: messages.map(toProviderMessage),
         stream: true,
         think: wantReasoning || undefined,
         options: { temperature: options.temperature },
@@ -178,9 +185,10 @@ export class OllamaProvider implements ILLMProvider {
     const response = await fetch(`${this.endpoint}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: options.signal,
       body: JSON.stringify({
         model: options.model || 'llama3',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        messages: messages.map(toProviderMessage),
         stream: false,
         think: wantReasoning || undefined,
         options: { temperature: options.temperature },
@@ -189,6 +197,7 @@ export class OllamaProvider implements ILLMProvider {
     });
 
     const json = await response.json();
+    const message = json.message || {};
     const usage: TokenUsage | undefined = (json.prompt_eval_count || json.eval_count) ? {
       prompt_tokens: json.prompt_eval_count || 0,
       completion_tokens: json.eval_count || 0,
@@ -196,8 +205,9 @@ export class OllamaProvider implements ILLMProvider {
     } : undefined;
 
     return {
-      content: json.message.content,
+      content: message.content || '',
       usage,
+      toolCalls: parseToolCalls(message),
     };
   }
 }
@@ -229,7 +239,7 @@ export class OpenRouterProvider implements ILLMProvider {
     
     const body: any = {
         model: options.model || 'openai/gpt-4o',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        messages: messages.map(toProviderMessage),
         stream: true,
         temperature: options.temperature,
         ...options.extraParams
@@ -297,7 +307,7 @@ export class OpenRouterProvider implements ILLMProvider {
   async complete(messages: Message[], options: ModelOptions): Promise<CompletionResult> {
     const body: any = {
         model: options.model || 'openai/gpt-4o',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        messages: messages.map(toProviderMessage),
         stream: false,
         temperature: options.temperature,
         ...options.extraParams
@@ -311,6 +321,7 @@ export class OpenRouterProvider implements ILLMProvider {
     const response = await fetch(this.endpoint('/chat/completions'), {
       method: 'POST',
       headers: this.buildHeaders(),
+      signal: options.signal,
       body: JSON.stringify(body),
     });
 
