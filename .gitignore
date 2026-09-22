@@ -51,5 +51,6 @@ Thumbs.db
 
 # Application specific
 .jamcli/
+.commandcode/
 agents.config.json
 scripts/test-history.ts
