@@ -8,11 +8,16 @@ if (process.stdin && process.stdin.isTTY === false) {
 }
 
 try {
+  // alternateScreen keeps transcript scrollback intact after exit, which is
+  // what makes a watched run explainable afterward. incrementalRendering is
+  // off because full redraws are cheaper than diffing at this frame rate.
   render(<Layout />, {
     exitOnCtrlC: false,
     stdin: process.stdin,
     stdout: process.stdout,
     stderr: process.stderr,
+    incrementalRendering: false,
+    alternateScreen: false,
   });
 } catch (error) {
   console.error('Failed to start JamCLI', error);
