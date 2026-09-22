@@ -13,7 +13,11 @@ interface HeaderProps {
 }
 
 export const Header = ({ mode = 'standard', statusStyle }: HeaderProps) => {
-  const { activeProfile, config, status, getSessionUsage, modelTokenUsage } = useStore();
+  const activeProfile = useStore((s) => s.activeProfile);
+  const config = useStore((s) => s.config);
+  const status = useStore((s) => s.status);
+  const getSessionUsage = useStore((s) => s.getSessionUsage);
+  const modelTokenUsage = useStore((s) => s.modelTokenUsage);
   const sessionUsage = getSessionUsage();
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;

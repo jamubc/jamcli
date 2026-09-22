@@ -275,29 +275,27 @@ const truncateOutput = (text: string, limit: number = DEFAULT_AGENT_LOOP_CONFIG.
 };
 
 export const Layout = () => {
-  const {
-    messages,
-    pendingAction,
-    status,
-    config,
-    activeProfile,
-    addMessage,
-    updateLastMessage,
-    setConfig,
-    setActiveProfile,
-    setUiConfig,
-    setStatus,
-    setPendingAction,
-    initializeHistory,
-    persistTurn,
-    getSessionUsage,
-    resumeSession,
-    modelTokenUsage,
-    incrementModelTokenUsage,
-    initializeModelTokenUsage,
-    clearModelTokenUsage,
-    uiConfig,
-  } = useStore();
+  const messages = useStore((s) => s.messages);
+  const pendingAction = useStore((s) => s.pendingAction);
+  const status = useStore((s) => s.status);
+  const config = useStore((s) => s.config);
+  const activeProfile = useStore((s) => s.activeProfile);
+  const addMessage = useStore((s) => s.addMessage);
+  const updateLastMessage = useStore((s) => s.updateLastMessage);
+  const setConfig = useStore((s) => s.setConfig);
+  const setActiveProfile = useStore((s) => s.setActiveProfile);
+  const setUiConfig = useStore((s) => s.setUiConfig);
+  const setStatus = useStore((s) => s.setStatus);
+  const setPendingAction = useStore((s) => s.setPendingAction);
+  const initializeHistory = useStore((s) => s.initializeHistory);
+  const persistTurn = useStore((s) => s.persistTurn);
+  const getSessionUsage = useStore((s) => s.getSessionUsage);
+  const resumeSession = useStore((s) => s.resumeSession);
+  const modelTokenUsage = useStore((s) => s.modelTokenUsage);
+  const incrementModelTokenUsage = useStore((s) => s.incrementModelTokenUsage);
+  const initializeModelTokenUsage = useStore((s) => s.initializeModelTokenUsage);
+  const clearModelTokenUsage = useStore((s) => s.clearModelTokenUsage);
+  const uiConfig = useStore((s) => s.uiConfig);
 
   const [inputValue, setInputValue] = useState('');
   const [collapsedPaste, setCollapsedPaste] = useState<CollapsedPastePreview | null>(null);

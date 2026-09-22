@@ -134,7 +134,7 @@ type ChatViewportProps = {
 };
 
 export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle', statusDetail, statusStyle }: ChatViewportProps) => {
-  const { messages } = useStore();
+  const messages = useStore((s) => s.messages);
   const { stdout } = useStdout();
   const [terminalSize, setTerminalSize] = useState({
     rows: stdout?.rows ?? 24,

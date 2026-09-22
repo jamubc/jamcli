@@ -4,7 +4,7 @@ import { useStore } from '../store/index.js';
 import * as Diff from 'diff';
 
 export const ActionModal = () => {
-  const { pendingAction } = useStore();
+  const pendingAction = useStore((s) => s.pendingAction);
 
   if (!pendingAction) return null;
 
