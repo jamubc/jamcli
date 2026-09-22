@@ -71,6 +71,33 @@ export const ActionModal = () => {
       );
     }
 
+    if (pendingAction.type === 'tool_call') {
+      const argsPreview = JSON.stringify(pendingAction.params.args ?? {}, null, 2);
+      return (
+        <Box flexDirection="column" gap={1}>
+          <Text color="yellow" bold>
+            ⚡ Action Proposed: TOOL_CALL
+          </Text>
+          <Box flexDirection="row" gap={1}>
+            <Text color="gray">Tool:</Text>
+            <Text>{pendingAction.params.tool}</Text>
+          </Box>
+          {pendingAction.params.serverId && (
+            <Box flexDirection="row" gap={1}>
+              <Text color="gray">Server:</Text>
+              <Text>{pendingAction.params.serverId}</Text>
+            </Box>
+          )}
+          <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column">
+            <Text color="cyan" bold>
+              Arguments:
+            </Text>
+            <Text>{argsPreview}</Text>
+          </Box>
+        </Box>
+      );
+    }
+
     return null;
   };
 

@@ -6,6 +6,8 @@ export interface ModelOptions {
   signal?: AbortSignal;
   reasoning?: 'off' | 'on' | 'auto';
   extraParams?: Record<string, unknown>;
+  tools?: LLMTool[];
+  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
 }
 
 export interface Chunk {
@@ -18,6 +20,25 @@ export interface Chunk {
 export interface CompletionResult {
   content: string;
   usage?: TokenUsage;
+  toolCalls?: ToolCall[];
+  finishReason?: string;
+  rawMessage?: any;
+}
+
+export interface ToolCall {
+  id?: string;
+  name: string;
+  type?: string;
+  arguments?: any;
+}
+
+export interface LLMTool {
+  type: 'function';
+  function: {
+    name: string;
+    description?: string;
+    parameters?: Record<string, unknown>;
+  };
 }
 
 interface OpenRouterProviderOptions {
@@ -40,6 +61,38 @@ function extractReasoningDelta(delta: any): string | undefined {
     delta?.thinking ??
     undefined
   );
+}
+
+function parseToolCalls(message: any): ToolCall[] | undefined {
+  const rawCalls = message?.tool_calls;
+  if (!Array.isArray(rawCalls)) return undefined;
+
+  const normalizeArgs = (value: any) => {
+    if (value === undefined || value === null) return {};
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return { value };
+      }
+    }
+    return value;
+  };
+
+  const calls = rawCalls
+    .map((call: any): ToolCall | null => {
+      const fn = call.function || call;
+      if (!fn?.name) return null;
+      return {
+        id: call.id || fn.id,
+        name: fn.name,
+        type: call.type || 'function',
+        arguments: normalizeArgs(fn.arguments),
+      };
+    })
+    .filter(Boolean) as ToolCall[];
+
+  return calls.length ? calls : undefined;
 }
 
 export class OllamaProvider implements ILLMProvider {
@@ -185,6 +238,10 @@ export class OpenRouterProvider implements ILLMProvider {
     if (wantReasoning && body.include_reasoning === undefined) {
         body.include_reasoning = true;
     }
+    if (options.tools) {
+      body.tools = options.tools;
+      body.tool_choice = options.toolChoice || 'auto';
+    }
 
     const response = await fetch(this.endpoint('/chat/completions'), {
       method: 'POST',
@@ -246,6 +303,11 @@ export class OpenRouterProvider implements ILLMProvider {
         ...options.extraParams
     };
 
+    if (options.tools) {
+      body.tools = options.tools;
+      body.tool_choice = options.toolChoice || 'auto';
+    }
+
     const response = await fetch(this.endpoint('/chat/completions'), {
       method: 'POST',
       headers: this.buildHeaders(),
@@ -253,13 +315,19 @@ export class OpenRouterProvider implements ILLMProvider {
     });
 
     const json = await response.json();
+    const choice = json.choices?.[0];
+    const message = choice?.message || {};
+    const toolCalls = parseToolCalls(message);
     return {
-      content: json.choices?.[0]?.message?.content || '',
+      content: message?.content || '',
       usage: json.usage ? {
         prompt_tokens: json.usage.prompt_tokens || 0,
         completion_tokens: json.usage.completion_tokens || 0,
         total_tokens: json.usage.total_tokens || 0,
       } : undefined,
+      toolCalls,
+      finishReason: choice?.finish_reason,
+      rawMessage: message,
     };
   }
 }

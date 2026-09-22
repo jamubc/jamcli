@@ -20,7 +20,7 @@ export interface Message {
 }
 
 export interface Action {
-  type: 'file_edit' | 'shell_exec';
+  type: 'file_edit' | 'shell_exec' | 'tool_call';
   params: any;
   status: 'pending' | 'approved' | 'rejected' | 'executed' | 'failed';
   result?: string;

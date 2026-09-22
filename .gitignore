@@ -6,11 +6,15 @@ node_modules/
 # Testing
 coverage/
 
+# Specs and docs: markdown is tracked inside openspec/ and docs/ only.
+# A bare *.md rule would also hide openspec/, which is the point of this change.
 tools/
-docs/
 *.xml
 *.md
 !README.md
+!AGENTS.md
+!openspec/**
+!docs/**
 # Production
 build/
 dist/

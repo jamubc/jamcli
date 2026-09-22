@@ -22,7 +22,7 @@ import { ModelService } from '../services/ModelService.js';
 import { McpManager } from '../services/McpManager.js';
 import { McpTestService } from '../services/McpTestService.js';
 import { ContextManager } from '../services/ContextManager.js';
-import { LLMFactory } from '../services/LLMProvider.js';
+import { LLMFactory, type ToolCall as LlmToolCall } from '../services/LLMProvider.js';
 import { ActionParser } from '../services/ActionParser.js';
 import { FileSystemService } from '../services/FileSystemService.js';
 import { ExecutionService } from '../services/ExecutionService.js';
@@ -30,7 +30,7 @@ import { ToolService } from '../services/ToolService.js';
 import { HistoryService, SessionMetadata } from '../services/HistoryService.js';
 import type { Config, ModelInfo, Profile, ToolPermission, UiConfig } from '../types/config.js';
 import type { ToolCall, ToolResult, ToolName } from '../types/tools.js';
-import { ALL_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
+import { ALL_TOOL_NAMES, SAFE_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
 import type { McpServerConfig, McpTestResult } from '../types/mcp.js';
 import {
   DEFAULT_CUSTOM_STYLE,
@@ -139,6 +139,7 @@ type ConfigWizardState =
     };
 
 const MAX_AGENT_STEPS = 8;
+const MAX_TOOL_CALLS_PER_TURN = 5;
 const TOOL_RESULT_MAX_CHARS = 2000;
 const TOOL_COMMAND_USAGE = 'Usage: /tools [status|enable|disable|require|auto] <tool_name>';
 const MCP_COMMAND_USAGE = 'Usage: /mcp [servers|tools|add|remove]';
@@ -298,7 +299,108 @@ const formatToolResultMessage = (call: ToolCall, result: ToolResult) => {
 
 const buildSystemPrompt = (profile?: Profile | null) => {
   const base = profile?.system_prompt_override?.trim() || 'You are JamCLI, a meticulous AI software engineer.';
-  return `${base}\n\n${TOOL_INSTRUCTION_PROMPT}`;
+  const toolGuidance = [
+    'TOOL USAGE RULES:',
+    '- For commands like run "X": use run_command ONLY, do not list/read/search files first.',
+    '- For file/code questions: prefer list_files, read_file, search_code as needed.',
+    '- To discover other MCP tools: call search_tools.',
+    '- If no tool is needed, respond naturally without tool calls.',
+    '- Never call multiple tools when one suffices; avoid exploratory calls.',
+    '',
+    'Examples:',
+    '✅ "run \\"ls\\"" -> run_command only',
+    '✅ "what is in src/?" -> list_files',
+    '✅ "hello" -> no tools',
+    '❌ "run \\"ls\\"" -> do not call list_files/read_file/search_code',
+  ].join('\n');
+  return `${base}\n\n${TOOL_INSTRUCTION_PROMPT}\n\n${toolGuidance}`;
+};
+
+const buildToolAvailabilityPrompt = (tools: McpToolDescriptor[]) => {
+  if (!tools.length) return '';
+  const lines = tools.map((tool) => {
+    const from = tool.source === 'server' ? `mcp:${tool.serverId}` : 'builtin';
+    return `- ${tool.name} (${from}) — ${tool.description || 'no description'}`;
+  });
+  return [
+    'Available tools for this session (subset shown; more may be discoverable):',
+    ...lines,
+    'Use tools only when directly needed. Use search_tools to discover other capabilities.',
+  ].join('\n');
+};
+
+const isMcpToolQuery = (text: string) => {
+  const normalized = text.toLowerCase();
+  return (
+    (normalized.includes('mcp') && normalized.includes('tool')) ||
+    /^what (tools|mcp tools)/i.test(text.trim()) ||
+    /^which (tools|mcp tools)/i.test(text.trim()) ||
+    normalized.startsWith('list mcp tool') ||
+    normalized.startsWith('show mcp tool')
+  );
+};
+
+type QueryIntent = 'command' | 'code_exploration' | 'conversation';
+
+const detectIntent = (text: string): QueryIntent => {
+  const normalized = text.toLowerCase();
+  if (/^(run|execute)\s+['"]?/.test(normalized)) return 'command';
+  if (/^(show|list|find|search|read|what is in|open)\b/.test(normalized)) return 'code_exploration';
+  if (isMcpToolQuery(text)) return 'code_exploration';
+  return 'conversation';
+};
+
+const userQueryNeedsTools = (text: string) => {
+  const intent = detectIntent(text);
+  if (intent === 'conversation') return false;
+  return true;
+};
+
+const selectToolsForQuery = (tools: McpToolDescriptor[], userText: string, limit: number = 6) => {
+  const intent = detectIntent(userText);
+  const normalized = userText.toLowerCase();
+  const alwaysOn = new Set<string>(['search_tools']);
+  if (intent === 'command') {
+    return tools.filter((t) => t.name === 'run_command');
+  }
+  if (intent === 'conversation') {
+    return [];
+  }
+
+  // core tools kept small
+  for (const name of ['read_file', 'search_code', 'list_files']) {
+    alwaysOn.add(name);
+  }
+
+  const scored: { tool: McpToolDescriptor; score: number }[] = [];
+
+  for (const tool of tools) {
+    if (alwaysOn.has(tool.name)) {
+      scored.push({ tool, score: 100 });
+      continue;
+    }
+
+    const haystack = `${tool.name} ${tool.description || ''} ${tool.serverId || ''}`.toLowerCase();
+    let score = 0;
+    if (haystack.includes('search') || haystack.includes('find')) score += 10;
+    if (haystack.includes('file') || haystack.includes('repo') || haystack.includes('code')) score += 10;
+    for (const term of normalized.split(/\s+/)) {
+      if (term.length > 3 && haystack.includes(term)) {
+        score += 2;
+      }
+    }
+    if (score > 0) {
+      scored.push({ tool, score });
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  const unique = new Map<string, McpToolDescriptor>();
+  for (const entry of scored) {
+    if (unique.size >= limit) break;
+    unique.set(entry.tool.name, entry.tool);
+  }
+  return Array.from(unique.values());
 };
 
 export const Layout = () => {
@@ -362,6 +464,7 @@ export const Layout = () => {
   const prevContextEnabledRef = useRef<boolean | undefined>(undefined);
   const inlineNoticeRef = useRef<InlineNotice | null>(null);
   const statusLineIndexRef = useRef(0);
+  const toolServiceRef = useRef<ToolService | null>(null);
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [terminalSize, setTerminalSize] = useState({
@@ -430,7 +533,9 @@ export const Layout = () => {
     const description =
       pendingAction.type === 'shell_exec'
         ? pendingAction.params.command
-        : `Edit ${pendingAction.params.path}`;
+        : pendingAction.type === 'tool_call'
+          ? `Call ${pendingAction.params.tool || pendingAction.params.descriptor?.name || 'tool'}`
+          : `Edit ${pendingAction.params.path}`;
     showInlineNotice({
       message: `Action pending: ${description} | [1] [Yes] (Enter) [2] [Yes, don't ask again] [3] [No, change something]`,
       tone: 'warning',
@@ -934,6 +1039,7 @@ export const Layout = () => {
       const profile = await configService.getActiveProfile();
       setConfig(loadedConfig);
       setActiveProfile(profile);
+      toolServiceRef.current = new ToolService({ projectRoot, configService });
 
       modelService = new ModelService(configService);
       mcpManager = new McpManager({ configService });
@@ -2076,6 +2182,25 @@ export const Layout = () => {
     }
   };
 
+  const performToolCall = useCallback(async (descriptor: McpToolDescriptor, args: Record<string, any>) => {
+    if (descriptor.name === 'search_tools') {
+      const results = await mcpManager.searchTools(String(args.query || ''), args.limit || 20);
+      if (!results.length) return 'No tools matched that query.';
+      return results.map((t) => `${t.name} — ${t.description || 'no description'} (${t.source})`).join('\n');
+    }
+
+    if (descriptor.source === 'server') {
+      const response = await mcpManager.callServerTool(descriptor, args);
+      return response.output;
+    }
+    const svc = toolServiceRef.current;
+    if (!svc) {
+      throw new Error('Tool service not initialized');
+    }
+    const exec = await svc.execute({ tool: descriptor.name as ToolName, params: args });
+    return exec.output;
+  }, []);
+
   const handleConfirmAction = async (pending?: Action) => {
     const action = pending || useStore.getState().pendingAction;
     if (!action) return;
@@ -2094,6 +2219,19 @@ export const Layout = () => {
       } catch (error: any) {
         result = 'Error editing file: ' + error.message;
       }
+    } else if (action.type === 'tool_call') {
+      try {
+        const descriptor = action.params.descriptor as McpToolDescriptor | undefined;
+        const args = action.params.args || {};
+        if (!descriptor) {
+          result = 'Tool descriptor missing for requested call.';
+        } else {
+          const output = await performToolCall(descriptor, args);
+          result = `Tool ${descriptor.name} output:\n${truncateOutput(output)}`;
+        }
+      } catch (error: any) {
+        result = `Error executing tool: ${error.message}`;
+      }
     }
 
     addMessage({ role: 'system', content: `Action Executed:\n${result}`, timestamp: Date.now() });
@@ -2103,6 +2241,188 @@ export const Layout = () => {
     setPendingAction(null);
     addMessage({ role: 'system', content: 'Action Rejected by user.', timestamp: Date.now() });
   };
+
+  const runToolEnabledConversation = useCallback(
+    async ({
+      provider,
+      contextForModel,
+      modelUsageKey,
+      modelName,
+      signal,
+      userText,
+    }: {
+      provider: ReturnType<typeof LLMFactory.createProvider>;
+      contextForModel: Message[];
+      modelUsageKey: string;
+      modelName?: string;
+      signal?: AbortSignal;
+      userText: string;
+    }) => {
+      if (!mcpManager) return false;
+
+      const allTools = await mcpManager.listAllTools();
+      const exposedTools = selectToolsForQuery(
+        allTools.filter(
+          (tool) => tool.source === 'server' || SAFE_TOOL_NAMES.includes(tool.name as ToolName)
+        ),
+        userText
+      );
+      if (!exposedTools.length) {
+        return false;
+      }
+
+      const toolPrompt = buildToolAvailabilityPrompt(exposedTools);
+      const systemPrompt = buildSystemPrompt(activeProfile);
+      const systemContent = toolPrompt ? `${systemPrompt}\n\n${toolPrompt}` : systemPrompt;
+
+      const providerMessages: any[] = [{ role: 'system', content: systemContent }];
+      for (const msg of contextForModel) {
+        if (msg.role === 'system') continue;
+        providerMessages.push({ role: msg.role, content: msg.content });
+      }
+
+      const toolMap = new Map(exposedTools.map((tool) => [tool.name, tool]));
+      const openAiTools = exposedTools.map((tool) => ({
+        type: 'function' as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.inputSchema || { type: 'object', properties: {}, additionalProperties: true },
+          cache_control: { type: 'ephemeral' },
+        },
+      }));
+
+      addMessage({
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+        model: modelName,
+        modelName,
+        streaming: true,
+      });
+
+      let finalUsage: TokenUsage | undefined;
+      let toolIterations = 0;
+      let totalToolCalls = 0;
+
+      while (toolIterations < MAX_AGENT_STEPS) {
+        const completion = await provider.complete(providerMessages as any, {
+          model: modelName,
+          temperature: activeProfile?.temperature,
+          tools: openAiTools,
+          toolChoice: 'auto',
+          extraParams: { tools: openAiTools, tool_choice: 'auto' },
+          signal,
+        });
+
+        finalUsage = completion.usage || finalUsage;
+        const toolCalls: LlmToolCall[] = (completion.toolCalls || []).map((call, idx) => ({
+          ...call,
+          id: call.id || `tool_call_${toolIterations}_${idx}`,
+        }));
+
+        totalToolCalls += toolCalls.length;
+        if (totalToolCalls > MAX_TOOL_CALLS_PER_TURN) {
+          updateLastMessage(
+            `⚠️ Tool call budget exceeded (${totalToolCalls}/${MAX_TOOL_CALLS_PER_TURN}). Stopping tool calls.`,
+            finalUsage,
+            { streaming: false }
+          );
+          setStatus('idle');
+          return true;
+        }
+
+        if (toolCalls.length) {
+          updateLastMessage(`Calling tools: ${toolCalls.map((c) => c.name).join(', ')}`, undefined, { streaming: true });
+          providerMessages.push({
+            role: 'assistant',
+            content: completion.content || '',
+            tool_calls: toolCalls.map((call) => ({
+              id: call.id,
+              type: call.type || 'function',
+              function: { name: call.name, arguments: JSON.stringify(call.arguments ?? {}) },
+            })),
+          });
+
+          const toolResultsForModel: any[] = [];
+          for (const call of toolCalls) {
+            const descriptor = toolMap.get(call.name);
+            if (!descriptor) {
+              const missing = `Tool ${call.name} not found or unavailable.`;
+              addMessage({ role: 'system', content: missing, timestamp: Date.now() });
+              toolResultsForModel.push({ role: 'tool', tool_call_id: call.id, content: missing });
+              continue;
+            }
+
+            const requiresApproval = Boolean(descriptor.annotations?.destructiveHint) && !autoApproveActions;
+            if (requiresApproval) {
+              const action: Action = {
+                type: 'tool_call',
+                params: { tool: call.name, args: call.arguments || {}, descriptor, serverId: descriptor.serverId },
+                status: 'pending',
+              };
+              setPendingAction(action);
+              updateLastMessage(
+                `Tool ${call.name} requires approval. Press [1]=yes, [2]=yes (don't ask again), [3]=no.`,
+                finalUsage,
+                { streaming: false }
+              );
+              setStatus('idle');
+              return true;
+            }
+
+            try {
+              const output = await performToolCall(descriptor, call.arguments || {});
+              const userMessage = [
+                `tool_result:${descriptor.name}`,
+                `args: ${JSON.stringify(call.arguments || {})}`,
+                `output:\n${truncateOutput(output)}`,
+              ].join('\n');
+              addMessage({ role: 'system', content: userMessage, timestamp: Date.now() });
+              toolResultsForModel.push({ role: 'tool', tool_call_id: call.id, content: output });
+            } catch (error: any) {
+              const errorMsg = `Tool ${call.name} failed: ${error.message}`;
+              addMessage({ role: 'system', content: errorMsg, timestamp: Date.now() });
+              toolResultsForModel.push({ role: 'tool', tool_call_id: call.id, content: errorMsg });
+            }
+          }
+
+          providerMessages.push(...toolResultsForModel);
+          toolIterations += 1;
+          continue;
+        }
+
+        setStatus('streaming');
+        const finalContent = completion.content || '';
+        updateLastMessage(finalContent, finalUsage, { streaming: false });
+        await persistTurn();
+        if (finalUsage) {
+          incrementModelTokenUsage(modelUsageKey, finalUsage);
+        }
+        setStatus('idle');
+        return true;
+      }
+
+      updateLastMessage(
+        `Reached tool iteration limit (${MAX_AGENT_STEPS}) without a final answer.`,
+        finalUsage,
+        { streaming: false }
+      );
+      setStatus('idle');
+      return true;
+    },
+    [
+      activeProfile,
+      addMessage,
+      autoApproveActions,
+      incrementModelTokenUsage,
+      performToolCall,
+      persistTurn,
+      setPendingAction,
+      setStatus,
+      updateLastMessage,
+    ]
+  );
 
   const handleCommand = async (text: string) => {
     if (!text.startsWith('/')) return false;
@@ -2445,6 +2765,12 @@ export const Layout = () => {
     }
 
     addMessage({ role: 'user', content: text, timestamp: Date.now() });
+    // Short-circuit simple MCP tool visibility questions to avoid unnecessary tool calls.
+    if (isMcpToolQuery(text)) {
+      await showMcpTools();
+      return;
+    }
+
     setStatus('thinking');
 
     const baseMessages = useStore.getState().messages;
@@ -2490,6 +2816,22 @@ export const Layout = () => {
       modelsUsedRef.current.add(modelUsageKey);
       initializeModelTokenUsage(modelUsageKey);
 
+      const needsTools = userQueryNeedsTools(text);
+      const canUseTools = providerKey === 'openrouter' && needsTools;
+      if (canUseTools) {
+        const handled = await runToolEnabledConversation({
+          provider,
+          contextForModel,
+          modelUsageKey,
+          modelName: activeProfile?.preferred_model,
+          signal: controller.signal,
+          userText: text,
+        });
+        if (handled) {
+          return;
+        }
+      }
+
       addMessage({
         role: 'assistant',
         content: '',
@@ -2498,6 +2840,14 @@ export const Layout = () => {
         modelName: activeProfile?.preferred_model,
         streaming: true,
       });
+
+      const systemPromptMessage: Message = {
+        role: 'system',
+        content: buildSystemPrompt(activeProfile),
+        timestamp: Date.now(),
+      };
+      const streamMessages =
+        contextForModel[0]?.role === 'system' ? contextForModel : [systemPromptMessage, ...contextForModel];
 
       let fullContent = '';
       let fullReasoning = '';
@@ -2508,7 +2858,7 @@ export const Layout = () => {
       let finalUsage: TokenUsage | undefined;
       let hasStartedStreaming = false;
 
-      for await (const chunk of provider.streamChat(contextForModel, { 
+      for await (const chunk of provider.streamChat(streamMessages, { 
         model: activeProfile?.preferred_model, 
         signal: controller.signal,
         reasoning: 'auto' 
