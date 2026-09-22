@@ -28,12 +28,25 @@ export interface ContextManagementConfig {
   strategy: 'summarize' | 'truncate';
 }
 
+export interface AgentLoopConfig {
+  max_steps: number;
+  max_tool_calls_per_turn: number;
+  tool_result_max_chars: number;
+}
+
+export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
+  max_steps: 8,
+  max_tool_calls_per_turn: 5,
+  tool_result_max_chars: 2000,
+};
+
 export interface Config {
   api_registry: ApiRegistry;
   active_profile: string;
   telemetry: boolean;
   available_models?: ModelInfo[];
   context_management?: ContextManagementConfig;
+  agent_loop?: AgentLoopConfig;
   general?: GeneralConfig;
 }
 

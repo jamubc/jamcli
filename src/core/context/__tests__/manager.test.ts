@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import { ContextManager } from '../manager.js';
-import type { ChatProvider } from '../providers/types.js';
-import type { ChatMessage } from '../types.js';
+import type { ChatProvider } from '../../providers/types.js';
+import type { ChatMessage } from '../../types.js';
 
 const quiet: ChatProvider = {
   async *streamChat() {},

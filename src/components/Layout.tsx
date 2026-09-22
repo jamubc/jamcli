@@ -34,6 +34,7 @@ import { ExecutionService } from '../services/ExecutionService.js';
 import { ToolService } from '../services/ToolService.js';
 import { HistoryService, SessionMetadata } from '../services/HistoryService.js';
 import type { Config, ModelInfo, Profile, ToolPermission, UiConfig } from '../types/config.js';
+import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
 import type { ToolCall, ToolResult, ToolName } from '../types/tools.js';
 import { ALL_TOOL_NAMES, SAFE_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
 import type { McpServerConfig, McpTestResult, McpToolDescriptor } from '../types/mcp.js';
@@ -143,9 +144,6 @@ type ConfigWizardState =
       form: McpServerForm;
     };
 
-const MAX_AGENT_STEPS = 8;
-const MAX_TOOL_CALLS_PER_TURN = 5;
-const TOOL_RESULT_MAX_CHARS = 2000;
 const TOOL_COMMAND_USAGE = 'Usage: /tools [status|enable|disable|require|auto] <tool_name>';
 const MCP_COMMAND_USAGE = 'Usage: /mcp [servers|tools|add|remove]';
 const PROVIDER_COMMAND_USAGE = 'Usage: /config provider [list|set] [ollama|openrouter] [value]';
@@ -271,7 +269,7 @@ const formatProviderSummary = (cfg: Config | null) => {
   return lines.join('\n');
 };
 
-const truncateOutput = (text: string, limit: number = TOOL_RESULT_MAX_CHARS) => {
+const truncateOutput = (text: string, limit: number = DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars) => {
   if (!text) return '';
   return text.length > limit ? `${text.slice(0, limit)}\n… <truncated>` : text;
 };
@@ -2226,8 +2224,11 @@ export const Layout = () => {
           },
         },
         toolDefinitions: openAiTools,
-        maxToolCallsPerTurn: MAX_TOOL_CALLS_PER_TURN,
-        truncationLimit: TOOL_RESULT_MAX_CHARS,
+        maxSteps: config?.agent_loop?.max_steps ?? DEFAULT_AGENT_LOOP_CONFIG.max_steps,
+        maxToolCallsPerTurn:
+          config?.agent_loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn,
+        truncationLimit:
+          config?.agent_loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars,
         systemPrompt: systemContent,
       });
       toolSession.messages.push(

@@ -189,6 +189,43 @@ test('an approval approval runs the tool and a rejection refuses the run', async
     expect(events.map((e) => e.type)).toEqual(['tool_call', 'approval_request']);
   }
 });
+test('loop limits resolve from configuration with current values as defaults', async () => {
+  const script: CompletionResult[] = [{ content: 'done' }];
+  const provider: ChatProvider = {
+    async *streamChat() {},
+    async complete(): Promise<CompletionResult> {
+      return script[0];
+    },
+  };
+  const dispatcher: ToolDispatcher = {
+    listTools: () => [],
+    requiresApproval: () => false,
+    async execute(call): Promise<ToolResult> {
+      return { tool: call.name, success: true, output: '', durationMs: 0 };
+    },
+  };
+  const fromConfig = new CoreAgent({
+    provider,
+    dispatcher,
+    toolDefinitions: [{ type: 'function', function: { name: 'x' } }],
+    loop: { max_steps: 3, max_tool_calls_per_turn: 7, tool_result_max_chars: 11 },
+  });
+  expect((fromConfig as any).maxSteps).toBe(3);
+  expect((fromConfig as any).maxToolCallsPerTurn).toBe(7);
+  expect((fromConfig as any).truncationLimit).toBe(11);
+  expect((fromConfig as any).truncate('0123456789abcdef')).toBe('0123456789a\n… <truncated>');
+  const explicit = new CoreAgent({
+    provider,
+    dispatcher,
+    toolDefinitions: [{ type: 'function', function: { name: 'x' } }],
+    maxSteps: 2,
+    loop: { max_steps: 3, max_tool_calls_per_turn: 7, tool_result_max_chars: 11 },
+  });
+  expect((explicit as any).maxSteps).toBe(2);
+  const events: AgentEvent[] = [];
+  const result = await explicit.run(createSession('/tmp/test-project'), 'Hi.', (e) => events.push(e));
+  expect(result.status).toBe('ok');
+});
 test('budget exhaustion stops the loop without a second provider call', async () => {
   let completions = 0;
   const provider: ChatProvider = {

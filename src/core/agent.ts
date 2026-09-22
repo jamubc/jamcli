@@ -3,6 +3,8 @@ import { addModelUsage, addUsage, appendMessages, isCancelled } from './state.js
 import type { ChatProvider, ToolDefinition } from './providers/types.js';
 import { dispatchToolCalls, toProviderToolMessages, type ToolDispatcher } from './tools/dispatch.js';
 
+import type { AgentLoopConfig } from '../types/config.js';
+
 export interface AgentOptions {
   maxSteps?: number;
   provider?: ChatProvider;
@@ -15,6 +17,7 @@ export interface AgentOptions {
   maxToolCallsPerTurn?: number;
   truncationLimit?: number;
   systemPrompt?: string;
+  loop?: AgentLoopConfig;
 }
 
 const DEFAULT_MAX_STEPS = 8;
@@ -36,7 +39,8 @@ export class CoreAgent implements Agent {
   private systemPrompt?: string;
 
   constructor(options: AgentOptions = {}) {
-    this.maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
+    const loop = options.loop;
+    this.maxSteps = options.maxSteps ?? loop?.max_steps ?? DEFAULT_MAX_STEPS;
     this.provider = options.provider;
     this.model = options.model;
     this.temperature = options.temperature;
@@ -44,8 +48,8 @@ export class CoreAgent implements Agent {
     this.signal = options.signal;
     this.dispatcher = options.dispatcher;
     this.toolDefinitions = options.toolDefinitions;
-    this.maxToolCallsPerTurn = options.maxToolCallsPerTurn ?? DEFAULT_MAX_TOOL_CALLS;
-    this.truncationLimit = options.truncationLimit ?? DEFAULT_TRUNCATION_LIMIT;
+    this.maxToolCallsPerTurn = options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_MAX_TOOL_CALLS;
+    this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_TRUNCATION_LIMIT;
     this.systemPrompt = options.systemPrompt;
   }
 
