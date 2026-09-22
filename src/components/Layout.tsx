@@ -144,25 +144,6 @@ const TOOL_RESULT_MAX_CHARS = 2000;
 const TOOL_COMMAND_USAGE = 'Usage: /tools [status|enable|disable|require|auto] <tool_name>';
 const MCP_COMMAND_USAGE = 'Usage: /mcp [servers|tools|add|remove]';
 const PROVIDER_COMMAND_USAGE = 'Usage: /config provider [list|set] [ollama|openrouter] [value]';
-const TOOL_INSTRUCTION_PROMPT = [
-  'You are JamCLI, an on-device software engineer. When you need to inspect the repository or run checks, emit a fenced JSON block describing a single action.',
-  '',
-  'Format:',
-  '',
-  '```json',
-  '{"action": "<list_files|read_file|search_code|apply_patch|run_command>", "params": { "path": "src/index.ts", "start_line": 1, "end_line": 80 }}',
-  '```',
-  '',
-  'Available actions:',
-  '- list_files: { pattern?: string, limit?: number, include_hidden?: boolean }',
-  '- read_file: { path: string, start_line?: number, end_line?: number }',
-  '- search_code: { query?: string, regex?: { pattern: string, flags?: string }, pattern?: string, limit?: number }',
-  '- apply_patch: { path: string, patch: string } (unified diff)',
-  '- run_command: { command: string, cwd?: string }',
-  '',
-  'Wait for tool_result(...) messages before deciding your next step. Prefer using tools over guessing. Respond with natural language only when the task is complete.',
-].join('\n');
-
 const THINKING_STATUS_LINES = [
   'Deciding on build steps to catch errors',
   'Scanning recent turns for context',
@@ -303,6 +284,7 @@ const buildSystemPrompt = (profile?: Profile | null) => {
     'TOOL USAGE RULES:',
     '- For commands like run "X": use run_command ONLY, do not list/read/search files first.',
     '- For file/code questions: prefer list_files, read_file, search_code as needed.',
+    '- Inspect the repository with tools instead of guessing at its contents.',
     '- To discover other MCP tools: call search_tools.',
     '- If no tool is needed, respond naturally without tool calls.',
     '- Never call multiple tools when one suffices; avoid exploratory calls.',
@@ -313,7 +295,7 @@ const buildSystemPrompt = (profile?: Profile | null) => {
     '✅ "hello" -> no tools',
     '❌ "run \\"ls\\"" -> do not call list_files/read_file/search_code',
   ].join('\n');
-  return `${base}\n\n${TOOL_INSTRUCTION_PROMPT}\n\n${toolGuidance}`;
+  return `${base}\n\n${toolGuidance}`;
 };
 
 const buildToolAvailabilityPrompt = (tools: McpToolDescriptor[]) => {
