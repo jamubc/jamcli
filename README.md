@@ -35,7 +35,7 @@ X Git integration
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) runtime (required for Ink)
+- [Bun](https://bun.sh) runtime
 - Node.js (for npm package management)
 
 ## Installation
@@ -119,8 +119,8 @@ npm unlink -g jamcli
 
 ## Architecture
 
-- **Runtime**: Bun (required for OpenTUI's native integrations)
-- **UI Framework**: OpenTUI + React
+- **Runtime**: Bun
+- **UI Framework**: Ink 7.1.1 (interim; OpenTUI is the committed target and the port follows this unit)
 - **State Management**: Zustand
 - **Type Safety**: TypeScript
 - **MCP**

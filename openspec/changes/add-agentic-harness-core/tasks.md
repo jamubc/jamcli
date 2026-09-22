@@ -59,6 +59,7 @@ the TUI booted and exercised after each. The TUI is the regression test for this
 - [ ] 2.9 Extract context management. Files: `src/core/context/`, `src/services/ContextManager.ts`. Move `ContextManager` under the core unchanged, then delete the original. Verify `/compact` still works.
 - [ ] 2.10 Extract the loop constants. Files: `src/core/`, `src/types/config.ts`. Move `MAX_AGENT_STEPS`, `MAX_TOOL_CALLS_PER_TURN`, and `TOOL_RESULT_MAX_CHARS` into configuration with the current values as defaults. Verify no constant remains in a component.
 - [ ] 2.11 Rewire the TUI onto the core. Files: `src/components/Layout.tsx`, `src/tui/`. The TUI renders core events and forwards input. Verify every slash command still works.
+  - TUI renders core events and forwards input, with no Ink import outside `src/tui/`, no new `ink-*` dependency, and no bare `useStore()` read for chat state. Parity only: no new Ink-specific features, and Ink idioms that OpenTUI replaces (`ink-text-input`, reserved-line math) are not polished beyond what the checks require.
 - [ ] 2.12 Split `Layout.tsx`. Files: `src/tui/*.tsx`. Split the 3,318-line component into focused files, none over 400 lines, one commit per extraction, no behavior change. Verify the file no longer exists or is under 400 lines, and that the TUI boots after each commit.
 - [ ] 2.13 Prove the core runs without the TUI. Files: `src/core/__tests__/agent.test.ts`. Run a turn against a stubbed provider and assert the event sequence. Verify the test passes with no Ink module imported.
 

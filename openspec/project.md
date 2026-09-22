@@ -45,17 +45,20 @@ memories, because every candidate it surfaced was already obvious.
 
 Current, as measured in `package.json` and `src/`:
 
-- Bun 1.4.2 as the runtime (Ink requires it)
-- TypeScript 5.4, bundled with tsup to `dist/index.js`
-- Ink 6.5 and React 19 for the terminal UI
-- Zustand 4.5 for state
-- Zod 3.22 for schema validation
+- Bun 1.4.2 as the runtime (Ink 7.1.1 is the interim renderer; OpenTUI is the
+  committed target and the port follows the open change)
+- TypeScript 7, bundled with tsup to `dist/index.js`
+- React 19.2 for the terminal UI
+- Zustand 5 for state
+- Zod 4 for schema validation
 - `@modelcontextprotocol/sdk` 1.22 for MCP clients
 - No test framework installed; no CI
 
 Target, established by `changes/add-agentic-harness-core`:
 
-- TypeScript 7, Ink 7, Zustand 5, Zod 4
+- TypeScript 7, Ink 7 (interim), Zustand 5, Zod 4, React 19.2
+- OpenTUI as the committed UI substrate, ported in the next unit after this
+  change closes; no new Ink-specific features until then
 - `bun test` as the test runner, `tsc --noEmit` as the type gate
 - `@agentclientprotocol/sdk` 1.5 for ACP
 
