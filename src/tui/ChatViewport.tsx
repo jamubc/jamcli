@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useStore } from '../store/index.js';
-import { DEFAULT_SPINNER_FRAMES, useColorSpinner, useElapsedTimer } from '../hooks/useStatusIndicator.js';
+import { DEFAULT_SPINNER_FRAMES, useColorSpinner, useElapsedTimer } from './useStatusIndicator.js';
 import type { Message } from '../core/types.js';
 import type { StatusStyleDefinition } from '../styles/statusStyles.js';
 

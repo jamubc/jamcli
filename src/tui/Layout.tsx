@@ -17,7 +17,7 @@ import { McpServerModal, type McpServerForm } from './McpServerModal.js';
 import { useStore } from '../store/index.js';
 import type { Action } from '../store/index.js';
 import type { Message, TokenUsage } from '../core/types.js';
-import { useMenuNavigation } from '../hooks/useMenuNavigation.js';
+import { useMenuNavigation } from './useMenuNavigation.js';
 import { useInlineNotice } from './useInlineNotice.js';
 import { ConfigService } from '../services/ConfigService.js';
 import { ModelService } from '../services/ModelService.js';

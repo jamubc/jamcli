@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useStore } from '../store/index.js';
-import { DEFAULT_SHIMMER_COLORS, DEFAULT_SPINNER_FRAMES, useColorSpinner } from '../hooks/useStatusIndicator.js';
+import { DEFAULT_SHIMMER_COLORS, DEFAULT_SPINNER_FRAMES, useColorSpinner } from './useStatusIndicator.js';
 import { DEFAULT_STATUS_STYLE } from '../styles/statusStyles.js';
 import type { StatusStyleDefinition } from '../styles/statusStyles.js';
 

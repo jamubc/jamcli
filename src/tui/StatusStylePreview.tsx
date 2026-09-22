@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { useColorSpinner, useShimmerTick } from '../hooks/useStatusIndicator.js';
+import { useColorSpinner, useShimmerTick } from './useStatusIndicator.js';
 import type { StatusStyleDefinition } from '../styles/statusStyles.js';
 
 const renderShimmeringText = (text: string, palette: string[], shimmerEnabled: boolean, shimmerTick: number) => {
