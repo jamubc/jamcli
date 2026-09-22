@@ -2190,6 +2190,14 @@ export const Layout = () => {
     const action = pending || useStore.getState().pendingAction;
     if (!action) return;
 
+    if (action.type === 'tool_call' && coreApprovalRef.current) {
+      const resolve = coreApprovalRef.current;
+      coreApprovalRef.current = null;
+      setPendingAction(null);
+      resolve(true);
+      return;
+    }
+
     setPendingAction(null);
     let result = '';
 
@@ -2205,13 +2213,6 @@ export const Layout = () => {
         result = 'Error editing file: ' + error.message;
       }
     } else if (action.type === 'tool_call') {
-      if (coreApprovalRef.current) {
-        const resolve = coreApprovalRef.current;
-        coreApprovalRef.current = null;
-        setPendingAction(null);
-        resolve(true);
-        return;
-      }
       try {
         const descriptor = action.params.descriptor as McpToolDescriptor | undefined;
         const args = action.params.args || {};

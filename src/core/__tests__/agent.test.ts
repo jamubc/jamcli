@@ -129,6 +129,66 @@ test('an unusable tool call becomes a tool error and the turn continues', async 
   const errors = events.filter((e) => e.type === 'tool_result' && !(e as any).result.success);
   expect(errors).toHaveLength(1);
 });
+test('an approval approval runs the tool and a rejection refuses the run', async () => {
+  const scripted = () => {
+    const script: CompletionResult[] = [
+      {
+        content: '',
+        toolCalls: [{ function: { name: 'run_command', arguments: { command: 'ls' } } }],
+      },
+      { content: 'final' },
+    ];
+    let calls = 0;
+    const provider: ChatProvider = {
+      async *streamChat() {},
+      async complete(): Promise<CompletionResult> {
+        return script[Math.min(calls++, script.length - 1)];
+      },
+    };
+    let executed = 0;
+    const dispatcher: ToolDispatcher = {
+      listTools: () => [{ name: 'run_command' }],
+      requiresApproval: () => true,
+      async execute(call): Promise<ToolResult> {
+        executed += 1;
+        return { tool: call.name, success: true, output: 'listed', durationMs: 0 };
+      },
+    };
+    const agent = new CoreAgent({
+      provider,
+      dispatcher,
+      toolDefinitions: [{ type: 'function', function: { name: 'run_command' } }],
+    });
+    return { agent, getExecuted: () => executed };
+  };
+
+  {
+    const { agent, getExecuted } = scripted();
+    const events: AgentEvent[] = [];
+    const pending = agent.run(createSession('/tmp/test-project'), 'Run ls.', (e) => {
+      events.push(e);
+      if (e.type === 'approval_request') e.decide(true);
+    });
+    const result = await pending;
+    expect(result.status).toBe('ok');
+    expect(result.response).toBe('final');
+    expect(getExecuted()).toBe(1);
+    expect(events.map((e) => e.type)).toEqual(['tool_call', 'approval_request', 'tool_result', 'text']);
+  }
+
+  {
+    const { agent, getExecuted } = scripted();
+    const events: AgentEvent[] = [];
+    const pending = agent.run(createSession('/tmp/test-project'), 'Run ls.', (e) => {
+      events.push(e);
+      if (e.type === 'approval_request') e.decide(false);
+    });
+    const result = await pending;
+    expect(result.status).toBe('refused');
+    expect(getExecuted()).toBe(0);
+    expect(events.map((e) => e.type)).toEqual(['tool_call', 'approval_request']);
+  }
+});
 test('budget exhaustion stops the loop without a second provider call', async () => {
   let completions = 0;
   const provider: ChatProvider = {
