@@ -59,218 +59,42 @@ let configService: ConfigService;
 let modelService: ModelService;
 let mcpManager: McpManager;
 
-const resetTerminalViewport = () => {
-  if (!process.stdout) return;
-  // Clear screen + scrollback to keep the layout from mixing with prior runs.
-  process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
-};
-
-const BRACKETED_PASTE_START = '\x1b[200~';
-const BRACKETED_PASTE_END = '\x1b[201~';
-
-const normalizePastedContent = (value: string) => value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-const SLASH_COMMANDS: SlashCommand[] = [
-  { name: '/model', description: 'Switch AI model' },
-  { name: '/copy', description: 'Copy chat (/copy o 3)' },
-  { name: '/profile', description: 'Switch profile' },
-  { name: '/resume', description: 'Resume previous session' },
-  { name: '/tools', description: 'Manage AI tool permissions' },
-  { name: '/mcp', description: 'Manage MCP servers and tools' },
-  { name: '/config', description: 'Open configuration menu' },
-  { name: '/compact', description: 'Compress conversation history' },
-  { name: '/clear', description: 'Clear chat history' },
-  { name: '/help', description: 'Show help' },
-  { name: '/exit', description: 'Exit JamCLI' },
-];
-
-const CONFIG_SUBCOMMANDS: SlashCommand[] = [
-  { name: 'provider', description: 'Configure AI providers (ollama, openrouter)' },
-  { name: 'prompt', description: 'View or edit system prompt' },
-  { name: 'style', description: 'Status indicator style' },
-];
-
-type ModelMenuState = {
-  open: boolean;
-  models: ModelInfo[];
-  selectedIndex: number;
-  searchQuery: string;
-};
-
-type SessionMenuState = {
-  open: boolean;
-  sessions: SessionMetadata[];
-  allSessions: SessionMetadata[];
-  selectedIndex: number;
-  searchQuery: string;
-  currentPage: number;
-};
-
-const initialModelMenuState: ModelMenuState = {
-  open: false,
-  models: [],
-  selectedIndex: 0,
-  searchQuery: '',
-};
-
-const initialSessionMenuState: SessionMenuState = {
-  open: false,
-  sessions: [],
-  allSessions: [],
-  selectedIndex: 0,
-  searchQuery: '',
-  currentPage: 0,
-};
-
-const CONFIGURE_ENTRY_ID = '__configure__';
-const CONFIGURE_MODELS_ENTRY: ModelInfo = {
-  id: CONFIGURE_ENTRY_ID,
-  provider: 'openrouter',
-  name: 'Configure models & providers',
-  description: 'Add providers, API keys, and custom model entries.',
-};
-
-const SESSION_PAGE_SIZE = 8;
-
-type ConfigWizardState =
-  | null
-  | {
-      mode: 'provider';
-      provider: ProviderSlug;
-      form: Record<string, string>;
-    }
-  | {
-      mode: 'mcp';
-      action: 'add' | 'edit';
-      server?: McpServerConfig;
-      form: McpServerForm;
-    };
-
-const TOOL_COMMAND_USAGE = 'Usage: /tools [status|enable|disable|require|auto] <tool_name>';
-const MCP_COMMAND_USAGE = 'Usage: /mcp [servers|tools|add|remove]';
-const PROVIDER_COMMAND_USAGE = 'Usage: /config provider [list|set] [ollama|openrouter] [value]';
-const THINKING_STATUS_LINES = [
-  'Deciding on build steps to catch errors',
-  'Scanning recent turns for context',
-  'Choosing which tools to call next',
-  'Lining up a plan before replying',
-];
-
-const STREAMING_STATUS_LINES = [
-  'Shaping the reply',
-  'Tightening wording and code blocks',
-  'Streaming the answer',
-  'Wrapping up the response',
-];
-
-type AgentLoopState = {
-  messages: Message[];
-  provider: ReturnType<typeof LLMFactory.createProvider>;
-  profile: Profile | null;
-  providerKey: 'ollama' | 'openrouter';
-  step: number;
-  maxSteps: number;
-};
-
-type StatusDetail = {
-  phase: 'thinking' | 'streaming';
-  modelName?: string;
-  startedAt: number;
-  message: string;
-};
-
-type CollapsedPastePreview = {
-  id: number;
-  content: string;
-  lineCount: number;
-  charCount: number;
-};
-
-export type { InlineNotice } from './useInlineNotice.js';
-
-const TOOL_ALIAS_MAP: Record<string, ToolName> = {
-  shell: 'run_command',
-  run: 'run_command',
-  command: 'run_command',
-  bash: 'run_command',
-  apply: 'apply_patch',
-  patch: 'apply_patch',
-  edit: 'apply_patch',
-  files: 'list_files',
-  list: 'list_files',
-  ls: 'list_files',
-  read: 'read_file',
-  cat: 'read_file',
-  search: 'search_code',
-  rg: 'search_code',
-};
-
-const normalizeToolIdentifier = (input?: string): ToolName | null => {
-  if (!input) return null;
-  const normalized = input.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-  const exact = ALL_TOOL_NAMES.find((name) => name === normalized);
-  if (exact) return exact;
-  return TOOL_ALIAS_MAP[normalized] ?? null;
-};
-
-const formatToolStatusTable = (permissions: Record<ToolName, ToolPermission>) => {
-  const header = 'Tool            Status   Mode   Description';
-  const lines = ALL_TOOL_NAMES.map((name) => {
-    const perm = permissions[name];
-    const meta = TOOL_DEFINITIONS[name];
-    const status = perm.allowed ? 'on ' : 'off';
-    const mode = perm.allowed ? (perm.require_approval ? 'ask ' : 'auto') : 'off';
-    return `${name.padEnd(15)} ${status.padEnd(7)} ${mode.padEnd(5)} ${meta.description}`;
-  });
-  return ['Tool permissions:', header, ...lines, '', 'Use /tools enable|disable|require|auto <tool_name> to update.'].join('\n');
-};
-
-const describeToolMode = (perm: ToolPermission) => {
-  if (!perm.allowed) return 'disabled';
-  return perm.require_approval ? 'enabled (ask)' : 'enabled (auto)';
-};
-
-type ProviderSlug = 'ollama' | 'openrouter';
-
-const PROVIDER_ALIAS_MAP: Record<string, ProviderSlug> = {
-  ollama: 'ollama',
-  local: 'ollama',
-  openrouter: 'openrouter',
-  router: 'openrouter',
-  or: 'openrouter',
-};
-
-const normalizeProvider = (value?: string): ProviderSlug | null => {
-  if (!value) return null;
-  return PROVIDER_ALIAS_MAP[value.trim().toLowerCase()] ?? null;
-};
-
-const maskKey = (value?: string) => {
-  if (!value) return '(not set)';
-  if (value.length <= 6) return `${value.slice(0, 2)}****`;
-  return `${value.slice(0, 4)}****${value.slice(-2)}`;
-};
-
-const formatProviderSummary = (cfg: Config | null) => {
-  const ollamaEndpoint = cfg?.api_registry?.ollama?.endpoint || 'http://localhost:11434 (default)';
-  const openrouterKey = cfg?.api_registry?.openrouter?.api_key;
-  const lines = [
-    'Providers:',
-    `- Ollama endpoint: ${ollamaEndpoint}`,
-    `- OpenRouter: ${openrouterKey ? `configured (${maskKey(openrouterKey)})` : 'not configured'}`,
-    '',
-    'Commands:',
-    '/config provider list',
-    '/config provider set ollama <http://host:port>',
-    '/config provider set openrouter <api_key>',
-  ];
-  return lines.join('\n');
-};
-
-const truncateOutput = (text: string, limit: number = DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars) => {
-  if (!text) return '';
-  return text.length > limit ? `${text.slice(0, limit)}\n… <truncated>` : text;
-};
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START,
+  CONFIG_SUBCOMMANDS,
+  CONFIGURE_ENTRY_ID,
+  CONFIGURE_MODELS_ENTRY,
+  initialModelMenuState,
+  initialSessionMenuState,
+  MCP_COMMAND_USAGE,
+  normalizePastedContent,
+  PROVIDER_COMMAND_USAGE,
+  resetTerminalViewport,
+  SESSION_PAGE_SIZE,
+  SLASH_COMMANDS,
+  STREAMING_STATUS_LINES,
+  THINKING_STATUS_LINES,
+  TOOL_COMMAND_USAGE,
+} from './layoutState.js';
+import type {
+  AgentLoopState,
+  CollapsedPastePreview,
+  ConfigWizardState,
+  ModelMenuState,
+  ProviderSlug,
+  SessionMenuState,
+  StatusDetail,
+} from './layoutState.js';
+import {
+  describeToolMode,
+  formatProviderSummary,
+  formatToolStatusTable,
+  maskKey,
+  normalizeProvider,
+  normalizeToolIdentifier,
+  truncateOutput,
+} from './layoutFormat.js';
 
 export const Layout = () => {
   const messages = useStore((s) => s.messages);
