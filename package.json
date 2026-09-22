@@ -22,7 +22,7 @@
     "env-paths": "^3.0.0",
     "fast-glob": "^3.3.3",
     "fs-extra": "^11.2.0",
-    "ink": "^6.5.1",
+    "ink": "^7.1.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.0.0",
     "string-width": "^8.1.0",
