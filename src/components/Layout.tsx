@@ -23,7 +23,6 @@ import { McpManager } from '../services/McpManager.js';
 import { McpTestService } from '../services/McpTestService.js';
 import { ContextManager } from '../services/ContextManager.js';
 import { LLMFactory, type ToolCall as LlmToolCall } from '../services/LLMProvider.js';
-import { ActionParser } from '../services/ActionParser.js';
 import { FileSystemService } from '../services/FileSystemService.js';
 import { ExecutionService } from '../services/ExecutionService.js';
 import { ToolService } from '../services/ToolService.js';
@@ -2900,19 +2899,6 @@ export const Layout = () => {
         }
       }
 
-      const action = ActionParser.parse(fullContent);
-      if (action) {
-        if (autoApproveActions) {
-          showInlineNotice({
-            message: 'Auto-approved tool action this session.',
-            tone: 'info',
-            kind: 'sticky',
-          });
-          await handleConfirmAction(action);
-        } else {
-          setPendingAction(action);
-        }
-      }
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         const reason = cancelReasonRef.current;
