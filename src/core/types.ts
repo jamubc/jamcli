@@ -17,6 +17,8 @@ export interface ChatMessage {
   tool_call_id?: string;
 }
 
+export type Message = ChatMessage;
+
 export interface ProviderToolCall {
   id?: string;
   type?: string;

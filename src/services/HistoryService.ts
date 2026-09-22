@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { Message, TokenUsage } from '../store/index.js';
+import { Message, TokenUsage } from '../core/types.js';
 import { jamcliPaths, getStateDir } from '../utils/paths.js';
 
 export interface SessionMetadata {

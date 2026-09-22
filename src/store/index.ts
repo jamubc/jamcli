@@ -1,9 +1,7 @@
 import { create } from 'zustand';
 import { Config, Profile, UiConfig } from '../types/config.js';
 import { HistoryService, SessionUsage } from '../services/HistoryService.js';
-import type { ChatMessage as Message, TokenUsage } from '../core/types.js';
-
-export type { Message, TokenUsage };
+import type { Message, TokenUsage } from '../core/types.js';
 
 export interface Action {
   type: 'file_edit' | 'shell_exec' | 'tool_call';

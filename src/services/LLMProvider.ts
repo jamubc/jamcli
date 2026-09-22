@@ -1,4 +1,4 @@
-import { Message, TokenUsage } from '../store/index.js';
+import { Message, TokenUsage } from '../core/types.js';
 
 export interface ModelOptions {
   temperature?: number;
