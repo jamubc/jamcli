@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from 'ink';
-import { Layout } from './components/Layout.js';
+import { Layout } from './tui/Layout.js';
 
 // Avoid raw-mode errors when running under non-TTY (e.g., tsup --watch onSuccess).
 if (process.stdin && process.stdin.isTTY === false) {

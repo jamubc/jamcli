@@ -17,7 +17,7 @@ const tools: McpToolDescriptor[] = [
 ];
 
 test('the core system prompt is byte-identical for an unchanged profile', async () => {
-  const src = await Bun.file('src/components/Layout.tsx').text();
+  const src = await Bun.file('src/tui/Layout.tsx').text();
   expect(src).not.toContain('TOOL_INSTRUCTION_PROMPT');
   expect(src).not.toContain('const buildSystemPrompt');
   const prompt = buildSystemPrompt(profile());
