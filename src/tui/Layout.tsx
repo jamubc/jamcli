@@ -17,6 +17,7 @@ import { McpServerModal, type McpServerForm } from './McpServerModal.js';
 import { useStore } from '../store/index.js';
 import type { Action, Message, TokenUsage } from '../store/index.js';
 import { useMenuNavigation } from '../hooks/useMenuNavigation.js';
+import { useInlineNotice } from './useInlineNotice.js';
 import { ConfigService } from '../services/ConfigService.js';
 import { ModelService } from '../services/ModelService.js';
 import { McpManager } from '../services/McpManager.js';
@@ -184,11 +185,7 @@ type CollapsedPastePreview = {
   charCount: number;
 };
 
-type InlineNotice = {
-  message: string;
-  tone?: 'warning' | 'info';
-  kind?: 'clear_input' | 'sticky';
-};
+export type { InlineNotice } from './useInlineNotice.js';
 
 const TOOL_ALIAS_MAP: Record<string, ToolName> = {
   shell: 'run_command',
@@ -317,7 +314,7 @@ export const Layout = () => {
   const [statusDetail, setStatusDetail] = useState<StatusDetail | null>(null);
   const [statusStyle, setStatusStyle] = useState<StatusStyleDefinition>(DEFAULT_STATUS_STYLE);
   const [statusStyleOptions, setStatusStyleOptions] = useState<StatusStyleOption[]>([]);
-  const [inlineNotice, setInlineNotice] = useState<InlineNotice | null>(null);
+  const { inlineNotice, showInlineNotice, clearInlineNotice } = useInlineNotice(inputValue);
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelReasonRef = useRef<'escape' | 'ctrl+c' | null>(null);
   const coreApprovalRef = useRef<((ok: boolean) => void) | null>(null);
@@ -333,7 +330,6 @@ export const Layout = () => {
   const pasteCounterRef = useRef(0);
   const pasteBufferRef = useRef<{ active: boolean; data: string }>({ active: false, data: '' });
   const prevContextEnabledRef = useRef<boolean | undefined>(undefined);
-  const inlineNoticeRef = useRef<InlineNotice | null>(null);
   const statusLineIndexRef = useRef(0);
   const toolServiceRef = useRef<ToolService | null>(null);
   const { exit } = useApp();
@@ -360,22 +356,6 @@ export const Layout = () => {
       }
     };
   }, [stdout]);
-
-  const showInlineNotice = useCallback((notice: InlineNotice) => {
-    inlineNoticeRef.current = notice;
-    setInlineNotice(notice);
-  }, []);
-
-  const clearInlineNotice = useCallback(() => {
-    inlineNoticeRef.current = null;
-    setInlineNotice(null);
-  }, []);
-
-  useEffect(() => {
-    if (!inputValue && inlineNoticeRef.current?.kind === 'clear_input') {
-      clearInlineNotice();
-    }
-  }, [clearInlineNotice, inputValue]);
 
   useEffect(() => {
     const ctxEnabled = config?.context_management?.enabled ?? false;
