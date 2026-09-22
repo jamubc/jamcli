@@ -289,6 +289,7 @@ export const Layout = () => {
   const setPendingAction = useStore((s) => s.setPendingAction);
   const initializeHistory = useStore((s) => s.initializeHistory);
   const persistTurn = useStore((s) => s.persistTurn);
+  const replaceMessages = useStore((s) => s.replaceMessages);
   const getSessionUsage = useStore((s) => s.getSessionUsage);
   const resumeSession = useStore((s) => s.resumeSession);
   const modelTokenUsage = useStore((s) => s.modelTokenUsage);
@@ -1497,7 +1498,7 @@ export const Layout = () => {
     const success = await resumeSession(sessionId, projectRoot);
     
     if (success) {
-      const updatedMessages = useStore.getState().messages;
+      const updatedMessages = messages;
       addMessage({
         role: 'system',
         content: `📜 Resumed session: ${sessionId}\nLoaded ${updatedMessages.length} messages from history.`,
@@ -2011,7 +2012,7 @@ export const Layout = () => {
   });
 
   const copyConversation = async ({ onlyModel, limit }: { onlyModel: boolean; limit?: number }) => {
-    const allMessages = useStore.getState().messages;
+    const allMessages = messages;
     const source = onlyModel ? allMessages.filter((msg) => msg.role === 'assistant') : allMessages;
 
     if (!source.length) {
@@ -2072,7 +2073,7 @@ export const Layout = () => {
   }, []);
 
   const handleConfirmAction = async (pending?: Action) => {
-    const action = pending || useStore.getState().pendingAction;
+    const action = pending || pendingAction;
     if (!action) return;
 
     if (action.type === 'tool_call' && coreApprovalRef.current) {
@@ -2314,7 +2315,7 @@ export const Layout = () => {
         setIsConfigMenuOpen(false);
         resetTerminalViewport();
         setIsExpandedView(false);
-        useStore.setState({ messages: [] });
+        replaceMessages([]);
         return true;
       case '/help':
         setIsConfigMenuOpen(false);
@@ -2463,7 +2464,9 @@ export const Layout = () => {
       }
       case '/compact': {
         setIsConfigMenuOpen(false);
-        const { messages: currentMessages, config: currentConfig, activeProfile: currentProfile } = useStore.getState();
+        const currentMessages = messages;
+        const currentConfig = config;
+        const currentProfile = activeProfile;
 
         if (status !== 'idle') {
           addMessage({ role: 'system', content: 'Cannot compact while busy.', timestamp: Date.now() });
@@ -2492,7 +2495,7 @@ export const Layout = () => {
           );
 
           if (result.context !== currentMessages) {
-            useStore.setState({ messages: result.context });
+            replaceMessages(result.context);
             addMessage({
               role: 'system',
               content: result.systemNotice || 'Context compacted.',
@@ -2652,7 +2655,7 @@ export const Layout = () => {
 
     setStatus('thinking');
 
-    const baseMessages = useStore.getState().messages;
+    const baseMessages = messages;
     const controller = new AbortController();
     abortControllerRef.current = controller;
     cancelReasonRef.current = null;
@@ -2686,7 +2689,7 @@ export const Layout = () => {
       }
 
       if (managed.context !== baseMessages) {
-        useStore.setState({ messages: managed.context });
+        replaceMessages(managed.context);
       }
 
       const conversationProvider = activeProfile?.preferred_provider || providerKey;
@@ -2808,7 +2811,7 @@ export const Layout = () => {
       if (error?.name === 'AbortError') {
         const reason = cancelReasonRef.current;
         const cancelledMessage = reason === 'escape' ? '⏸️ Request cancelled by user.' : '⛔ Request cancelled.';
-        const latestMessages = useStore.getState().messages;
+        const latestMessages = messages;
         const last = latestMessages[latestMessages.length - 1];
         if (last?.role === 'assistant') {
           const content = last.content ? `${last.content}\n\n${cancelledMessage}` : cancelledMessage;

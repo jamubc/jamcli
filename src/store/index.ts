@@ -19,6 +19,7 @@ interface ChatSlice {
   sessionUsage: SessionUsage | null;
   addMessage: (msg: Message) => void;
   updateLastMessage: (content: string, usage?: TokenUsage, overrides?: Partial<Message>) => void;
+  replaceMessages: (messages: Message[]) => void;
   setStatus: (status: 'idle' | 'thinking' | 'streaming') => void;
   initializeHistory: (projectRoot?: string, sessionId?: string) => Promise<void>;
   persistTurn: () => Promise<void>;
@@ -74,6 +75,8 @@ export const useStore = create<AppState>((set, get) => ({
   }),
   
   setStatus: (status) => set({ status }),
+
+  replaceMessages: (messages) => set({ messages }),
   
   initializeHistory: async (projectRoot?: string, sessionId?: string) => {
     const resolvedRoot = projectRoot ?? process.cwd();
