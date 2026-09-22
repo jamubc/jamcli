@@ -47,7 +47,7 @@ Park the in-progress work first. Nothing below may be built on an unrecorded tre
 The point of no return in one direction. Extract in slices, one commit per slice, with
 the TUI booted and exercised after each. The TUI is the regression test for this stage.
 
-- [ ] 2.1 Create the core contracts. Files: `src/core/types.ts`. Define `JamSession`, `AgentEvent` (text, reasoning, tool_call, tool_result, usage, approval_request), `ToolCall`, `ToolResult`, and `RunResult` per `design.md`. Keep `approval_request` carrying a decision callback and never a component reference.
+- [x] 2.1 Create the core contracts. Files: `src/core/types.ts`. Define `JamSession`, `AgentEvent` (text, reasoning, tool_call, tool_result, usage, approval_request), `ToolCall`, `ToolResult`, and `RunResult` per `design.md`. Keep `approval_request` carrying a decision callback and never a component reference.
 - [ ] 2.2 Create the session state module. Files: `src/core/state.ts`. Move message list, usage accumulation, and cancellation flags out of the Zustand store's chat slice. The store keeps UI state only.
 - [ ] 2.3 Create the loop skeleton. Files: `src/core/agent.ts`. Implement `run` and `cancel` with no tool dispatch and no provider call yet. Verify a caller can construct it and receive a text event.
 - [ ] 2.4 Extract the provider call. Files: `src/core/agent.ts`, `src/components/Layout.tsx`. Move the streaming call and reasoning-delta handling into the core, emitting text, reasoning, and usage events. Verify the TUI still streams replies.
