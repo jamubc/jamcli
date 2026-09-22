@@ -26,6 +26,7 @@ import { LLMFactory, type ToolCall as LlmToolCall } from '../services/LLMProvide
 import { CoreAgent } from '../core/agent.js';
 import { adaptLegacyProvider } from '../core/providers/legacy.js';
 import { createSession } from '../core/state.js';
+import { buildSystemPrompt, buildToolAvailabilityPrompt } from '../core/prompt.js';
 import { FileSystemService } from '../services/FileSystemService.js';
 import { ExecutionService } from '../services/ExecutionService.js';
 import { ToolService } from '../services/ToolService.js';
@@ -278,39 +279,6 @@ const formatToolResultMessage = (call: ToolCall, result: ToolResult) => {
   const metadata = result.metadata ? `\nmetadata: ${JSON.stringify(result.metadata)}` : '';
   const output = truncateOutput(result.output || '<no output>');
   return [`tool_result:${call.tool}`, `args: ${argsPreview}`, `duration: ${result.durationMs}ms`, `output:\n${output}${metadata}`].join('\n');
-};
-
-const buildSystemPrompt = (profile?: Profile | null) => {
-  const base = profile?.system_prompt_override?.trim() || 'You are JamCLI, a meticulous AI software engineer.';
-  const toolGuidance = [
-    'TOOL USAGE RULES:',
-    '- For commands like run "X": use run_command ONLY, do not list/read/search files first.',
-    '- For file/code questions: prefer list_files, read_file, search_code as needed.',
-    '- Inspect the repository with tools instead of guessing at its contents.',
-    '- To discover other MCP tools: call search_tools.',
-    '- If no tool is needed, respond naturally without tool calls.',
-    '- Never call multiple tools when one suffices; avoid exploratory calls.',
-    '',
-    'Examples:',
-    '✅ "run \\"ls\\"" -> run_command only',
-    '✅ "what is in src/?" -> list_files',
-    '✅ "hello" -> no tools',
-    '❌ "run \\"ls\\"" -> do not call list_files/read_file/search_code',
-  ].join('\n');
-  return `${base}\n\n${toolGuidance}`;
-};
-
-const buildToolAvailabilityPrompt = (tools: McpToolDescriptor[]) => {
-  if (!tools.length) return '';
-  const lines = tools.map((tool) => {
-    const from = tool.source === 'server' ? `mcp:${tool.serverId}` : 'builtin';
-    return `- ${tool.name} (${from}) — ${tool.description || 'no description'}`;
-  });
-  return [
-    'Available tools for this session (subset shown; more may be discoverable):',
-    ...lines,
-    'Use tools only when directly needed. Use search_tools to discover other capabilities.',
-  ].join('\n');
 };
 
 const isMcpToolQuery = (text: string) => {
