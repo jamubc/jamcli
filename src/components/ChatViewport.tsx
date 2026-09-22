@@ -9,6 +9,7 @@ const ROLE_META: Record<Message['role'], { prefix: string; color: any }> = {
   user: { prefix: '›', color: 'cyan' },
   assistant: { prefix: '•', color: 'green' },
   system: { prefix: '!', color: 'yellow' },
+  tool: { prefix: '⚙', color: 'gray' },
 };
 
 const DEFAULT_RESERVED_LINES = 12;

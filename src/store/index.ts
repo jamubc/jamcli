@@ -1,23 +1,9 @@
 import { create } from 'zustand';
 import { Config, Profile, UiConfig } from '../types/config.js';
 import { HistoryService, SessionUsage } from '../services/HistoryService.js';
+import type { ChatMessage as Message, TokenUsage } from '../core/types.js';
 
-export interface TokenUsage {
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-}
-
-export interface Message {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: number;
-  model?: string;
-  modelName?: string;
-  streaming?: boolean;
-  usage?: TokenUsage;
-  reasoning?: string;
-}
+export type { Message, TokenUsage };
 
 export interface Action {
   type: 'file_edit' | 'shell_exec' | 'tool_call';

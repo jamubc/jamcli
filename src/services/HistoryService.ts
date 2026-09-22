@@ -22,7 +22,7 @@ export interface ConversationTurn {
   timestamp: string;
   model?: string;
   messages: Array<{
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: string;
   }>;
   usage?: TokenUsage;

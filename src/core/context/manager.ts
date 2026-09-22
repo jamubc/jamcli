@@ -1,23 +1,21 @@
-import { Message } from '../store/index.js';
-import { ContextManagementConfig } from '../types/config.js';
-import { countTotalTokens } from '../utils/tokenUtils.js';
-import { ILLMProvider } from './LLMProvider.js';
+import type { ChatMessage } from '../types.js';
+import type { ContextManagementConfig } from '../../types/config.js';
+import { countTotalTokens } from '../../utils/tokenUtils.js';
+import type { ChatProvider } from '../providers/types.js';
 
 export class ContextManager {
   static async manageContext(
-    messages: Message[],
+    messages: ChatMessage[],
     config: ContextManagementConfig | undefined,
-    provider: ILLMProvider,
+    provider: ChatProvider,
     modelId: string,
     force: boolean = false
-  ): Promise<{ context: Message[]; systemNotice?: string }> {
-    // If force is true, we proceed even if disabled or empty (though empty usually returns early)
-    // If force is false, check config enabled and message length
+  ): Promise<{ context: ChatMessage[]; systemNotice?: string }> {
     if ((!config || !config.enabled) && !force) {
       return { context: messages };
     }
     if (messages.length === 0) {
-        return { context: messages };
+      return { context: messages };
     }
 
     const maxTokens = Math.max(1, config?.max_tokens ?? 8000);
@@ -35,7 +33,7 @@ export class ContextManager {
       const truncated = this.truncateContext(messages, maxTokens);
       return {
         context: truncated.context,
-        systemNotice: `ℹ Context truncated to fit limit (${totalTokens} -> ${truncated.tokens} tokens, limit ${maxTokens}).`,
+        systemNotice: `Context truncated to fit limit (${totalTokens} -> ${truncated.tokens} tokens, limit ${maxTokens}).`,
       };
     }
 
@@ -46,11 +44,11 @@ export class ContextManager {
     return { context: messages };
   }
 
-  private static truncateContext(messages: Message[], limit: number): { context: Message[]; tokens: number } {
+  private static truncateContext(messages: ChatMessage[], limit: number): { context: ChatMessage[]; tokens: number } {
     const systemPrompt = messages[0]?.role === 'system' ? messages[0] : null;
     const systemTokens = systemPrompt ? countTotalTokens([systemPrompt]) : 0;
     const remainingLimit = limit - systemTokens;
-    const contextMessages: Message[] = [];
+    const contextMessages: ChatMessage[] = [];
     let currentTokens = 0;
 
     for (let i = messages.length - 1; i >= (systemPrompt ? 1 : 0); i -= 1) {
@@ -72,20 +70,19 @@ export class ContextManager {
   }
 
   private static async summarizeContext(
-    messages: Message[],
-    provider: ILLMProvider,
+    messages: ChatMessage[],
+    provider: ChatProvider,
     modelId: string,
     currentTokens: number,
     maxTokens: number,
     thresholdLimit: number
-  ): Promise<{ context: Message[]; systemNotice?: string }> {
+  ): Promise<{ context: ChatMessage[]; systemNotice?: string }> {
     const systemPrompt = messages[0]?.role === 'system' ? messages[0] : null;
     const startIndex = systemPrompt ? 1 : 0;
-    // Keep more messages if possible, but ensure we condense at least something
     const KEEP_LAST = 4;
-    
+
     if (messages.length - startIndex <= KEEP_LAST) {
-        return { context: messages };
+      return { context: messages };
     }
 
     const endIndex = messages.length - KEEP_LAST;
@@ -112,50 +109,52 @@ Your summary MUST include the following sections:
 
 Keep the summary concise but technically accurate.
 `.trim();
-    
-    const summaryInput: Message[] = [
-        { role: 'user', content: `${summaryPrompt}\n\n${toSummarize.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}`, timestamp: Date.now() }
+
+    const summaryInput: ChatMessage[] = [
+      {
+        role: 'user',
+        content: `${summaryPrompt}\n\n${toSummarize.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}`,
+        timestamp: Date.now(),
+      },
     ];
 
     try {
-        const result = await provider.complete(summaryInput, { model: modelId, temperature: 0.3 });
-        const summary = result.content;
-        const summaryMessage: Message = {
-            role: 'system',
-            content: `[Context Summary]:\n${summary}`,
-            timestamp: Date.now()
-        };
+      const result = await provider.complete(summaryInput, { model: modelId, temperature: 0.3 });
+      const summary = result.content;
+      const summaryMessage: ChatMessage = {
+        role: 'system',
+        content: `[Context Summary]:\n${summary}`,
+        timestamp: Date.now(),
+      };
 
-        const newContext: Message[] = [];
-        if (systemPrompt) newContext.push(systemPrompt);
-        newContext.push(summaryMessage);
-        newContext.push(...recentMessages);
+      const newContext: ChatMessage[] = [];
+      if (systemPrompt) newContext.push(systemPrompt);
+      newContext.push(summaryMessage);
+      newContext.push(...recentMessages);
 
-        let newTokens = countTotalTokens(newContext);
-        let systemNotice = `ℹ Context compressed (${currentTokens} -> ${newTokens} tokens).`;
+      let newTokens = countTotalTokens(newContext);
+      let systemNotice = `Context compressed (${currentTokens} -> ${newTokens} tokens).`;
 
-        // Only warn about threshold if we were actually over it (not forced)
-        if (currentTokens > thresholdLimit) {
-             systemNotice = `ℹ IMPORTANT: Conversation exceeded limit (${thresholdLimit}/${maxTokens}). Context compressed (${currentTokens} -> ${newTokens} tokens).`;
-        }
+      if (currentTokens > thresholdLimit) {
+        systemNotice = `IMPORTANT: Conversation exceeded limit (${thresholdLimit}/${maxTokens}). Context compressed (${currentTokens} -> ${newTokens} tokens).`;
+      }
 
-        if (newTokens > maxTokens) {
-          const truncated = this.truncateContext(newContext, maxTokens);
-          newTokens = truncated.tokens;
-          return {
-            context: truncated.context,
-            systemNotice: `${systemNotice}\nℹ Summary was still above limit; truncated to ${newTokens} tokens.`,
-          };
-        }
-
+      if (newTokens > maxTokens) {
+        const truncated = this.truncateContext(newContext, maxTokens);
+        newTokens = truncated.tokens;
         return {
-            context: newContext,
-            systemNotice,
+          context: truncated.context,
+          systemNotice: `${systemNotice}\nSummary was still above limit; truncated to ${newTokens} tokens.`,
         };
+      }
 
+      return {
+        context: newContext,
+        systemNotice,
+      };
     } catch (error) {
-        console.error("Failed to summarize context", error);
-        return { context: messages, systemNotice: "⚠ Failed to compress context." };
+      console.error('Failed to summarize context', error);
+      return { context: messages, systemNotice: 'Failed to compress context.' };
     }
   }
 }

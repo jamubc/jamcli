@@ -21,11 +21,12 @@ import { ConfigService } from '../services/ConfigService.js';
 import { ModelService } from '../services/ModelService.js';
 import { McpManager } from '../services/McpManager.js';
 import { McpTestService } from '../services/McpTestService.js';
-import { ContextManager } from '../services/ContextManager.js';
+import { ContextManager } from '../core/context/manager.js';
 import { LLMFactory, type ToolCall as LlmToolCall } from '../services/LLMProvider.js';
 import { CoreAgent } from '../core/agent.js';
 import { adaptLegacyProvider } from '../core/providers/legacy.js';
 import { createSession } from '../core/state.js';
+import type { ChatMessage } from '../core/types.js';
 import { buildSystemPrompt, buildToolAvailabilityPrompt } from '../core/prompt.js';
 import { isMcpToolQuery, selectToolsForQuery, userQueryNeedsTools } from '../core/sensor.js';
 import { FileSystemService } from '../services/FileSystemService.js';
@@ -2141,7 +2142,7 @@ export const Layout = () => {
       userText,
     }: {
       provider: ReturnType<typeof LLMFactory.createProvider>;
-      contextForModel: Message[];
+      contextForModel: ChatMessage[];
       modelUsageKey: string;
       modelName?: string;
       signal?: AbortSignal;
@@ -2486,7 +2487,7 @@ export const Layout = () => {
           const result = await ContextManager.manageContext(
             currentMessages,
             currentConfig?.context_management,
-            provider,
+            adaptLegacyProvider(provider),
             modelId,
             true
           );
@@ -2670,7 +2671,7 @@ export const Layout = () => {
       const managed = await ContextManager.manageContext(
         baseMessages,
         config?.context_management,
-        provider,
+        adaptLegacyProvider(provider),
         modelId,
         false
       );
