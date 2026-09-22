@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useStore } from '../store/index.js';
-import { DEFAULT_SHIMMER_COLORS, DEFAULT_SPINNER_FRAMES, useColorSpinner, useShimmerTick } from '../hooks/useStatusIndicator.js';
+import { DEFAULT_SHIMMER_COLORS, DEFAULT_SPINNER_FRAMES, useColorSpinner } from '../hooks/useStatusIndicator.js';
 import { DEFAULT_STATUS_STYLE } from '../styles/statusStyles.js';
 import type { StatusStyleDefinition } from '../styles/statusStyles.js';
 
@@ -32,7 +32,6 @@ export const Header = ({ mode = 'standard', statusStyle }: HeaderProps) => {
     spinnerColors,
     activeStyle.spinnerIntervalMs
   );
-  const shimmerTick = useShimmerTick(shimmerEnabled);
   const statusLabel = status === 'thinking' ? 'thinking' : status === 'streaming' ? 'streaming' : 'ready';
   const statusGlyph = status === 'idle' ? 'o' : spinner?.frame || DEFAULT_SPINNER_FRAMES[0];
   const glyphColor = status === 'idle' ? palette[0] || 'green' : spinner?.color || palette[0] || 'green';
@@ -40,15 +39,8 @@ export const Header = ({ mode = 'standard', statusStyle }: HeaderProps) => {
     <Box flexDirection="row" gap={1} alignItems="center">
       <Text color={glyphColor}>{statusGlyph}</Text>
       {withLabel && (
-        <Text>
-          {statusLabel.split('').map((char, idx) => {
-            const color = shimmerEnabled ? palette[(idx + shimmerTick) % palette.length] : palette[0] || 'white';
-            return (
-              <Text key={`${char}-${idx}`} color={color} bold>
-                {char}
-              </Text>
-            );
-          })}
+        <Text color={shimmerEnabled ? undefined : palette[0] || 'white'} bold={!shimmerEnabled}>
+          {statusLabel}
         </Text>
       )}
     </Box>

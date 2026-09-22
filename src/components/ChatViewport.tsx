@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useStore } from '../store/index.js';
-import { DEFAULT_SPINNER_FRAMES, useColorSpinner, useElapsedTimer, useShimmerTick } from '../hooks/useStatusIndicator.js';
+import { DEFAULT_SPINNER_FRAMES, useColorSpinner, useElapsedTimer } from '../hooks/useStatusIndicator.js';
 import type { Message } from '../store/index.js';
 import type { StatusStyleDefinition } from '../styles/statusStyles.js';
 
@@ -170,7 +170,6 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
   // Always call these hooks
   const spinnerFrame = useColorSpinner(spinnerFrames, showStatusLine, spinnerColors, statusStyle?.spinnerIntervalMs);
   const elapsed = useElapsedTimer(statusDetail?.startedAt, showStatusLine);
-  const shimmerTick = useShimmerTick(showStatusLine && (statusStyle?.shimmer ?? true));
 
   const availableRows = terminalSize.rows ?? 24;
   const availableColumns = terminalSize.columns ?? 80;
@@ -178,16 +177,6 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
   const baseMinVisible = computeMinVisibleLines(availableRows);
   const minVisibleLines = reservedLineBoost > 0 ? Math.max(3, Math.min(baseMinVisible, 6)) : baseMinVisible;
   const maxLines = Math.max(minVisibleLines, availableRows - reservedLines);
-
-  const expandedMessages = useMemo(
-    () =>
-      messages.map((message) => ({
-        message,
-        contentLines: wrapContentLines(message.content, availableColumns),
-        reasoningLines: message.reasoning ? wrapContentLines(message.reasoning, availableColumns) : [],
-      })),
-    [messages, availableColumns]
-  );
 
   const visibleMessages = useMemo(
     () => selectVisibleMessages(messages, maxLines, availableColumns),
@@ -215,7 +204,7 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
           </Box>
         ) : (
           <>
-            {expandedMessages.map(({ message, contentLines, reasoningLines }, index) => {
+            {visibleMessages.map(({ message, contentLines, reasoningLines }, index) => {
               const meta = ROLE_META[message.role] || ROLE_META.user;
               const prefix = `${meta.prefix} `;
               const spacer = ' '.repeat(prefix.length);
@@ -245,7 +234,7 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
                     </Text>
                   ))}
 
-                  {index < expandedMessages.length - 1 && <Text color="gray">....................</Text>}
+                  {index < visibleMessages.length - 1 && <Text color="gray">....................</Text>}
                 </Box>
               );
             })}
@@ -330,21 +319,9 @@ export const ChatViewport = ({ isExpanded, reservedLineBoost = 0, status = 'idle
             <Box flexDirection="row" gap={1}>
               {spinnerFrame && <Text color={spinnerFrame.color}>{spinnerFrame.frame}</Text>}
               <Text>
-                {statusLineText.split('').map((char, idx) => {
-                  if (!(statusStyle?.shimmer ?? true)) {
-                    return (
-                      <Text key={idx} color="white" bold>
-                        {char}
-                      </Text>
-                    );
-                  }
-                  const color = shimmerColors[(idx + shimmerTick) % shimmerColors.length];
-                  return (
-                    <Text key={idx} color={color} bold>
-                      {char}
-                    </Text>
-                  );
-                })}
+                <Text color={statusStyle?.shimmer ?? true ? undefined : 'white'} bold={!(statusStyle?.shimmer ?? true)}>
+                  {statusLineText}
+                </Text>
                 <Text color="gray">{` (${elapsed} · esc to interrupt)`}</Text>
               </Text>
             </Box>
