@@ -39,7 +39,7 @@
     "@types/uuid": "^10.0.0",
     "tsup": "^8.0.2",
     "tsx": "^4.16.5",
-    "typescript": "^5.4.0"
+    "typescript": "^7.0.2"
   },
   "module": "src/index.tsx",
   "private": true
