@@ -434,6 +434,7 @@ export const Layout = () => {
   const [inlineNotice, setInlineNotice] = useState<InlineNotice | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelReasonRef = useRef<'escape' | 'ctrl+c' | null>(null);
+  const coreApprovalRef = useRef<((ok: boolean) => void) | null>(null);
   const exitResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitConfirmationRef = useRef(false);
   const isProcessingRef = useRef(false);
@@ -2204,6 +2205,13 @@ export const Layout = () => {
         result = 'Error editing file: ' + error.message;
       }
     } else if (action.type === 'tool_call') {
+      if (coreApprovalRef.current) {
+        const resolve = coreApprovalRef.current;
+        coreApprovalRef.current = null;
+        setPendingAction(null);
+        resolve(true);
+        return;
+      }
       try {
         const descriptor = action.params.descriptor as McpToolDescriptor | undefined;
         const args = action.params.args || {};
@@ -2222,6 +2230,14 @@ export const Layout = () => {
   };
 
   const handleRejectAction = () => {
+    if (coreApprovalRef.current) {
+      const resolve = coreApprovalRef.current;
+      coreApprovalRef.current = null;
+      setPendingAction(null);
+      addMessage({ role: 'system', content: 'Action Rejected by user.', timestamp: Date.now() });
+      resolve(false);
+      return;
+    }
     setPendingAction(null);
     addMessage({ role: 'system', content: 'Action Rejected by user.', timestamp: Date.now() });
   };
@@ -2259,12 +2275,6 @@ export const Layout = () => {
       const systemPrompt = buildSystemPrompt(activeProfile);
       const systemContent = toolPrompt ? `${systemPrompt}\n\n${toolPrompt}` : systemPrompt;
 
-      const providerMessages: any[] = [{ role: 'system', content: systemContent }];
-      for (const msg of contextForModel) {
-        if (msg.role === 'system') continue;
-        providerMessages.push({ role: msg.role, content: msg.content });
-      }
-
       const toolMap = new Map(exposedTools.map((tool) => [tool.name, tool]));
       const openAiTools = exposedTools.map((tool) => ({
         type: 'function' as const,
@@ -2272,7 +2282,6 @@ export const Layout = () => {
           name: tool.name,
           description: tool.description,
           parameters: tool.inputSchema || { type: 'object', properties: {}, additionalProperties: true },
-          cache_control: { type: 'ephemeral' },
         },
       }));
 
@@ -2286,99 +2295,95 @@ export const Layout = () => {
       });
 
       let finalUsage: TokenUsage | undefined;
-      let toolIterations = 0;
-      let totalToolCalls = 0;
+      const toolNames: string[] = [];
 
-      while (toolIterations < MAX_AGENT_STEPS) {
-        const completion = await provider.complete(providerMessages as any, {
-          model: modelName,
-          temperature: activeProfile?.temperature,
-          tools: openAiTools,
-          toolChoice: 'auto',
-          extraParams: { tools: openAiTools, tool_choice: 'auto' },
-          signal,
-        });
+      const toolSession = createSession(projectRoot, 'tui-tools');
+      const toolAgent = new CoreAgent({
+        provider: adaptLegacyProvider(provider),
+        model: modelName,
+        temperature: activeProfile?.temperature,
+        modelUsageKey,
+        signal,
+        dispatcher: {
+          listTools: () => exposedTools.map((tool) => ({ name: tool.name })),
+          requiresApproval: (name: string) => {
+            const descriptor = toolMap.get(name);
+            if (!descriptor) return false;
+            return Boolean(descriptor.annotations?.destructiveHint) && !autoApproveActions;
+          },
+          execute: async (call) => {
+            const descriptor = toolMap.get(call.name);
+            if (!descriptor) {
+              return {
+                tool: call.name,
+                success: false,
+                output: `Tool ${call.name} not found or unavailable.`,
+                durationMs: 0,
+              };
+            }
+            const started = Date.now();
+            try {
+              const output = await performToolCall(descriptor, call.arguments || {});
+              return { tool: call.name, success: true, output, durationMs: Date.now() - started };
+            } catch (error: any) {
+              return {
+                tool: call.name,
+                success: false,
+                output: `Tool ${call.name} failed: ${error.message}`,
+                durationMs: Date.now() - started,
+              };
+            }
+          },
+        },
+        toolDefinitions: openAiTools,
+        maxToolCallsPerTurn: MAX_TOOL_CALLS_PER_TURN,
+        truncationLimit: TOOL_RESULT_MAX_CHARS,
+        systemPrompt: systemContent,
+      });
+      toolSession.messages.push(
+        ...contextForModel
+          .filter((msg) => msg.role !== 'system')
+          .map((msg) => ({ ...msg }))
+      );
 
-        finalUsage = completion.usage || finalUsage;
-        const toolCalls: LlmToolCall[] = (completion.toolCalls || []).map((call, idx) => ({
-          ...call,
-          id: call.id || `tool_call_${toolIterations}_${idx}`,
-        }));
-
-        totalToolCalls += toolCalls.length;
-        if (totalToolCalls > MAX_TOOL_CALLS_PER_TURN) {
+      const toolResult = await toolAgent.run(toolSession, userText, (event) => {
+        if (event.type === 'tool_call') {
+          toolNames.push(event.call.name);
+          updateLastMessage(`Calling tools: ${toolNames.join(', ')}`, undefined, { streaming: true });
+        } else if (event.type === 'tool_result') {
+          const userMessage = [
+            `tool_result:${event.result.tool}`,
+            `output:\n${truncateOutput(event.result.output)}`,
+          ].join('\n');
+          addMessage({ role: 'system', content: userMessage, timestamp: Date.now() });
+        } else if (event.type === 'usage') {
+          finalUsage = event.usage;
+        } else if (event.type === 'approval_request') {
+          const descriptor = toolMap.get(event.call.name);
+          const action: Action = {
+            type: 'tool_call',
+            params: {
+              tool: event.call.name,
+              args: event.call.arguments || {},
+              descriptor,
+              serverId: descriptor?.serverId,
+            },
+            status: 'pending',
+          };
+          coreApprovalRef.current = event.decide;
+          setPendingAction(action);
           updateLastMessage(
-            `⚠️ Tool call budget exceeded (${totalToolCalls}/${MAX_TOOL_CALLS_PER_TURN}). Stopping tool calls.`,
+            `Tool ${event.call.name} requires approval. Press [1]=yes, [2]=yes (don't ask again), [3]=no.`,
             finalUsage,
             { streaming: false }
           );
           setStatus('idle');
-          return true;
         }
+      });
 
-        if (toolCalls.length) {
-          updateLastMessage(`Calling tools: ${toolCalls.map((c) => c.name).join(', ')}`, undefined, { streaming: true });
-          providerMessages.push({
-            role: 'assistant',
-            content: completion.content || '',
-            tool_calls: toolCalls.map((call) => ({
-              id: call.id,
-              type: call.type || 'function',
-              function: { name: call.name, arguments: JSON.stringify(call.arguments ?? {}) },
-            })),
-          });
-
-          const toolResultsForModel: any[] = [];
-          for (const call of toolCalls) {
-            const descriptor = toolMap.get(call.name);
-            if (!descriptor) {
-              const missing = `Tool ${call.name} not found or unavailable.`;
-              addMessage({ role: 'system', content: missing, timestamp: Date.now() });
-              toolResultsForModel.push({ role: 'tool', tool_call_id: call.id, content: missing });
-              continue;
-            }
-
-            const requiresApproval = Boolean(descriptor.annotations?.destructiveHint) && !autoApproveActions;
-            if (requiresApproval) {
-              const action: Action = {
-                type: 'tool_call',
-                params: { tool: call.name, args: call.arguments || {}, descriptor, serverId: descriptor.serverId },
-                status: 'pending',
-              };
-              setPendingAction(action);
-              updateLastMessage(
-                `Tool ${call.name} requires approval. Press [1]=yes, [2]=yes (don't ask again), [3]=no.`,
-                finalUsage,
-                { streaming: false }
-              );
-              setStatus('idle');
-              return true;
-            }
-
-            try {
-              const output = await performToolCall(descriptor, call.arguments || {});
-              const userMessage = [
-                `tool_result:${descriptor.name}`,
-                `args: ${JSON.stringify(call.arguments || {})}`,
-                `output:\n${truncateOutput(output)}`,
-              ].join('\n');
-              addMessage({ role: 'system', content: userMessage, timestamp: Date.now() });
-              toolResultsForModel.push({ role: 'tool', tool_call_id: call.id, content: output });
-            } catch (error: any) {
-              const errorMsg = `Tool ${call.name} failed: ${error.message}`;
-              addMessage({ role: 'system', content: errorMsg, timestamp: Date.now() });
-              toolResultsForModel.push({ role: 'tool', tool_call_id: call.id, content: errorMsg });
-            }
-          }
-
-          providerMessages.push(...toolResultsForModel);
-          toolIterations += 1;
-          continue;
-        }
-
+      if (toolResult.status === 'ok') {
         setStatus('streaming');
-        const finalContent = completion.content || '';
-        updateLastMessage(finalContent, finalUsage, { streaming: false });
+        updateLastMessage(toolResult.response, finalUsage, { streaming: false });
         await persistTurn();
         if (finalUsage) {
           incrementModelTokenUsage(modelUsageKey, finalUsage);
@@ -2386,12 +2391,13 @@ export const Layout = () => {
         setStatus('idle');
         return true;
       }
-
-      updateLastMessage(
-        `Reached tool iteration limit (${MAX_AGENT_STEPS}) without a final answer.`,
-        finalUsage,
-        { streaming: false }
-      );
+      if (toolResult.status === 'refused') {
+        setStatus('idle');
+        return true;
+      }
+      updateLastMessage(toolResult.response || 'Tool run ended without a final answer.', finalUsage, {
+        streaming: false,
+      });
       setStatus('idle');
       return true;
     },

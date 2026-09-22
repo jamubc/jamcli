@@ -5,7 +5,7 @@ export interface TokenUsage {
 }
 
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   timestamp: number;
   model?: string;
@@ -19,14 +19,17 @@ export interface ChatMessage {
 
 export interface ProviderToolCall {
   id?: string;
-  name: string;
   type?: string;
-  arguments?: any;
+  function: {
+    name: string;
+    arguments?: any;
+  };
 }
 
 export interface ToolCall {
   id: string;
   name: string;
+  type?: string;
   arguments: Record<string, any>;
 }
 

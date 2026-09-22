@@ -1,6 +1,7 @@
 import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage } from './types.js';
 import { addModelUsage, addUsage, appendMessages, isCancelled } from './state.js';
-import type { ChatProvider } from './providers/types.js';
+import type { ChatProvider, ToolDefinition } from './providers/types.js';
+import { dispatchToolCalls, toProviderToolMessages, type ToolDispatcher } from './tools/dispatch.js';
 
 export interface AgentOptions {
   maxSteps?: number;
@@ -9,9 +10,16 @@ export interface AgentOptions {
   temperature?: number;
   modelUsageKey?: string;
   signal?: AbortSignal;
+  dispatcher?: ToolDispatcher;
+  toolDefinitions?: ToolDefinition[];
+  maxToolCallsPerTurn?: number;
+  truncationLimit?: number;
+  systemPrompt?: string;
 }
 
 const DEFAULT_MAX_STEPS = 8;
+const DEFAULT_MAX_TOOL_CALLS = 5;
+const DEFAULT_TRUNCATION_LIMIT = 2000;
 
 export class CoreAgent implements Agent {
   private cancelled = new Set<string>();
@@ -21,6 +29,11 @@ export class CoreAgent implements Agent {
   private temperature?: number;
   private modelUsageKey?: string;
   private signal?: AbortSignal;
+  private dispatcher?: ToolDispatcher;
+  private toolDefinitions?: ToolDefinition[];
+  private maxToolCallsPerTurn: number;
+  private truncationLimit: number;
+  private systemPrompt?: string;
 
   constructor(options: AgentOptions = {}) {
     this.maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
@@ -29,6 +42,11 @@ export class CoreAgent implements Agent {
     this.temperature = options.temperature;
     this.modelUsageKey = options.modelUsageKey;
     this.signal = options.signal;
+    this.dispatcher = options.dispatcher;
+    this.toolDefinitions = options.toolDefinitions;
+    this.maxToolCallsPerTurn = options.maxToolCallsPerTurn ?? DEFAULT_MAX_TOOL_CALLS;
+    this.truncationLimit = options.truncationLimit ?? DEFAULT_TRUNCATION_LIMIT;
+    this.systemPrompt = options.systemPrompt;
   }
 
   cancel(sessionId: string): void {
@@ -36,6 +54,9 @@ export class CoreAgent implements Agent {
   }
 
   async run(session: JamSession, prompt: string, onEvent: (e: AgentEvent) => void): Promise<RunResult> {
+    if (this.dispatcher && this.toolDefinitions?.length) {
+      return this.runWithTools(session, prompt, onEvent);
+    }
     let working = appendMessages(session, [userMessage(prompt)]);
     let response = '';
     let turns = 0;
@@ -64,6 +85,126 @@ export class CoreAgent implements Agent {
       return this.finish(working, 'limit', response, turns);
     }
     return this.finish(working, 'ok', response, turns);
+  }
+
+  private async runWithTools(
+    session: JamSession,
+    prompt: string,
+    onEvent: (e: AgentEvent) => void
+  ): Promise<RunResult> {
+    if (!this.provider || !this.dispatcher || !this.toolDefinitions?.length) {
+      throw new Error('runWithTools requires a provider, a dispatcher, and tool definitions');
+    }
+    let working = appendMessages(session, [userMessage(prompt)]);
+    if (this.systemPrompt) {
+      working = appendMessages(working, [{ role: 'system', content: this.systemPrompt, timestamp: Date.now() }]);
+    }
+    let totalToolCalls = 0;
+    let iterations = 0;
+
+    while (iterations < this.maxSteps) {
+      if (isCancelled(session.id, this.cancelled)) {
+        this.cancelled.delete(session.id);
+        return this.finish(working, 'cancelled', '', iterations);
+      }
+      const completion = await this.provider.complete(working.messages, {
+        model: this.model,
+        temperature: this.temperature,
+        signal: this.signal,
+        tools: this.toolDefinitions,
+      });
+      if (completion.usage) {
+        working = addUsage(working, completion.usage);
+        if (this.modelUsageKey) {
+          working = addModelUsage(working, this.modelUsageKey, completion.usage);
+        }
+        onEvent({ type: 'usage', usage: completion.usage });
+      }
+      const rawCalls = completion.toolCalls || [];
+      const calls = [];
+      const callErrors: { index: number; message: string }[] = [];
+      for (let idx = 0; idx < rawCalls.length; idx += 1) {
+        const call = rawCalls[idx];
+        const name = call?.function?.name;
+        if (typeof name !== 'string' || !name) {
+          callErrors.push({ index: idx, message: 'Tool call names an unknown tool or carries unusable arguments.' });
+          continue;
+        }
+        calls.push({
+          id: call.id || `tool_call_${iterations}_${idx}`,
+          name,
+          type: call.type || 'function',
+          arguments: call.function.arguments ?? {},
+        });
+      }
+      for (const failure of callErrors) {
+        onEvent({
+          type: 'tool_result',
+          result: {
+            tool: 'unknown',
+            success: false,
+            output: `Tool error: unusable tool call at index ${failure.index}: ${failure.message}`,
+            durationMs: 0,
+          },
+        });
+      }
+      if (!calls.length && !callErrors.length) {
+        const text = completion.content || '';
+        working = appendMessages(working, [assistantMessage(text, '')]);
+        if (text) onEvent({ type: 'text', delta: text });
+        return this.finish(working, 'ok', text, iterations + 1);
+      }
+      if (!calls.length) {
+        iterations += 1;
+        continue;
+      }
+
+      totalToolCalls += calls.length;
+      const outcome = await dispatchToolCalls(calls, this.dispatcher, onEvent, {
+        maxCalls: this.maxToolCallsPerTurn,
+        alreadyUsed: totalToolCalls - calls.length,
+      });
+      if (outcome.stopped && outcome.stopReason === 'budget') {
+        return this.finish(working, 'limit', `Tool call budget exceeded (${totalToolCalls}/${this.maxToolCallsPerTurn}).`, iterations + 1);
+      }
+      if (outcome.stopped && outcome.stopReason === 'approval' && outcome.pendingCall) {
+        const pending = outcome.pendingCall;
+        const decided = await this.requestApproval(pending, onEvent);
+        if (!decided) {
+          return this.finish(working, 'refused', `Tool ${pending.name} was not approved.`, iterations + 1);
+        }
+        const result = await this.dispatcher.execute(pending);
+        onEvent({ type: 'tool_result', result });
+        outcome.results.push(result);
+      }
+
+      for (let i = 0; i < calls.length; i += 1) {
+        const result = outcome.results[i];
+        if (!result) continue;
+        const callId = calls[i].id;
+        const truncated = this.truncate(result.output);
+        const { assistant, tool } = toProviderToolMessages(calls[i], callId, truncated);
+        working = appendMessages(working, [assistant, tool]);
+      }
+      iterations += 1;
+    }
+
+    return this.finish(working, 'limit', `Reached tool iteration limit (${this.maxSteps}) without a final answer.`, iterations);
+  }
+
+  private truncate(text: string): string {
+    if (!text) return '';
+    return text.length > this.truncationLimit ? `${text.slice(0, this.truncationLimit)}\n… <truncated>` : text;
+  }
+
+  private requestApproval(call: { id: string; name: string; arguments: Record<string, any> }, onEvent: (e: AgentEvent) => void): Promise<boolean> {
+    return new Promise((resolve) => {
+      onEvent({
+        type: 'approval_request',
+        call,
+        decide: (ok: boolean) => resolve(ok),
+      });
+    });
   }
 
   protected async complete(
