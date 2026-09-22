@@ -23,6 +23,9 @@ import { McpManager } from '../services/McpManager.js';
 import { McpTestService } from '../services/McpTestService.js';
 import { ContextManager } from '../services/ContextManager.js';
 import { LLMFactory, type ToolCall as LlmToolCall } from '../services/LLMProvider.js';
+import { CoreAgent } from '../core/agent.js';
+import { adaptLegacyProvider } from '../core/providers/legacy.js';
+import { createSession } from '../core/state.js';
 import { FileSystemService } from '../services/FileSystemService.js';
 import { ExecutionService } from '../services/ExecutionService.js';
 import { ToolService } from '../services/ToolService.js';
@@ -2839,36 +2842,43 @@ export const Layout = () => {
       let finalUsage: TokenUsage | undefined;
       let hasStartedStreaming = false;
 
-      for await (const chunk of provider.streamChat(streamMessages, { 
-        model: activeProfile?.preferred_model, 
+      const streamSession = createSession(projectRoot, 'tui-stream');
+      const streamAgent = new CoreAgent({
+        provider: adaptLegacyProvider(provider),
+        model: activeProfile?.preferred_model,
+        temperature: activeProfile?.temperature,
+        modelUsageKey,
         signal: controller.signal,
-        reasoning: 'auto' 
-      })) {
-        if (chunk.content || chunk.reasoning) {
+      });
+      streamSession.messages.push(...streamMessages.map((m) => ({ ...m })));
+      const streamResult = await streamAgent.run(streamSession, '', (event) => {
+        if (event.type === 'text' && event.delta) {
           if (!hasStartedStreaming) {
             setStatus('streaming');
             hasStartedStreaming = true;
           }
-          if (chunk.content) {
-            buffer += chunk.content;
-            hasContent = true;
-          }
-          if (chunk.reasoning) {
-            reasoningBuffer += chunk.reasoning;
-          }
-          if (buffer.length >= BUFFER_SIZE || reasoningBuffer.length >= BUFFER_SIZE) {
-            fullContent += buffer;
-            fullReasoning += reasoningBuffer;
-            updateLastMessage(fullContent, undefined, { reasoning: fullReasoning });
-            buffer = '';
-            reasoningBuffer = '';
-          }
+          buffer += event.delta;
+          hasContent = true;
         }
-        // Capture token usage from final chunk
-        if (chunk.done && chunk.usage) {
-          finalUsage = chunk.usage;
+        if (event.type === 'reasoning' && event.delta) {
+          if (!hasStartedStreaming) {
+            setStatus('streaming');
+            hasStartedStreaming = true;
+          }
+          reasoningBuffer += event.delta;
         }
-      }
+        if (event.type === 'usage') {
+          finalUsage = event.usage;
+        }
+        if (buffer.length >= BUFFER_SIZE || reasoningBuffer.length >= BUFFER_SIZE) {
+          fullContent += buffer;
+          fullReasoning += reasoningBuffer;
+          updateLastMessage(fullContent, undefined, { reasoning: fullReasoning });
+          buffer = '';
+          reasoningBuffer = '';
+        }
+      });
+      void streamResult;
       if (buffer.length > 0) {
         fullContent += buffer;
       }
