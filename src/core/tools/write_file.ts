@@ -24,7 +24,7 @@ const writeFileSchema: JsonSchema = {
 export async function writeFile(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
   const relative = String(args.path ?? '');
   const content = String(args.content ?? '');
-  const target = resolveProjectPath(relative, ctx.projectRoot);
+  const target = resolveProjectPath(ctx.projectRoot, relative);
   const exists = await fs.pathExists(target);
 
   if (exists) {
