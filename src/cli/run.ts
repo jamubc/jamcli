@@ -22,6 +22,7 @@ export interface HeadlessOptions {
   prompt: string;
   cwd?: string;
   maxTurns?: number;
+  model?: string;
   projectRoot: string;
   sessionId?: string;
   allowTools?: string[];
@@ -61,9 +62,11 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   const profile: Profile = await configService.getActiveProfile();
   const permissions = await configService.getToolPermissions();
 
-  const providerName = profile.preferred_provider || 'ollama';
+  const requested = options.model?.trim();
+  const requestedProvider = requested && requested.includes(':') ? requested.split(':')[0] : undefined;
+  const providerName = requestedProvider || profile.preferred_provider || 'ollama';
   const provider = createChatProvider(providerName, config.api_registry);
-  const modelName = profile.preferred_model || 'default';
+  const modelName = requested && requestedProvider ? requested.slice(requestedProvider.length + 1) : requested || profile.preferred_model || 'default';
 
   const toolService = new ToolService({ projectRoot: options.projectRoot, configService });
   const mcpManager = new McpManager({ configService });

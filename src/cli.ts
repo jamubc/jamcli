@@ -1,20 +1,26 @@
 import { runHeadless } from './cli/run.js';
 import { runAuditCli } from './cli/audit.js';
+import { runMcpCommand } from './cli/mcp.js';
 import { listSessions, latestSessionId, loadSessionMessages, searchSessions, exportSession } from './core/session/store.js';
 import { resolveJamcliProjectRoot } from './utils/projectRoot.js';
 import type { AgentEvent } from './core/types.js';
+
+export type McpAction = 'add' | 'list' | 'test' | 'remove';
 
 export interface ParsedArgs {
   prompt?: string;
   outputFormat: 'text' | 'json' | 'stream-json';
   cwd?: string;
   maxTurns?: number;
+  model?: string;
   resume?: string;
   continueLast: boolean;
   allowTools: string[];
   denyTools: string[];
   sessionsCommand?: { action: 'list' | 'search' | 'export'; query?: string };
+  mcpCommand?: { action: McpAction; args: string[] };
   audit: boolean;
+  acp: boolean;
   help: boolean;
   version: boolean;
   unknown: string[];
@@ -29,6 +35,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     help: false,
     version: false,
     audit: false,
+    acp: false,
     unknown: [],
   };
 
@@ -53,6 +60,11 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     if (token === '--max-turns') {
       const value = Number(argv[i + 1]);
       if (Number.isFinite(value) && value > 0) parsed.maxTurns = Math.floor(value);
+      i += 1;
+      continue;
+    }
+    if (token === '--model') {
+      parsed.model = argv[i + 1];
       i += 1;
       continue;
     }
@@ -95,6 +107,20 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       }
       continue;
     }
+    if (token === 'mcp') {
+      const action = argv[i + 1];
+      const args = argv.slice(i + 2);
+      if (action === 'add' || action === 'list' || action === 'test' || action === 'remove') {
+        parsed.mcpCommand = { action, args };
+      } else {
+        parsed.mcpCommand = { action: (action ?? 'list') as McpAction, args };
+      }
+      return parsed;
+    }
+    if (token === 'acp') {
+      parsed.acp = true;
+      continue;
+    }
     if (token.startsWith('-')) {
       parsed.unknown.push(token);
       continue;
@@ -113,6 +139,7 @@ export const USAGE = `Usage: jamcli [options]
       --output-format <fmt>    text (default), json, or stream-json
       --cwd <path>             Run in this directory
       --max-turns <n>          Bound the number of turns
+      --model <id>             Run this turn on a specific model
       --resume <session-id>    Continue an existing session
       --continue               Continue the most recent session
       --allow-tool <name>      Allow a tool for this run (repeatable)
@@ -120,6 +147,8 @@ export const USAGE = `Usage: jamcli [options]
 
   jamcli sessions list|search <query>|export <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
+  jamcli mcp add|list|test|remove   Manage MCP servers in .jamcli/mcp.json
+  jamcli acp                   Serve the Agent Client Protocol over stdio
 
   --help                       Show this help
   --version                    Show the version`;
@@ -154,6 +183,15 @@ export const runCli = async (argv: string[]): Promise<number> => {
     return runAuditCli();
   }
 
+  if (parsed.mcpCommand) {
+    return runMcpCommand(parsed.mcpCommand, projectRoot);
+  }
+
+  if (parsed.acp) {
+    const { runAcpServer } = await import('./acp/server.js');
+    return runAcpServer(projectRoot);
+  }
+
   if (parsed.sessionsCommand) {
     return runSessionsCommand(parsed.sessionsCommand, projectRoot);
   }
@@ -166,10 +204,11 @@ export const runCli = async (argv: string[]): Promise<number> => {
   const sessionId = parsed.resume ? parsed.resume : parsed.continueLast ? (await latestSessionId(projectRoot)) ?? undefined : undefined;
   const startedAt = Date.now();
 
-  const { result } = await runHeadless({
+  const { result, refusals } = await runHeadless({
     prompt: parsed.prompt,
     projectRoot,
     maxTurns: parsed.maxTurns,
+    model: parsed.model,
     sessionId,
     allowTools: parsed.allowTools,
     denyTools: parsed.denyTools,
@@ -182,6 +221,10 @@ export const runCli = async (argv: string[]): Promise<number> => {
   });
 
   const durationMs = Date.now() - startedAt;
+
+  for (const refusal of refusals) {
+    process.stderr.write(`${refusal}\n`);
+  }
 
   if (parsed.outputFormat === 'json' || parsed.outputFormat === 'stream-json') {
     process.stdout.write(
@@ -199,6 +242,9 @@ export const runCli = async (argv: string[]): Promise<number> => {
   }
 
   if (result.status === 'ok') return 0;
+  if (result.error) {
+    process.stderr.write(`${result.error}\n`);
+  }
   return 1;
 };
 
