@@ -1,0 +1,30 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    env:
+      TYPE_ERRORS_BASELINE: "22"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Type gate
+        run: |
+          npx tsc --noEmit > tsc.log 2>&1 || true
+          count=$(grep -c "error TS" tsc.log || true)
+          cat tsc.log
+          echo "tsc --noEmit errors: $count (baseline $TYPE_ERRORS_BASELINE)"
+          if [ "$count" -gt "$TYPE_ERRORS_BASELINE" ]; then
+            echo "type gate failed: $count exceeds the baseline $TYPE_ERRORS_BASELINE"
+            exit 1
+          fi
+      - name: Test
+        run: bun test
+      - name: Build
+        run: bun run build

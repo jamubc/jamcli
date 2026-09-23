@@ -22,11 +22,15 @@ Line references describe the tree when the change opened.
 ## Stage 1: Foundations
 
 - [ ] 1.1 Record the baseline. Files: this file, `.github/workflows/ci.yml`. Lower `TYPE_ERRORS_BASELINE` from 35 to 22. Verify CI's type step prints `22 (baseline 22)`.
-- [ ] 1.2 Build the fake provider server. Files: `src/testing/fakeProvider.ts`, `src/testing/__tests__/fakeProvider.test.ts`.
+  - **Blocked on access**: the GitHub App this work is pushed with lacks the `workflows` permission, so no commit that touches `.github/workflows/` can be pushed. The intended workflow is staged at `openspec/changes/rehaul-jamcli/workflows/ci.yml`. Its type step, run locally on Bun 1.4.2, prints `tsc --noEmit errors: 22 (baseline 22)` and passes. It lands in `.github/workflows/` once the permission is granted or the owner copies it there, and every later workflow change is staged beside it.
+- [x] 1.2 Build the fake provider server. Files: `src/testing/fakeProvider.ts`, `src/testing/__tests__/fakeProvider.test.ts`.
   - It serves OpenAI chat completions (SSE and JSON), Anthropic messages (SSE and JSON), and Ollama `/api/chat` (NDJSON), plus `/models` and `/api/tags`.
   - Each response comes from a queue of scripted turns (text, reasoning, tool calls, usage, errors, delays, status codes). Every request body is captured for assertions.
   - Verify: the existing providers round-trip a scripted tool call through each dialect against it.
-- [ ] 1.3 Add surface-level regression tests for the audit's critical findings, marked as the acceptance checks for stage 2. Files: `src/core/__tests__/audit.test.ts`. Tests that pass only after stage 2 are written with `test.todo` so every checkpoint stays green, and each is converted to `test` in the task that fixes it.
+  - **Verification**: 11 tests pass against a real local server: OpenAI, Anthropic, and Ollama each stream text in pieces and assemble a scripted tool call. Scripted 429 status and headers, an exhausted script, a stream cut short, and the model routes are also covered. Mutation probe: disabling chunk splitting turns two tests red.
+  - **Found while building it**: Ollama 0.8 and later streams tool calls in a non-final chunk, but `OllamaProvider.streamChat` reads them from the final chunk only. It is recorded as a todo in `fakeProvider.test.ts` and fixed in 2.8.
+- [x] 1.3 Add surface-level regression tests for the audit's critical findings, marked as the acceptance checks for stage 2. Files: `src/core/__tests__/audit.test.ts`. Tests that pass only after stage 2 are written with `test.todo` so every checkpoint stays green, and each is converted to `test` in the task that fixes it.
+  - **Verification**: 25 todos, F1 to F25, each naming the task that converts it. `bun test` reports 158 pass and 26 todo.
 
 ## Stage 2: One honest runtime
 
