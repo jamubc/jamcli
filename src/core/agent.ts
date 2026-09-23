@@ -2,6 +2,7 @@ import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, 
 import { addModelUsage, addUsage, appendMessages, isCancelled } from './state.js';
 import type { ChatProvider, ToolDefinition } from './providers/types.js';
 import { dispatchToolCalls, toProviderToolMessages, type ToolDispatcher } from './tools/dispatch.js';
+import { screenToolResults } from './trust/index.js';
 
 import type { AgentLoopConfig } from '../types/config.js';
 
@@ -18,6 +19,9 @@ export interface AgentOptions {
   truncationLimit?: number;
   systemPrompt?: string;
   loop?: AgentLoopConfig;
+  trustProvider?: ChatProvider;
+  trustModel?: string;
+  trustOffNote?: boolean;
 }
 
 const DEFAULT_MAX_STEPS = 8;
@@ -37,6 +41,10 @@ export class CoreAgent implements Agent {
   private maxToolCallsPerTurn: number;
   private truncationLimit: number;
   private systemPrompt?: string;
+  private trustProvider?: ChatProvider;
+  private trustModel?: string;
+  private trustOffNote: boolean;
+  private trustNoted = false;
 
   constructor(options: AgentOptions = {}) {
     const loop = options.loop;
@@ -51,6 +59,9 @@ export class CoreAgent implements Agent {
     this.maxToolCallsPerTurn = options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_MAX_TOOL_CALLS;
     this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_TRUNCATION_LIMIT;
     this.systemPrompt = options.systemPrompt;
+    this.trustProvider = options.trustProvider;
+    this.trustModel = options.trustModel;
+    this.trustOffNote = options.trustOffNote ?? false;
   }
 
   cancel(sessionId: string): void {
@@ -182,13 +193,45 @@ export class CoreAgent implements Agent {
         outcome.results.push(result);
       }
 
+      const screening = await screenToolResults({
+        prompt,
+        provider: this.trustProvider,
+        model: this.trustModel,
+        signal: this.signal,
+        candidates: calls.map((call, index) => ({
+          tool: call.name,
+          output: outcome.results[index]?.output ?? '',
+        })),
+      });
+      if (this.trustOffNote && !this.trustNoted) {
+        this.trustNoted = true;
+        for (const note of screening.notes) {
+          onEvent({ type: 'notice', message: note });
+        }
+      }
+      for (const removal of [...screening.deduped, ...screening.dropped]) {
+        onEvent({ type: 'notice', message: `Removed ${removal.tool} result: ${removal.reason}` });
+      }
+
+      const keptKeys = new Set(screening.kept.map((item) => `${item.tool}\u0000${item.output}`));
       for (let i = 0; i < calls.length; i += 1) {
         const result = outcome.results[i];
         if (!result) continue;
+        if (!keptKeys.has(`${result.tool}\u0000${result.output}`)) continue;
+        keptKeys.delete(`${result.tool}\u0000${result.output}`);
         const callId = calls[i].id;
         const truncated = this.truncate(result.output);
         const { assistant, tool } = toProviderToolMessages(calls[i], callId, truncated);
         working = appendMessages(working, [assistant, tool]);
+      }
+      if (outcome.results.length && !screening.kept.length) {
+        working = appendMessages(working, [
+          {
+            role: 'system',
+            content: 'Every tool result this turn was removed by the trust gate.',
+            timestamp: Date.now(),
+          },
+        ]);
       }
       iterations += 1;
     }

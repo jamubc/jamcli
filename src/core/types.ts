@@ -59,6 +59,7 @@ export type AgentEvent =
   | { type: 'tool_call'; call: ToolCall }
   | { type: 'tool_result'; result: ToolResult }
   | { type: 'usage'; usage: TokenUsage }
+  | { type: 'notice'; message: string }
   | { type: 'approval_request'; call: ToolCall; decide: (ok: boolean) => void };
 
 export type RunStatus = 'ok' | 'refused' | 'limit' | 'cancelled' | 'error';
