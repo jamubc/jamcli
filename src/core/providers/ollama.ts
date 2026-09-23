@@ -167,6 +167,7 @@ function toOllamaMessage(message: ChatMessage): Record<string, unknown> {
       },
     }));
   }
+  if (message.tool_call_id) out.tool_call_id = message.tool_call_id;
   return out;
 }
 
