@@ -1,4 +1,5 @@
 import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage } from './types.js';
+import { readDecision } from './types.js';
 import { addModelUsage, addUsage, appendMessages, isCancelled } from './state.js';
 import type { ChatProvider, ToolDefinition } from './providers/types.js';
 import { dispatchToolCalls, toProviderToolMessages, type ToolDispatcher } from './tools/dispatch.js';
@@ -278,7 +279,7 @@ export class CoreAgent implements Agent {
       onEvent({
         type: 'approval_request',
         call,
-        decide: (ok: boolean) => resolve(ok),
+        decide: (decision) => resolve(readDecision(decision).allow),
       });
     });
   }

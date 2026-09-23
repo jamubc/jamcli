@@ -34,12 +34,13 @@ Line references describe the tree when the change opened.
 
 ## Stage 2: One honest runtime
 
-- [ ] 2.1 Extend the core contracts. Files: `src/core/types.ts`.
+- [x] 2.1 Extend the core contracts. Files: `src/core/types.ts`.
   - Add `ToolResult.callId` and `ToolResult.status`.
   - Add reasoning blocks with the producing provider family.
   - Add the events `turn_start`, `step_start`, `tool_progress`, `retry`, `compaction`, and `turn_end`, and a `notice` level.
   - Add an `ApprovalRequest` with a preview, a reason, and suggestions. `decide` accepts a boolean or an `ApprovalDecision`.
   - Additive only, so the Ink interface still compiles.
+  - **Verification**: the type count stays at 22 and all tests pass. The two callbacks that took only a boolean (the loop's approval request and an ACP test stub) now read the decision through `readDecision`, so `true` and `false` stay valid decisions.
 - [x] 2.2 Fix `write_file` (F4). Files: `src/core/tools/write_file.ts`, `src/core/tools/__tests__/writeFile.test.ts`. Verify create, refuse to overwrite, overwrite, refuse a directory, and refuse an escape.
   - **Verification**: 5 tests pass. Mutation probe: restoring the reversed arguments turns four of them red. F4 in `audit.test.ts` is live.
 - [x] 2.3 Make replacements literal and add `replace_all` (F5). Files: `src/services/FileSystemService.ts`, `src/core/tools/edit.ts`, tests. Verify `$$`, `$&`, `` $` ``, and `$'` survive, and CRLF files keep CRLF.

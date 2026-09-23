@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream';
 import { AcpServer } from '../server.js';
 import type { AcpSessionController } from '../session.js';
 import type { AgentEvent, RunResult } from '../../core/types.js';
+import { readDecision } from '../../core/types.js';
 
 const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
@@ -19,7 +20,7 @@ const approvableController = (): AcpSessionController => ({
       onEvent({
         type: 'approval_request',
         call: { id: 'call-1', name: 'write_file', arguments: { path: 'a.txt' } },
-        decide: resolve,
+        decide: (decision) => resolve(readDecision(decision).allow),
       })
     );
     if (!approved) {
