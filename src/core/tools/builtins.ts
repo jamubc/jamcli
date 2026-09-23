@@ -1,24 +1,27 @@
 import fs from 'fs-extra';
 import path from 'path';
 import fg, { Entry } from 'fast-glob';
-import { ConfigService } from '../../services/ConfigService.js';
 import { FileSystemService } from '../../services/FileSystemService.js';
 import { ExecutionService } from '../../services/ExecutionService.js';
 import { TOOL_DEFINITIONS } from '../../types/tools.js';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
+import { EDIT_TOOL } from './edit.js';
+import { GIT_TOOLS } from './git.js';
+import { GLOB_TOOL } from './glob.js';
+import { GREP_TOOL } from './grep.js';
+import { resolveIgnorePatterns } from './ignore.js';
 import { countOccurrences, resolveProjectPath } from './paths.js';
+import { READ_FILE_TOOL } from './read_file.js';
+import { WRITE_FILE_TOOL } from './write_file.js';
+import { TODO_TOOLS } from './todo.js';
 
 const DEFAULT_LIST_PATTERN = '**/*';
 const DEFAULT_CODE_PATTERN =
   '**/*.{ts,tsx,js,jsx,json,md,py,rb,rs,go,java,cs,php,sh,sql,html,css,scss,c,cpp,h,kt,swift,yml,yaml}';
 const MAX_LIST_RESULTS = 200;
-const MAX_READ_BYTES = 64 * 1024; // 64 KB
 const MAX_SEARCH_MATCHES = 40;
 const MAX_SEARCH_FILES = 400;
 const MAX_FILE_SIZE_BYTES = 512 * 1024; // 512 KB
-const FALLBACK_IGNORE = ['node_modules/**', 'dist/**'];
-
-const ignoreCache = new Map<string, string[]>();
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -31,23 +34,6 @@ const ensureFlags = (flags: string, enforceGlobal = true) => {
   }
   return result;
 };
-
-async function resolveIgnorePatterns(ctx: ToolContext): Promise<string[]> {
-  if (Array.isArray(ctx.ignorePatterns)) return ctx.ignorePatterns;
-  const cached = ignoreCache.get(ctx.projectRoot);
-  if (cached) return cached;
-
-  let patterns: string[];
-  try {
-    const configService = new ConfigService(ctx.projectRoot);
-    const mcpConfig = await configService.getMcpConfig();
-    patterns = mcpConfig.ignore_patterns || FALLBACK_IGNORE;
-  } catch {
-    patterns = FALLBACK_IGNORE;
-  }
-  ignoreCache.set(ctx.projectRoot, patterns);
-  return patterns;
-}
 
 async function listFiles(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
   const pattern = typeof args.pattern === 'string' && args.pattern ? args.pattern : DEFAULT_LIST_PATTERN;
@@ -87,42 +73,6 @@ async function listFiles(args: Record<string, any>, ctx: ToolContext): Promise<T
       totalMatches: entries.length,
       limit,
       pattern,
-    },
-  };
-}
-
-async function readFile(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
-  const target = args.path || args.file;
-  if (!target || typeof target !== 'string') {
-    throw new Error('read_file requires a "path" parameter.');
-  }
-
-  const absolute = resolveProjectPath(ctx.projectRoot, target);
-  const content = await new FileSystemService().readFile(absolute);
-  const lines = content.split(/\r?\n/);
-  const startLine = clamp(typeof args.start_line === 'number' ? args.start_line : 1, 1, lines.length);
-  const endLine = clamp(
-    typeof args.end_line === 'number' ? args.end_line : startLine + 200 - 1,
-    startLine,
-    lines.length
-  );
-  const snippet = lines.slice(startLine - 1, endLine);
-
-  let joined = snippet.map((line, idx) => `${startLine + idx}: ${line}`).join('\n');
-
-  let truncated = false;
-  if (joined.length > MAX_READ_BYTES) {
-    joined = joined.slice(0, MAX_READ_BYTES) + '\n… <truncated>';
-    truncated = true;
-  }
-
-  return {
-    output: joined,
-    metadata: {
-      path: path.relative(ctx.projectRoot, absolute) || '.',
-      startLine,
-      endLine,
-      truncated,
     },
   };
 }
@@ -270,17 +220,6 @@ const listFilesSchema: JsonSchema = {
   additionalProperties: false,
 };
 
-const readFileSchema: JsonSchema = {
-  type: 'object',
-  properties: {
-    path: { type: 'string', description: 'File path relative to the project root.' },
-    start_line: { type: 'integer', minimum: 1, description: 'First line to return, 1-indexed. Defaults to 1.' },
-    end_line: { type: 'integer', minimum: 1, description: 'Last line to return, inclusive.' },
-  },
-  required: ['path'],
-  additionalProperties: false,
-};
-
 const searchCodeSchema: JsonSchema = {
   type: 'object',
   properties: {
@@ -346,13 +285,6 @@ export const BUILTIN_TOOLS: RegisteredTool[] = [
     runner: listFiles,
   },
   {
-    name: 'read_file',
-    description: TOOL_DEFINITIONS.read_file.description,
-    inputSchema: readFileSchema,
-    policy: 'read',
-    runner: readFile,
-  },
-  {
     name: 'search_code',
     description: TOOL_DEFINITIONS.search_code.description,
     inputSchema: searchCodeSchema,
@@ -373,6 +305,13 @@ export const BUILTIN_TOOLS: RegisteredTool[] = [
     policy: 'execute',
     runner: runCommand,
   },
+  READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
+  GLOB_TOOL,
+  GREP_TOOL,
+  EDIT_TOOL,
+  ...TODO_TOOLS,
+  ...GIT_TOOLS,
 ];
 
 export function registerBuiltinTools(registry: { register(tool: RegisteredTool): void }): void {

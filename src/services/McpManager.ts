@@ -3,22 +3,75 @@ import type { McpServerConfig, McpToolDescriptor } from '../types/mcp.js';
 import { listTools } from '../core/tools/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 type McpManagerOptions = {
   configService?: ConfigService;
 };
 
+/** The shape cached per connected server. */
+type McpConnection = {
+  server: McpServerConfig;
+  client: Client;
+  transport: Transport;
+  tools?: McpToolDescriptor[];
+};
+
+/** Optional seams used by tests to avoid a live server. */
+export interface McpTransportOverrides {
+  fetch?: (url: string | URL, init?: RequestInit) => Promise<Response>;
+}
+
+/**
+ * Resolve which transport a server entry uses. stdio stays the default when
+ * nothing is declared, so an entry with only a command behaves as it always
+ * has. A URL-only entry is treated as HTTP even when the field is absent.
+ */
+export const resolveTransportKind = (server: McpServerConfig): 'stdio' | 'http' => {
+  if (server.transport === 'http' || server.transport === 'sse') return 'http';
+  if (!server.transport && !!server.url && !server.command) return 'http';
+  return 'stdio';
+};
+
+const buildStdioEnv = (extra?: Record<string, string>): Record<string, string> => {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') env[key] = value;
+  }
+  return { ...env, ...(extra || {}) };
+};
+
+/**
+ * Build the SDK transport for a server entry. Exported so the transport choice
+ * can be exercised without spawning a process or opening a socket.
+ */
+export const createClientTransport = (
+  server: McpServerConfig,
+  overrides: McpTransportOverrides = {}
+): Transport => {
+  const kind = resolveTransportKind(server);
+  if (kind === 'http') {
+    if (!server.url) {
+      throw new Error(`MCP server ${server.id} declares an HTTP transport without a url.`);
+    }
+    return new StreamableHTTPClientTransport(new URL(server.url), {
+      ...(server.headers ? { requestInit: { headers: server.headers } } : {}),
+      ...(overrides.fetch ? { fetch: overrides.fetch } : {}),
+    });
+  }
+
+  return new StdioClientTransport({
+    command: server.command,
+    args: server.args || [],
+    env: buildStdioEnv(server.env),
+    cwd: server.cwd || process.cwd(),
+  });
+};
+
 export class McpManager {
   private configService: ConfigService;
-  private connections: Map<
-    string,
-    {
-      server: McpServerConfig;
-      client: Client;
-      transport: StdioClientTransport;
-      tools?: McpToolDescriptor[];
-    }
-  > = new Map();
+  private connections: Map<string, McpConnection> = new Map();
   private toolIndex: Map<string, McpToolDescriptor> = new Map();
 
   constructor(options: McpManagerOptions = {}) {
@@ -30,14 +83,21 @@ export class McpManager {
   }
 
   async upsertServer(server: McpServerConfig): Promise<McpServerConfig[]> {
-    if (!server.id || !server.command) {
-      throw new Error('MCP server requires at least an id and command.');
+    if (!server.id) {
+      throw new Error('MCP server requires at least an id.');
+    }
+    const kind = resolveTransportKind(server);
+    if (kind === 'http' && !server.url) {
+      throw new Error('An HTTP MCP server requires a url.');
+    }
+    if (kind === 'stdio' && !server.command) {
+      throw new Error('A stdio MCP server requires a command.');
     }
     return this.configService.upsertMcpServer({
-      transport: 'stdio',
       enabled: true,
       args: [],
       ...server,
+      transport: kind === 'http' ? 'http' : 'stdio',
     });
   }
 
@@ -89,6 +149,8 @@ export class McpManager {
         const tools = await this.listServerTools(server, { refresh: options.refresh });
         discovered.push(...tools);
       } catch (error) {
+        // A server that fails to connect is reported as configured but not
+        // connected, and the remaining servers still contribute tools.
         console.error(`Failed to list tools for MCP server ${server.id}`, error);
       }
     }
@@ -142,8 +204,12 @@ export class McpManager {
 
     const lines = servers.map((srv, idx) => {
       const status = srv.enabled === false ? 'disabled' : 'enabled';
-      const args = srv.args?.length ? ` ${srv.args.join(' ')}` : '';
-      return `${idx + 1}. ${srv.id} (${status})\n   cmd: ${srv.command}${args}${srv.cwd ? `\n   cwd: ${srv.cwd}` : ''}`;
+      const kind = resolveTransportKind(srv);
+      const target =
+        kind === 'http'
+          ? `url: ${srv.url}`
+          : `cmd: ${srv.command}${srv.args?.length ? ` ${srv.args.join(' ')}` : ''}${srv.cwd ? `\n   cwd: ${srv.cwd}` : ''}`;
+      return `${idx + 1}. ${srv.id} (${status}, ${kind})\n   ${target}`;
     });
 
     return ['MCP servers:', ...lines].join('\n');
@@ -155,7 +221,7 @@ export class McpManager {
     const lines = tools.map((tool, idx) => {
       const from = tool.source === 'server' ? `server:${tool.serverId}` : 'builtin';
       const original = tool.nativeName && tool.nativeName !== tool.name ? ` (native: ${tool.nativeName})` : '';
-      return `${idx + 1}. ${tool.name} [${from}]${original} — ${tool.description || 'No description'}`;
+      return `${idx + 1}. ${tool.name} [${from}]${original} - ${tool.description || 'No description'}`;
     });
     return ['Available MCP tools:', ...lines].join('\n');
   }
@@ -177,17 +243,11 @@ export class McpManager {
     return matches;
   }
 
-  private async getConnection(server: McpServerConfig) {
+  private async getConnection(server: McpServerConfig): Promise<McpConnection> {
     const existing = this.connections.get(server.id);
     if (existing) return existing;
 
-    const transport = new StdioClientTransport({
-      command: server.command,
-      args: server.args || [],
-      env: { ...process.env, ...(server.env || {}) },
-      cwd: server.cwd || process.cwd(),
-      stdio: 'pipe',
-    });
+    const transport = createClientTransport(server);
 
     const client = new Client(
       {
@@ -200,7 +260,7 @@ export class McpManager {
     );
 
     await client.connect(transport);
-    const connection = { server, client, transport };
+    const connection: McpConnection = { server, client, transport };
     this.connections.set(server.id, connection);
     return connection;
   }

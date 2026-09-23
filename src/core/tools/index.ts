@@ -1,3 +1,14 @@
 export * from './registry.js';
 export * from './paths.js';
+export * from './anchors.js';
+export * from './ignore.js';
 export { BUILTIN_TOOLS, registerBuiltinTools } from './builtins.js';
+export { READ_FILE_TOOL, readFileRunner } from './read_file.js';
+export { GLOB_TOOL, globRunner } from './glob.js';
+export { GREP_TOOL, grepRunner } from './grep.js';
+export { EDIT_TOOL, editRunner, StaleAnchorError, AmbiguousMatchError } from './edit.js';
+export type { AnchorInput, AnchorMismatch } from './edit.js';
+export { TODO_TOOLS, todoReadRunner, todoWriteRunner } from './todo.js';
+export type { TodoItem } from './todo.js';
+export { GIT_TOOLS, gitStatusRunner, gitDiffRunner } from './git.js';
+export { WRITE_FILE_TOOL, writeFile } from './write_file.js';
