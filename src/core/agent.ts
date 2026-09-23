@@ -26,6 +26,8 @@ export interface AgentOptions {
   loop?: AgentLoopConfig;
   trustProvider?: ChatProvider;
   trustModel?: string;
+  /** Relevance below which the trust gate removes a result. */
+  trustThreshold?: number;
   trustOffNote?: boolean;
   hooks?: HookBus;
   reasoning?: ProviderRequestOptions['reasoning'];
@@ -278,15 +280,16 @@ export class CoreAgent implements Agent {
     signal: AbortSignal,
     emit: (e: AgentEvent) => void
   ): Promise<ToolResult[]> {
-    const candidates: (ScreeningCandidate & { index: number })[] = [];
+    const candidates: (ScreeningCandidate & { result: number })[] = [];
     results.forEach((result, index) => {
-      if (result.status === 'ok' || result.status === 'error') candidates.push({ tool: calls[index].name, output: result.output, index });
+      if (result.status === 'ok' || result.status === 'error') candidates.push({ tool: calls[index].name, output: result.output, result: index });
     });
     if (!candidates.length) return results;
     const screening = await screenToolResults({
       prompt,
       provider: this.options.trustProvider,
       model: this.options.trustModel,
+      threshold: this.options.trustThreshold,
       signal,
       candidates,
     });
@@ -294,16 +297,11 @@ export class CoreAgent implements Agent {
       this.trustNoted = true;
       for (const note of screening.notes) emit({ type: 'notice', level: 'info', message: note });
     }
-    const kept = new Set<ScreeningCandidate>(screening.kept);
-    const removals = [...screening.deduped, ...screening.dropped];
-    let removalIndex = 0;
     const out = [...results];
-    for (const candidate of candidates) {
-      if (kept.has(candidate)) continue;
-      const removal = removals[removalIndex++];
-      const reason = removal?.reason ?? 'removed by the trust gate';
-      emit({ type: 'notice', level: 'warn', message: `Removed ${candidate.tool} result: ${reason}` });
-      out[candidate.index] = { ...out[candidate.index], output: `[This result was withheld by the trust gate: ${reason}.]` };
+    for (const removal of [...screening.deduped, ...screening.dropped]) {
+      const candidate = candidates[removal.index];
+      emit({ type: 'notice', level: 'warn', code: 'trust_gate', message: `Removed ${candidate.tool} result: ${removal.reason}` });
+      out[candidate.result] = { ...out[candidate.result], output: `[This result was withheld by the trust gate: ${removal.reason}.]` };
     }
     return out;
   }

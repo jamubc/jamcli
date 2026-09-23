@@ -18,7 +18,7 @@ test('dedupe runs before classification and reports what it removed', async () =
     { tool: 'grep', output: 'different' },
   ]);
   expect(unique).toHaveLength(2);
-  expect(deduped).toEqual([{ tool: 'read_file', reason: 'duplicate of an earlier result in this turn' }]);
+  expect(deduped).toEqual([{ index: 1, tool: 'read_file', reason: 'duplicate of an earlier result in this turn' }]);
 });
 
 test('an injection flag drops the result even when it scores as relevant', async () => {
@@ -44,7 +44,7 @@ test('a low relevance result is dropped and a relevant one is kept', async () =>
   });
   expect(outcome.kept.map((candidate) => candidate.tool)).toEqual(['read_file']);
   expect(outcome.dropped).toEqual([
-    { tool: 'grep', reason: 'not relevant to this turn: unrelated vendored file' },
+    { index: 1, tool: 'grep', reason: 'not relevant to this turn: unrelated vendored file' },
   ]);
 });
 
