@@ -2,7 +2,6 @@ import fs from 'fs-extra';
 import path from 'path';
 import fg, { Entry } from 'fast-glob';
 import { FileSystemService } from '../../services/FileSystemService.js';
-import { ExecutionService } from '../../services/ExecutionService.js';
 import { TOOL_DEFINITIONS } from '../../types/tools.js';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { EDIT_TOOL } from './edit.js';
@@ -16,6 +15,7 @@ import { WRITE_FILE_TOOL } from './write_file.js';
 import { TODO_TOOLS } from './todo.js';
 import { TASK_TOOLS } from './task.js';
 import { ACP_TOOLS } from './acp.js';
+import { COMMAND_TOOLS } from './command.js';
 
 const DEFAULT_LIST_PATTERN = '**/*';
 const DEFAULT_CODE_PATTERN =
@@ -187,21 +187,6 @@ async function applyPatch(args: Record<string, any>, ctx: ToolContext): Promise<
   };
 }
 
-async function runCommand(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
-  const command = args.command;
-  if (typeof command !== 'string' || !command.length) {
-    throw new Error('run_command requires a "command" parameter.');
-  }
-
-  const cwd =
-    typeof args.cwd === 'string' && args.cwd.length
-      ? resolveProjectPath(ctx.projectRoot, args.cwd)
-      : ctx.projectRoot;
-
-  const output = await new ExecutionService().runShell(command, cwd);
-  return { output, metadata: { command, cwd } };
-}
-
 const listFilesSchema: JsonSchema = {
   type: 'object',
   properties: {
@@ -268,16 +253,6 @@ const applyPatchSchema: JsonSchema = {
   additionalProperties: false,
 };
 
-const runCommandSchema: JsonSchema = {
-  type: 'object',
-  properties: {
-    command: { type: 'string', description: 'Shell command to execute.' },
-    cwd: { type: 'string', description: 'Working directory under the project root. Defaults to the project root.' },
-  },
-  required: ['command'],
-  additionalProperties: false,
-};
-
 export const BUILTIN_TOOLS: RegisteredTool[] = [
   {
     name: 'list_files',
@@ -300,13 +275,7 @@ export const BUILTIN_TOOLS: RegisteredTool[] = [
     policy: 'write',
     runner: applyPatch,
   },
-  {
-    name: 'run_command',
-    description: TOOL_DEFINITIONS.run_command.description,
-    inputSchema: runCommandSchema,
-    policy: 'execute',
-    runner: runCommand,
-  },
+  ...COMMAND_TOOLS,
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
   GLOB_TOOL,

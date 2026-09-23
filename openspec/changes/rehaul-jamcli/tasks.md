@@ -47,11 +47,17 @@ Line references describe the tree when the change opened.
   - **Verification**: `src/core/tools/textEdit.ts` holds the literal replacement. `edit` gains `replace_all` and `occurrence` and reports a unified diff in its metadata. `FileSystemService.applyEdit` inserts literally too, which also fixes the Ink approval path until stage 6 removes it. 8 tests pass. Mutation probe: restoring the string replacement turns the `apply_patch` dollar test red. F5 is live.
 - [x] 2.4 Resolve symbolic links in path checks (F22). Files: `src/core/tools/paths.ts`, tests. Verify a link inside the project that points outside is refused for reads and writes.
   - **Verification**: a read and a write through an outward link are refused, and nothing is created outside. A project root that is itself reached through a link still works. Mutation probe: disabling the real path check turns both escape tests red. F22 is live.
-- [ ] 2.5 Rebuild `run_command` (F11). Files: `src/core/tools/command.ts` (new), `src/core/tools/builtins.ts`, `src/services/ExecutionService.ts` (removed), tests.
+- [x] 2.5 Rebuild `run_command` (F11). Files: `src/core/tools/command.ts` (new), `src/core/tools/builtins.ts`, `src/services/ExecutionService.ts` (removed), tests.
   - Spawn, timeout, exit code or signal, and labeled streams.
   - Head and tail truncation with a note, and `tool_progress` events.
   - The abort signal kills the process group.
   - Background jobs with `command_output` and `command_kill`.
+  - **Verification**: 11 tests pass.
+    - They cover exit codes with labeled streams, a timeout that stops the whole process group (a backgrounded child's file never appears), and cancellation.
+    - They also cover head and tail truncation, streamed progress, end of input on stdin, a refused working directory, and background start, read, and kill.
+    - Mutation probes: signaling only the shell fails both the timeout and the cancellation tests, because the orphaned child holds the pipes open. Disabling the timer fails the timeout test.
+    - Tool payloads now carry a status that the registry maps to `success`.
+    - `ExecutionService` is kept as a thin wrapper over the new runner for the Ink approval path and is deleted with Ink in 6.15. F11 is live.
 - [ ] 2.6 Rebuild search (F12). Files: `src/core/tools/search.ts` (new), `glob.ts`, `grep.ts`, tests.
   - Use ripgrep when present, otherwise a JavaScript walk honoring `.gitignore`, `.ignore`, and configured patterns through `ignore`. Add `ignore` in its own commit first.
   - No silent cap: limits are reported in the output.

@@ -50,7 +50,15 @@ test.todo('F7: tool steps stream, keep text beside calls, and send the system pr
 test.todo('F8: calls after an approval request still run or are answered (2.9)', pending);
 test.todo('F9: a read-edit-test cycle completes under the default loop limits (2.9)', pending);
 test.todo('F10: --allow-tool run_command runs the command headlessly (2.12)', pending);
-test.todo('F11: run_command reports exit codes and times out (2.5)', pending);
+test('F11: run_command reports exit codes and times out (2.5)', () =>
+  withProject(async (root) => {
+    const registry = createBuiltinRegistry();
+    const failed = await registry.execute('run_command', { command: 'exit 4' }, { projectRoot: root });
+    expect(failed.status).toBe('error');
+    expect(failed.output).toContain('Exit code 4');
+    const slow = await registry.execute('run_command', { command: 'sleep 30', timeout_ms: 200 }, { projectRoot: root });
+    expect(slow.status).toBe('timeout');
+  }));
 test.todo('F12: grep finds a match past the 400th file and honors .gitignore (2.6)', pending);
 test.todo('F13: ACP uses the configured provider (2.13)', pending);
 test.todo('F14: reasoning is not replayed to another provider family (2.8)', pending);

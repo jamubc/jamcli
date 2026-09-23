@@ -28,3 +28,14 @@ export {
   acpResultRunner,
   acpCancelRunner,
 } from './acp.js';
+export {
+  COMMAND_TOOLS,
+  RUN_COMMAND_TOOL,
+  COMMAND_OUTPUT_TOOL,
+  COMMAND_KILL_TOOL,
+  HeadTailBuffer,
+  runShellCommand,
+  formatCommandResult,
+  startBackgroundCommand,
+} from './command.js';
+export type { CommandRunOptions, CommandRunResult } from './command.js';
