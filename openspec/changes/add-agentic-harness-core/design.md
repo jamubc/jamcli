@@ -60,37 +60,34 @@ features; no license file; and the harness must stay legible enough to review.
 
 ### Decision: OpenTUI is the committed substrate, Ink is interim
 
-Ink 7.1.1 remains the renderer until it is replaced. The committed
-destination is OpenTUI, maintained by the OpenCode team with OpenCode
-itself as the production consumer, high npm adoption, and releases
-landing several times a week.
+OpenTUI, from the OpenCode team, becomes the UI substrate for JamCLI. Ink 7.1.1
+remains the interim renderer until a later unit ports the presentation layer.
 
-**Why capability, not speed.** OpenTUI brings mouse input, a scrollbox,
-select, textarea, selection, diff and code renderables, markdown, and
-image support. None of those are obtainable from Ink without hand-rolled
-windowing and input math that this project would then own.
+**Why.** OpenTUI is maintained by the OpenCode team, OpenCode is a production
+consumer, and `@opentui/core` carries ~3.1M monthly downloads. The decision is
+capability driven: mouse, scrollbox, select, textarea, selection, diff and code
+renderables, markdown, and image. None of that is obtainable from Ink without
+hand-rolled windowing and input math this project would then own. The core
+decoupling in this change is what makes the swap a presentation-only change.
 
-**Alternatives considered.** Staying on Ink was rejected: no mouse, no
-scrollbox, no diff widgets, and manual windowing for transcript
-scrollback. A rewrite in Rust or Go was rejected: a full language
-change for capability the current stack already provides. Termcn
-(shadcn-labs/termcn) stays an evaluation candidate for the port, not a
-decision: it ships AI chat primitives on both Ink and OpenTUI and may
-replace hand-rolled pieces, but it is not vendored blindly.
+**Alternatives considered.** Staying on Ink was rejected: it has no native
+renderables and no mouse, and Ink is not the direction. A rewrite of the UI in
+Rust or Go was rejected: it throws away the TypeScript core and the adapter
+boundary. Termcn (shadcn-labs/termcn) stays an evaluation candidate for the
+port, not a decision: it ships AI chat primitives on both Ink and OpenTUI and
+may replace hand-rolled pieces, but it is not vendored blindly.
 
-**Accepted risks.** OpenTUI is pre-1.0, so the port pins exact versions
-and never adopts snapshots. Its native library changes packaging (tsup
-now, `bun build --compile` later). If the port stalls, the adapter
-boundary this change establishes keeps Ink reachable until parity. No
-performance win is claimed without before and after numbers on input
-latency and frame behavior over a long transcript.
+**Accepted risks.** OpenTUI is pre-1.0, so versions are pinned exactly and no
+snapshots are adopted. A native library changes packaging: tsup now and
+`bun build --compile` later. The Ink adapter boundary must stay reachable until
+the port lands. No performance win is claimed without before and after numbers
+on input latency and frame behavior over a long transcript.
 
-**Consequence for this change.** The core decoupling is what makes the
-swap cheap, so none of this work is redirected. For the rest of this
-unit: parity only, no new Ink-specific features, no polishing of Ink
-idioms that OpenTUI replaces beyond what the checks require. `react`
-and `@types/react` move to ^19.2.0 now because both Ink 7 and
-@opentui/react require it.
+**Consequence for this change.** The core decoupling is what makes the swap
+cheap, so none of this work is redirected. For the rest of this unit: parity
+only, no new Ink-specific features, no polishing of Ink idioms that OpenTUI
+replaces beyond what the checks require. `react` and `@types/react` move to
+^19.2.0 now because both Ink 7 and @opentui/react require it.
 
 ### Decision: Native tool calls become the only protocol
 

@@ -69,6 +69,27 @@ branch holds a state that either boots or does not. Stage 1 alone removes the pr
 defect that causes most visible unreliability, so stopping after it is a real outcome
 rather than a failure.
 
+## Pre-authorized next unit
+
+### `replace-ink-with-opentui`
+
+Pre-authorized next unit: replace the Ink presentation layer with OpenTUI. It opens
+only after `add-agentic-harness-core` closes and archives.
+
+- **Scope.** Presentation only. `src/core/` and `src/services/` are untouchable.
+- **Acceptance.** Every slash command works, approval and rejection work, streaming
+  works, resume works, compact works, transcript scrollback runs through a scrollbox,
+  and mouse input works. The four gates pass.
+- **Benchmark gate.** Record input latency and frame behavior on a long transcript
+  before and after the port. No performance claim may be made without those numbers.
+- **Component source.** Evaluate shadcn-labs/termcn, which ships AI chat primitives on
+  Ink and OpenTUI. Do not vendor it blindly.
+- **Packaging.** Pin exact OpenTUI versions. The native library sits under tsup now and
+  `bun build --compile` later.
+- **Non-goal.** No appearance redesign.
+- **Start steps.** Run `npx skills add anomalyco/opentui --skill opentui`, scaffold the
+  change, and run `openspec validate --strict` before any implementation.
+
 ## Not in this unit
 
 Anything below takes its position from one question: does it make the harness more
@@ -77,20 +98,6 @@ all. None of these have a change proposal, and none should start before unit 1 c
 
 ### Candidates, in no order
 
-- **Replace the Ink presentation layer with OpenTUI.** Pre-authorized as the
-  unit immediately after `add-agentic-harness-core`. Scope is presentation
-  layer only: `src/core/` and `src/services/` are untouchable. Acceptance:
-  every slash command, approval and rejection, streaming, resume, compact,
-  transcript scrollback through a scrollbox, mouse input, and the four
-  gates. Benchmark gate: record input latency and frame behavior on a long
-  transcript before and after, since the migration is capability-driven
-  and claims no performance win without numbers. Component source:
-  evaluate shadcn-labs/termcn, which ships AI chat primitives on both Ink
-  and OpenTUI, without vendoring it blindly. Packaging: pin exact OpenTUI
-  versions, native library under tsup now and `bun build --compile` later.
-  Non-goal: no appearance redesign. At unit start: install the OpenTUI
-  skill and scaffold the change with `openspec validate --strict` before
-  implementation.
 - **Single-binary distribution.** `bun build --compile` per platform. Deferred because
   a working build is the prerequisite, and because the project is personal and not
   published.
