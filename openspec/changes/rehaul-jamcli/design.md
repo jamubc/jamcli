@@ -220,7 +220,12 @@ appended as version 2 lines, and the reader handles mixed files.
 
 Secret values from the environment are redacted from tool output before it reaches the
 model or the log. Redaction applies to variables whose names match `*_KEY`, `*_TOKEN`,
-`*_SECRET`, `*PASSWORD*`, and the configured credentials.
+`*_SECRET`, `*_PAT`, `*_CREDENTIALS`, `SECRET_*`, `*PASSWORD*`, and `*PASSWD*`, and to the
+configured credentials, each replaced by `[redacted:<source>]`. Values shorter than eight
+characters are left alone. It happens where a result is produced, in `executeBatch`, so
+surfaces, the trust gate, the model, and the log all see the redacted text. Streamed
+progress is redacted chunk by chunk, so a value split across two chunks can show in the
+live view but never in the result.
 
 **Why.** Promise three says an unwatched run must be explainable from its transcript. F17
 shows text-only history cannot do that. Resume, fork, rewind, audit, export, and ACP

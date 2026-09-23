@@ -121,7 +121,7 @@ Line references describe the tree when the change opened.
     - 15 engine tests and 5 harness tests pass; the old tests encoded the removed behavior and were rewritten.
     - Mutation probes: sending the system prompt last, dropping text beside calls, stopping a batch after an approval, and restoring the cap of 5 each turn a test red.
     - F7, F8, F9, and F25 are live.
-- [ ] 2.10 Build the transcript event log (D4; F17). Files: `src/core/transcript/` (new), `src/services/HistoryService.ts` (reader and index only), tests.
+- [x] 2.10 Build the transcript event log (D4; F17). Files: `src/core/transcript/` (new), `src/services/HistoryService.ts` (reader and index only), tests.
   - Version 2 writer, version 1 reader, a mixed-file reader, and projections to provider messages and Markdown.
   - Secret redaction.
   - `jamcli sessions show` and `jamcli sessions fork` on the command line, beside list, search, and export.
@@ -134,6 +134,9 @@ Line references describe the tree when the change opened.
     - 24 transcript and session tests pass, including `jamcli sessions show`, `fork`, and `export` run as a subprocess.
     - Mutation probes: ignoring version 1 lines, dropping tool calls on write, stamping the creation time at update, trusting a stale index entry, listing other projects, writing the header early, losing the fork's parent, sending the tool name to a provider, fixed three-backtick fences, searching metadata only, writing version 1 from the interface, not recording approvals, starting a window on an orphaned tool result, and not recording tool status each turn a test red.
     - F17 is live.
+  - **Verification (redaction)**: `src/core/redact.ts` builds the redactor from the environment and named extras, and `executeBatch` applies it to every result and progress chunk. `CoreAgent` uses the environment's credentials unless the runtime passes its own, which 2.11 extends with configured `key_env_var` names and stored keys.
+    - 4 tests: markers name the source, short values and ordinary variables are left alone, and a secret in a command's output is absent from the next request, the surfaced events, and the session file.
+    - Mutation probes: not redacting output, not redacting progress, an identity default, not passing the redactor to the batch, no longest-first order, anchoring `PASSWORD`, no minimum length, and ignoring named extras each turn a test red.
 - [ ] 2.11 Build `createRuntime` (D2). Files: `src/core/runtime/` (new), tests.
   - It is the one place that builds the provider, the full registry (built-ins plus MCP), policy (legacy semantics with F10 fixed), rules, hooks, context management, the trust gate (D21 repairs), and the transcript.
   - `@` references expand in the runtime, not in a surface (F24).

@@ -49,6 +49,8 @@ export interface BatchContext {
   remaining?: number;
   /** The cap itself, for the message a capped call receives. */
   cap?: number;
+  /** Applied to every result and progress chunk before anything else sees it. */
+  redact?: (text: string) => string;
 }
 
 export interface BatchOutcome {
@@ -90,20 +92,29 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
     await emitHookEvent(ctx.hooks, 'pre_tool', { session: ctx.session, call }, ctx.emit);
   };
 
+  const redact = ctx.redact ?? ((text: string) => text);
+
   const perform = async (call: ToolCall): Promise<ToolResult> => {
     const started = Date.now();
     let result: ToolResult;
     try {
       result = await ctx.dispatcher.execute(call, {
         signal: ctx.signal,
-        onProgress: (chunk) => ctx.emit({ type: 'tool_progress', callId: call.id, tool: call.name, chunk }),
+        onProgress: (chunk) => ctx.emit({ type: 'tool_progress', callId: call.id, tool: call.name, chunk: redact(chunk) }),
       });
     } catch (error: any) {
       const cancelled = ctx.signal.aborted || error?.name === 'AbortError';
       result = resultFor(call, cancelled ? 'cancelled' : 'error', `Tool ${call.name} failed: ${error?.message ?? error}`, Date.now() - started);
     }
     const status = result.status ?? (result.success ? 'ok' : 'error');
-    const settled: ToolResult = { ...result, tool: call.name, callId: call.id, status, success: status === 'ok' };
+    const settled: ToolResult = {
+      ...result,
+      output: redact(result.output ?? ''),
+      tool: call.name,
+      callId: call.id,
+      status,
+      success: status === 'ok',
+    };
     ctx.emit({ type: 'tool_result', result: settled });
     return settled;
   };

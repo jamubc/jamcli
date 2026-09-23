@@ -7,6 +7,7 @@ import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
 import { emitHookEvent, type HookBus } from './hooks/index.js';
 import type { AgentLoopConfig } from '../types/config.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
+import { createRedactor, type Redactor } from './redact.js';
 
 export interface AgentOptions {
   maxSteps?: number;
@@ -30,6 +31,8 @@ export interface AgentOptions {
   reasoning?: ProviderRequestOptions['reasoning'];
   maxOutputTokens?: number;
   contextLength?: number;
+  /** Replaces credentials in tool output. Defaults to the credentials in the environment. */
+  redact?: Redactor;
 }
 
 interface StepOutput {
@@ -51,6 +54,7 @@ export class CoreAgent implements Agent {
   private readonly maxSteps: number;
   private readonly maxToolCallsPerTurn: number;
   private readonly truncationLimit: number;
+  private readonly redact: Redactor;
   private trustNoted = false;
 
   constructor(private readonly options: AgentOptions = {}) {
@@ -59,6 +63,7 @@ export class CoreAgent implements Agent {
     this.maxToolCallsPerTurn =
       options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn;
     this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars;
+    this.redact = options.redact ?? createRedactor();
   }
 
   /** Abort the running turn of a session, if there is one. */
@@ -170,6 +175,7 @@ export class CoreAgent implements Agent {
         hooks,
         remaining: cap === undefined ? undefined : cap - usedCalls,
         cap,
+        redact: this.redact,
       });
       usedCalls += batch.ran;
 
