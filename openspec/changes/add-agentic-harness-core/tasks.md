@@ -62,7 +62,8 @@ the TUI booted and exercised after each. The TUI is the regression test for this
 - [ ] 2.11 Rewire the TUI onto the core. Files: `src/components/Layout.tsx`, `src/tui/`. The TUI renders core events and forwards input. Verify every slash command still works.
   - TUI renders core events and forwards input, with no Ink import outside `src/tui/`, no new `ink-*` dependency, and no bare `useStore()` read for chat state. Parity only: no new Ink-specific features, and Ink idioms that OpenTUI replaces (`ink-text-input`, reserved-line math) are not polished beyond what the checks require.
 - [ ] 2.12 Split `Layout.tsx`. Files: `src/tui/*.tsx`. Split the 3,318-line component into focused files, none over 400 lines, one commit per extraction, no behavior change. Verify the file no longer exists or is under 400 lines, and that the TUI boots after each commit.
-- [ ] 2.13 Prove the core runs without the TUI. Files: `src/core/__tests__/agent.test.ts`. Run a turn against a stubbed provider and assert the event sequence. Verify the test passes with no Ink module imported.
+- [x] 2.13 Prove the core runs without the TUI. Files: `src/core/__tests__/agent.test.ts`. Run a turn against a stubbed provider and assert the event sequence. Verify the test passes with no Ink module imported.
+  - **Verification**: a full turn (usage, tool_call, tool_result, usage, text) runs against a stubbed provider with `result.turns === 2` and `result.usage.total_tokens === 40`, and the same test scans every file under `src/core/` for an `ink` import and asserts the list is empty. The scan is proven able to fail: adding a probe file that imports `ink` turns the test red, removing it turns it green.
 
 ## Stage 3: Tool layer
 

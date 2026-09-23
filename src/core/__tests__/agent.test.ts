@@ -1,4 +1,5 @@
 import { test, expect } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { CoreAgent } from '../agent.js';
 import { createSession } from '../state.js';
 import type { ChatProvider, CompletionResult, StreamChunk } from '../providers/types.js';
@@ -270,4 +271,62 @@ test('cancel stops a queued run and leaves the session usable', async () => {
   expect(events).toEqual([]);
   const again = await agent.run(session, 'hello', (e) => events.push(e));
   expect(again.status).toBe('ok');
+});
+
+test('a full turn runs headless with no TUI module in the graph', async () => {
+  const script: CompletionResult[] = [
+    {
+      content: '',
+      usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+      toolCalls: [{ id: 'c1', function: { name: 'read_file', arguments: { path: 'README.md' } } }],
+    },
+    { content: 'README.md starts with the project summary.', usage: { prompt_tokens: 20, completion_tokens: 8, total_tokens: 28 } },
+  ];
+  let completions = 0;
+  const provider: ChatProvider = {
+    async *streamChat() {
+      yield { content: '', done: true };
+    },
+    async complete(): Promise<CompletionResult> {
+      return script[completions++] ?? { content: '' };
+    },
+  };
+  const executed: string[] = [];
+  const dispatcher: ToolDispatcher = {
+    listTools: () => [{ name: 'read_file' }],
+    requiresApproval: () => false,
+    async execute(call): Promise<ToolResult> {
+      executed.push(call.name);
+      return { tool: call.name, success: true, output: '# JamCLI', durationMs: 1 };
+    },
+  };
+
+  const agent = new CoreAgent({
+    provider,
+    dispatcher,
+    toolDefinitions: [
+      { type: 'function', function: { name: 'read_file', description: 'read', parameters: { type: 'object' } } },
+    ],
+    maxSteps: 4,
+    maxToolCallsPerTurn: 2,
+    modelUsageKey: 'test:stub',
+  });
+  const session = createSession('/tmp/headless-project', 'headless-test');
+  const events: AgentEvent[] = [];
+  const result = await agent.run(session, 'Summarize the README.', (e) => events.push(e));
+
+  expect(result.status).toBe('ok');
+  expect(result.response).toBe('README.md starts with the project summary.');
+  expect(executed).toEqual(['read_file']);
+  expect(events.map((e) => e.type)).toEqual(['usage', 'tool_call', 'tool_result', 'usage', 'text']);
+  expect(result.turns).toBe(2);
+  expect(result.usage.total_tokens).toBe(40);
+
+  const coreDir = new URL('..', import.meta.url).pathname;
+  const coreFiles = Array.from(new Bun.Glob('**/*.ts').scanSync({ cwd: coreDir }));
+  const importingInk = coreFiles.filter((file) => {
+    const source = readFileSync(`${coreDir}${file}`, 'utf8');
+    return /from ['"]ink['"]/.test(source);
+  });
+  expect(importingInk).toEqual([]);
 });
