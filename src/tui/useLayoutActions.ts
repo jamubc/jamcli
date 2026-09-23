@@ -4,6 +4,7 @@ import { useMcpPanels } from './useMcpPanels.js';
 import { useMenusActions } from './useMenusActions.js';
 import { useToolConversation } from './useToolConversation.js';
 import { useSlashCommands } from './useSlashCommands.js';
+import { forkSession } from '../core/session/store.js';
 import { useChatSubmit } from './useChatSubmit.js';
 import { useLayoutInput } from './useLayoutInput.js';
 import type { LayoutContext } from './useLayoutContext.js';
@@ -26,6 +27,7 @@ export function useLayoutActions(ctx: LayoutContext, derived: LayoutDerived, pan
     initializeHistory,
     persistTurn,
     replaceMessages,
+    getSessionId,
     incrementModelTokenUsage,
     initializeModelTokenUsage,
     inputValue,
@@ -226,6 +228,9 @@ export function useLayoutActions(ctx: LayoutContext, derived: LayoutDerived, pan
     openStatusStyleMenu,
     setStatus,
     setAvailableModels,
+    getSessionId,
+    forkSession,
+    initializeHistory,
     openModelMenu,
     reopenModelMenu,
     refreshAvailableModels,

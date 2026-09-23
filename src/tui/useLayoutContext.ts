@@ -34,6 +34,7 @@ export function useLayoutContext() {
   const persistTurn = useStore((s) => s.persistTurn);
   const replaceMessages = useStore((s) => s.replaceMessages);
   const getSessionUsage = useStore((s) => s.getSessionUsage);
+  const getSessionId = useStore((s) => s.getSessionId);
   const resumeSession = useStore((s) => s.resumeSession);
   const modelTokenUsage = useStore((s) => s.modelTokenUsage);
   const incrementModelTokenUsage = useStore((s) => s.incrementModelTokenUsage);
@@ -107,6 +108,7 @@ export function useLayoutContext() {
     persistTurn,
     replaceMessages,
     getSessionUsage,
+    getSessionId,
     resumeSession,
     modelTokenUsage,
     incrementModelTokenUsage,

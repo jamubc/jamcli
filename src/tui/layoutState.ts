@@ -25,6 +25,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: '/tools', description: 'Manage AI tool permissions' },
   { name: '/mcp', description: 'Manage MCP servers and tools' },
   { name: '/config', description: 'Open configuration menu' },
+  { name: '/categories', description: 'Show model categories' },
   { name: '/compact', description: 'Compress conversation history' },
   { name: '/clear', description: 'Clear chat history' },
   { name: '/help', description: 'Show help' },

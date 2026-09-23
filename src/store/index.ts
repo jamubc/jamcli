@@ -22,6 +22,7 @@ interface ChatSlice {
   initializeHistory: (projectRoot?: string, sessionId?: string) => Promise<void>;
   persistTurn: () => Promise<void>;
   getSessionUsage: () => SessionUsage | null;
+  getSessionId: () => string | null;
   resumeSession: (sessionId: string, projectRoot?: string) => Promise<boolean>;
 }
 
@@ -160,6 +161,11 @@ export const useStore = create<AppState>((set, get) => ({
   getSessionUsage: () => {
     const state = get();
     return state.sessionUsage;
+  },
+
+  getSessionId: () => {
+    const state = get();
+    return state.historyService?.getSessionId() ?? null;
   },
 
   // Config Slice

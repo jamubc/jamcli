@@ -5,10 +5,23 @@ import { adaptLegacyProvider } from '../core/providers/legacy.js';
 import { resetTerminalViewport } from './layoutState.js';
 import { normalizeProvider, normalizeToolIdentifier } from './layoutFormat.js';
 import { MCP_COMMAND_USAGE, PROVIDER_COMMAND_USAGE, TOOL_COMMAND_USAGE } from './layoutState.js';
+import { forkSession } from '../core/session/store.js';
+import { DEFAULT_CATEGORIES, describeChain, listCategories } from '../core/routing/categories.js';
 import type { ProviderSlug } from './layoutState.js';
 import type { ChatMessage } from '../core/types.js';
-import type { Config, Profile } from '../types/config.js';
-import type { ModelInfo } from '../types/config.js';
+import type { Config, ModelInfo, Profile } from '../types/config.js';
+
+const describeCategories = (config: Config | null): string => {
+  const configured = config?.categories;
+  const entries = configured && Object.keys(configured).length ? listCategories(configured) : listCategories(DEFAULT_CATEGORIES);
+  const source = configured && Object.keys(configured).length ? 'configured' : 'defaults';
+  const lines = [`Model categories (${source}):`];
+  for (const entry of entries) {
+    lines.push(`- ${entry.name}: ${describeChain(entry.chain)}`);
+  }
+  lines.push('', 'Category routing applies to delegated work; the session model is unchanged.');
+  return lines.join('\n');
+};
 
 interface CommandDeps {
   messages: ChatMessage[];
@@ -41,6 +54,9 @@ interface CommandDeps {
   openStatusStyleMenu: () => Promise<void>;
   setStatus: (status: 'idle' | 'thinking' | 'streaming') => void;
   setAvailableModels: (models: ModelInfo[]) => void;
+  getSessionId: () => string | null;
+  forkSession: (projectRoot: string, sessionId: string) => Promise<string | null>;
+  initializeHistory: (projectRoot?: string, sessionId?: string) => Promise<void>;
   openModelMenu: (models: ModelInfo[]) => void;
   reopenModelMenu: () => Promise<void>;
   refreshAvailableModels: () => Promise<ModelInfo[]>;
@@ -79,6 +95,9 @@ export function useSlashCommands(deps: CommandDeps) {
     openStatusStyleMenu,
     setStatus,
     setAvailableModels,
+    getSessionId,
+    forkSession,
+    initializeHistory,
     openModelMenu,
     reopenModelMenu,
     refreshAvailableModels,
@@ -103,7 +122,7 @@ export function useSlashCommands(deps: CommandDeps) {
         addMessage({
           role: 'system',
           content:
-            'Available commands:\n/model <name> - Switch AI model\n/profile <name> - Switch profile\n/resume - Resume a previous session\n/tools [action] - Manage tool permissions\n/config [prompt|menu] - Inspect or edit settings\n/copy [o] [count] - Copy chat (o = model output)\n/clear - Clear chat history\n/help - Show this help\n/exit - Exit JamCLI',
+            'Available commands:\n/model <name> - Switch AI model\n/profile <name> - Switch profile\n/resume - Resume a previous session\n/tools [action] - Manage tool permissions\n/categories - Show model categories\n/config [prompt|menu] - Inspect or edit settings\n/copy [o] [count] - Copy chat (o = model output)\n/clear - Clear chat history\n/help - Show this help\n/exit - Exit JamCLI',
           timestamp: Date.now(),
         });
         return true;
@@ -122,6 +141,39 @@ export function useSlashCommands(deps: CommandDeps) {
           timestamp: Date.now(),
         });
         return true;
+      case '/categories': {
+        setIsConfigMenuOpen(false);
+        addMessage({ role: 'system', content: describeCategories(config), timestamp: Date.now() });
+        return true;
+      }
+      case '/fork': {
+        setIsConfigMenuOpen(false);
+        const sourceId = getSessionId();
+        if (!sourceId) {
+          addMessage({
+            role: 'system',
+            content: 'No session is active yet, so there is nothing to fork.',
+            timestamp: Date.now(),
+          });
+          return true;
+        }
+        const forked = await forkSession(projectRoot, sourceId);
+        if (!forked) {
+          addMessage({
+            role: 'system',
+            content: `Could not fork ${sourceId}: it has no recorded turns.`,
+            timestamp: Date.now(),
+          });
+          return true;
+        }
+        await initializeHistory(projectRoot, forked);
+        addMessage({
+          role: 'system',
+          content: `Forked ${sourceId} into ${forked}. The original session is unchanged and later turns land in the fork.`,
+          timestamp: Date.now(),
+        });
+        return true;
+      }
       case '/tools': {
         setIsConfigMenuOpen(false);
         const action = (args[0] || 'status').toLowerCase();
