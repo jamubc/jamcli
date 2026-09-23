@@ -18,32 +18,27 @@ where the unit can be abandoned safely and picked up again. A checkpoint is neve
 merge candidate: the unit is finished only when its change is archived, and only then
 does the next unit start.
 
-This rule exists because the alternative is already on the record. JamCLI has one
+This rule exists because the alternative is already on the record. JamCLI had one
 branch, four commits all dated 2025-11-25, and roughly 620 lines of source changes
 sitting uncommitted since 2026-09-21 with no record of what they were for. The work was
 real; the trail was not.
 
 A unit is done when all of these are true:
 
-- [x] The feature works end to end. No stubs and no code paths reachable only by a flag
-      nobody sets. `devloop`'s harness slot still reads `// REPLACE THIS LINE`, and its
-      `test-results/.last-run.json` reports `passed` with no spec files present. Stub
-      markers and status files are both disqualifying.
-- [x] Every design decision it depends on is **decided**, not deferred. A chosen library
+- [ ] The feature works end to end **on every surface a user reaches it through**: the
+      interface, headless, and ACP. No stubs and no code paths reachable only by a flag
+      nobody sets. Stub markers and status files are both disqualifying.
+- [ ] Every design decision it depends on is **decided**, not deferred. A chosen library
       is chosen, not "currently wired up".
-- [x] `npx tsc --noEmit` does not exceed the recorded baseline for the unit. It ended at
-      22 against a baseline of 35, all of them pre-existing duplicate-prop errors in one
-      terminal file.
-- [x] `bun test` passes, and the tests can fail. A test that cannot fail is not evidence.
-      147 tests pass, and the new ones were each mutation-probed red before green.
-- [x] `bun run build` succeeds.
-- [x] The TUI boots and its slash commands work, if the unit touched the core. The
-      interface renders header, transcript, input, and footer, and the command surface is
-      exercised through the headless path.
-- [x] `openspec validate --strict` passes for the unit's change.
-- [x] The unit's change has every task checked and is moved to `openspec/changes/archive/`,
-      with its deltas applied into `openspec/specs/`. Archived as
-      `2026-09-23-add-agentic-harness-core`, 16 added, 8 modified, 1 removed.
+- [ ] `npx tsc --noEmit` does not exceed the recorded baseline for the unit.
+- [ ] `bun test` passes, and the tests can fail. A test that cannot fail is not evidence.
+      At least one test per surface drives the assembled product, not only its modules.
+- [ ] `bun run build` succeeds.
+- [ ] The interface boots and its slash commands work, if the unit touched the core,
+      exercised through the interface itself and not only through the headless path.
+- [ ] `openspec validate --strict` passes for the unit's change.
+- [ ] The unit's change has every task checked and is moved to `openspec/changes/archive/`,
+      with its deltas applied into `openspec/specs/`.
 
 Only then does it commit and merge, and only then does the next unit start.
 
@@ -51,77 +46,85 @@ Only then does it commit and merge, and only then does the next unit start.
 read as finished and was not committed. `claude-code-adapter` reports 87% coverage and
 ships 6,400 lines of tests, which is what the claim looks like when it is real.
 
+**Neither is a checked box.** `add-agentic-harness-core` closed with every item above
+checked, and its own surfaces then failed on the default path: the interface offered no
+tools with Ollama, headless and ACP offered three read tools with empty schemas, and
+`write_file` could not write a file. Its tests exercised modules and never a surface. The
+per-surface clauses above were added for that reason. The record is in
+`openspec/changes/rehaul-jamcli/audit.md`.
+
 ## Open unit
+
+### 2. `rehaul-jamcli`
+
+The rehaul of JamCLI into a modern coding CLI, as directed by the owner on 2026-09-23.
+It covers:
+
+- one runtime for every surface, a streaming turn engine, and a transcript event log;
+- permission modes with a sandbox;
+- a model catalog with cost tracking, and model-aware context management;
+- layered configuration, credentials, and observability;
+- the interface rebuilt on OpenTUI;
+- git workflows;
+- commands, skills, and hooks;
+- MCP, ACP, and LSP adapters;
+- plugins, workflows, and release binaries.
+
+Full scope in `openspec/changes/rehaul-jamcli/`.
+
+**Owner decisions recorded with it** (2026-09-23):
+
+- One unit rather than several, with twelve stages.
+- The pre-authorized `replace-ink-with-opentui` unit is folded into stage 6 and merged
+  with an interface redesign. Its benchmark gate stands, and frame-text snapshot tests
+  are authorized.
+- A plugin system, a git write path, a workflow engine, and release binaries are
+  authorized. They were previously deferred.
+- The owner's answers approve the plan. Each stage proceeds without a separate review of
+  its proposal.
+
+**Insertion rule for this unit.**
+
+- Stage 1 precedes everything, and stage 2 precedes everything after it.
+- Stage 6 needs stages 3 and 4.
+- Stage 10 needs stages 8 and 9.
+- Stage 11 needs stage 8, and stage 7 for its commit step.
+- Stage 12 is last.
+
+**Partial completion is identifiable.** The stopped point is the last checked task in
+`tasks.md`. Stopping after stage 2 still leaves a working agent on all three surfaces.
+
+**Baseline.** `npx tsc --noEmit` reports 22 errors on Bun 1.4.2 and TypeScript 7.0.2.
+CI's ceiling is lowered to match in task 1.1.
+
+## Closed units
 
 ### 1. `add-agentic-harness-core`
 
-The whole harness rebuild: one tool protocol, a headless core, a tool registry, generic
-providers, category routing, delegation, a tool output trust gate, rules, hooks, policy,
-sessions, and the MCP and ACP surfaces. Full scope in
-`openspec/changes/add-agentic-harness-core/`.
+Archived as `2026-09-23-add-agentic-harness-core`: 16 added, 8 modified, 1 removed. It
+built the core, the registry, generic providers, the Anthropic seam, category routing,
+headless invocation, delegation, the trust gate, rules, hooks, policy, audit, and the MCP
+and ACP surfaces.
 
-This unit is deliberately large because its stages are not independent: the protocol
-defect and the trapped loop are the reason nothing else here is possible, and splitting
-them across units would mean shipping a protocol migration twice.
+The audit that opened `rehaul-jamcli` found its surfaces assembled inconsistently:
 
-**Insertion rule for this unit.** The stages in `tasks.md` are ordered by dependency and
-are not reorderable within stages 1 and 2. After stage 2, work may interleave freely,
-with one exception: `task` delegation requires both headless mode and category routing,
-so it cannot precede either.
+- 6 of its 36 requirements do not hold for a normal user;
+- 18 hold only on some surfaces or paths;
+- `master` shares no commit with its branch, so it has not been merged.
 
-**Partial completion is identifiable, not ambiguous.** If this unit stalls, the stopped
-point is the last checked task, the uncompleted stages are listed above it, and the
-branch holds a state that either boots or does not. Stage 1 alone removes the protocol
-defect that causes most visible unreliability, so stopping after it is a real outcome
-rather than a failure.
-
-**Status.** Closed and archived on `feat/agentic-harness-core` as
-`2026-09-23-add-agentic-harness-core`. The harness, the tool registry, generic providers,
-the Anthropic seam, category routing, headless invocation, delegation, the trust gate,
-rules, hooks, policy, audit, and the MCP and ACP surfaces are in the tree. What the unit
-did not finish is named rather than implied: the terminal interface drives the core
-through the extracted hooks but its interactive command path is exercised by the headless
-surface rather than by a captured keystroke run, and delegation to a local child process
-and to an external ACP agent are both wired and unit-verified without a live
-multi-provider child.
-
-## Pre-authorized next unit
-
-### `replace-ink-with-opentui`
-
-Pre-authorized next unit: replace the Ink presentation layer with OpenTUI. It opens
-only after `add-agentic-harness-core` closes and archives.
-
-- **Scope.** Presentation only. `src/core/` and `src/services/` are untouchable.
-- **Acceptance.** Every slash command works, approval and rejection work, streaming
-  works, resume works, compact works, transcript scrollback runs through a scrollbox,
-  and mouse input works. The four gates pass.
-- **Benchmark gate.** Record input latency and frame behavior on a long transcript
-  before and after the port. No performance claim may be made without those numbers.
-- **Component source.** Evaluate shadcn-labs/termcn, which ships AI chat primitives on
-  Ink and OpenTUI. Do not vendor it blindly.
-- **Packaging.** Pin exact OpenTUI versions. The native library sits under tsup now and
-  `bun build --compile` later.
-- **Non-goal.** No appearance redesign.
-- **Start steps.** Run `npx skills add anomalyco/opentui --skill opentui`, scaffold the
-  change, and run `openspec validate --strict` before any implementation.
+The measurements are in `openspec/changes/rehaul-jamcli/audit.md`.
 
 ## Not in this unit
 
 Anything below takes its position from one question: does it make the harness more
-trustworthy, or does it add surface? Only the first kind is listed as a candidate at
-all. None of these have a change proposal, and none should start before unit 1 closes.
+trustworthy, or does it add surface?
 
 ### Candidates, in no order
 
-- **Single-binary distribution.** `bun build --compile` per platform. Deferred because
-  a working build is the prerequisite, and because the project is personal and not
-  published.
-- **Committing on the user's behalf.** `git_status` and `git_diff` are read-only in unit
-  1 by design. A write path would need its own approval design.
-- **A plugin or extension API.** Deferred until the registry and hook bus have been used
-  long enough to know what a stable extension point even is.
-- **Remote or hosted sessions.** Contradicts local-first.
+- **A VS Code extension.** ACP already reaches Zed, JetBrains, Neovim, and Emacs.
+- **A vim editing mode in the composer.** Waits until the OpenTUI composer is stable.
+- **Image input.** Needs a local vision path to keep the local-first promise.
+- **An OpenAI Responses API adapter,** if stage 4's optional task does not land.
 
 ### Rejected, with reasons
 
@@ -131,12 +134,19 @@ These are recorded so they are not proposed again without new evidence.
   `hermes-plasticity-plugin`: 26 cycles, roughly 138,000 tokens, zero committed
   memories. Its own post-mortem describes it as an LLM writing book reports about what
   another LLM had already done. Revisit only with a hard novelty gate that can be
-  demonstrated on real transcripts before any code is written.
-- **Team mode, parallel member orchestration, tmux visualization.** The complexity cost
-  is real and the benefit is unproven for a single user.
-- **A hosted service or remote session store.** Contradicts local-first.
+  demonstrated on real transcripts before any code is written. This also rules out a
+  learned preference profile of the kind Command Code calls "taste".
+- **Team mode, member visualization, or unbounded parallel agents.** The complexity cost
+  is real and the benefit is unproven for a single user. Workflows may run a small,
+  capped number of steps in parallel; that is the whole of it.
+- **A hosted service, remote sessions, or a background daemon.** Contradicts
+  local-first. Scheduled workflows use the operating system's scheduler instead.
 - **Building a plugin for another harness as the primary surface.** JamCLI is the host,
   not a guest. Where another tool has something worth having, delegate over ACP instead.
+- **Loading third-party code into the JamCLI process.** Plugins run as sandboxed
+  subprocesses only, for the reason `vm2` was removed.
+- **An npm release.** The project stays unpublished on npm; release binaries go to
+  GitHub Releases.
 
 ## Cross-cutting rules that apply to every unit
 

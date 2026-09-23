@@ -77,6 +77,7 @@ description. `bun test` must pass, and the tests must be capable of failing.
 
 ## Known state
 
-The tree carries uncommitted work from before this change opened, covering a partial
-native tool-calling path and MCP integration. `tasks.md` stage 1 commits it before
-anything else is touched. Do not discard it.
+The open unit is `rehaul-jamcli`. Its `audit.md` records the measured state of the tree
+when it opened, including the defects the previous unit's tests did not catch. Its
+`tasks.md` is the checklist, and the last checked task is where work stopped. The type
+baseline for the unit is 22 errors.
