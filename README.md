@@ -13,8 +13,6 @@
 ---
 --> Roadmap:
 
-X Tools and their usage
-
 X Plugins system
 
 X Git integration
@@ -29,9 +27,15 @@ X Git integration
 
 ## Features
 
-- **Provider Agnostic**: Supports Ollama (default) and extensible for OpenAI/Anthropic.
-- **Human-in-the-Loop**: All file edits and shell commands require explicit user approval.
-- **Configuration Profiles**: Switch between different behavior profiles via `.jamcli/profiles`.
+- **Three surfaces, one core**: the terminal interface, a one-shot command line, and an Agent Client Protocol server all drive the same agent loop.
+- **Provider agnostic**: Ollama with no account, any OpenAI-compatible endpoint, and a translated Anthropic-shaped endpoint. Keys come from `key_env_var` wherever the provider allows it.
+- **Tool registry**: a tool declares its name, description, JSON Schema, policy class, and runner. Built-ins cover files, search, glob, edit, a todo list, read-only git, and delegation; MCP tools join the same list.
+- **Human in the loop**: state-changing tools ask before running, a deny always wins, and a headless run never prompts, it refuses and names the flag that would allow it.
+- **Trust gate**: tool output is screened for relevance and prompt injection before it enters context, and every removal is named with its reason.
+- **Project rules**: instruction files are collected from the project root to the working directory and injected outermost first, with glob-conditional sections.
+- **Hooks**: session start, turn start, pre-tool, post-tool, compaction, and session end, with a throwing hook reported rather than fatal.
+- **Category routing**: a category names an ordered chain of models, so delegated work resolves its own model instead of inheriting the session's.
+- **Configuration profiles**: switch between different behavior profiles via `.jamcli/profiles`.
 
 ## Prerequisites
 
@@ -82,7 +86,7 @@ jamcli
 
 ### One-shot and piped use
 
-Any argument switches the entry point out of the interface and onto the command surface:
+Any argument that asks for a run or a subcommand switches the entry point out of the interface and onto the command surface:
 
 ```bash
 jamcli -p "summarize the changes in src/core" --output-format text
@@ -96,7 +100,15 @@ jamcli -p "read package.json and report the version" --output-format stream-json
 - `--cwd`, `--max-turns`, `--model`, `--continue`, and `--resume <id>` bound and shape the run.
 - `jamcli sessions list`, `jamcli sessions search <query>`, and `jamcli sessions export <id>` read the existing history files without migrating them.
 - `jamcli mcp add|list|test|remove` manages MCP servers, and `jamcli audit` reports tool access, isolation, and guardrail findings by severity without writing anything.
-- `jamcli acp` serves the Agent Client Protocol over stdio for an ACP client such as Zed.
+- `jamcli acp` serves the Agent Client Protocol over stdio for an ACP client such as Zed:
+
+```bash
+~/.local/bin/acp-delegate --agent "bun src/index.tsx acp" --cwd . --prompt "unused" --list-only
+# agent: jamcli 1.0.0  protocol v1
+# session: <id>
+#   model: model = <configured model>
+#   profile: profile = default
+```
 
 **Driving a vendor subscription through a third-party protocol client can violate that vendor's terms of service.** The ACP surface exists for agents and endpoints you are entitled to drive. Where the vendor offers an API-key path, use that instead: configure the key through `key_env_var` so it stays out of the project file.
 
@@ -114,9 +126,10 @@ JamCLI automatically detects the project root by walking up the directory tree f
 
 ### Configuration Files
 
-- `config.json`: General settings.
-- `mcp.json`: Tool permissions and context limits.
+- `config.json`: General settings, including `agent_loop` bounds, `categories` for routed work, `delegation` limits, and `trust`.
+- `mcp.json`: Tool permissions, context limits, ignore patterns, and MCP servers over stdio or streamable HTTP.
 - `profiles/`: AI behavior profiles.
+- `AGENTS.md`, `CLAUDE.md`, and `.jamcli/rules/*.md`: project rules, collected from the project root toward the working directory. A section headed `# when: <glob>` applies only to matching work.
 - `styles` may be created using `/config > Style > Create Custom Style`
 
 ## Development
