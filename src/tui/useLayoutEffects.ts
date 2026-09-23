@@ -120,6 +120,10 @@ export function useLayoutEffects(ctx: LayoutContext): void {
     if (!stdout) return;
 
     const handleResize = () => {
+      // The terminal rewraps the previous frame on resize, so Ink's line-count
+      // erase misses rows and leaves stale frames behind. Clear the screen and
+      // home the cursor so the next render starts clean.
+      stdout.write('\x1b[2J\x1b[H');
       setTerminalSize({
         rows: stdout.rows ?? 24,
         columns: stdout.columns ?? 80,
