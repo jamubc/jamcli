@@ -1,6 +1,6 @@
 import { ConfigService } from './ConfigService.js';
 import type { McpServerConfig, McpToolDescriptor } from '../types/mcp.js';
-import { TOOL_DEFINITIONS, type ToolName } from '../types/tools.js';
+import { listTools } from '../core/tools/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -49,11 +49,12 @@ export class McpManager {
    * Return MCP-style tool descriptors for built-in tools so they flow through the same pipeline.
    */
   getBuiltinTools(): McpToolDescriptor[] {
-    const names = Object.keys(TOOL_DEFINITIONS) as ToolName[];
-    const core = names.map((name) => ({
-      name,
-      description: TOOL_DEFINITIONS[name].description,
-      inputSchema: this.buildBuiltinSchema(name),
+    // Built-in descriptors come from the registry so discovery sees the real
+    // schemas declared by each tool rather than a permissive placeholder.
+    const core = listTools().map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
       source: 'builtin' as const,
     }));
 
@@ -157,56 +158,6 @@ export class McpManager {
       return `${idx + 1}. ${tool.name} [${from}]${original} — ${tool.description || 'No description'}`;
     });
     return ['Available MCP tools:', ...lines].join('\n');
-  }
-
-  private buildBuiltinSchema(name: ToolName) {
-    // Simple permissive schema for now; specific schemas can be added per tool.
-    const base = {
-      type: 'object',
-      properties: {},
-      additionalProperties: true,
-    };
-
-    if (name === 'list_files') {
-      base.properties = {
-        pattern: { type: 'string' },
-        limit: { type: 'integer', minimum: 1 },
-        include_hidden: { type: 'boolean' },
-        include_dirs: { type: 'boolean' },
-      };
-    } else if (name === 'read_file') {
-      base.properties = {
-        path: { type: 'string' },
-        start_line: { type: 'integer', minimum: 1 },
-        end_line: { type: 'integer', minimum: 1 },
-      };
-    } else if (name === 'search_code') {
-      base.properties = {
-        query: { type: 'string' },
-        regex: {
-          type: 'object',
-          properties: {
-            pattern: { type: 'string' },
-            flags: { type: 'string' },
-          },
-        },
-        pattern: { type: 'string' },
-        limit: { type: 'integer', minimum: 1 },
-        include_hidden: { type: 'boolean' },
-      };
-    } else if (name === 'run_command') {
-      base.properties = {
-        command: { type: 'string' },
-        cwd: { type: 'string' },
-      };
-    } else if (name === 'apply_patch') {
-      base.properties = {
-        path: { type: 'string' },
-        patch: { type: 'string' },
-      };
-    }
-
-    return base;
   }
 
   private buildServerToolName(serverId: string, toolName: string) {
