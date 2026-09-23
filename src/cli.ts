@@ -1,4 +1,5 @@
 import { runHeadless } from './cli/run.js';
+import { runAuditCli } from './cli/audit.js';
 import { listSessions, latestSessionId, loadSessionMessages, searchSessions, exportSession } from './core/session/store.js';
 import { resolveJamcliProjectRoot } from './utils/projectRoot.js';
 import type { AgentEvent } from './core/types.js';
@@ -13,6 +14,7 @@ export interface ParsedArgs {
   allowTools: string[];
   denyTools: string[];
   sessionsCommand?: { action: 'list' | 'search' | 'export'; query?: string };
+  audit: boolean;
   help: boolean;
   version: boolean;
   unknown: string[];
@@ -26,6 +28,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     denyTools: [],
     help: false,
     version: false,
+    audit: false,
     unknown: [],
   };
 
@@ -80,6 +83,10 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       parsed.version = true;
       continue;
     }
+    if (token === 'audit') {
+      parsed.audit = true;
+      continue;
+    }
     if (token === 'sessions') {
       const action = argv[i + 1];
       if (action === 'list' || action === 'search' || action === 'export') {
@@ -112,6 +119,7 @@ export const USAGE = `Usage: jamcli [options]
       --deny-tool <name>       Deny a tool for this run (repeatable)
 
   jamcli sessions list|search <query>|export <id>
+  jamcli audit                 Report tool access, isolation, and guardrail findings
 
   --help                       Show this help
   --version                    Show the version`;
@@ -141,6 +149,10 @@ export const runCli = async (argv: string[]): Promise<number> => {
     process.chdir(parsed.cwd);
   }
   const projectRoot = resolveJamcliProjectRoot();
+
+  if (parsed.audit) {
+    return runAuditCli();
+  }
 
   if (parsed.sessionsCommand) {
     return runSessionsCommand(parsed.sessionsCommand, projectRoot);
