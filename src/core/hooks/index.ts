@@ -111,8 +111,10 @@ export const emitHookEvent = async <K extends HookEventName>(
   const failures = await bus.emit(event, payload);
   for (const failure of failures) {
     onEvent?.({
-      type: 'text',
-      delta: `\n[hook ${failure.handler} on ${failure.event} failed: ${failure.message}]\n`,
+      type: 'notice',
+      level: 'warn',
+      code: 'hook_failed',
+      message: `Hook ${failure.handler} on ${failure.event} failed: ${failure.message}`,
     });
   }
 };

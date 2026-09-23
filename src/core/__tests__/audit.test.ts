@@ -7,6 +7,11 @@ import { startFakeProvider } from '../../testing/fakeProvider.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { OllamaProvider } from '../providers/ollama.js';
 import { OpenAICompatProvider } from '../providers/openai-compat.js';
+import { CoreAgent } from '../agent.js';
+import { createSession } from '../state.js';
+import { createHookBus } from '../hooks/index.js';
+import { createScriptedProvider } from '../../testing/scriptedProvider.js';
+import type { ToolDispatcher } from '../tools/dispatch.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -16,6 +21,15 @@ import { OpenAICompatProvider } from '../providers/openai-compat.js';
  */
 
 const pending = () => {};
+
+
+const echoDispatcher = (ask: string[] = []): ToolDispatcher => ({
+  listTools: () => [],
+  requiresApproval: (name) => ask.includes(name),
+  isReadOnly: (name) => name.startsWith('read'),
+  execute: async (call) => ({ tool: call.name, success: true, output: `${call.name} ran`, durationMs: 0 }),
+});
+const defs = (...names: string[]) => names.map((name) => ({ type: 'function' as const, function: { name } }));
 
 const withProject = async (run: (root: string) => Promise<void>) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-'));
@@ -50,9 +64,46 @@ test('F5: edit replacements keep $$, $&, $` and $\' literally (2.3)', () =>
   }));
 
 test.todo('F6: an ACP session sends earlier turns with the second prompt (2.13)', pending);
-test.todo('F7: tool steps stream, keep text beside calls, and send the system prompt first (2.9)', pending);
-test.todo('F8: calls after an approval request still run or are answered (2.9)', pending);
-test.todo('F9: a read-edit-test cycle completes under the default loop limits (2.9)', pending);
+test('F7: tool steps stream, keep text beside calls, and send the system prompt first (2.9)', async () => {
+  const provider = createScriptedProvider([{ text: 'Looking.', toolCalls: [{ name: 'read_a', arguments: {} }] }, { text: 'Done.' }]);
+  const texts: string[] = [];
+  await new CoreAgent({ provider, model: 'm', systemPrompt: 'SYS', dispatcher: echoDispatcher(), toolDefinitions: defs('read_a') }).run(
+    createSession('/tmp/audit'),
+    'go',
+    (e) => {
+      if (e.type === 'text') texts.push(e.delta);
+    }
+  );
+  expect(texts.join('')).toBe('Looking.Done.');
+  const second = provider.calls[1].messages;
+  expect(second[0]).toMatchObject({ role: 'system', content: 'SYS' });
+  expect(second.find((m) => m.role === 'assistant')?.content).toBe('Looking.');
+});
+test('F8: calls after an approval request still run or are answered (2.9)', async () => {
+  const provider = createScriptedProvider([
+    { toolCalls: [{ name: 'write_a', arguments: {} }, { name: 'read_b', arguments: {} }] },
+    { text: 'ok' },
+  ]);
+  await new CoreAgent({ provider, model: 'm', dispatcher: echoDispatcher(['write_a']), toolDefinitions: defs('write_a', 'read_b') }).run(
+    createSession('/tmp/audit'),
+    'go',
+    (e) => {
+      if (e.type === 'approval_request') e.decide(true);
+    }
+  );
+  expect(provider.calls[1].messages.filter((m) => m.role === 'tool').map((m) => m.content)).toEqual(['write_a ran', 'read_b ran']);
+});
+test('F9: a read-edit-test cycle completes under the default loop limits (2.9)', async () => {
+  const names = ['read_a', 'read_b', 'edit', 'run_command', 'read_c', 'edit', 'run_command'];
+  const provider = createScriptedProvider([...names.map((name) => ({ toolCalls: [{ name, arguments: {} }] })), { text: 'fixed' }]);
+  const result = await new CoreAgent({ provider, model: 'm', dispatcher: echoDispatcher(), toolDefinitions: defs(...new Set(names)) }).run(
+    createSession('/tmp/audit'),
+    'fix it',
+    () => {}
+  );
+  expect(result.status).toBe('ok');
+  expect(result.response).toBe('fixed');
+});
 test.todo('F10: --allow-tool run_command runs the command headlessly (2.12)', pending);
 test('F11: run_command reports exit codes and times out (2.5)', () =>
   withProject(async (root) => {
@@ -145,4 +196,17 @@ test('F22: a symbolic link out of the project is refused (2.4)', () =>
 
 test.todo('F23: MCP servers do not receive provider keys and run on every surface (2.11, 3.5)', pending);
 test.todo('F24: @ references expand on every surface (2.11)', pending);
-test.todo('F25: a failing hook is a notice, not assistant text (2.11)', pending);
+test('F25: a failing hook is a notice, not assistant text (2.9)', async () => {
+  const hooks = createHookBus();
+  hooks.on('turn_start', () => {
+    throw new Error('boom');
+  });
+  const texts: string[] = [];
+  const notices: string[] = [];
+  await new CoreAgent({ provider: createScriptedProvider([{ text: 'answer' }]), model: 'm', hooks }).run(createSession('/tmp/audit'), 'hi', (e) => {
+    if (e.type === 'text') texts.push(e.delta);
+    if (e.type === 'notice') notices.push(e.message);
+  });
+  expect(texts.join('')).toBe('answer');
+  expect(notices.join(' ')).toContain('boom');
+});

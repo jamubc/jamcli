@@ -1,12 +1,12 @@
-import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage } from './types.js';
-import { readDecision } from './types.js';
-import { addModelUsage, addUsage, appendMessages, isCancelled } from './state.js';
-import type { ChatProvider, ToolDefinition } from './providers/types.js';
-import { dispatchToolCalls, toProviderToolMessages, type ToolDispatcher } from './tools/dispatch.js';
-import { screenToolResults } from './trust/index.js';
+import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, ToolCall, ToolResult } from './types.js';
+import { addModelUsage, addUsage, appendMessages } from './state.js';
+import type { ChatProvider, ProviderRequestOptions, StreamChunk, ToolDefinition } from './providers/types.js';
+import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';
+import { HeadTailBuffer } from './tools/command.js';
+import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
 import { emitHookEvent, type HookBus } from './hooks/index.js';
-
 import type { AgentLoopConfig } from '../types/config.js';
+import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
 
 export interface AgentOptions {
   maxSteps?: number;
@@ -14,9 +14,11 @@ export interface AgentOptions {
   model?: string;
   temperature?: number;
   modelUsageKey?: string;
+  /** Cancels every run of this agent when aborted. */
   signal?: AbortSignal;
   dispatcher?: ToolDispatcher;
   toolDefinitions?: ToolDefinition[];
+  /** Tool calls allowed per user turn; 0 or undefined means no cap. */
   maxToolCallsPerTurn?: number;
   truncationLimit?: number;
   systemPrompt?: string;
@@ -25,320 +27,289 @@ export interface AgentOptions {
   trustModel?: string;
   trustOffNote?: boolean;
   hooks?: HookBus;
+  reasoning?: ProviderRequestOptions['reasoning'];
+  maxOutputTokens?: number;
+  contextLength?: number;
 }
 
-const DEFAULT_MAX_STEPS = 8;
-const DEFAULT_MAX_TOOL_CALLS = 5;
-const DEFAULT_TRUNCATION_LIMIT = 2000;
+interface StepOutput {
+  text: string;
+  reasoning: string;
+  done?: StreamChunk;
+}
 
+const userMessage = (content: string): ChatMessage => ({ role: 'user', content, timestamp: Date.now() });
+
+/**
+ * The turn engine. A user turn is a loop of steps: stream the model's reply, record it
+ * as one assistant message with its text, reasoning, and every tool call, run the calls,
+ * and record exactly one result for each. The loop ends when the model stops calling
+ * tools, the user takes back control, a limit is reached, or the run is cancelled.
+ */
 export class CoreAgent implements Agent {
-  private cancelled = new Set<string>();
-  private maxSteps: number;
-  private provider?: ChatProvider;
-  private model?: string;
-  private temperature?: number;
-  private modelUsageKey?: string;
-  private signal?: AbortSignal;
-  private dispatcher?: ToolDispatcher;
-  private toolDefinitions?: ToolDefinition[];
-  private maxToolCallsPerTurn: number;
-  private truncationLimit: number;
-  private systemPrompt?: string;
-  private trustProvider?: ChatProvider;
-  private trustModel?: string;
-  private trustOffNote: boolean;
+  private readonly running = new Map<string, AbortController>();
+  private readonly maxSteps: number;
+  private readonly maxToolCallsPerTurn: number;
+  private readonly truncationLimit: number;
   private trustNoted = false;
-  private hooks?: HookBus;
 
-  constructor(options: AgentOptions = {}) {
+  constructor(private readonly options: AgentOptions = {}) {
     const loop = options.loop;
-    this.maxSteps = options.maxSteps ?? loop?.max_steps ?? DEFAULT_MAX_STEPS;
-    this.provider = options.provider;
-    this.model = options.model;
-    this.temperature = options.temperature;
-    this.modelUsageKey = options.modelUsageKey;
-    this.signal = options.signal;
-    this.dispatcher = options.dispatcher;
-    this.toolDefinitions = options.toolDefinitions;
-    this.maxToolCallsPerTurn = options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_MAX_TOOL_CALLS;
-    this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_TRUNCATION_LIMIT;
-    this.systemPrompt = options.systemPrompt;
-    this.trustProvider = options.trustProvider;
-    this.trustModel = options.trustModel;
-    this.trustOffNote = options.trustOffNote ?? false;
-    this.hooks = options.hooks;
+    this.maxSteps = options.maxSteps ?? loop?.max_steps ?? DEFAULT_AGENT_LOOP_CONFIG.max_steps;
+    this.maxToolCallsPerTurn =
+      options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn;
+    this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars;
   }
 
+  /** Abort the running turn of a session, if there is one. */
   cancel(sessionId: string): void {
-    this.cancelled.add(sessionId);
+    this.running.get(sessionId)?.abort();
   }
 
   async run(session: JamSession, prompt: string, onEvent: (e: AgentEvent) => void): Promise<RunResult> {
-    if (this.dispatcher && this.toolDefinitions?.length) {
-      return this.runWithTools(session, prompt, onEvent);
+    const controller = new AbortController();
+    const external = this.options.signal;
+    const relay = () => controller.abort();
+    if (external?.aborted) controller.abort();
+    external?.addEventListener('abort', relay, { once: true });
+    this.running.set(session.id, controller);
+    try {
+      return await this.turn(session, prompt, onEvent, controller.signal);
+    } finally {
+      external?.removeEventListener('abort', relay);
+      if (this.running.get(session.id) === controller) this.running.delete(session.id);
     }
-    await emitHookEvent(this.hooks, 'turn_start', { session, prompt, messages: session.messages });
-    let working = appendMessages(session, [userMessage(prompt)]);
-    let response = '';
-    let turns = 0;
-
-    while (turns < this.maxSteps) {
-      if (isCancelled(session.id, this.cancelled)) {
-        this.cancelled.delete(session.id);
-        return this.finish(working, 'cancelled', response, turns);
-      }
-
-      const reply = await this.complete(working, prompt, onEvent);
-      response = reply.text;
-      working = appendMessages(working, [assistantMessage(reply.text, reply.reasoning)]);
-      if (reply.usage) {
-        working = addUsage(working, reply.usage);
-        if (this.modelUsageKey) {
-          working = addModelUsage(working, this.modelUsageKey, reply.usage);
-        }
-        onEvent({ type: 'usage', usage: reply.usage });
-      }
-      turns += 1;
-      break;
-    }
-
-    if (!response) {
-      return this.finish(working, 'limit', response, turns);
-    }
-    return this.finish(working, 'ok', response, turns);
   }
 
-  private async runWithTools(
+  /** Keep the beginning and the end of long output, and say how much was cut. */
+  truncate(text: string): string {
+    if (!text || text.length <= this.truncationLimit) return text ?? '';
+    const buffer = new HeadTailBuffer(this.truncationLimit);
+    buffer.push(text);
+    return buffer.toString();
+  }
+
+  private async turn(
     session: JamSession,
     prompt: string,
-    onEvent: (e: AgentEvent) => void
+    emit: (e: AgentEvent) => void,
+    signal: AbortSignal
   ): Promise<RunResult> {
-    if (!this.provider || !this.dispatcher || !this.toolDefinitions?.length) {
-      throw new Error('runWithTools requires a provider, a dispatcher, and tool definitions');
+    const { provider, dispatcher, hooks } = this.options;
+    let working = prompt ? appendMessages(session, [userMessage(prompt)]) : session;
+    const finish = (status: RunStatus, response: string, steps: number, error?: string): RunResult => {
+      emit({ type: 'turn_end', status });
+      return { status, sessionId: session.id, response, turns: steps, usage: { ...working.usage }, session: working, ...(error ? { error } : {}) };
+    };
+    if (!provider) {
+      return finish('error', '', 0, 'No model provider is configured for this session.');
     }
-    await emitHookEvent(this.hooks, 'turn_start', { session, prompt, messages: session.messages });
-    let working = appendMessages(session, [userMessage(prompt)]);
-    if (this.systemPrompt) {
-      working = appendMessages(working, [{ role: 'system', content: this.systemPrompt, timestamp: Date.now() }]);
-    }
-    let totalToolCalls = 0;
-    let iterations = 0;
 
-    while (iterations < this.maxSteps) {
-      if (isCancelled(session.id, this.cancelled)) {
-        this.cancelled.delete(session.id);
-        return this.finish(working, 'cancelled', '', iterations);
+    emit({ type: 'turn_start', prompt });
+    await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
+    const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
+    const cap = this.maxToolCallsPerTurn > 0 ? this.maxToolCallsPerTurn : undefined;
+    const turnPrompt = prompt || [...working.messages].reverse().find((m) => m.role === 'user')?.content || '';
+    let usedCalls = 0;
+    let steps = 0;
+
+    for (;;) {
+      if (signal.aborted) return finish('cancelled', '', steps);
+      if (steps >= this.maxSteps) {
+        return finish('limit', `Stopped after ${this.maxSteps} steps without a final answer.`, steps);
       }
-      let completion;
+      steps += 1;
+      emit({ type: 'step_start', step: steps });
+
+      let step: StepOutput;
       try {
-        completion = await this.provider.complete(working.messages, {
-          model: this.model,
-          temperature: this.temperature,
-          signal: this.signal,
-          tools: this.toolDefinitions,
-        });
+        step = await this.streamStep(provider, this.project(working.messages), tools, signal, emit);
       } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          return this.finish(working, 'cancelled', '', iterations);
-        }
-        return this.finish(working, 'error', '', iterations, error?.message ?? String(error));
+        const partial: string = error?.partialText ?? '';
+        if (partial) working = appendMessages(working, [this.assistantMessage(partial, '', [], undefined)]);
+        if (signal.aborted || error?.name === 'AbortError') return finish('cancelled', partial, steps);
+        const message = error?.message ?? String(error);
+        emit({ type: 'notice', level: 'error', message });
+        return finish('error', partial, steps, message);
       }
-      if (completion.usage) {
-        working = addUsage(working, completion.usage);
-        if (this.modelUsageKey) {
-          working = addModelUsage(working, this.modelUsageKey, completion.usage);
-        }
-        onEvent({ type: 'usage', usage: completion.usage });
+
+      const usage = step.done?.usage;
+      if (usage) {
+        working = addUsage(working, usage);
+        if (this.options.modelUsageKey) working = addModelUsage(working, this.options.modelUsageKey, usage);
+        emit({ type: 'usage', usage });
       }
-      const rawCalls = completion.toolCalls || [];
-      const calls = [];
-      const callErrors: { index: number; message: string }[] = [];
-      for (let idx = 0; idx < rawCalls.length; idx += 1) {
-        const call = rawCalls[idx];
-        const name = call?.function?.name;
-        if (typeof name !== 'string' || !name) {
-          callErrors.push({ index: idx, message: 'Tool call names an unknown tool or carries unusable arguments.' });
-          continue;
-        }
-        calls.push({
-          id: call.id || `tool_call_${iterations}_${idx}`,
-          name,
-          type: call.type || 'function',
-          arguments: call.function.arguments ?? {},
-        });
-      }
-      for (const failure of callErrors) {
-        onEvent({
-          type: 'tool_result',
-          result: {
-            tool: 'unknown',
-            success: false,
-            output: `Tool error: unusable tool call at index ${failure.index}: ${failure.message}`,
-            durationMs: 0,
-          },
-        });
-      }
-      if (!calls.length && !callErrors.length) {
-        const text = completion.content || '';
-        working = appendMessages(working, [assistantMessage(text, '')]);
-        if (text) onEvent({ type: 'text', delta: text });
-        return this.finish(working, 'ok', text, iterations + 1);
+
+      const { calls, unusable } = normalizeCalls(step.done?.toolCalls, steps);
+      working = appendMessages(working, [this.assistantMessage(step.text, step.reasoning, calls, step.done)]);
+      if (unusable) {
+        emit({ type: 'notice', level: 'warn', message: `The model returned ${unusable} tool call(s) without a tool name; they were ignored.` });
       }
       if (!calls.length) {
-        iterations += 1;
-        continue;
-      }
-
-      totalToolCalls += calls.length;
-      for (const call of calls) {
-        await emitHookEvent(this.hooks, 'pre_tool', { session: working, call });
-      }
-
-      const outcome = await dispatchToolCalls(calls, this.dispatcher, onEvent, {
-        maxCalls: this.maxToolCallsPerTurn,
-        alreadyUsed: totalToolCalls - calls.length,
-      });
-      if (outcome.stopped && outcome.stopReason === 'budget') {
-        return this.finish(working, 'limit', `Tool call budget exceeded (${totalToolCalls}/${this.maxToolCallsPerTurn}).`, iterations + 1);
-      }
-      if (outcome.stopped && outcome.stopReason === 'approval' && outcome.pendingCall) {
-        const pending = outcome.pendingCall;
-        const decided = await this.requestApproval(pending, onEvent);
-        if (!decided) {
-          return this.finish(working, 'refused', `Tool ${pending.name} was not approved.`, iterations + 1);
+        if (unusable) {
+          working = appendMessages(working, [userMessage('[Your last tool call had no tool name and was ignored. Name the tool you want to call.]')]);
+          continue;
         }
-        const result = await this.dispatcher.execute(pending);
-        onEvent({ type: 'tool_result', result });
-        outcome.results.push(result);
+        return finish('ok', step.text, steps);
       }
 
-      const screening = await screenToolResults({
-        prompt,
-        provider: this.trustProvider,
-        model: this.trustModel,
-        signal: this.signal,
-        candidates: calls.map((call, index) => ({
-          tool: call.name,
-          output: outcome.results[index]?.output ?? '',
-        })),
+      if (!dispatcher) {
+        return finish('error', step.text, steps, 'The model called a tool, but this session has no tools.');
+      }
+      const batch = await executeBatch(calls, {
+        dispatcher,
+        emit,
+        signal,
+        projectRoot: session.projectRoot,
+        session: working,
+        hooks,
+        remaining: cap === undefined ? undefined : cap - usedCalls,
+        cap,
       });
-      if (this.trustOffNote && !this.trustNoted) {
-        this.trustNoted = true;
-        for (const note of screening.notes) {
-          onEvent({ type: 'notice', message: note });
-        }
-      }
-      for (const removal of [...screening.deduped, ...screening.dropped]) {
-        onEvent({ type: 'notice', message: `Removed ${removal.tool} result: ${removal.reason}` });
-      }
+      usedCalls += batch.ran;
 
-      for (let index = 0; index < calls.length; index += 1) {
-        const result = outcome.results[index];
-        if (!result) continue;
-        await emitHookEvent(this.hooks, 'post_tool', {
-          session: working,
-          call: calls[index],
-          result,
-          output: this.truncate(result.output),
-        });
-      }
-
-      const keptKeys = new Set(screening.kept.map((item) => `${item.tool}\u0000${item.output}`));
+      const results = await this.screen(turnPrompt, calls, batch.results, signal, emit);
       for (let i = 0; i < calls.length; i += 1) {
-        const result = outcome.results[i];
-        if (!result) continue;
-        if (!keptKeys.has(`${result.tool}\u0000${result.output}`)) continue;
-        keptKeys.delete(`${result.tool}\u0000${result.output}`);
-        const callId = calls[i].id;
-        const truncated = this.truncate(result.output);
-        const { assistant, tool } = toProviderToolMessages(calls[i], callId, truncated);
-        working = appendMessages(working, [assistant, tool]);
+        const output = this.truncate(results[i].output);
+        working = appendMessages(working, [{ role: 'tool', content: output, tool_call_id: calls[i].id, timestamp: Date.now() }]);
+        await emitHookEvent(hooks, 'post_tool', { session: working, call: calls[i], result: results[i], output }, emit);
       }
-      if (outcome.results.length && !screening.kept.length) {
-        working = appendMessages(working, [
-          {
-            role: 'system',
-            content: 'Every tool result this turn was removed by the trust gate.',
-            timestamp: Date.now(),
-          },
-        ]);
+
+      if (signal.aborted) return finish('cancelled', step.text, steps);
+      if (batch.denial && !batch.denial.feedback) {
+        return finish('refused', step.text || 'Stopped because a tool call was denied.', steps);
       }
-      iterations += 1;
+      if (cap !== undefined && batch.capped > 0 && batch.ran === 0) {
+        return finish('limit', `Stopped: the limit of ${cap} tool calls per turn was reached.`, steps);
+      }
     }
-
-    return this.finish(working, 'limit', `Reached tool iteration limit (${this.maxSteps}) without a final answer.`, iterations);
   }
 
-  private truncate(text: string): string {
-    if (!text) return '';
-    return text.length > this.truncationLimit ? `${text.slice(0, this.truncationLimit)}\n… <truncated>` : text;
+  /** The request for a step: the system prompt first, then the conversation in order. */
+  private project(messages: ChatMessage[]): ChatMessage[] {
+    const system = this.options.systemPrompt;
+    return system ? [{ role: 'system', content: system, timestamp: 0 }, ...messages] : messages;
   }
 
-  private requestApproval(call: { id: string; name: string; arguments: Record<string, any> }, onEvent: (e: AgentEvent) => void): Promise<boolean> {
-    return new Promise((resolve) => {
-      onEvent({
-        type: 'approval_request',
-        call,
-        decide: (decision) => resolve(readDecision(decision).allow),
-      });
-    });
-  }
-
-  protected async complete(
-    session: JamSession,
-    prompt: string,
-    onEvent: (e: AgentEvent) => void
-  ): Promise<{ text: string; reasoning: string; usage?: TokenUsage }> {
-    if (!this.provider) {
-      onEvent({ type: 'text', delta: prompt });
-      return { text: prompt, reasoning: '' };
-    }
+  private async streamStep(
+    provider: ChatProvider,
+    messages: ChatMessage[],
+    tools: ToolDefinition[] | undefined,
+    signal: AbortSignal,
+    emit: (e: AgentEvent) => void
+  ): Promise<StepOutput> {
     let text = '';
     let reasoning = '';
-    let usage: TokenUsage | undefined;
-    for await (const chunk of this.provider.streamChat(session.messages, {
-      model: this.model,
-      temperature: this.temperature,
-      reasoning: 'auto',
-      signal: this.signal,
-    })) {
-      if (chunk.content) {
-        text += chunk.content;
-        onEvent({ type: 'text', delta: chunk.content });
+    let done: StreamChunk | undefined;
+    try {
+      for await (const chunk of provider.streamChat(messages, {
+        model: this.options.model,
+        temperature: this.options.temperature,
+        signal,
+        tools,
+        reasoning: this.options.reasoning ?? 'auto',
+        maxOutputTokens: this.options.maxOutputTokens,
+        contextLength: this.options.contextLength,
+        onRetry: (info) => emit({ type: 'retry', attempt: info.attempt, delayMs: info.delayMs, reason: info.reason }),
+      })) {
+        if (chunk.content) {
+          text += chunk.content;
+          emit({ type: 'text', delta: chunk.content });
+        }
+        if (chunk.reasoning) {
+          reasoning += chunk.reasoning;
+          emit({ type: 'reasoning', delta: chunk.reasoning });
+        }
+        if (chunk.done) done = chunk;
       }
-      if (chunk.reasoning) {
-        reasoning += chunk.reasoning;
-        onEvent({ type: 'reasoning', delta: chunk.reasoning });
-      }
-      if (chunk.done && chunk.usage) {
-        usage = chunk.usage;
-      }
+    } catch (error: any) {
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), { partialText: text });
     }
-    return { text, reasoning, usage };
+    return { text, reasoning, done };
   }
 
-  private finish(
-    session: JamSession,
-    status: RunStatus,
-    response: string,
-    turns: number,
-    error?: string
-  ): RunResult {
+  private assistantMessage(text: string, reasoning: string, calls: ToolCall[], done: StreamChunk | undefined): ChatMessage {
     return {
-      status,
-      sessionId: session.id,
-      response,
-      turns,
-      usage: { ...session.usage },
-      ...(error ? { error } : {}),
+      role: 'assistant',
+      content: text,
+      timestamp: Date.now(),
+      ...(this.options.model ? { model: this.options.model } : {}),
+      ...(reasoning ? { reasoning } : {}),
+      ...(done?.reasoningBlocks?.length ? { reasoningBlocks: done.reasoningBlocks } : {}),
+      ...(this.options.provider?.family ? { providerFamily: this.options.provider.family } : {}),
+      ...(calls.length
+        ? {
+            tool_calls: calls.map((call) => ({
+              id: call.id,
+              type: 'function',
+              function: { name: call.name, arguments: JSON.stringify(call.arguments ?? {}) },
+            })),
+          }
+        : {}),
     };
   }
+
+  /**
+   * Screen results through the trust gate. A removed result is still answered, with a
+   * note saying why, so every call keeps its result and the reason is visible.
+   */
+  private async screen(
+    prompt: string,
+    calls: ToolCall[],
+    results: ToolResult[],
+    signal: AbortSignal,
+    emit: (e: AgentEvent) => void
+  ): Promise<ToolResult[]> {
+    const candidates: (ScreeningCandidate & { index: number })[] = [];
+    results.forEach((result, index) => {
+      if (result.status === 'ok' || result.status === 'error') candidates.push({ tool: calls[index].name, output: result.output, index });
+    });
+    if (!candidates.length) return results;
+    const screening = await screenToolResults({
+      prompt,
+      provider: this.options.trustProvider,
+      model: this.options.trustModel,
+      signal,
+      candidates,
+    });
+    if (this.options.trustOffNote && !this.trustNoted) {
+      this.trustNoted = true;
+      for (const note of screening.notes) emit({ type: 'notice', level: 'info', message: note });
+    }
+    const kept = new Set<ScreeningCandidate>(screening.kept);
+    const removals = [...screening.deduped, ...screening.dropped];
+    let removalIndex = 0;
+    const out = [...results];
+    for (const candidate of candidates) {
+      if (kept.has(candidate)) continue;
+      const removal = removals[removalIndex++];
+      const reason = removal?.reason ?? 'removed by the trust gate';
+      emit({ type: 'notice', level: 'warn', message: `Removed ${candidate.tool} result: ${reason}` });
+      out[candidate.index] = { ...out[candidate.index], output: `[This result was withheld by the trust gate: ${reason}.]` };
+    }
+    return out;
+  }
 }
 
-function userMessage(content: string): ChatMessage {
-  return { role: 'user', content, timestamp: Date.now() };
-}
-
-function assistantMessage(content: string, reasoning: string): ChatMessage {
-  return { role: 'assistant', content, timestamp: Date.now(), ...(reasoning ? { reasoning } : {}) };
+/** Give every call an id, and count the ones with no tool name. */
+function normalizeCalls(raw: StreamChunk['toolCalls'], step: number): { calls: ToolCall[]; unusable: number } {
+  const calls: ToolCall[] = [];
+  let unusable = 0;
+  (raw ?? []).forEach((call, index) => {
+    const name = call?.function?.name;
+    if (typeof name !== 'string' || !name) {
+      unusable += 1;
+      return;
+    }
+    let args = call.function.arguments ?? {};
+    if (typeof args === 'string') {
+      try {
+        args = JSON.parse(args);
+      } catch {
+        args = { value: args };
+      }
+    }
+    calls.push({ id: call.id || `call_${step}_${index}`, name, type: call.type || 'function', arguments: args });
+  });
+  return { calls, unusable };
 }

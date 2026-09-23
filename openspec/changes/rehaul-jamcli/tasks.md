@@ -99,13 +99,28 @@ Line references describe the tree when the change opened.
     - 12 hardening tests pass.
     - Mutation probes: replaying across families, dropping `num_ctx`, reading tool calls only from the final chunk, and not retrying 429 each turn a test red.
     - F14, F15, and F19 are live. F13, ACP choosing its own provider, is fixed by 2.13.
-- [ ] 2.9 Build the turn engine (D3; F7, F8, F9). Files: `src/core/agent.ts`, `src/core/tools/dispatch.ts`, `src/types/config.ts` (new loop defaults), tests.
+- [x] 2.9 Build the turn engine (D3; F7, F8, F9). Files: `src/core/agent.ts`, `src/core/tools/dispatch.ts`, `src/types/config.ts` (new loop defaults), tests.
   - Streams every step, with the system prompt first.
   - One assistant message holds the text, reasoning, and all calls.
   - One result per call, including denied and cancelled. Per-call approvals.
   - Concurrent read-only calls; cancellation through a per-run controller.
   - Returns the updated session.
   - Convert the F7 and F8 checks in `audit.test.ts` to live tests.
+  - **Verification**: `CoreAgent` streams every step, with the system prompt first and never stored in the session. One assistant message holds the text, the reasoning with its provider family and signatures, and every call.
+    - `executeBatch` in `dispatch.ts` gives each call exactly one result.
+      - Consecutive reads run concurrently; approvals run one at a time with a built request (summary, diff or command preview, suggested patterns, from `src/core/approval.ts`).
+      - A denial or cancellation answers the remaining calls.
+      - A denial with feedback continues the turn; one without it ends the turn as refused.
+      - The optional per-turn cap answers capped calls.
+    - Trust gate removals still answer the call, with a note.
+    - Cancellation aborts the stream and keeps the partial text.
+    - `RunResult.session` returns the updated conversation.
+    - Retries surface as events, and hook failures are notices (F25).
+    - The echo stub for a missing provider is gone; that case is an error.
+    - Loop defaults are now 50 steps, no per-turn cap, and 30,000 characters.
+    - 15 engine tests and 5 harness tests pass; the old tests encoded the removed behavior and were rewritten.
+    - Mutation probes: sending the system prompt last, dropping text beside calls, stopping a batch after an approval, and restoring the cap of 5 each turn a test red.
+    - F7, F8, F9, and F25 are live.
 - [ ] 2.10 Build the transcript event log (D4; F17). Files: `src/core/transcript/` (new), `src/services/HistoryService.ts` (reader and index only), tests.
   - Version 2 writer, version 1 reader, a mixed-file reader, and projections to provider messages and Markdown.
   - Secret redaction.

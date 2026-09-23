@@ -71,15 +71,22 @@ export interface ContextManagementConfig {
 }
 
 export interface AgentLoopConfig {
+  /** Model requests per user turn before the loop stops and asks. */
   max_steps: number;
+  /** Tool calls per user turn; 0 means no cap beyond the step limit. */
   max_tool_calls_per_turn: number;
+  /** Characters of one tool result kept in context; the middle is cut beyond it. */
   tool_result_max_chars: number;
+  /** Default timeout for a command, in milliseconds. */
+  command_timeout_ms?: number;
 }
 
+/** Sized for multi-step work: reading, editing, and testing within one turn. */
 export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
-  max_steps: 8,
-  max_tool_calls_per_turn: 5,
-  tool_result_max_chars: 2000,
+  max_steps: 50,
+  max_tool_calls_per_turn: 0,
+  tool_result_max_chars: 30_000,
+  command_timeout_ms: 120_000,
 };
 
 export interface Config {

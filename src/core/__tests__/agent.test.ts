@@ -1,275 +1,255 @@
-import { test, expect } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { expect, test } from 'bun:test';
 import { CoreAgent } from '../agent.js';
 import { createSession } from '../state.js';
-import { createHookBus } from '../hooks/index.js';
-import type { ChatProvider, CompletionResult, StreamChunk } from '../providers/types.js';
+import { createScriptedProvider } from '../../testing/scriptedProvider.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
-import type { AgentEvent, ToolResult } from '../types.js';
+import type { AgentEvent, ToolCall, ToolResult } from '../types.js';
+import { DEFAULT_AGENT_LOOP_CONFIG } from '../../types/config.js';
 
-test('the loop skeleton runs a turn and emits a text event', async () => {
-  const agent = new CoreAgent();
-  const session = createSession('/tmp/test-project');
-  const events: AgentEvent[] = [];
-  const result = await agent.run(session, 'hello', (e) => events.push(e));
-  expect(result.status).toBe('ok');
-  expect(result.sessionId).toBe(session.id);
-  expect(result.turns).toBe(1);
-  expect(result.response).toBe('hello');
-  expect(events).toEqual([{ type: 'text', delta: 'hello' }]);
+const project = '/tmp/engine-project';
+
+/** A dispatcher over fake tools. `read_*` tools are read-only; anything in `ask` needs approval. */
+const fakeDispatcher = (options: { ask?: string[]; delayMs?: number; log?: string[] } = {}): ToolDispatcher => ({
+  listTools: () => [],
+  requiresApproval: (name) => (options.ask ?? []).includes(name),
+  isReadOnly: (name) => name.startsWith('read'),
+  async execute(call: ToolCall): Promise<ToolResult> {
+    options.log?.push(`start:${call.name}`);
+    if (options.delayMs) await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+    options.log?.push(`end:${call.name}`);
+    return { tool: call.name, success: true, output: `${call.name} output`, durationMs: 1 };
+  },
 });
 
-test('the core streams a provider reply with reasoning and usage', async () => {
-  const chunks: StreamChunk[] = [
-    { content: 'hel', done: false },
-    { content: 'lo', done: false, reasoning: 'greet' },
-    {
-      content: '',
-      done: true,
-      usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
-    },
-  ];
-  const provider: ChatProvider = {
-    async *streamChat() {
-      yield* chunks;
-    },
-    async complete(): Promise<CompletionResult> {
-      return { content: '', usage: undefined };
-    },
-  };
-  const agent = new CoreAgent({ provider, model: 'test-model', modelUsageKey: 'test:test-model' });
-  const session = createSession('/tmp/test-project');
+const toolDefs = (...names: string[]) => names.map((name) => ({ type: 'function' as const, function: { name } }));
+const types = (events: AgentEvent[]) => events.map((event) => event.type);
+
+test('a run with no provider reports an error instead of echoing the prompt', async () => {
   const events: AgentEvent[] = [];
-  const result = await agent.run(session, 'hello', (e) => events.push(e));
+  const result = await new CoreAgent().run(createSession(project), 'hello', (e) => events.push(e));
+  expect(result.status).toBe('error');
+  expect(result.error).toContain('No model provider');
+  expect(events.some((event) => event.type === 'text')).toBe(false);
+});
+
+test('a reply streams text and reasoning and reports usage', async () => {
+  const provider = createScriptedProvider([{ reasoning: 'greet', text: 'hello there', usage: { prompt: 3, completion: 2 } }]);
+  const events: AgentEvent[] = [];
+  const result = await new CoreAgent({ provider, model: 'm', modelUsageKey: 'fake:m' }).run(
+    createSession(project),
+    'hi',
+    (e) => events.push(e)
+  );
   expect(result.status).toBe('ok');
-  expect(result.response).toBe('hello');
+  expect(result.response).toBe('hello there');
   expect(result.usage).toEqual({ prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 });
-  expect(events).toEqual([
-    { type: 'text', delta: 'hel' },
-    { type: 'text', delta: 'lo' },
-    { type: 'reasoning', delta: 'greet' },
-    { type: 'usage', usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } },
+  expect(events.filter((e) => e.type === 'text').length).toBeGreaterThan(1);
+  expect(types(events)[0]).toBe('turn_start');
+  expect(types(events).at(-1)).toBe('turn_end');
+  expect(result.session?.modelUsage['fake:m'].total_tokens).toBe(5);
+});
+
+test('the system prompt comes first and text beside a tool call is kept (F7)', async () => {
+  const provider = createScriptedProvider([
+    { text: 'Let me check.', reasoning: 'need the file', toolCalls: [{ name: 'read_file', arguments: { path: 'a' } }] },
+    { text: 'It says hello.' },
+  ]);
+  const agent = new CoreAgent({
+    provider,
+    model: 'm',
+    systemPrompt: 'SYSTEM',
+    dispatcher: fakeDispatcher(),
+    toolDefinitions: toolDefs('read_file'),
+  });
+  const events: AgentEvent[] = [];
+  const result = await agent.run(createSession(project), 'read a', (e) => events.push(e));
+
+  expect(result.status).toBe('ok');
+  for (const call of provider.calls) {
+    expect(call.messages[0]).toMatchObject({ role: 'system', content: 'SYSTEM' });
+    expect(call.options.tools?.[0].function.name).toBe('read_file');
+  }
+  const second = provider.calls[1].messages;
+  expect(second.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'tool']);
+  expect(second[2]).toMatchObject({ content: 'Let me check.', reasoning: 'need the file' });
+  expect(second[2].tool_calls?.[0].function.name).toBe('read_file');
+  expect(second[3]).toMatchObject({ role: 'tool', content: 'read_file output', tool_call_id: second[2].tool_calls?.[0].id });
+  expect(events.filter((e) => e.type === 'text').map((e: any) => e.delta).join('')).toBe('Let me check.It says hello.');
+  expect(result.session?.messages.some((m) => m.role === 'system')).toBe(false);
+});
+
+test('every call in a batch is answered around an approval (F8)', async () => {
+  const provider = createScriptedProvider([
+    {
+      toolCalls: [
+        { name: 'read_a', arguments: {} },
+        { name: 'write_b', arguments: { path: 'b' } },
+        { name: 'read_c', arguments: {} },
+      ],
+    },
+    { text: 'done' },
+  ]);
+  const log: string[] = [];
+  const agent = new CoreAgent({
+    provider,
+    dispatcher: fakeDispatcher({ ask: ['write_b'], log }),
+    toolDefinitions: toolDefs('read_a', 'write_b', 'read_c'),
+    model: 'm',
+  });
+  const events: AgentEvent[] = [];
+  const result = await agent.run(createSession(project), 'go', (e) => {
+    events.push(e);
+    if (e.type === 'approval_request') e.decide(true);
+  });
+  expect(result.status).toBe('ok');
+  expect(log.filter((entry) => entry.startsWith('start'))).toEqual(['start:read_a', 'start:write_b', 'start:read_c']);
+  const toolMessages = provider.calls[1].messages.filter((m) => m.role === 'tool');
+  expect(toolMessages).toHaveLength(3);
+  const request = events.find((e) => e.type === 'approval_request') as any;
+  expect(request.request.summary).toBe('write_b b');
+});
+
+test('a denial without feedback answers the rest of the batch and ends the turn', async () => {
+  const provider = createScriptedProvider([
+    { text: 'Trying.', toolCalls: [{ name: 'write_a', arguments: {} }, { name: 'read_b', arguments: {} }] },
+  ]);
+  const log: string[] = [];
+  const agent = new CoreAgent({ provider, dispatcher: fakeDispatcher({ ask: ['write_a'], log }), toolDefinitions: toolDefs('write_a', 'read_b'), model: 'm' });
+  const events: AgentEvent[] = [];
+  const result = await agent.run(createSession(project), 'go', (e) => {
+    events.push(e);
+    if (e.type === 'approval_request') e.decide(false);
+  });
+  expect(result.status).toBe('refused');
+  expect(log).toEqual([]);
+  const results = events.filter((e) => e.type === 'tool_result').map((e: any) => e.result);
+  expect(results.map((r) => r.status)).toEqual(['denied', 'cancelled']);
+  const toolMessages = result.session!.messages.filter((m) => m.role === 'tool');
+  expect(toolMessages.map((m) => m.content)).toEqual([
+    'Denied by the user. The call did not run.',
+    'Not run: an earlier call in this step was denied.',
   ]);
 });
-test('the core dispatches a tool call, appends results, and loops', async () => {
-  const script: CompletionResult[] = [
-    {
-      content: '',
-      toolCalls: [{ function: { name: 'list_files', arguments: { pattern: 'package.json' } } }],
-    },
-    { content: 'package.json is the manifest.' },
+
+test('a denial with feedback is given to the model and the turn continues', async () => {
+  const provider = createScriptedProvider([{ toolCalls: [{ name: 'write_a', arguments: {} }] }, { text: 'Understood, I will not.' }]);
+  const agent = new CoreAgent({ provider, dispatcher: fakeDispatcher({ ask: ['write_a'] }), toolDefinitions: toolDefs('write_a'), model: 'm' });
+  const result = await agent.run(createSession(project), 'go', (e) => {
+    if (e.type === 'approval_request') e.decide({ allow: false, feedback: 'use the other file' });
+  });
+  expect(result.status).toBe('ok');
+  expect(provider.calls[1].messages.at(-1)).toMatchObject({ role: 'tool', content: 'Denied by the user, who said: use the other file' });
+});
+
+test('a read, search, edit, and test cycle finishes under the default limits (F9)', async () => {
+  const steps = [
+    ['read_file'],
+    ['read_grep', 'read_glob'],
+    ['read_file'],
+    ['edit'],
+    ['run_command'],
+    ['read_file'],
+    ['edit'],
+    ['run_command'],
   ];
-  let calls = 0;
-  const provider: ChatProvider = {
-    async *streamChat() {},
-    async complete(): Promise<CompletionResult> {
-      return script[Math.min(calls++, script.length - 1)];
-    },
-  };
-  const seen: string[] = [];
-  const dispatcher: ToolDispatcher = {
-    listTools: () => [{ name: 'list_files', parameters: { type: 'object', properties: {} } }],
-    requiresApproval: () => false,
-    async execute(call): Promise<ToolResult> {
-      seen.push(call.name);
-      return { tool: call.name, success: true, output: '1. package.json', durationMs: 1 };
-    },
-  };
+  const provider = createScriptedProvider([
+    ...steps.map((names) => ({ toolCalls: names.map((name) => ({ name, arguments: {} })) })),
+    { text: 'Fixed and tests pass.' },
+  ]);
   const agent = new CoreAgent({
     provider,
-    dispatcher,
-    toolDefinitions: [
-      { type: 'function', function: { name: 'list_files', parameters: { type: 'object', properties: {} } } },
-    ],
+    dispatcher: fakeDispatcher(),
+    toolDefinitions: toolDefs('read_file', 'read_grep', 'read_glob', 'edit', 'run_command'),
+    model: 'm',
   });
-  const events: AgentEvent[] = [];
-  const result = await agent.run(createSession('/tmp/test-project'), 'List package.json.', (e) => events.push(e));
+  const result = await agent.run(createSession(project), 'fix the bug', () => {});
   expect(result.status).toBe('ok');
-  expect(result.response).toBe('package.json is the manifest.');
-  expect(seen).toEqual(['list_files']);
-  expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'text']);
-  const callEvent = events[0];
-  const resultEvent = events[1];
-  if (callEvent.type !== 'tool_call' || resultEvent.type !== 'tool_result') {
-    throw new Error('expected tool_call then tool_result');
-  }
-  expect(callEvent.call.name).toBe('list_files');
-  expect(resultEvent.result.output).toBe('1. package.json');
+  expect(result.turns).toBe(9);
+  expect(DEFAULT_AGENT_LOOP_CONFIG).toMatchObject({ max_steps: 50, max_tool_calls_per_turn: 0, tool_result_max_chars: 30_000 });
 });
 
-test('an unusable tool call becomes a tool error and the turn continues', async () => {
-  const script: CompletionResult[] = [
-    { content: '', toolCalls: [{ function: {} } as any] },
-    { content: 'Recovered without dispatch.' },
-  ];
-  let calls = 0;
-  const provider: ChatProvider = {
-    async *streamChat() {},
-    async complete(): Promise<CompletionResult> {
-      return script[Math.min(calls++, script.length - 1)];
-    },
-  };
-  let executed = 0;
-  const dispatcher: ToolDispatcher = {
-    listTools: () => [{ name: 'list_files' }],
-    requiresApproval: () => false,
-    async execute(call): Promise<ToolResult> {
-      executed += 1;
-      return { tool: call.name, success: true, output: 'x', durationMs: 0 };
-    },
-  };
-  const agent = new CoreAgent({
-    provider,
-    dispatcher,
-    toolDefinitions: [{ type: 'function', function: { name: 'list_files' } }],
-  });
-  const events: AgentEvent[] = [];
-  const result = await agent.run(createSession('/tmp/test-project'), 'Go.', (e) => events.push(e));
-  expect(result.status).toBe('ok');
-  expect(result.response).toBe('Recovered without dispatch.');
-  expect(executed).toBe(0);
-  const errors = events.filter((e) => e.type === 'tool_result' && !(e as any).result.success);
-  expect(errors).toHaveLength(1);
+test('consecutive read-only calls run concurrently', async () => {
+  const provider = createScriptedProvider([
+    { toolCalls: [{ name: 'read_a', arguments: {} }, { name: 'read_b', arguments: {} }] },
+    { text: 'ok' },
+  ]);
+  const log: string[] = [];
+  const agent = new CoreAgent({ provider, dispatcher: fakeDispatcher({ delayMs: 30, log }), toolDefinitions: toolDefs('read_a', 'read_b'), model: 'm' });
+  await agent.run(createSession(project), 'go', () => {});
+  expect(log.slice(0, 2)).toEqual(['start:read_a', 'start:read_b']);
 });
-test('an approval approval runs the tool and a rejection refuses the run', async () => {
-  const scripted = () => {
-    const script: CompletionResult[] = [
-      {
-        content: '',
-        toolCalls: [{ function: { name: 'run_command', arguments: { command: 'ls' } } }],
-      },
-      { content: 'final' },
-    ];
-    let calls = 0;
-    const provider: ChatProvider = {
-      async *streamChat() {},
-      async complete(): Promise<CompletionResult> {
-        return script[Math.min(calls++, script.length - 1)];
-      },
-    };
-    let executed = 0;
-    const dispatcher: ToolDispatcher = {
-      listTools: () => [{ name: 'run_command' }],
-      requiresApproval: () => true,
-      async execute(call): Promise<ToolResult> {
-        executed += 1;
-        return { tool: call.name, success: true, output: 'listed', durationMs: 0 };
-      },
-    };
-    const agent = new CoreAgent({
-      provider,
-      dispatcher,
-      toolDefinitions: [{ type: 'function', function: { name: 'run_command' } }],
-    });
-    return { agent, getExecuted: () => executed };
-  };
 
-  {
-    const { agent, getExecuted } = scripted();
-    const events: AgentEvent[] = [];
-    const pending = agent.run(createSession('/tmp/test-project'), 'Run ls.', (e) => {
-      events.push(e);
-      if (e.type === 'approval_request') e.decide(true);
-    });
-    const result = await pending;
-    expect(result.status).toBe('ok');
-    expect(result.response).toBe('final');
-    expect(getExecuted()).toBe(1);
-    expect(events.map((e) => e.type)).toEqual(['tool_call', 'approval_request', 'tool_result', 'text']);
-  }
-
-  {
-    const { agent, getExecuted } = scripted();
-    const events: AgentEvent[] = [];
-    const pending = agent.run(createSession('/tmp/test-project'), 'Run ls.', (e) => {
-      events.push(e);
-      if (e.type === 'approval_request') e.decide(false);
-    });
-    const result = await pending;
-    expect(result.status).toBe('refused');
-    expect(getExecuted()).toBe(0);
-    expect(events.map((e) => e.type)).toEqual(['tool_call', 'approval_request']);
-  }
-});
-test('loop limits resolve from configuration with current values as defaults', async () => {
-  const script: CompletionResult[] = [{ content: 'done' }];
-  const provider: ChatProvider = {
-    async *streamChat() {},
-    async complete(): Promise<CompletionResult> {
-      return script[0];
-    },
-  };
-  const dispatcher: ToolDispatcher = {
-    listTools: () => [],
-    requiresApproval: () => false,
-    async execute(call): Promise<ToolResult> {
-      return { tool: call.name, success: true, output: '', durationMs: 0 };
-    },
-  };
-  const fromConfig = new CoreAgent({
-    provider,
-    dispatcher,
-    toolDefinitions: [{ type: 'function', function: { name: 'x' } }],
-    loop: { max_steps: 3, max_tool_calls_per_turn: 7, tool_result_max_chars: 11 },
-  });
-  expect((fromConfig as any).maxSteps).toBe(3);
-  expect((fromConfig as any).maxToolCallsPerTurn).toBe(7);
-  expect((fromConfig as any).truncationLimit).toBe(11);
-  expect((fromConfig as any).truncate('0123456789abcdef')).toBe('0123456789a\n… <truncated>');
-  const explicit = new CoreAgent({
-    provider,
-    dispatcher,
-    toolDefinitions: [{ type: 'function', function: { name: 'x' } }],
-    maxSteps: 2,
-    loop: { max_steps: 3, max_tool_calls_per_turn: 7, tool_result_max_chars: 11 },
-  });
-  expect((explicit as any).maxSteps).toBe(2);
+test('the per-turn cap answers capped calls and stops when nothing can run', async () => {
+  const pair = { toolCalls: [{ name: 'read_a', arguments: {} }, { name: 'read_b', arguments: {} }] };
+  const provider = createScriptedProvider([pair, pair]);
+  const agent = new CoreAgent({ provider, dispatcher: fakeDispatcher(), toolDefinitions: toolDefs('read_a', 'read_b'), model: 'm', maxToolCallsPerTurn: 1 });
   const events: AgentEvent[] = [];
-  const result = await explicit.run(createSession('/tmp/test-project'), 'Hi.', (e) => events.push(e));
-  expect(result.status).toBe('ok');
-});
-test('budget exhaustion stops the loop without a second provider call', async () => {
-  let completions = 0;
-  const provider: ChatProvider = {
-    async *streamChat() {},
-    async complete(): Promise<CompletionResult> {
-      completions += 1;
-      return {
-        content: '',
-        toolCalls: [
-          { function: { name: 'list_files', arguments: {} } },
-          { function: { name: 'list_files', arguments: {} } },
-        ],
-      };
-    },
-  };
-  const dispatcher: ToolDispatcher = {
-    listTools: () => [{ name: 'list_files' }],
-    requiresApproval: () => false,
-    async execute(call): Promise<ToolResult> {
-      return { tool: call.name, success: true, output: 'x', durationMs: 0 };
-    },
-  };
-  const agent = new CoreAgent({
-    provider,
-    dispatcher,
-    toolDefinitions: [{ type: 'function', function: { name: 'list_files' } }],
-    maxToolCallsPerTurn: 1,
-  });
-  const events: AgentEvent[] = [];
-  const result = await agent.run(createSession('/tmp/test-project'), 'List.', (e) => events.push(e));
+  const result = await agent.run(createSession(project), 'go', (e) => events.push(e));
   expect(result.status).toBe('limit');
-  expect(completions).toBe(1);
-  expect(events.filter((e) => e.type === 'tool_result')).toHaveLength(1);
+  expect(provider.calls).toHaveLength(2);
+  const statuses = events.filter((e) => e.type === 'tool_result').map((e: any) => e.result.status);
+  expect(statuses).toEqual(['ok', 'cancelled', 'cancelled', 'cancelled']);
 });
-test('cancel stops a queued run and leaves the session usable', async () => {
-  const agent = new CoreAgent();
-  const session = createSession('/tmp/test-project');
-  agent.cancel(session.id);
-  const events: AgentEvent[] = [];
-  const cancelled = await agent.run(session, 'hello', (e) => events.push(e));
+
+test('the step limit stops a turn that never finishes', async () => {
+  const provider = createScriptedProvider(Array.from({ length: 5 }, () => ({ toolCalls: [{ name: 'read_a', arguments: {} }] })));
+  const agent = new CoreAgent({ provider, dispatcher: fakeDispatcher(), toolDefinitions: toolDefs('read_a'), model: 'm', maxSteps: 3 });
+  const result = await agent.run(createSession(project), 'go', () => {});
+  expect(result.status).toBe('limit');
+  expect(result.response).toContain('Stopped after 3 steps');
+});
+
+test('cancel aborts a streaming turn, keeps the partial text, and the session stays usable', async () => {
+  const provider = createScriptedProvider([{ text: 'a long answer that streams slowly', chunkSize: 2, delayMs: 20 }, { text: 'again' }]);
+  const agent = new CoreAgent({ provider, model: 'm' });
+  const session = createSession(project);
+  const pending = agent.run(session, 'go', () => {});
+  setTimeout(() => agent.cancel(session.id), 60);
+  const cancelled = await pending;
   expect(cancelled.status).toBe('cancelled');
-  expect(events).toEqual([]);
-  const again = await agent.run(session, 'hello', (e) => events.push(e));
+  const partial = cancelled.session!.messages.at(-1)!;
+  expect(partial.role).toBe('assistant');
+  expect(partial.content.length).toBeGreaterThan(0);
+  const again = await agent.run(cancelled.session!, 'try again', () => {});
   expect(again.status).toBe('ok');
+});
+
+test('the returned session carries the conversation into the next prompt', async () => {
+  const provider = createScriptedProvider([{ text: 'first answer' }, { text: 'second answer' }]);
+  const agent = new CoreAgent({ provider, model: 'm' });
+  const first = await agent.run(createSession(project), 'first question', () => {});
+  await agent.run(first.session!, 'second question', () => {});
+  expect(provider.calls[1].messages.map((m) => m.content)).toEqual(['first question', 'first answer', 'second question']);
+});
+
+test('long tool output keeps its beginning and end', async () => {
+  const agent = new CoreAgent({ truncationLimit: 20 });
+  const cut = agent.truncate(`${'a'.repeat(50)}${'z'.repeat(50)}`);
+  expect(cut.startsWith('aaaaaaaaaa')).toBe(true);
+  expect(cut.endsWith('zzzzzzzzzz')).toBe(true);
+  expect(cut).toContain('[80 characters removed]');
+});
+
+test('provider retries surface as events', async () => {
+  const provider = createScriptedProvider([{ text: 'ok' }]);
+  const retrying = {
+    ...provider,
+    family: provider.family,
+    async *streamChat(messages: any, options: any) {
+      options.onRetry?.({ attempt: 1, delayMs: 5, reason: '429 slow down' });
+      yield* provider.streamChat(messages, options);
+    },
+  };
+  const events: AgentEvent[] = [];
+  await new CoreAgent({ provider: retrying, model: 'm' }).run(createSession(project), 'hi', (e) => events.push(e));
+  expect(events.find((e) => e.type === 'retry')).toEqual({ type: 'retry', attempt: 1, delayMs: 5, reason: '429 slow down' });
+});
+
+test('assistant messages record the provider family and signed reasoning', async () => {
+  const provider = createScriptedProvider([{ text: 'x', reasoning: 'r', reasoningSignature: 'sig' }], 'anthropic');
+  const result = await new CoreAgent({ provider, model: 'm' }).run(createSession(project), 'hi', () => {});
+  expect(result.session!.messages.at(-1)).toMatchObject({
+    providerFamily: 'anthropic',
+    reasoningBlocks: [{ type: 'thinking', text: 'r', signature: 'sig' }],
+  });
 });

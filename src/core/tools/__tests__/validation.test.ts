@@ -1,6 +1,7 @@
 import { test, expect } from 'bun:test';
 import { createToolRegistry } from '../registry.js';
-import { dispatchToolCalls } from '../dispatch.js';
+import { createSession } from '../../state.js';
+import { executeBatch } from '../dispatch.js';
 import type { ToolContext } from '../../../types/tools.js';
 import type { ToolCall } from '../../../core/types.js';
 
@@ -56,22 +57,23 @@ test('a schema failure returns a tool error and the turn continues', async () =>
   ];
   const seenResults: string[] = [];
 
-  const outcome = await dispatchToolCalls(
-    calls,
-    {
+  const outcome = await executeBatch(calls, {
+    dispatcher: {
       listTools: () => registry.list().map((tool) => ({ name: tool.name })),
       requiresApproval: () => false,
       execute: (call) => registry.execute(call.name, call.arguments ?? {}, ctx),
     },
-    (event) => {
+    emit: (event) => {
       if (event.type === 'tool_result') {
         seenResults.push(event.result.output);
       }
     },
-    { maxCalls: 10, alreadyUsed: 0 }
-  );
+    signal: new AbortController().signal,
+    projectRoot: ctx.projectRoot,
+    session: createSession(ctx.projectRoot),
+  });
 
-  expect(outcome.stopped).toBe(false);
+  expect(outcome.ran).toBe(2);
   expect(outcome.results).toHaveLength(2);
   expect(outcome.results[0].success).toBe(false);
   expect(outcome.results[0].output).toContain('limit');
