@@ -68,7 +68,7 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`ollama chat responded with status ${response.status}`);
+      throw new Error(`ollama chat responded with status ${response.status}: ${await readErrorBody(response)}`);
     }
     if (!response.body) {
       throw new Error('Response body is not readable');
@@ -125,7 +125,7 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`ollama chat responded with status ${response.status}`);
+      throw new Error(`ollama chat responded with status ${response.status}: ${await readErrorBody(response)}`);
     }
 
     const json: any = await response.json();
@@ -158,7 +158,38 @@ function ollamaUsage(json: any): TokenUsage | undefined {
 
 function toOllamaMessage(message: ChatMessage): Record<string, unknown> {
   const out: Record<string, unknown> = { role: message.role, content: message.content ?? '' };
-  if (message.tool_calls) out.tool_calls = message.tool_calls;
-  if (message.tool_call_id) out.tool_call_id = message.tool_call_id;
+  if (message.tool_calls?.length) {
+    // Ollama's native shape carries neither the wire id nor the call type.
+    out.tool_calls = message.tool_calls.map((call) => ({
+      function: {
+        name: call.function?.name,
+        arguments: normalizeArguments(call.function?.arguments),
+      },
+    }));
+  }
   return out;
+}
+
+function normalizeArguments(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+      return { value: parsed };
+    } catch {
+      return { value };
+    }
+  }
+  return { value };
+}
+
+async function readErrorBody(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    return text.slice(0, 400) || 'no response body';
+  } catch {
+    return 'unreadable response body';
+  }
 }

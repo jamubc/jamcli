@@ -128,12 +128,20 @@ export class CoreAgent implements Agent {
         this.cancelled.delete(session.id);
         return this.finish(working, 'cancelled', '', iterations);
       }
-      const completion = await this.provider.complete(working.messages, {
-        model: this.model,
-        temperature: this.temperature,
-        signal: this.signal,
-        tools: this.toolDefinitions,
-      });
+      let completion;
+      try {
+        completion = await this.provider.complete(working.messages, {
+          model: this.model,
+          temperature: this.temperature,
+          signal: this.signal,
+          tools: this.toolDefinitions,
+        });
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          return this.finish(working, 'cancelled', '', iterations);
+        }
+        return this.finish(working, 'error', '', iterations, error?.message ?? String(error));
+      }
       if (completion.usage) {
         working = addUsage(working, completion.usage);
         if (this.modelUsageKey) {
@@ -308,13 +316,20 @@ export class CoreAgent implements Agent {
     return { text, reasoning, usage };
   }
 
-  private finish(session: JamSession, status: RunStatus, response: string, turns: number): RunResult {
+  private finish(
+    session: JamSession,
+    status: RunStatus,
+    response: string,
+    turns: number,
+    error?: string
+  ): RunResult {
     return {
       status,
       sessionId: session.id,
       response,
       turns,
       usage: { ...session.usage },
+      ...(error ? { error } : {}),
     };
   }
 }

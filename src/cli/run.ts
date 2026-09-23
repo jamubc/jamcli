@@ -1,11 +1,10 @@
 import { CoreAgent } from '../core/agent.js';
-import { adaptLegacyProvider } from '../core/providers/legacy.js';
+import { createChatProvider } from '../core/providers/factory.js';
 import { createSession } from '../core/state.js';
 import type { AgentEvent, ChatMessage, RunResult, TokenUsage } from '../core/types.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 import { applyRules, loadRules, rulesPromptText } from '../core/rules/index.js';
 import { createHookBus, emitHookEvent } from '../core/hooks/index.js';
-import { LLMFactory } from '../services/LLMProvider.js';
 import { ConfigService } from '../services/ConfigService.js';
 import { ToolService } from '../services/ToolService.js';
 import { HistoryService } from '../services/HistoryService.js';
@@ -15,6 +14,9 @@ import type { Profile } from '../types/config.js';
 import { SAFE_TOOL_NAMES, ALL_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
 import type { ToolName } from '../types/tools.js';
 import type { ToolDispatcher } from '../core/tools/dispatch.js';
+import { resolveToolPolicy } from '../core/policy/index.js';
+import type { ToolDecision } from '../core/policy/index.js';
+import type { ToolPermissionValue } from '../types/config.js';
 
 export interface HeadlessOptions {
   prompt: string;
@@ -32,6 +34,7 @@ export interface HeadlessResult {
   provider: string;
   model: string;
   messages: ChatMessage[];
+  refusals: string[];
 }
 
 const parseToolList = (values: string[] | undefined): ToolName[] => {
@@ -58,35 +61,34 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   const profile: Profile = await configService.getActiveProfile();
   const permissions = await configService.getToolPermissions();
 
-  const providerKey: 'ollama' | 'openrouter' = profile.preferred_provider === 'openrouter' ? 'openrouter' : 'ollama';
-  const providerConfig =
-    providerKey === 'openrouter' ? config.api_registry.openrouter || {} : config.api_registry.ollama || {};
-  const provider = LLMFactory.createProvider(providerKey, providerConfig);
+  const providerName = profile.preferred_provider || 'ollama';
+  const provider = createChatProvider(providerName, config.api_registry);
   const modelName = profile.preferred_model || 'default';
 
   const toolService = new ToolService({ projectRoot: options.projectRoot, configService });
   const mcpManager = new McpManager({ configService });
 
   const allowed = parseToolList(options.allowTools);
-  const denied = new Set(parseToolList(options.denyTools));
+  const denied = parseToolList(options.denyTools);
 
-  const toolNames: ToolName[] = allowed.length ? allowed : (SAFE_TOOL_NAMES as ToolName[]);
-  const usableTools = toolNames.filter((name) => {
-    if (denied.has(name)) return false;
-    const permission = permissions[name];
-    return permission ? permission.allowed : true;
+  const policySource = {
+    permissions: permissions as unknown as Record<string, ToolPermissionValue>,
+    allowTools: allowed.length ? allowed : undefined,
+    denyTools: denied.length ? denied : undefined,
+  };
+
+  const candidates: ToolName[] = allowed.length ? allowed : (SAFE_TOOL_NAMES as ToolName[]);
+  const decisions = new Map<string, ToolDecision>();
+  const usableTools = candidates.filter((name) => {
+    const decision = resolveToolPolicy(name, policySource).decision;
+    decisions.set(name, decision);
+    return decision !== 'deny';
   });
 
   const dispatcher: ToolDispatcher | undefined = usableTools.length
     ? {
         listTools: () => usableTools.map((name) => ({ name })),
-        requiresApproval: (name) => {
-          const toolName = name as ToolName;
-          if (denied.has(toolName)) return true;
-          const permission = permissions[toolName];
-          if (!permission) return true;
-          return Boolean(permission.require_approval);
-        },
+        requiresApproval: (name) => resolveToolPolicy(name, policySource).decision === 'ask',
         execute: async (call) => {
           const started = Date.now();
           try {
@@ -121,10 +123,10 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   const priorMessages = options.sessionId ? await historyService.loadMessagesFromHistory() : [];
 
   const agent = new CoreAgent({
-    provider: adaptLegacyProvider(provider),
+    provider,
     model: modelName,
     temperature: profile.temperature,
-    modelUsageKey: `${profile.preferred_provider || providerKey}:${modelName}`,
+    modelUsageKey: `${providerName}:${modelName}`,
     dispatcher,
     toolDefinitions,
     maxSteps: options.maxTurns ?? config.agent_loop?.max_steps ?? DEFAULT_AGENT_LOOP_CONFIG.max_steps,
@@ -144,9 +146,23 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   await emitHookEvent(hooks, 'session_start', { session, profile: config.active_profile });
 
   const events: AgentEvent[] = [];
+  const refusals: string[] = [];
   const result = await agent.run(session, options.prompt, (event) => {
     events.push(event);
     options.onEvent?.(event);
+    if (event.type === 'approval_request') {
+      const decision = resolveToolPolicy(event.call.name, policySource).decision;
+      if (decision === 'allow') {
+        event.decide(true);
+        return;
+      }
+      refusals.push(
+        decision === 'deny'
+          ? `Tool ${event.call.name} is denied by policy and did not run.`
+          : `Tool ${event.call.name} asks for approval, which a headless run cannot grant; pass --allow-tool ${event.call.name} to permit it.`
+      );
+      event.decide(false);
+    }
   });
 
   await emitHookEvent(hooks, 'session_end', { session, status: result.status, turns: result.turns });
@@ -165,8 +181,9 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
 
   return {
     result,
-    provider: profile.preferred_provider || providerKey,
+    provider: providerName,
     model: modelName,
     messages: session.messages,
+    refusals,
   };
 };
