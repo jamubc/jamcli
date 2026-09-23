@@ -19,73 +19,44 @@ import {
 } from '../types/config.js';
 import type { McpServerConfig } from '../types/mcp.js';
 import type { ToolName } from '../types/tools.js';
-import { ALL_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
-
-const JAMCLI_DIR = '.jamcli';
-const CONFIG_FILE = 'config.json';
-const MCP_FILE = 'mcp.json';
-const PROFILES_DIR = 'profiles';
-const GLOBAL_DIR = '.jamubc';
-const UI_CONFIG_FILE = 'ui.json';
-const STATUS_STYLES_DIR = 'status-styles';
-
-const TOOL_DEFAULTS = Object.fromEntries(
-  ALL_TOOL_NAMES.map((name) => [
-    name,
-    {
-      allowed: TOOL_DEFINITIONS[name].defaultAllowed,
-      require_approval: TOOL_DEFINITIONS[name].defaultRequireApproval ?? false,
-    } satisfies ToolPermission,
-  ])
-) as Record<ToolName, ToolPermission>;
-
-const DEFAULT_CONTEXT_MANAGEMENT: ContextManagementConfig = {
-  enabled: false,
-  max_tokens: 8000,
-  compression_threshold: 0.9,
-  strategy: 'summarize',
-};
-
-const DEFAULT_CONFIG: Config = {
-  api_registry: {
-    ollama: { endpoint: 'http://localhost:11434' },
-  },
-  active_profile: 'default',
-  telemetry: false,
-  general: {
-    show_tool_calling_models_only: false,
-  },
-  context_management: DEFAULT_CONTEXT_MANAGEMENT,
-};
-
-const DEFAULT_UI_CONFIG: UiConfig = {
-  status_indicator_style: 'subtle',
-  status_text_style: 'subtle',
-  status_spinner_style: 'classic',
-  custom_status_styles: {},
-};
-
-const DEFAULT_MCP: McpConfig = {
-  context_window_limit: 16000,
-  ignore_patterns: ['node_modules/**', 'dist/**', '*.lock'],
-  tools: {
-    ...TOOL_DEFAULTS,
-    git_ops: true,
-  },
-  servers: [],
-};
-
-const DEFAULT_PROFILE: Profile = {
-  name: 'Default',
-  system_prompt_override: 'You are a helpful AI assistant.',
-  preferred_model: 'gpt-4o',
-  temperature: 0.7,
-};
-
-type ProviderName = 'ollama' | 'openrouter';
+import { ALL_TOOL_NAMES } from '../types/tools.js';
+import {
+  CONFIG_FILE,
+  DEFAULT_CONFIG,
+  DEFAULT_CONTEXT_MANAGEMENT,
+  DEFAULT_MCP,
+  DEFAULT_PROFILE,
+  DEFAULT_UI_CONFIG,
+  GLOBAL_DIR,
+  JAMCLI_DIR,
+  MCP_FILE,
+  PROFILES_DIR,
+  STATUS_STYLES_DIR,
+  TOOL_DEFAULTS,
+  UI_CONFIG_FILE,
+} from './config/defaults.js';
+import type { ProviderName } from './config/defaults.js';
+import { normalizePermission, pendingToolDefaults, toolPermissionsOf, upsertServer } from './config/mcpConfig.js';
+import { readProfile, writeProfile } from './config/profileConfig.js';
+import {
+  customStatusStylePath,
+  ensureCustomStatusStyle,
+  initializeUiConfig,
+  readUiConfig,
+  registerCustomStatusStyle,
+  writeUiConfig,
+} from './config/uiConfig.js';
 
 export class ConfigService {
   private projectRoot: string;
+
+  private get uiPaths() {
+    return {
+      uiConfigPath: this.uiConfigPath,
+      statusStylesDir: this.statusStylesDir,
+      globalDir: this.globalDir,
+    };
+  }
 
   constructor(projectRoot: string = process.cwd()) {
     this.projectRoot = projectRoot;
@@ -160,23 +131,15 @@ export class ConfigService {
   }
 
   async initializeUiConfig() {
-    await fs.ensureDir(this.globalDir);
-    await fs.ensureDir(this.statusStylesDir);
-    if (!(await fs.pathExists(this.uiConfigPath))) {
-      await fs.writeJson(this.uiConfigPath, DEFAULT_UI_CONFIG, { spaces: 2 });
-    }
+    await initializeUiConfig(this.uiPaths);
   }
 
   async getUiConfig(): Promise<UiConfig> {
-    await this.initializeUiConfig();
-    return fs.readJson(this.uiConfigPath);
+    return readUiConfig(this.uiPaths);
   }
 
   async updateUiConfig(partial: Partial<UiConfig>): Promise<UiConfig> {
-    const current = await this.getUiConfig();
-    const updated: UiConfig = { ...DEFAULT_UI_CONFIG, ...current, ...partial };
-    await fs.writeJson(this.uiConfigPath, updated, { spaces: 2 });
-    return updated;
+    return writeUiConfig(this.uiPaths, partial);
   }
 
   async setStatusIndicatorStyle(styleId: StatusIndicatorStyleId): Promise<UiConfig> {
@@ -202,10 +165,7 @@ export class ConfigService {
   }
 
   async registerCustomStatusStyle(name: string, definitionPath: string): Promise<UiConfig> {
-    const current = await this.getUiConfig();
-    const custom = { ...(current.custom_status_styles || {}) };
-    custom[name] = { path: definitionPath };
-    return this.updateUiConfig({ custom_status_styles: custom });
+    return registerCustomStatusStyle(this.uiPaths, name, definitionPath);
   }
 
   getStatusStylesDirectory(): string {
@@ -213,17 +173,11 @@ export class ConfigService {
   }
 
   getCustomStatusStylePath(name: string) {
-    return path.join(this.statusStylesDir, `${name}.json`);
+    return customStatusStylePath(this.uiPaths, name);
   }
 
   async ensureCustomStatusStyle(name: string, template: StatusIndicatorCustomDefinition) {
-    await this.initializeUiConfig();
-    const targetPath = this.getCustomStatusStylePath(name);
-    if (!(await fs.pathExists(targetPath))) {
-      await fs.writeJson(targetPath, template, { spaces: 2 });
-    }
-    const uiConfig = await this.registerCustomStatusStyle(name, targetPath);
-    return { path: targetPath, uiConfig };
+    return ensureCustomStatusStyle(this.uiPaths, name, template);
   }
 
   async saveConfig(config: Config): Promise<void> {
@@ -244,11 +198,7 @@ export class ConfigService {
   }
 
   async getProfile(profileName: string): Promise<Profile> {
-    const profilePath = path.join(this.profilesDir, `${profileName}.json`);
-    if (await fs.pathExists(profilePath)) {
-      return fs.readJson(profilePath);
-    }
-    return DEFAULT_PROFILE;
+    return readProfile(this.profilesDir, profileName);
   }
 
   async getActiveProfile(): Promise<Profile> {
@@ -343,20 +293,13 @@ export class ConfigService {
 
   async getToolPermissions(): Promise<Record<ToolName, ToolPermission>> {
     const mcp = await this.getMcpConfig();
-    const permissions = {} as Record<ToolName, ToolPermission>;
-    for (const toolName of ALL_TOOL_NAMES) {
-      permissions[toolName] = this.normalizePermission(
-        mcp.tools?.[toolName] as ToolPermissionValue | undefined,
-        TOOL_DEFAULTS[toolName]
-      );
-    }
-    return permissions;
+    return toolPermissionsOf(mcp);
   }
 
   async updateToolPermission(toolName: ToolName, updates: Partial<ToolPermission>): Promise<ToolPermission> {
     const mcp = await this.getMcpConfig();
     mcp.tools = mcp.tools || {};
-    const current = this.normalizePermission(mcp.tools[toolName] as ToolPermissionValue | undefined, TOOL_DEFAULTS[toolName]);
+    const current = normalizePermission(mcp.tools[toolName] as ToolPermissionValue | undefined, TOOL_DEFAULTS[toolName]);
     const next: ToolPermission = {
       allowed: updates.allowed ?? current.allowed,
       require_approval: updates.require_approval ?? current.require_approval ?? false,
@@ -374,13 +317,7 @@ export class ConfigService {
 
   async upsertMcpServer(server: McpServerConfig): Promise<McpServerConfig[]> {
     const mcp = await this.getMcpConfig();
-    const servers = Array.isArray(mcp.servers) ? [...mcp.servers] : [];
-    const existingIndex = servers.findIndex((s) => s.id === server.id);
-    if (existingIndex >= 0) {
-      servers[existingIndex] = { ...servers[existingIndex], ...server };
-    } else {
-      servers.push({ ...server });
-    }
+    const servers = upsertServer(mcp.servers, server);
     mcp.servers = servers;
     await fs.writeJson(this.mcpPath, mcp, { spaces: 2 });
     return servers;
@@ -388,7 +325,7 @@ export class ConfigService {
 
   async removeMcpServer(id: string): Promise<McpServerConfig[]> {
     const mcp = await this.getMcpConfig();
-    const servers = Array.isArray(mcp.servers) ? mcp.servers.filter((s) => s.id !== id) : [];
+    const servers = (Array.isArray(mcp.servers) ? mcp.servers : []).filter((server) => server.id !== id);
     mcp.servers = servers;
     await fs.writeJson(this.mcpPath, mcp, { spaces: 2 });
     return servers;
@@ -397,48 +334,14 @@ export class ConfigService {
   private async updateActiveProfile(partial: Partial<Profile>): Promise<Profile> {
     const config = await this.getConfig();
     const profilePath = this.getActiveProfilePath(config.active_profile);
-    const profile = (await fs.readJson(profilePath)) as Profile;
-    const updated: Profile = { ...profile, ...partial };
-    await fs.writeJson(profilePath, updated, { spaces: 2 });
-    return updated;
-  }
-
-  private normalizePermission(value: ToolPermissionValue | undefined, defaults: ToolPermission): ToolPermission {
-    if (typeof value === 'boolean') {
-      return {
-        allowed: value,
-        require_approval: value ? defaults.require_approval ?? false : false,
-      };
-    }
-
-    if (!value) {
-      return { ...defaults };
-    }
-
-    return {
-      allowed: value.allowed ?? defaults.allowed,
-      require_approval: value.require_approval ?? defaults.require_approval ?? false,
-      description: value.description ?? defaults.description,
-    };
+    return writeProfile(profilePath, partial);
   }
 
   private async ensureToolDefaults() {
     try {
       const mcp = await this.getMcpConfig();
-      mcp.tools = mcp.tools || {};
-      let updated = false;
-
-      for (const toolName of ALL_TOOL_NAMES) {
-        const current = mcp.tools[toolName];
-        const normalized = this.normalizePermission(current as ToolPermissionValue | undefined, TOOL_DEFAULTS[toolName]);
-        const existingJson = JSON.stringify(current ?? null);
-        const normalizedJson = JSON.stringify(normalized);
-        if (existingJson !== normalizedJson) {
-          mcp.tools[toolName] = normalized;
-          updated = true;
-        }
-      }
-
+      const { tools, updated } = pendingToolDefaults(mcp.tools ?? {});
+      mcp.tools = tools;
       if (updated) {
         await fs.writeJson(this.mcpPath, mcp, { spaces: 2 });
       }
