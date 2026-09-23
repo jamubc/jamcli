@@ -22,6 +22,7 @@
     "env-paths": "^3.0.0",
     "fast-glob": "^3.3.3",
     "fs-extra": "^11.2.0",
+    "ignore": "7.0.10",
     "ink": "^7.1.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.2.0",
