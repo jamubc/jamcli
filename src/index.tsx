@@ -29,8 +29,43 @@ const startTui = () => {
   }
 };
 
+const HEADLESS_INTENTS = new Set([
+  '-p',
+  '--prompt',
+  'sessions',
+  'audit',
+  'mcp',
+  'acp',
+  '--help',
+  '-h',
+  '--version',
+  '-v',
+  '--output-format',
+  '--continue',
+  '--resume',
+  '--allow-tool',
+  '--deny-tool',
+]);
+
 const main = async () => {
-  if (argv.length === 0) {
+  const wantsHeadless = argv.some((token) => HEADLESS_INTENTS.has(token));
+
+  if (!wantsHeadless) {
+    const cwdIndex = argv.indexOf('--cwd');
+    if (cwdIndex === -1) {
+      if (argv.length) {
+        process.stderr.write(`Unknown option: ${argv.join(', ')}\n`);
+        process.exit(2);
+      }
+      startTui();
+      return;
+    }
+    const target = argv[cwdIndex + 1];
+    if (!target) {
+      process.stderr.write('--cwd needs a path\n');
+      process.exit(2);
+    }
+    process.chdir(target);
     startTui();
     return;
   }
