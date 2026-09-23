@@ -58,10 +58,16 @@ Line references describe the tree when the change opened.
     - Mutation probes: signaling only the shell fails both the timeout and the cancellation tests, because the orphaned child holds the pipes open. Disabling the timer fails the timeout test.
     - Tool payloads now carry a status that the registry maps to `success`.
     - `ExecutionService` is kept as a thin wrapper over the new runner for the Ink approval path and is deleted with Ink in 6.15. F11 is live.
-- [ ] 2.6 Rebuild search (F12). Files: `src/core/tools/search.ts` (new), `glob.ts`, `grep.ts`, tests.
+- [x] 2.6 Rebuild search (F12). Files: `src/core/tools/search.ts` (new), `glob.ts`, `grep.ts`, tests.
   - Use ripgrep when present, otherwise a JavaScript walk honoring `.gitignore`, `.ignore`, and configured patterns through `ignore`. Add `ignore` in its own commit first.
   - No silent cap: limits are reported in the output.
   - Verify a match in file 401 of a 1,000-file tree is found by both implementations, and ignored files are skipped by both.
+  - **Verification**: `search.test.ts` runs every case against both backends, 20 tests.
+    - They cover a match in the last of 1,000 files, root and nested `.gitignore` outside a git repository, hidden files, binary files, and the files and count modes.
+    - They also cover a reported limit, a path restriction, and consistent glob meaning, plus ripgrep falling back to the JavaScript engine on a pattern it cannot compile.
+    - Mutation probes: not reading ignore files, or restoring a 400-file cap, turns the builtin cases red.
+    - A real defect was caught while building it: ripgrep lets the last matching `--glob` win, so exclusions must follow the include glob.
+    - `grep` gains `path`, `output_mode`, and a limit of up to 1,000. `glob` gains `path` and a limit of up to 1,000. F12 is live, and `search_code` and `list_files` are routed in 2.7.
 - [ ] 2.7 Rationalize the tool set (D5). Files: `src/core/tools/builtins.ts`, `src/core/tools/registry.ts`, `src/types/tools.ts`.
   - Add `hidden` and `aliasOf` to registered tools. `list_files` and `search_code` become hidden aliases.
   - `read_file` gains line windows, a long-line cut, and binary refusal.

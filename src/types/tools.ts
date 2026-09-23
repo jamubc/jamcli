@@ -115,6 +115,8 @@ export interface ToolContext {
   wrapCommand?: CommandWrapper;
   /** Further directories tools may reach besides the project root. */
   additionalRoots?: string[];
+  /** Force a search backend; `auto` uses ripgrep when it is on PATH. */
+  searchBackend?: 'auto' | 'ripgrep' | 'builtin';
 }
 
 export type ToolRunner = (args: Record<string, any>, ctx: ToolContext) => Promise<ToolRunPayload>;

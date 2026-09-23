@@ -59,7 +59,22 @@ test('F11: run_command reports exit codes and times out (2.5)', () =>
     const slow = await registry.execute('run_command', { command: 'sleep 30', timeout_ms: 200 }, { projectRoot: root });
     expect(slow.status).toBe('timeout');
   }));
-test.todo('F12: grep finds a match past the 400th file and honors .gitignore (2.6)', pending);
+test('F12: grep finds a match past the 400th file and honors .gitignore (2.6)', () =>
+  withProject(async (root) => {
+    for (let i = 0; i < 450; i += 1) await fs.writeFile(path.join(root, `f${String(i).padStart(3, '0')}.txt`), 'x\n');
+    await fs.writeFile(path.join(root, 'f449.txt'), 'target\n');
+    await fs.writeFile(path.join(root, '.gitignore'), 'secret.txt\n');
+    await fs.writeFile(path.join(root, 'secret.txt'), 'target\n');
+    for (const backend of ['builtin', 'auto'] as const) {
+      const result = await createBuiltinRegistry().execute(
+        'grep',
+        { pattern: 'target' },
+        { projectRoot: root, ignorePatterns: [], searchBackend: backend }
+      );
+      expect(result.output).toContain('f449.txt:1:target');
+      expect(result.output).not.toContain('secret.txt');
+    }
+  }));
 test.todo('F13: ACP uses the configured provider (2.13)', pending);
 test.todo('F14: reasoning is not replayed to another provider family (2.8)', pending);
 test.todo('F15: a failed request reports the provider error body, and 429 retries (2.8)', pending);
