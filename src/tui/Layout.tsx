@@ -27,6 +27,7 @@ import { useStatusStyles } from './useStatusStyles.js';
 import { useStatusTracking, useExitHandling } from './useStatusExit.js';
 import { useMountInit } from './useMountInit.js';
 import { useModelSessionMenus } from './useModelSessionMenus.js';
+import { useConfigWizard } from './useConfigWizard.js';
 import { McpTestService } from '../services/McpTestService.js';
 import { ContextManager } from '../core/context/manager.js';
 import { LLMFactory, type ToolCall as LlmToolCall } from '../services/LLMProvider.js';
@@ -521,136 +522,25 @@ export const Layout = () => {
   });
   const handleSessionResume = (sessionId: string) => handleSessionResumeBase(sessionId, messages);
 
-  const openConfigMenu = useCallback(
-    async (options?: { returnToModels?: boolean }) => {
-      if (!configService) {
-        addMessage({
-          role: 'system',
-          content: 'Configuration service is still initializing. Try again shortly.',
-          timestamp: Date.now(),
-        });
-        return;
-      }
-
-      if (typeof options?.returnToModels === 'boolean') {
-        returnToModelMenuRef.current = options.returnToModels;
-      }
-
-      try {
-        const cfg = await configService.getConfig();
-        setConfig(cfg);
-        await refreshStatusStyles(); // Ensure styles are loaded
-        setIsConfigMenuOpen(true);
-      } catch (error: any) {
-        addMessage({
-          role: 'system',
-          content: `Failed to load configuration: ${error.message}`,
-          timestamp: Date.now(),
-        });
-      }
-    },
-    [addMessage, setConfig, refreshStatusStyles]
-  );
-
-  const closeConfigMenu = useCallback(async () => {
-    setIsConfigMenuOpen(false);
-    const shouldReturn = returnToModelMenuRef.current;
-    returnToModelMenuRef.current = false;
-    if (shouldReturn) {
-      await reopenModelMenu();
-    }
-  }, [reopenModelMenu]);
-
-  const updateConfigWizardForm = useCallback((field: string, value: string) => {
-    setConfigWizard((prev) => (prev ? { ...prev, form: { ...prev.form, [field]: value } } : prev));
-  }, []);
-
-  const cancelConfigWizard = useCallback(() => {
-    setConfigWizard(null);
-    void openConfigMenu();
-  }, [openConfigMenu]);
-
-  const removeProvider = useCallback(
-    async (provider: ProviderSlug) => {
-      if (!configService) {
-        addMessage({
-          role: 'system',
-          content: 'Configuration service is still initializing. Try again shortly.',
-          timestamp: Date.now(),
-        });
-        return;
-      }
-      try {
-        const updated = await configService.removeProvider(provider);
-        setConfig(updated);
-        addMessage({
-          role: 'system',
-          content: `${provider === 'ollama' ? 'Ollama' : 'OpenRouter'} provider removed.`,
-          timestamp: Date.now(),
-        });
-        await refreshAvailableModels();
-        await openConfigMenu();
-      } catch (error: any) {
-        addMessage({
-          role: 'system',
-          content: `Failed to update providers: ${error.message}`,
-          timestamp: Date.now(),
-        });
-      }
-    },
-    [addMessage, openConfigMenu, refreshAvailableModels, setConfig]
-  );
-
-  const handleConfigWizardSubmit = useCallback(async () => {
-    if (!configWizard || configWizard.mode !== 'provider') return;
-    if (!configService) {
-      addMessage({
-        role: 'system',
-        content: 'Configuration service is still initializing. Try again shortly.',
-        timestamp: Date.now(),
-      });
-      return;
-    }
-
-    try {
-      if (configWizard.provider === 'ollama') {
-        const endpoint = (configWizard.form.endpoint || '').trim() || 'http://localhost:11434';
-        const updatedConfig = await configService.updateProvider('ollama', endpoint);
-        setConfig(updatedConfig);
-        addMessage({
-          role: 'system',
-          content: `Ollama endpoint set to ${endpoint}`,
-          timestamp: Date.now(),
-        });
-      } else {
-        const apiKey = (configWizard.form.apiKey || '').trim();
-        if (!apiKey) {
-          addMessage({
-            role: 'system',
-            content: 'Please enter an API key to continue.',
-            timestamp: Date.now(),
-          });
-          return;
-        }
-        const updatedConfig = await configService.updateProvider('openrouter', apiKey);
-        setConfig(updatedConfig);
-        addMessage({
-          role: 'system',
-          content: 'OpenRouter API key saved.',
-          timestamp: Date.now(),
-        });
-      }
-      setConfigWizard(null);
-      await refreshAvailableModels();
-      await openConfigMenu();
-    } catch (error: any) {
-      addMessage({
-        role: 'system',
-        content: `Failed to save provider: ${error.message}`,
-        timestamp: Date.now(),
-      });
-    }
-  }, [addMessage, configWizard, openConfigMenu, refreshAvailableModels, setConfig]);
+  const {
+    openConfigMenu,
+    closeConfigMenu,
+    updateConfigWizardForm,
+    cancelConfigWizard,
+    removeProvider,
+    handleConfigWizardSubmit,
+  } = useConfigWizard({
+    configService,
+    configWizard,
+    addMessage,
+    setConfig,
+    setConfigWizard,
+    setIsConfigMenuOpen,
+    returnToModelMenuRef,
+    refreshStatusStyles,
+    refreshAvailableModels,
+    reopenModelMenu,
+  });
 
   const refreshMcpServers = useCallback(async () => {
     if (!configService) return [];
