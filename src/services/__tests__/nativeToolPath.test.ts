@@ -1,6 +1,6 @@
 import { test, expect, afterEach } from 'bun:test';
 import path from 'node:path';
-import { OllamaProvider, OpenRouterProvider } from '../LLMProvider.js';
+import { LLMFactory } from '../LLMProvider.js';
 import { ToolService } from '../ToolService.js';
 
 const projectRoot = path.resolve(import.meta.dirname, '../../..');
@@ -50,7 +50,7 @@ test('a tool-requiring prompt round-trips through dispatch and a second turn', a
     },
   ]);
 
-  const provider = new OllamaProvider('http://localhost:11434');
+  const provider = LLMFactory.createProvider('ollama', { endpoint: 'http://localhost:11434' });
   const toolService = new ToolService({ projectRoot });
   const providerMessages: any[] = [
     { role: 'system', content: 'system prompt' },
@@ -117,7 +117,7 @@ test('tool shape survives the openrouter message mapping on the way in', async (
     },
   ]);
 
-  const provider = new OpenRouterProvider({ apiKey: 'test-key' });
+  const provider = LLMFactory.createProvider('openrouter', { api_key: 'test-key' });
   const providerMessages: any[] = [
     { role: 'system', content: 'system prompt' },
     { role: 'user', content: 'List package.json for me.' },
