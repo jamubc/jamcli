@@ -23,7 +23,9 @@ export class FileSystemService {
     const absolute = this.resolvePath(filePath);
     const content = await this.readFile(absolute);
     if (content.includes(findString)) {
-      const newContent = content.replace(findString, replaceString);
+      // A function replacement inserts the text literally; a string replacement would
+      // interpret $$, $&, $` and $' inside it.
+      const newContent = content.replace(findString, () => replaceString);
       await this.writeFile(absolute, newContent);
     } else {
       throw new Error(`Could not find string in file: ${filePath}`);

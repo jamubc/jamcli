@@ -1,7 +1,11 @@
-import { FileSystemService } from '../../services/FileSystemService.js';
+import fs from 'fs-extra';
+import { createTwoFilesPatch } from 'diff';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { anchorAtLine, type LineAnchor } from './anchors.js';
-import { countOccurrences, resolveProjectPath } from './paths.js';
+import { resolveProjectPath } from './paths.js';
+import { AmbiguousMatchError, replaceLiteral } from './textEdit.js';
+
+export { AmbiguousMatchError };
 
 /** An anchor the caller read, to be checked against the file before editing. */
 export interface AnchorInput {
@@ -39,21 +43,6 @@ export class StaleAnchorError extends Error {
   }
 }
 
-/** Raised when a find/replace target matches more than one location. */
-export class AmbiguousMatchError extends Error {
-  readonly path: string;
-  readonly matchCount: number;
-
-  constructor(path: string, matchCount: number) {
-    super(
-      `find_string matches ${matchCount} locations in ${path}; provide a unique snippet so the edit is unambiguous.`
-    );
-    this.name = 'AmbiguousMatchError';
-    this.path = path;
-    this.matchCount = matchCount;
-  }
-}
-
 function normalizeAnchors(raw: unknown): AnchorInput[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
@@ -75,8 +64,10 @@ function normalizeAnchors(raw: unknown): AnchorInput[] {
 }
 
 /**
- * Find and replace in a file. The match must be unique: an ambiguous find is
- * rejected with its match count rather than silently replacing the first hit.
+ * Find and replace in a file. The match must be unique unless the caller names an
+ * occurrence or asks to replace them all: an ambiguous find is rejected with its match
+ * count rather than silently replacing the first hit. Replacement text is literal and
+ * the file's line endings are preserved.
  *
  * When `anchors` are supplied the caller is asserting which content it read. If
  * any anchor is stale the edit is rejected before anything is written and the
@@ -94,8 +85,7 @@ export async function editRunner(args: Record<string, any>, ctx: ToolContext): P
   const replaceString = typeof args.replace_string === 'string' ? args.replace_string : '';
 
   const absolute = resolveProjectPath(ctx.projectRoot, target);
-  const fileSystem = new FileSystemService();
-  const content = await fileSystem.readFile(absolute);
+  const content = await fs.readFile(absolute, 'utf-8');
   const lines = content.split(/\r?\n/);
 
   const anchors = normalizeAnchors(args.anchors);
@@ -113,29 +103,25 @@ export async function editRunner(args: Record<string, any>, ctx: ToolContext): P
     }
   }
 
-  const occurrences = countOccurrences(content, findString);
-  if (occurrences === 0) {
-    throw new Error(`find_string was not found in ${target}.`);
-  }
-  if (occurrences > 1) {
-    throw new AmbiguousMatchError(target, occurrences);
-  }
+  const result = replaceLiteral(content, findString, replaceString, target, {
+    all: args.replace_all === true,
+    occurrence: typeof args.occurrence === 'number' ? args.occurrence : undefined,
+  });
+  await fs.writeFile(absolute, result.content, 'utf-8');
 
-  const startLine = content.slice(0, content.indexOf(findString)).split(/\r?\n/).length;
-  await fileSystem.applyEdit(absolute, findString, replaceString);
-
-  const updated = await fileSystem.readFile(absolute);
-  const endLine = startLine + replaceString.split(/\r?\n/).length - 1;
+  const { startLine, endLine, replaced } = result;
   const affected = endLine > startLine ? `lines ${startLine}-${endLine}` : `line ${startLine}`;
+  const noun = replaced === 1 ? 'occurrence' : 'occurrences';
 
   return {
-    output: `Replaced 1 occurrence in ${target}. Affected ${affected}.`,
+    output: `Replaced ${replaced} ${noun} in ${target}. First change at ${affected}.`,
     metadata: {
       path: target,
-      replacements: 1,
+      replacements: replaced,
       startLine,
       endLine,
-      totalLines: updated.split(/\r?\n/).length,
+      totalLines: result.content.split(/\r?\n/).length,
+      diff: createTwoFilesPatch(target, target, content, result.content, '', '', { context: 3 }),
     },
   };
 }
@@ -146,9 +132,16 @@ const editSchema: JsonSchema = {
     path: { type: 'string', description: 'File path relative to the project root.' },
     find_string: {
       type: 'string',
-      description: 'Exact snippet to replace. It must match exactly once or the edit is rejected.',
+      description:
+        'Exact snippet to replace. It must match exactly once unless occurrence or replace_all is given, or the edit is rejected.',
     },
-    replace_string: { type: 'string', description: 'Replacement text for find_string.' },
+    replace_string: { type: 'string', description: 'Replacement text for find_string, inserted literally.' },
+    replace_all: { type: 'boolean', description: 'Replace every occurrence of find_string.' },
+    occurrence: {
+      type: 'integer',
+      minimum: 1,
+      description: 'Replace only this occurrence of find_string, counted from 1 at the top of the file.',
+    },
     anchors: {
       type: 'array',
       description:
