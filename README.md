@@ -80,6 +80,26 @@ jamcli
 
 **Tip:** Type `/` in the input bar to see command suggestions.
 
+### One-shot and piped use
+
+Any argument switches the entry point out of the interface and onto the command surface:
+
+```bash
+jamcli -p "summarize the changes in src/core" --output-format text
+jamcli -p "list the tool registry" --output-format json | jq -r .response
+jamcli -p "read package.json and report the version" --output-format stream-json | jq -c 'select(.type=="tool_call")'
+```
+
+- `--output-format text` prints the answer, `json` prints one object with `session_id`, `status`, `response`, `duration_ms`, `turns`, and `usage`, and `stream-json` prints one event per line while it runs.
+- Exit codes: `0` on success, `1` on a refused or limited run, `2` on a usage error.
+- `--allow-tool <name>` and `--deny-tool <name>` govern the run without prompting. A headless run never prompts: a state-changing tool that would ask is refused, and the message names the flag that would permit it. A deny always wins.
+- `--cwd`, `--max-turns`, `--model`, `--continue`, and `--resume <id>` bound and shape the run.
+- `jamcli sessions list`, `jamcli sessions search <query>`, and `jamcli sessions export <id>` read the existing history files without migrating them.
+- `jamcli mcp add|list|test|remove` manages MCP servers, and `jamcli audit` reports tool access, isolation, and guardrail findings by severity without writing anything.
+- `jamcli acp` serves the Agent Client Protocol over stdio for an ACP client such as Zed.
+
+**Driving a vendor subscription through a third-party protocol client can violate that vendor's terms of service.** The ACP surface exists for agents and endpoints you are entitled to drive. Where the vendor offers an API-key path, use that instead: configure the key through `key_env_var` so it stays out of the project file.
+
 ## Configuration
 
 The CLI uses a `.jamcli` directory in your project root.
