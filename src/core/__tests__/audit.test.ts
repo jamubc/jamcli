@@ -12,6 +12,7 @@ import { createSession } from '../state.js';
 import { createHookBus } from '../hooks/index.js';
 import { createScriptedProvider } from '../../testing/scriptedProvider.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
+import { SessionLog, TranscriptRecorder } from '../transcript/index.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -33,9 +34,13 @@ const defs = (...names: string[]) => names.map((name) => ({ type: 'function' as 
 
 const withProject = async (run: (root: string) => Promise<void>) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-'));
+  const state = process.env.JAMCLI_STATE_DIR;
+  process.env.JAMCLI_STATE_DIR = path.join(root, '.state');
   try {
     await run(root);
   } finally {
+    if (state === undefined) delete process.env.JAMCLI_STATE_DIR;
+    else process.env.JAMCLI_STATE_DIR = state;
     await fs.remove(root);
   }
 };
@@ -163,7 +168,19 @@ test('F15: a failed request reports the provider error body, and 429 retries (2.
   }
 });
 test.todo('F16: interface turns apply rules, hooks, and the trust gate (2.11, 6.4)', pending);
-test.todo('F17: resume restores tool calls and results (2.10)', pending);
+test('F17: resume restores tool calls and results (2.10)', () =>
+  withProject(async (root) => {
+    const log = SessionLog.create(root, { surface: 'cli' });
+    const recorder = new TranscriptRecorder(log, { surface: 'cli' });
+    const first = createScriptedProvider([{ toolCalls: [{ id: 'c1', name: 'read_a', arguments: {} }] }, { text: 'done' }]);
+    const options = { model: 'm', dispatcher: echoDispatcher(), toolDefinitions: defs('read_a') };
+    await new CoreAgent({ ...options, provider: first }).run(createSession(root, log.id), 'go', recorder.handle);
+    const second = createScriptedProvider([{ text: 'ok' }]);
+    await new CoreAgent({ ...options, provider: second }).run(SessionLog.open(root, log.id).toSession(), 'again', () => {});
+    const request = second.calls[0].messages;
+    expect(request.find((m) => m.role === 'assistant')?.tool_calls?.[0]).toMatchObject({ id: 'c1', function: { name: 'read_a' } });
+    expect(request.find((m) => m.role === 'tool')).toMatchObject({ tool_call_id: 'c1', content: 'read_a ran' });
+  }));
 test.todo('F18: a created .jamcli directory ignores itself (5.1)', pending);
 test('F19: Ollama requests carry num_ctx (2.8)', async () => {
   const server = startFakeProvider();

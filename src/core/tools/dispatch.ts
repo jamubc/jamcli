@@ -179,6 +179,16 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         continue;
       }
       const read = readDecision(decision);
+      ctx.emit({
+        type: 'approval_decision',
+        callId: call.id,
+        tool: call.name,
+        allow: read.allow,
+        scope: read.scope,
+        by: 'user',
+        ...(read.feedback ? { feedback: read.feedback } : {}),
+        ...(read.pattern ? { rule: read.pattern } : {}),
+      });
       if (!read.allow) {
         const output = read.feedback
           ? `Denied by the user, who said: ${read.feedback}`

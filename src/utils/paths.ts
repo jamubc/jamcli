@@ -29,8 +29,11 @@ export const jamcliPaths: JamCliPaths = {
   projectLocal: (projectRoot: string) => path.join(projectRoot, '.jamcli'),
 };
 
-// Helper to get platform-specific state directory
+// Helper to get platform-specific state directory. JAMCLI_STATE_DIR overrides it.
 export function getStateDir(): string {
+  if (process.env.JAMCLI_STATE_DIR) {
+    return process.env.JAMCLI_STATE_DIR;
+  }
   if (process.platform === 'darwin') {
     return path.join(os.homedir(), 'Library', 'Application Support', 'jamcli');
   } else if (process.platform === 'win32') {

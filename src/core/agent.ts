@@ -96,7 +96,11 @@ export class CoreAgent implements Agent {
     signal: AbortSignal
   ): Promise<RunResult> {
     const { provider, dispatcher, hooks } = this.options;
-    let working = prompt ? appendMessages(session, [userMessage(prompt)]) : session;
+    let working = session;
+    const record = (message: ChatMessage) => {
+      working = appendMessages(working, [message]);
+      emit({ type: 'message', message });
+    };
     const finish = (status: RunStatus, response: string, steps: number, error?: string): RunResult => {
       emit({ type: 'turn_end', status });
       return { status, sessionId: session.id, response, turns: steps, usage: { ...working.usage }, session: working, ...(error ? { error } : {}) };
@@ -106,6 +110,7 @@ export class CoreAgent implements Agent {
     }
 
     emit({ type: 'turn_start', prompt });
+    if (prompt) record(userMessage(prompt));
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
     const cap = this.maxToolCallsPerTurn > 0 ? this.maxToolCallsPerTurn : undefined;
@@ -126,7 +131,7 @@ export class CoreAgent implements Agent {
         step = await this.streamStep(provider, this.project(working.messages), tools, signal, emit);
       } catch (error: any) {
         const partial: string = error?.partialText ?? '';
-        if (partial) working = appendMessages(working, [this.assistantMessage(partial, '', [], undefined)]);
+        if (partial) record(this.assistantMessage(partial, '', [], undefined));
         if (signal.aborted || error?.name === 'AbortError') return finish('cancelled', partial, steps);
         const message = error?.message ?? String(error);
         emit({ type: 'notice', level: 'error', message });
@@ -141,13 +146,13 @@ export class CoreAgent implements Agent {
       }
 
       const { calls, unusable } = normalizeCalls(step.done?.toolCalls, steps);
-      working = appendMessages(working, [this.assistantMessage(step.text, step.reasoning, calls, step.done)]);
+      record(this.assistantMessage(step.text, step.reasoning, calls, step.done));
       if (unusable) {
         emit({ type: 'notice', level: 'warn', message: `The model returned ${unusable} tool call(s) without a tool name; they were ignored.` });
       }
       if (!calls.length) {
         if (unusable) {
-          working = appendMessages(working, [userMessage('[Your last tool call had no tool name and was ignored. Name the tool you want to call.]')]);
+          record(userMessage('[Your last tool call had no tool name and was ignored. Name the tool you want to call.]'));
           continue;
         }
         return finish('ok', step.text, steps);
@@ -171,7 +176,14 @@ export class CoreAgent implements Agent {
       const results = await this.screen(turnPrompt, calls, batch.results, signal, emit);
       for (let i = 0; i < calls.length; i += 1) {
         const output = this.truncate(results[i].output);
-        working = appendMessages(working, [{ role: 'tool', content: output, tool_call_id: calls[i].id, timestamp: Date.now() }]);
+        record({
+          role: 'tool',
+          content: output,
+          tool_call_id: calls[i].id,
+          toolName: calls[i].name,
+          toolStatus: results[i].status ?? (results[i].success ? 'ok' : 'error'),
+          timestamp: Date.now(),
+        });
         await emitHookEvent(hooks, 'post_tool', { session: working, call: calls[i], result: results[i], output }, emit);
       }
 

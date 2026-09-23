@@ -124,7 +124,16 @@ Line references describe the tree when the change opened.
 - [ ] 2.10 Build the transcript event log (D4; F17). Files: `src/core/transcript/` (new), `src/services/HistoryService.ts` (reader and index only), tests.
   - Version 2 writer, version 1 reader, a mixed-file reader, and projections to provider messages and Markdown.
   - Secret redaction.
+  - `jamcli sessions show` and `jamcli sessions fork` on the command line, beside list, search, and export.
   - Verify a version 1 fixture resumes, and a version 2 session with tool calls resumes with the calls in the next request.
+  - **Verification (log)**: `src/core/transcript/` holds the event types, the reader for both formats, `SessionLog` (lazy header, append, fork with a parent pointer, rebuild with usage by model), `TranscriptRecorder` (engine events to log events), the project-filtered index, and the Markdown projection.
+    - The engine emits `message` and `approval_decision` events, and tool messages carry the tool name and status, which providers never receive.
+    - `HistoryService` and `src/core/session/store.ts` read and write through it, so the interface and headless now append version 2 lines, and version 1 files are read and never rewritten.
+    - The index takes the creation time from the session file and lists only the current project's sessions, which fixes `--continue` picking another project's latest session. Search reads message content.
+    - D4 in `design.md` now describes one `message` type instead of one type per role.
+    - 24 transcript and session tests pass, including `jamcli sessions show`, `fork`, and `export` run as a subprocess.
+    - Mutation probes: ignoring version 1 lines, dropping tool calls on write, stamping the creation time at update, trusting a stale index entry, listing other projects, writing the header early, losing the fork's parent, sending the tool name to a provider, fixed three-backtick fences, searching metadata only, writing version 1 from the interface, not recording approvals, starting a window on an orphaned tool result, and not recording tool status each turn a test red.
+    - F17 is live.
 - [ ] 2.11 Build `createRuntime` (D2). Files: `src/core/runtime/` (new), tests.
   - It is the one place that builds the provider, the full registry (built-ins plus MCP), policy (legacy semantics with F10 fixed), rules, hooks, context management, the trust gate (D21 repairs), and the transcript.
   - `@` references expand in the runtime, not in a surface (F24).

@@ -32,6 +32,10 @@ export interface ChatMessage {
   providerFamily?: string;
   tool_calls?: ProviderToolCall[];
   tool_call_id?: string;
+  /** On a tool message: the tool that produced it. Never sent to a provider. */
+  toolName?: string;
+  /** On a tool message: how the call ended. Never sent to a provider. */
+  toolStatus?: ToolStatus;
 }
 
 export type Message = ChatMessage;
@@ -128,7 +132,20 @@ export type AgentEvent =
       decide: (decision: ApprovalDecision) => void;
       request?: ApprovalRequest;
     }
-  | { type: 'turn_end'; status: RunStatus };
+  | { type: 'turn_end'; status: RunStatus }
+  /** A message the engine appended to the conversation: the prompt, a reply, or a tool result. */
+  | { type: 'message'; message: ChatMessage }
+  /** How an approval request was answered. */
+  | {
+      type: 'approval_decision';
+      callId: string;
+      tool: string;
+      allow: boolean;
+      scope: ApprovalScope;
+      feedback?: string;
+      by: 'user' | 'policy' | 'hook' | 'flag' | 'mode';
+      rule?: string;
+    };
 
 export interface RunResult {
   status: RunStatus;

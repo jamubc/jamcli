@@ -1,32 +1,23 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { Message, TokenUsage } from '../core/types.js';
-import { jamcliPaths, getStateDir } from '../utils/paths.js';
+import {
+  SessionLog,
+  ensureProjectStateDir,
+  listSessionSummaries,
+  newSessionId,
+  projectMessages,
+  readTranscript,
+  searchSessionSummaries,
+  transcriptToMarkdown,
+  type LegacyTurn,
+  type SessionSummary,
+} from '../core/transcript/index.js';
 
-export interface SessionMetadata {
-  id: string;
-  projectRoot: string;
-  projectName: string;
-  created: string;
-  updated: string;
-  totalTokens: number;
-  messageCount: number;
-  model?: string;
-  title?: string;
-  firstUserMessage?: string;
-}
+export type SessionMetadata = SessionSummary;
 
-export interface ConversationTurn {
-  id: string;
-  timestamp: string;
-  model?: string;
-  messages: Array<{
-    role: 'user' | 'assistant' | 'system' | 'tool';
-    content: string;
-  }>;
-  usage?: TokenUsage;
-}
+/** A version 1 history line. New turns are written as version 2 events. */
+export type ConversationTurn = LegacyTurn;
 
 export interface SessionUsage {
   promptTokens: number;
@@ -35,17 +26,21 @@ export interface SessionUsage {
   callCount: number;
 }
 
+/**
+ * The interface's view of one session's history until the interface moves onto the
+ * runtime. Reading, writing, and the index all go through the transcript module, so
+ * version 1, version 2, and mixed files load the same way everywhere.
+ */
 export class HistoryService {
   private projectRoot: string;
   private sessionId: string;
   private sessionUsage: SessionUsage;
-  private historyDir: string;
-  private globalStateDir: string;
+  private log: SessionLog;
   private disabled: boolean;
 
   constructor(projectRoot: string = process.cwd(), sessionId?: string) {
     this.projectRoot = projectRoot;
-    this.sessionId = sessionId || this.generateSessionId();
+    this.sessionId = sessionId || newSessionId();
     this.sessionUsage = {
       promptTokens: 0,
       completionTokens: 0,
@@ -53,31 +48,11 @@ export class HistoryService {
       callCount: 0,
     };
     this.disabled = false;
-    
-    // Project-local history directory
-    this.historyDir = path.join(jamcliPaths.projectLocal(projectRoot), 'history');
-    
-    // Global state directory
-    this.globalStateDir = getStateDir();
+    this.log = SessionLog.openOrCreate(projectRoot, this.sessionId, { surface: 'tui' });
   }
 
-  private generateSessionId(): string {
-    const date = new Date();
-    const dateStr = date.toISOString().split('T')[0];
-    const uuid = uuidv4().split('-')[0];
-    return `${dateStr}-${uuid}`;
-  }
-
-  async initialize(): Promise<void> {
-    try {
-      await fs.ensureDir(this.historyDir);
-      await fs.ensureDir(this.globalStateDir);
-      await this.updateSessionMetadata();
-    } catch (error) {
-      this.disabled = true;
-      console.error('History disabled (unable to initialize):', error);
-    }
-  }
+  /** Nothing is created until the first turn is written. */
+  async initialize(): Promise<void> {}
 
   getSessionId(): string {
     return this.sessionId;
@@ -90,7 +65,7 @@ export class HistoryService {
   updateUsage(usage?: TokenUsage): void {
     if (this.disabled) return;
     if (!usage) return;
-    
+
     this.sessionUsage.promptTokens += usage.prompt_tokens || 0;
     this.sessionUsage.completionTokens += usage.completion_tokens || 0;
     this.sessionUsage.totalTokens += usage.total_tokens || 0;
@@ -99,258 +74,52 @@ export class HistoryService {
 
   async appendTurn(messages: Message[], usage?: TokenUsage): Promise<void> {
     if (this.disabled) return;
-    const turn: ConversationTurn = {
-      id: `turn-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      model: messages.find(m => m.model)?.model,
-      messages: messages.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
-      usage,
-    };
-
-    // Update usage tracking
     this.updateUsage(usage);
-
-    // Append to JSONL history file
-    const historyFile = path.join(this.historyDir, `${this.sessionId}.jsonl`);
-    const line = JSON.stringify(turn) + '\n';
+    const model = messages.find((message) => message.model)?.model;
     try {
-      await fs.appendFile(historyFile, line, 'utf-8');
-      await this.updateSessionMetadata();
+      for (const message of messages) this.log.append({ type: 'message', message });
+      if (usage) this.log.append({ type: 'usage', ...(model ? { model } : {}), usage });
+      this.log.updateIndex();
     } catch (error) {
       this.disabled = true;
       console.error('History disabled (failed to append turn):', error);
     }
   }
 
-  async loadHistory(): Promise<ConversationTurn[]> {
+  async loadMessagesFromHistory(maxMessages?: number): Promise<Message[]> {
     if (this.disabled) return [];
-    const historyFile = path.join(this.historyDir, `${this.sessionId}.jsonl`);
-    
-    if (!(await fs.pathExists(historyFile))) {
-      return [];
-    }
-
+    let messages: Message[];
     try {
-      const content = await fs.readFile(historyFile, 'utf-8');
-      const lines = content.split('\n').filter(line => line.trim() !== '');
-      
-      return lines.map(line => JSON.parse(line) as ConversationTurn);
+      messages = projectMessages(readTranscript(this.log.file));
     } catch (error) {
       console.error(`Error loading history for session ${this.sessionId}:`, error);
       return [];
     }
+    if (!maxMessages || messages.length <= maxMessages) return messages;
+    // Never start with a tool result whose call was cut off.
+    let start = messages.length - maxMessages;
+    while (start < messages.length && messages[start].role === 'tool') start += 1;
+    return messages.slice(start);
   }
 
-  async loadMessagesFromHistory(maxMessages?: number): Promise<Message[]> {
-    const turns = await this.loadHistory();
-    const messages: Message[] = [];
-    
-    for (const turn of turns) {
-      for (const msg of turn.messages) {
-        messages.push({
-          role: msg.role,
-          content: msg.content,
-          timestamp: new Date(turn.timestamp).getTime(),
-          model: turn.model,
-          usage: turn.usage,
-        });
-      }
-    }
-
-    // Return last N messages if specified
-    if (maxMessages && messages.length > maxMessages) {
-      return messages.slice(-maxMessages);
-    }
-
-    return messages;
-  }
-
-  private async updateSessionMetadata(): Promise<void> {
-    if (this.disabled) return;
-    const turns = await this.loadHistory();
-    
-    // Extract first user message for title generation
-    let firstUserMessage = '';
-    let title = '';
-    
-    if (turns.length > 0) {
-      const firstTurn = turns[0];
-      const userMsg = firstTurn.messages.find(m => m.role === 'user');
-      if (userMsg) {
-        firstUserMessage = userMsg.content;
-        // Generate smart title from first message
-        title = this.generateTitle(userMsg.content);
-      }
-    }
-
-    const metadata: SessionMetadata = {
-      id: this.sessionId,
-      projectRoot: this.projectRoot,
-      projectName: path.basename(this.projectRoot),
-      created: new Date().toISOString(),
-      updated: new Date().toISOString(),
-      totalTokens: this.sessionUsage.totalTokens,
-      messageCount: this.sessionUsage.callCount,
-      title,
-      firstUserMessage: firstUserMessage.substring(0, 200), // Store first 200 chars
-    };
-
-    // Append to global sessions JSONL
-    const sessionsFile = path.join(this.globalStateDir, 'sessions.jsonl');
-    
-    // Check if session already exists in file
-    let existingLines: string[] = [];
-    if (await fs.pathExists(sessionsFile)) {
-      const content = await fs.readFile(sessionsFile, 'utf-8');
-      existingLines = content.split('\n').filter(line => line.trim() !== '');
-    }
-
-    // Remove old entry for this session if it exists
-    const filteredLines = existingLines.filter(line => {
-      try {
-        const session = JSON.parse(line);
-        return session.id !== this.sessionId;
-      } catch {
-        return false;
-      }
-    });
-
-    // Add updated entry
-    filteredLines.push(JSON.stringify(metadata));
-
-    // Write back
-    try {
-      await fs.writeFile(sessionsFile, filteredLines.join('\n') + '\n', 'utf-8');
-    } catch (error) {
-      this.disabled = true;
-      console.error('History disabled (failed to write metadata):', error);
-    }
-  }
-
-  private generateTitle(firstMessage: string): string {
-    // Remove common prefixes
-    let cleaned = firstMessage
-      .replace(/^(please|can you|could you|would you|help me|i need|i want to)\s+/i, '')
-      .trim();
-    
-    // Take first sentence or first 50 characters
-    const firstSentence = cleaned.split(/[.!?]\s/)[0];
-    let title = firstSentence.length > 50 
-      ? firstSentence.substring(0, 47) + '...'
-      : firstSentence;
-    
-    // Capitalize first letter
-    title = title.charAt(0).toUpperCase() + title.slice(1);
-    
-    // If still too generic, extract key words
-    if (title.length < 10 || /^(how|what|why|when|where)/i.test(title)) {
-      const words = cleaned.split(/\s+/).slice(0, 6);
-      title = words.join(' ');
-      if (title.length > 50) {
-        title = title.substring(0, 47) + '...';
-      }
-    }
-    
-    return title || 'New conversation';
-  }
-
+  /** This project's sessions, newest first. */
   async listSessions(limit = 20): Promise<SessionMetadata[]> {
-    const sessionsFile = path.join(this.globalStateDir, 'sessions.jsonl');
-    
-    if (!(await fs.pathExists(sessionsFile))) {
-      return [];
-    }
-
-    const content = await fs.readFile(sessionsFile, 'utf-8');
-    const lines = content.split('\n').filter(line => line.trim() !== '');
-    
-    const sessions = lines
-      .map(line => {
-        try {
-          return JSON.parse(line) as SessionMetadata;
-        } catch {
-          return null;
-        }
-      })
-      .filter((s): s is SessionMetadata => s !== null)
-      .filter(s => s.messageCount > 0) // Only show sessions with messages
-      .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
-
-    return sessions.slice(0, limit);
+    return listSessionSummaries(this.projectRoot, limit);
   }
 
   async searchSessions(query: string, limit = 20): Promise<SessionMetadata[]> {
-    const sessionsFile = path.join(this.globalStateDir, 'sessions.jsonl');
-    
-    if (!(await fs.pathExists(sessionsFile))) {
-      return [];
-    }
-
-    const content = await fs.readFile(sessionsFile, 'utf-8');
-    const lines = content.split('\n').filter(line => line.trim() !== '');
-    
-    const queryLower = query.toLowerCase();
-    
-    const sessions = lines
-      .map(line => {
-        try {
-          return JSON.parse(line) as SessionMetadata;
-        } catch {
-          return null;
-        }
-      })
-      .filter((s): s is SessionMetadata => s !== null)
-      .filter(s => s.messageCount > 0) // Only show sessions with messages
-      .filter(session => {
-        // Search in title, first message, project name, and session ID
-        const searchableText = [
-          session.title || '',
-          session.firstUserMessage || '',
-          session.projectName,
-          session.id,
-        ].join(' ').toLowerCase();
-        
-        return searchableText.includes(queryLower);
-      })
-      .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
-
-    return sessions.slice(0, limit);
+    return searchSessionSummaries(this.projectRoot, query, limit);
   }
 
   async exportToMarkdown(): Promise<string> {
-    const turns = await this.loadHistory();
-    const lines: string[] = [];
-
-    lines.push(`# Chat Session: ${this.sessionId}\n`);
-    lines.push(`**Project:** ${path.basename(this.projectRoot)}`);
-    lines.push(`**Total Tokens:** ${this.sessionUsage.totalTokens}`);
-    lines.push(`**Messages:** ${this.sessionUsage.callCount}\n`);
-    lines.push('---\n');
-
-    for (const turn of turns) {
-      for (const msg of turn.messages) {
-        const role = msg.role.charAt(0).toUpperCase() + msg.role.slice(1);
-        lines.push(`## ${role}\n`);
-        lines.push(msg.content);
-        lines.push('\n');
-      }
-
-      if (turn.usage) {
-        lines.push(`*Tokens: ${turn.usage.total_tokens} (prompt: ${turn.usage.prompt_tokens}, completion: ${turn.usage.completion_tokens})*\n`);
-      }
-
-      lines.push('---\n');
-    }
-
-    return lines.join('\n');
+    return transcriptToMarkdown(readTranscript(this.log.file), { id: this.sessionId });
   }
 
   async saveMarkdownExport(): Promise<string> {
     const markdown = await this.exportToMarkdown();
-    const exportPath = path.join(this.historyDir, `${this.sessionId}.md`);
+    ensureProjectStateDir(this.projectRoot);
+    const exportPath = path.join(path.dirname(this.log.file), `${this.sessionId}.md`);
+    await fs.ensureDir(path.dirname(exportPath));
     await fs.writeFile(exportPath, markdown, 'utf-8');
     return exportPath;
   }

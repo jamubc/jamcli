@@ -1,9 +1,20 @@
 import { runHeadless } from './cli/run.js';
 import { runAuditCli } from './cli/audit.js';
 import { runMcpCommand } from './cli/mcp.js';
-import { listSessions, latestSessionId, loadSessionMessages, searchSessions, exportSession } from './core/session/store.js';
+import {
+  exportSession,
+  forkSession,
+  latestSessionId,
+  listSessions,
+  loadSessionMessages,
+  renderSession,
+  searchSessions,
+} from './core/session/store.js';
 import { resolveJamcliProjectRoot } from './utils/projectRoot.js';
 import type { AgentEvent } from './core/types.js';
+
+const SESSIONS_ACTIONS = ['list', 'search', 'show', 'export', 'fork'] as const;
+type SessionsAction = (typeof SESSIONS_ACTIONS)[number];
 
 export type McpAction = 'add' | 'list' | 'test' | 'remove';
 
@@ -17,7 +28,7 @@ export interface ParsedArgs {
   continueLast: boolean;
   allowTools: string[];
   denyTools: string[];
-  sessionsCommand?: { action: 'list' | 'search' | 'export'; query?: string };
+  sessionsCommand?: { action: SessionsAction; query?: string };
   mcpCommand?: { action: McpAction; args: string[] };
   audit: boolean;
   acp: boolean;
@@ -101,8 +112,8 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (token === 'sessions') {
       const action = argv[i + 1];
-      if (action === 'list' || action === 'search' || action === 'export') {
-        parsed.sessionsCommand = { action, query: argv[i + 2] };
+      if (SESSIONS_ACTIONS.includes(action as SessionsAction)) {
+        parsed.sessionsCommand = { action: action as SessionsAction, query: argv[i + 2] };
         i += 2;
       }
       continue;
@@ -145,7 +156,7 @@ export const USAGE = `Usage: jamcli [options]
       --allow-tool <name>      Allow a tool for this run (repeatable)
       --deny-tool <name>       Deny a tool for this run (repeatable)
 
-  jamcli sessions list|search <query>|export <id>
+  jamcli sessions list|search <query>|show <id>|export <id>|fork <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
   jamcli mcp add|list|test|remove   Manage MCP servers in .jamcli/mcp.json
   jamcli acp                   Serve the Agent Client Protocol over stdio
@@ -268,7 +279,7 @@ const eventToJson = (event: AgentEvent): Record<string, unknown> => {
 };
 
 const runSessionsCommand = async (
-  command: { action: 'list' | 'search' | 'export'; query?: string },
+  command: { action: SessionsAction; query?: string },
   projectRoot: string
 ): Promise<number> => {
   if (command.action === 'list') {
@@ -292,10 +303,23 @@ const runSessionsCommand = async (
   }
 
   if (!command.query) {
-    process.stderr.write('Usage: jamcli sessions export <session-id>\n');
+    process.stderr.write(`Usage: jamcli sessions ${command.action} <session-id>\n`);
     return 2;
   }
   const messages = await loadSessionMessages(projectRoot, command.query);
+  if (!messages.length) {
+    process.stderr.write(`No session named ${command.query} with recorded messages in this project.\n`);
+    return 1;
+  }
+  if (command.action === 'show') {
+    process.stdout.write(await renderSession(projectRoot, command.query));
+    return 0;
+  }
+  if (command.action === 'fork') {
+    const forked = await forkSession(projectRoot, command.query, { surface: 'cli' });
+    process.stdout.write(`${forked}\n`);
+    return 0;
+  }
   const path = await exportSession(projectRoot, command.query);
   process.stdout.write(`${messages.length} messages exported to ${path}\n`);
   return 0;

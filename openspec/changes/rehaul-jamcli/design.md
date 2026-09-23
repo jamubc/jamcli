@@ -187,16 +187,27 @@ today. Version 2 lines carry `"v":2` and a type:
 
 | Type | Records |
 |---|---|
-| `session` | id, creation time, cwd, surface, parent (for forks), JamCLI version |
-| `user` | the text, with any expanded references |
-| `assistant` | model, provider, text, reasoning blocks, tool calls, usage, cost, stop reason |
-| `tool` | call id, tool, status, the output the model received, whether and how much it was truncated, duration |
+| `session` | id, creation time, project root, cwd, surface, parent (for forks), JamCLI version |
+| `message` | one user, assistant, or tool message, exactly as later requests replay it (below) |
 | `approval` | call id, allow or deny, who decided (user, policy, flag, mode, or hook), the surface, the rule, the scope of a grant, any feedback |
-| `compaction` | the summary, the event range it replaces, token counts before and after |
+| `usage` | the tokens of one request, the model, and its cost once the ledger prices it |
+| `compaction` | the summary, the number of messages it replaces, token counts before and after |
 | `checkpoint` | git ref or backup id, files |
 | `model` | a model switch |
 | `notice` | anything else worth knowing, such as a trust gate removal |
-| `end` | the final status |
+| `end` | the status a turn ended with |
+
+A user message holds the text with any expanded references. An assistant message holds
+the model, provider family, text, reasoning blocks with their signatures, and every tool
+call. A tool message holds the call id, the tool, its status, and the output the model
+received, in which truncation is marked where it happened. One `message` type rather
+than one type per role keeps the log and the provider projection the same shape, so
+resume cannot drift from what was sent. Durations belong to traces (D13), not the log.
+
+The `session` line is written with the first message, so a session that never gets one
+leaves no file. The global index at `<state>/sessions.jsonl` is a cache of the files:
+listings show only the current project's sessions, and the creation time is read from
+the session file rather than kept from an earlier index entry.
 
 Provider messages, interface rows, Markdown exports, and ACP `session/load` replays are
 all projections of this log. Forking copies the events up to a point into a new file
