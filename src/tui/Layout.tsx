@@ -5,7 +5,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { Header } from './Header.js';
 import { ChatViewport } from './ChatViewport.js';
-import { InputBar, SlashCommand } from './InputBar.js';
+import { InputBar } from './InputBar.js';
 import { ActionModal } from './ActionModal.js';
 import { ModelSelectorModal } from './ModelSelectorModal.js';
 import { ModelDetailsModal } from './ModelDetailsModal.js';
@@ -19,12 +19,12 @@ import type { Action } from '../store/index.js';
 import type { Message, TokenUsage } from '../core/types.js';
 import { useMenuNavigation } from './useMenuNavigation.js';
 import { useInlineNotice } from './useInlineNotice.js';
+import { useSuggestions } from './useSuggestions.js';
+import { useTextInput } from './useTextInput.js';
 import { useLayoutContext } from './useLayoutContext.js';
 import { useInfoPanels } from './useInfoPanels.js';
 import { useStatusStyles } from './useStatusStyles.js';
-import { ConfigService } from '../services/ConfigService.js';
-import { ModelService } from '../services/ModelService.js';
-import { McpManager } from '../services/McpManager.js';
+import { useMountInit } from './useMountInit.js';
 import { McpTestService } from '../services/McpTestService.js';
 import { ContextManager } from '../core/context/manager.js';
 import { LLMFactory, type ToolCall as LlmToolCall } from '../services/LLMProvider.js';
@@ -36,7 +36,6 @@ import { buildSystemPrompt, buildToolAvailabilityPrompt } from '../core/prompt.j
 import { isMcpToolQuery, selectToolsForQuery, userQueryNeedsTools } from '../core/sensor.js';
 import { FileSystemService } from '../services/FileSystemService.js';
 import { ExecutionService } from '../services/ExecutionService.js';
-import { ToolService } from '../services/ToolService.js';
 import { HistoryService, SessionMetadata } from '../services/HistoryService.js';
 import type { Config, ModelInfo, Profile, ToolPermission, UiConfig } from '../types/config.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
@@ -45,7 +44,6 @@ import { ALL_TOOL_NAMES, SAFE_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tool
 import type { McpServerConfig, McpTestResult, McpToolDescriptor } from '../types/mcp.js';
 import {
   DEFAULT_CUSTOM_STYLE,
-  DEFAULT_STATUS_STYLE,
   listStatusSpinnerStyleOptions,
   listStatusTextStyleOptions,
   resolveSpinnerStyle,
@@ -59,19 +57,14 @@ import { resolveJamcliProjectRoot } from '../utils/projectRoot.js';
 import { resolveAtReferences, type AtReference, type MissingAtReference } from '../utils/atReferences.js';
 
 import {
-  BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START,
-  CONFIG_SUBCOMMANDS,
   CONFIGURE_ENTRY_ID,
   CONFIGURE_MODELS_ENTRY,
   initialModelMenuState,
   initialSessionMenuState,
   MCP_COMMAND_USAGE,
-  normalizePastedContent,
   PROVIDER_COMMAND_USAGE,
   resetTerminalViewport,
   SESSION_PAGE_SIZE,
-  SLASH_COMMANDS,
   STREAMING_STATUS_LINES,
   THINKING_STATUS_LINES,
   TOOL_COMMAND_USAGE,
@@ -264,78 +257,16 @@ export const Layout = () => {
     updateSystemPromptSetting,
   } = useInfoPanels({ configService, mcpManager, addMessage, setConfig, setActiveProfile, setMcpServers });
 
-  const handleTextInputChange = useCallback(
-    (nextValue: string) => {
-      const previousValue = inputValueRef.current;
-      const hasStart = nextValue.includes(BRACKETED_PASTE_START);
-      const hasEnd = nextValue.includes(BRACKETED_PASTE_END);
-      const isCapturing = pasteBufferRef.current.active || hasStart || hasEnd;
-
-      const processPaste = (normalized: string) => {
-        if (!normalized.length) {
-          setCollapsedPaste(null);
-          setInputValue('');
-          return;
-        }
-
-        const lineCount = normalized.split('\n').length;
-        const width = terminalSize.columns ?? 80;
-        const shouldCollapse =
-          previousValue.length === 0 && (lineCount > 1 || normalized.length >= Math.max(width - 6, 80));
-
-        if (shouldCollapse) {
-          const nextId = pasteCounterRef.current + 1;
-          pasteCounterRef.current = nextId;
-          setCollapsedPaste({
-            id: nextId,
-            content: normalized,
-            lineCount,
-            charCount: normalized.length,
-          });
-          showInlineNotice({
-            message: `Pasted ${lineCount} lines (${normalized.length} chars). Enter inserts · Esc cancels.`,
-            tone: 'info',
-            kind: 'clear_input',
-          });
-          setInputValue('');
-        } else {
-          setCollapsedPaste(null);
-          setInputValue(normalized);
-        }
-      };
-
-      if (isCapturing) {
-        let chunk = nextValue;
-
-        if (hasStart) {
-          pasteBufferRef.current.active = true;
-          pasteBufferRef.current.data = '';
-          chunk = chunk.split(BRACKETED_PASTE_START).join('');
-        }
-
-        if (hasEnd) {
-          const beforeEnd = chunk.split(BRACKETED_PASTE_END)[0] || '';
-          pasteBufferRef.current.data += beforeEnd;
-          const normalized = normalizePastedContent(pasteBufferRef.current.data);
-          pasteBufferRef.current = { active: false, data: '' };
-          processPaste(normalized);
-          return;
-        }
-
-        if (pasteBufferRef.current.active) {
-          pasteBufferRef.current.data += chunk;
-          return;
-        }
-      }
-
-      if (collapsedPaste) {
-        setCollapsedPaste(null);
-      }
-
-      setInputValue(nextValue);
-    },
-    [collapsedPaste, showInlineNotice, terminalSize.columns]
-  );
+  const handleTextInputChange = useTextInput({
+    collapsedPaste,
+    inputValueRef,
+    pasteBufferRef,
+    pasteCounterRef,
+    terminalSize,
+    setInputValue,
+    setCollapsedPaste,
+    showInlineNotice,
+  });
 
   const {
     refreshStatusStyles,
@@ -345,73 +276,14 @@ export const Layout = () => {
     openStatusStyleFolderMessage,
   } = useStatusStyles({ configService, uiConfig, addMessage, setUiConfig, setStatusStyle, setStatusStyleOptions });
 
-  const suggestionData = useMemo(() => {
-    if (!inputValue.startsWith('/')) return { list: [] as SlashCommand[], hint: null as string | null };
-    const needle = inputValue.toLowerCase();
-
-    // Inline model suggestions when user typed "/model " or started a model name.
-    const modelParts = inputValue.trimStart().toLowerCase().split(/\s+/);
-    const isModelCommand = modelParts[0] === '/model';
-    const hasModelQuery = isModelCommand && (inputValue.endsWith(' ') || modelParts.length > 1);
-
-    if (isModelCommand && hasModelQuery) {
-      const query = modelParts.slice(1).join(' ').trim().toLowerCase();
-      const preferredProvider = activeProfile?.preferred_provider;
-      if (!preferredProvider) return { list: [], hint: null };
-
-      const sourceModels = (availableModels.length ? availableModels : modelMenuState.models).filter(
-        (m) => m.id !== CONFIGURE_ENTRY_ID
-      );
-      const providerFiltered = sourceModels.filter((m) => m.provider === preferredProvider);
-
-      const filteredModels = providerFiltered.filter((model) => {
-        if (!query) return true;
-        const description = model.description?.toLowerCase() ?? '';
-        const haystack = `${model.id} ${model.name}`.toLowerCase();
-        return haystack.includes(query) || description.includes(query);
-      });
-
-      const recency = recentModelsRef.current;
-      const sorted = filteredModels.sort((a, b) => {
-        const aIdx = recency.indexOf(a.id);
-        const bIdx = recency.indexOf(b.id);
-        if (aIdx !== bIdx) {
-          if (aIdx === -1) return 1;
-          if (bIdx === -1) return -1;
-          return aIdx - bIdx;
-        }
-        return a.name.localeCompare(b.name);
-      });
-
-      const list = sorted.slice(0, 10).map((model) => ({
-        name: `/model ${model.id}`,
-        description: model.provider,
-      }));
-      const hint = 'Need another provider? Use /model to open the menu.';
-      return { list, hint };
-    }
-
-    const parts = needle.split(' ');
-    if (parts.length === 1) {
-      return { list: SLASH_COMMANDS.filter((cmd) => cmd.name.startsWith(needle)), hint: null };
-    }
-    
-    if (parts[0] === '/config' && parts.length === 2) {
-      const subcommandNeedle = parts[1];
-      const list = CONFIG_SUBCOMMANDS.filter((cmd) => cmd.name.startsWith(subcommandNeedle))
-        .map((cmd) => ({ name: `/config ${cmd.name}`, description: cmd.description }));
-      return { list, hint: null };
-    }
-    
-    return { list: [], hint: null };
-  }, [inputValue, activeProfile?.preferred_provider, availableModels, modelMenuState.models]);
-
-  const suggestions = suggestionData.list;
-  const suggestionHint = suggestionData.hint;
-
-  useEffect(() => {
-    setSelectedSuggestion(0);
-  }, [suggestions.length]);
+  const { suggestions, suggestionHint } = useSuggestions({
+    inputValue,
+    activeProfile,
+    availableModels,
+    menuModels: modelMenuState.models,
+    recentModelsRef,
+    setSelectedSuggestion,
+  });
 
   const openStatusStyleMenu = useCallback(async () => {
     if (!configService) {
@@ -1149,6 +1021,21 @@ export const Layout = () => {
       return [];
     }
   }, [addMessage]);
+
+  useMountInit({
+    projectRoot,
+    setConfig,
+    setActiveProfile,
+    setAvailableModels,
+    setStatusStyle,
+    refreshStatusStyles,
+    refreshMcpServers,
+    initializeHistory,
+    configServiceRef,
+    toolServiceRef,
+    modelServiceRef,
+    mcpManagerRef,
+  });
 
   const openAddMcpWizard = useCallback(() => {
     setConfigWizard({
