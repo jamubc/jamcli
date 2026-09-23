@@ -57,7 +57,7 @@ test('a custom endpoint is resolved by id and served in its declared dialect', a
 
   const provider = createChatProvider('team-anthropic', registry);
   expect(provider).toBeInstanceOf(AnthropicProvider);
-  await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], {});
+  await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], { model: 'm' });
   expect(captured.url).toBe('https://team-proxy.test/v1/messages');
   expect(captured.headers['x-api-key']).toBe('custom-secret');
 });
@@ -74,7 +74,7 @@ test('an ollama base ending in /v1 is served by the compatible client', async ()
 
   expect(viaCompat).toBeInstanceOf(OpenAICompatProvider);
   expect(native).toBeInstanceOf(OllamaProvider);
-  await viaCompat.complete([{ role: 'user', content: 'hi', timestamp: 0 }], {});
+  await viaCompat.complete([{ role: 'user', content: 'hi', timestamp: 0 }], { model: 'm' });
   expect(url).toBe('http://localhost:11434/v1/chat/completions');
 });
 

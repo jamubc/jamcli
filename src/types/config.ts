@@ -1,7 +1,8 @@
 import type { McpServerConfig } from './mcp.js';
 
 export interface ApiRegistry {
-  ollama?: { endpoint?: string; base_url?: string };
+  /** `num_ctx` sets the context window Ollama allocates for every request. */
+  ollama?: { endpoint?: string; base_url?: string; num_ctx?: number };
   openai?: { api_key?: string; key_env_var?: string; base_url?: string };
   anthropic?: { api_key?: string; key_env_var?: string; base_url?: string };
   openrouter?: {

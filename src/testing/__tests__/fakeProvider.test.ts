@@ -121,7 +121,13 @@ test('ollama: streams text across chunks', async () => {
   expect(chunks.find((chunk) => chunk.done)?.usage?.total_tokens).toBe(5);
 });
 
-test.todo('ollama: streams tool calls that arrive before the final chunk (fixed by task 2.8)', () => {});
+test('ollama: streams tool calls that arrive before the final chunk', async () => {
+  server = startFakeProvider();
+  server.enqueue({ text: 'On it.', toolCalls: [readCall] });
+  const provider = new OllamaProvider({ endpoint: server.ollamaBaseUrl });
+  const chunks = await drain(provider.streamChat([user('read it')], { model: 'fake-model' }));
+  expect(chunks.find((chunk) => chunk.done)?.toolCalls?.[0].function.name).toBe('read_file');
+});
 
 test('scripted failures carry their status, body, and headers', async () => {
   server = startFakeProvider();
@@ -137,8 +143,11 @@ test('scripted failures carry their status, body, and headers', async () => {
 
 test('an exhausted script answers with a 500 that names the problem', async () => {
   server = startFakeProvider();
-  const provider = new OpenAICompatProvider({ baseUrl: server.openaiBaseUrl });
-  await expect(provider.complete([user('hi')], { model: 'm' })).rejects.toThrow('status 500');
+  const provider = new OpenAICompatProvider({
+    baseUrl: server.openaiBaseUrl,
+    retryPolicy: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
+  });
+  await expect(provider.complete([user('hi')], { model: 'm' })).rejects.toThrow('returned 500: fake provider: no scripted turn left');
 });
 
 test('a stream can be cut short without a terminal event', async () => {

@@ -67,9 +67,9 @@ const unconfigured = (name: string): Error => {
 const buildOllama = (config: ApiRegistry['ollama']): ChatProvider => {
   const endpoint = (config?.base_url || config?.endpoint || 'http://localhost:11434').replace(/\/+$/, '');
   if (/\/v1$/.test(endpoint)) {
-    return new OpenAICompatProvider({ baseUrl: endpoint, dialect: 'openai' });
+    return new OpenAICompatProvider({ baseUrl: endpoint, dialect: 'openai', name: 'ollama' });
   }
-  return new OllamaProvider({ endpoint });
+  return new OllamaProvider({ endpoint, numCtx: config?.num_ctx });
 };
 
 const buildOpenRouter = (config: ApiRegistry['openrouter']): ChatProvider => {
@@ -84,6 +84,8 @@ const buildOpenRouter = (config: ApiRegistry['openrouter']): ChatProvider => {
     },
     dialect: 'openai',
     reasoningParam: 'include_reasoning',
+    name: 'openrouter',
+    keyVariable: config?.key_env_var || FALLBACK_ENV.openrouter,
   });
 };
 
@@ -94,6 +96,8 @@ const buildOpenAI = (config: ApiRegistry['openai']): ChatProvider => {
     apiKey,
     baseUrl: config?.base_url?.trim() || 'https://api.openai.com/v1',
     dialect: 'openai',
+    name: 'openai',
+    keyVariable: config?.key_env_var || FALLBACK_ENV.openai,
   });
 };
 
@@ -103,6 +107,8 @@ const buildAnthropic = (config: ApiRegistry['anthropic']): ChatProvider => {
   return new AnthropicProvider({
     apiKey,
     baseUrl: config?.base_url?.trim() || 'https://api.anthropic.com',
+    name: 'anthropic',
+    keyVariable: config?.key_env_var || FALLBACK_ENV.anthropic,
   });
 };
 
@@ -117,6 +123,8 @@ const buildEndpoint = (endpoint: EndpointConfig): ChatProvider => {
       apiKey,
       baseUrl: endpoint.base_url.trim(),
       headers: endpoint.headers,
+      name: endpoint.id,
+      keyVariable: endpoint.key_env_var,
     });
   }
   return new OpenAICompatProvider({
@@ -124,6 +132,8 @@ const buildEndpoint = (endpoint: EndpointConfig): ChatProvider => {
     baseUrl: endpoint.base_url.trim(),
     headers: endpoint.headers,
     dialect: 'openai',
+    name: endpoint.id,
+    keyVariable: endpoint.key_env_var,
   });
 };
 

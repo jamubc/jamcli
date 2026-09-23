@@ -1,4 +1,5 @@
-import type { ChatMessage, ProviderToolCall, TokenUsage } from '../types.js';
+import type { ChatMessage, ProviderToolCall, ReasoningBlock, TokenUsage } from '../types.js';
+import type { RetryInfo } from './http.js';
 
 export interface StreamChunk {
   content: string;
@@ -10,6 +11,10 @@ export interface StreamChunk {
    * (done) chunk. Optional so every existing consumer keeps working.
    */
   toolCalls?: ProviderToolCall[];
+  /** Reasoning with signatures, surfaced on the terminal chunk when the provider returns it. */
+  reasoningBlocks?: ReasoningBlock[];
+  /** Why generation stopped, in the provider's words (`end_turn`, `tool_calls`, `length`). */
+  stopReason?: string;
 }
 
 export interface ToolDefinition {
@@ -27,6 +32,8 @@ export interface CompletionResult {
   toolCalls?: ProviderToolCall[];
   /** Reasoning text returned by a non-streaming completion, when present. */
   reasoning?: string;
+  reasoningBlocks?: ReasoningBlock[];
+  stopReason?: string;
 }
 
 export interface ProviderRequestOptions {
@@ -38,9 +45,20 @@ export interface ProviderRequestOptions {
   toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
   /** Extra body fields merged into the request just before the known fields. */
   extraParams?: Record<string, unknown>;
+  /** Called before each retry of a failed request. */
+  onRetry?: (info: RetryInfo) => void;
+  /** Most tokens the model may generate. */
+  maxOutputTokens?: number;
+  /** Context window to request, for providers that size it per request (Ollama). */
+  contextLength?: number;
 }
 
+/** The wire family a provider speaks. Signed reasoning is replayed only within a family. */
+export type ProviderFamily = 'openai' | 'anthropic' | 'ollama';
+
 export interface ChatProvider {
+  /** The family this provider speaks, used to decide what reasoning may be replayed to it. */
+  readonly family?: ProviderFamily;
   streamChat(messages: ChatMessage[], options: ProviderRequestOptions): AsyncGenerator<StreamChunk>;
   complete(messages: ChatMessage[], options: ProviderRequestOptions): Promise<CompletionResult>;
 }
@@ -59,3 +77,11 @@ export interface ListableProvider {
 
 export const isListableProvider = (provider: ChatProvider): provider is ChatProvider & ListableProvider =>
   typeof (provider as { listModels?: unknown }).listModels === 'function';
+
+/** Refuse a request with no model instead of silently choosing one. */
+export const requireModel = (provider: string, model: string | undefined): string => {
+  if (model && model.trim()) return model;
+  throw new Error(
+    `No model is configured for ${provider}. Choose one with /model, pass --model ${provider}:<model>, or set preferred_model in the active profile.`
+  );
+};

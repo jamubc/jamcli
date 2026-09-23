@@ -80,13 +80,25 @@ Line references describe the tree when the change opened.
     - `git_log` is added.
     - The interim Ink tool path now offers every read-class tool rather than the legacy three names.
     - 6 patch, 5 read, and 2 tool-set tests pass. Mutation probes: writing while planning breaks the all-or-nothing test, and advertising an alias breaks the tool-set test.
-- [ ] 2.8 Provider hardening (F13, F14, F15, F19). Files: `src/core/providers/*.ts`, tests against the fake server.
+- [x] 2.8 Provider hardening (F13, F14, F15, F19). Files: `src/core/providers/*.ts`, tests against the fake server.
   - Add `withRetry`, and `ProviderError` with body text and hints.
   - Add `stream_options.include_usage`.
   - Set Ollama `num_ctx` from configuration or the model's reported context length.
   - Replay reasoning only to the producing family.
   - Remove hardcoded model defaults.
   - Verify: a scripted 429 with `Retry-After: 1` retries once and succeeds; a 400 body appears in the error message; switching from an OpenRouter reasoning model to Anthropic sends no `thinking` block.
+  - **Verification**: `src/core/providers/http.ts` holds retries and `ProviderError`.
+    - Retries honor `Retry-After` and `retry-after-ms`, and each one reports a `retry` callback.
+    - A `ProviderError` carries the provider's own message with keys scrubbed and a hint: `ollama serve`, the key variable, `/compact`, or `/model`.
+    - Streams request usage and fall back once when an endpoint rejects `stream_options`.
+    - Ollama sends `num_ctx` on every request: the configured value, the model's reported limit capped at 16,384, or 8,192.
+    - Ollama streams keep tool calls from any chunk, a defect the fake server exposed in 1.2.
+    - Anthropic replays only its own signed thinking and redacted thinking, and reports cache reads and writes in usage.
+    - No provider picks a model silently.
+    - Every provider takes a retry policy.
+    - 12 hardening tests pass.
+    - Mutation probes: replaying across families, dropping `num_ctx`, reading tool calls only from the final chunk, and not retrying 429 each turn a test red.
+    - F14, F15, and F19 are live. F13, ACP choosing its own provider, is fixed by 2.13.
 - [ ] 2.9 Build the turn engine (D3; F7, F8, F9). Files: `src/core/agent.ts`, `src/core/tools/dispatch.ts`, `src/types/config.ts` (new loop defaults), tests.
   - Streams every step, with the system prompt first.
   - One assistant message holds the text, reasoning, and all calls.

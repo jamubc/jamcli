@@ -1,12 +1,15 @@
-import type { ChatMessage, ProviderToolCall, TokenUsage } from '../types.js';
+import type { ChatMessage, ProviderToolCall, ReasoningBlock, TokenUsage } from '../types.js';
 import type {
   ChatProvider,
   CompletionResult,
   ListableProvider,
+  ProviderFamily,
   ProviderModelInfo,
   ProviderRequestOptions,
   StreamChunk,
 } from './types.js';
+import { requireModel } from './types.js';
+import { ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
 import { readLines } from './openai-compat.js';
 
 export interface AnthropicProviderOptions {
@@ -15,11 +18,16 @@ export interface AnthropicProviderOptions {
   headers?: Record<string, string>;
   maxTokens?: number;
   version?: string;
+  /** Provider id used in errors, such as `anthropic` or a custom endpoint id. */
+  name?: string;
+  keyVariable?: string;
+  /** How failed requests are retried. */
+  retryPolicy?: RetryPolicy;
 }
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com';
-const DEFAULT_MODEL = 'claude-3-5-sonnet-latest';
-const DEFAULT_MAX_TOKENS = 4096;
+/** Used when neither the request nor the model catalog says how much the model may write. */
+const DEFAULT_MAX_TOKENS = 8192;
 const DEFAULT_VERSION = '2023-06-01';
 
 interface AnthropicContentBlock {
@@ -28,17 +36,39 @@ interface AnthropicContentBlock {
 }
 
 /**
+ * Reasoning is replayed only when it came from this family and carries what the API
+ * needs to accept it: a signature for thinking, or the opaque payload for redacted
+ * thinking. Anything else stays in the transcript and is left out of the request.
+ */
+const replayableReasoning = (message: ChatMessage): AnthropicContentBlock[] => {
+  if (message.providerFamily !== 'anthropic' || !message.reasoningBlocks?.length) return [];
+  const blocks: AnthropicContentBlock[] = [];
+  for (const block of message.reasoningBlocks) {
+    if (block.type === 'thinking' && block.signature) {
+      blocks.push({ type: 'thinking', thinking: block.text, signature: block.signature });
+    } else if (block.type === 'redacted' && block.data) {
+      blocks.push({ type: 'redacted_thinking', data: block.data });
+    }
+  }
+  return blocks;
+};
+
+/**
  * The Anthropic Messages translation seam. This is the only module that sets
  * the `x-api-key` and `anthropic-version` headers. Requests and streaming
- * responses are translated at this boundary; tool calls and reasoning
- * (thinking) blocks survive in both directions.
+ * responses are translated at this boundary; tool calls and signed reasoning
+ * survive in both directions.
  */
 export class AnthropicProvider implements ChatProvider, ListableProvider {
+  readonly family: ProviderFamily = 'anthropic';
   private readonly apiKey?: string;
   private readonly baseUrl: string;
   private readonly extraHeaders: Record<string, string>;
   private readonly maxTokens: number;
   private readonly version: string;
+  private readonly name: string;
+  private readonly keyVariable?: string;
+  private readonly retryPolicy?: RetryPolicy;
 
   constructor(options: AnthropicProviderOptions = {}) {
     this.apiKey = options.apiKey;
@@ -46,6 +76,9 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     this.extraHeaders = { ...(options.headers || {}) };
     this.maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
     this.version = options.version || DEFAULT_VERSION;
+    this.name = options.name || 'anthropic';
+    this.keyVariable = options.keyVariable;
+    this.retryPolicy = options.retryPolicy;
   }
 
   private url(path: string): string {
@@ -62,6 +95,17 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     };
     if (this.apiKey) headers['x-api-key'] = this.apiKey;
     return headers;
+  }
+
+  private send(path: string, init: RequestInit, options: ProviderRequestOptions): Promise<Response> {
+    return fetchWithRetry(this.url(path), init, {
+      provider: this.name,
+      signal: options.signal,
+      onRetry: options.onRetry,
+      secrets: [this.apiKey],
+      keyVariable: this.keyVariable,
+      policy: this.retryPolicy,
+    });
   }
 
   private buildBody(
@@ -97,10 +141,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
         continue;
       }
       if (message.role === 'assistant') {
-        const blocks: AnthropicContentBlock[] = [];
-        if (message.reasoning) {
-          blocks.push({ type: 'thinking', thinking: message.reasoning });
-        }
+        const blocks: AnthropicContentBlock[] = [...replayableReasoning(message)];
         if (message.content) {
           blocks.push({ type: 'text', text: message.content });
         }
@@ -119,8 +160,8 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     }
 
     const body: Record<string, unknown> = {
-      model: options.model || DEFAULT_MODEL,
-      max_tokens: this.maxTokens,
+      model: requireModel(this.name, options.model),
+      max_tokens: options.maxOutputTokens ?? this.maxTokens,
       messages: translated,
       stream,
       ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
@@ -139,12 +180,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    const response = await globalThis.fetch(this.url('/models'), {
-      headers: this.buildHeaders({ Accept: 'application/json' }),
-    });
-    if (!response.ok) {
-      throw new Error(`models route responded with status ${response.status}`);
-    }
+    const response = await this.send('/models', { headers: this.buildHeaders({ Accept: 'application/json' }) }, {});
     const json: any = await response.json();
     const data: any[] = Array.isArray(json?.data) ? json.data : [];
     return data
@@ -164,24 +200,33 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): AsyncGenerator<StreamChunk> {
-    const response = await globalThis.fetch(this.url('/messages'), {
-      method: 'POST',
-      headers: this.buildHeaders({ Accept: 'text/event-stream' }),
-      signal: options.signal,
-      body: JSON.stringify(this.buildBody(messages, options, true)),
-    });
-
-    if (!response.ok) {
-      throw new Error(`anthropic messages responded with status ${response.status}`);
-    }
+    const response = await this.send(
+      '/messages',
+      {
+        method: 'POST',
+        headers: this.buildHeaders({ Accept: 'text/event-stream' }),
+        body: JSON.stringify(this.buildBody(messages, options, true)),
+      },
+      options
+    );
     if (!response.body) {
-      throw new Error('Response body is not readable');
+      throw new ProviderError({ provider: this.name, detail: 'the response had no body' });
     }
 
     let usage: TokenUsage | undefined;
-    let inputTokens = 0;
+    let startUsage: any = {};
+    let stopReason: string | undefined;
     let sawStop = false;
-    const blocks = new Map<number, { type: string; id?: string; name?: string; json: string }>();
+    const blocks = new Map<number, { type: string; id?: string; name?: string; json: string; text: string; signature?: string; data?: string }>();
+
+    const finish = (): StreamChunk => ({
+      content: '',
+      done: true,
+      usage,
+      toolCalls: finalizeBlocks(blocks),
+      reasoningBlocks: reasoningFrom(blocks),
+      stopReason,
+    });
 
     for await (const line of readLines(response.body)) {
       if (!line.startsWith('data:')) continue;
@@ -196,7 +241,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
 
       switch (event?.type) {
         case 'message_start': {
-          inputTokens = event?.message?.usage?.input_tokens || 0;
+          startUsage = event?.message?.usage ?? {};
           break;
         }
         case 'content_block_start': {
@@ -207,18 +252,23 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
             id: block.id,
             name: block.name,
             json: '',
+            text: typeof block.thinking === 'string' ? block.thinking : '',
+            data: typeof block.data === 'string' ? block.data : undefined,
           });
           break;
         }
         case 'content_block_delta': {
           const index = typeof event.index === 'number' ? event.index : 0;
           const delta = event?.delta || {};
+          const entry = blocks.get(index);
           if (delta.type === 'text_delta' && delta.text) {
             yield { content: delta.text, done: false };
           } else if (delta.type === 'thinking_delta' && delta.thinking) {
+            if (entry) entry.text += delta.thinking;
             yield { content: '', reasoning: delta.thinking, done: false };
+          } else if (delta.type === 'signature_delta' && typeof delta.signature === 'string') {
+            if (entry) entry.signature = (entry.signature ?? '') + delta.signature;
           } else if (delta.type === 'input_json_delta') {
-            const entry = blocks.get(index);
             if (entry && typeof delta.partial_json === 'string') {
               entry.json += delta.partial_json;
             }
@@ -226,23 +276,23 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
           break;
         }
         case 'message_delta': {
-          const output = event?.usage?.output_tokens || 0;
-          if (inputTokens || output) {
-            usage = {
-              prompt_tokens: inputTokens,
-              completion_tokens: output,
-              total_tokens: inputTokens + output,
-            };
-          }
+          if (event?.delta?.stop_reason) stopReason = event.delta.stop_reason;
+          usage = mapUsage({ ...startUsage, ...(event?.usage ?? {}) });
           break;
         }
         case 'message_stop': {
           sawStop = true;
-          yield { content: '', done: true, usage, toolCalls: finalizeBlocks(blocks) };
+          yield finish();
           break;
         }
         case 'error': {
-          throw new Error(event?.error?.message || 'anthropic stream returned an error');
+          const detail = event?.error?.message || 'the stream reported an error';
+          throw new ProviderError({
+            provider: this.name,
+            detail,
+            retryable: event?.error?.type === 'overloaded_error',
+            message: `${this.name} reported an error mid-stream: ${detail}`,
+          });
         }
         default:
           break;
@@ -250,7 +300,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     }
 
     if (!sawStop) {
-      yield { content: '', done: true, usage, toolCalls: finalizeBlocks(blocks) };
+      yield finish();
     }
   }
 
@@ -258,26 +308,29 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): Promise<CompletionResult> {
-    const response = await globalThis.fetch(this.url('/messages'), {
-      method: 'POST',
-      headers: this.buildHeaders(),
-      signal: options.signal,
-      body: JSON.stringify(this.buildBody(messages, options, false)),
-    });
-
-    if (!response.ok) {
-      throw new Error(`anthropic messages responded with status ${response.status}`);
-    }
+    const response = await this.send(
+      '/messages',
+      {
+        method: 'POST',
+        headers: this.buildHeaders(),
+        body: JSON.stringify(this.buildBody(messages, options, false)),
+      },
+      options
+    );
 
     const json: any = await response.json();
     let content = '';
     let reasoning = '';
+    const reasoningBlocks: ReasoningBlock[] = [];
     const toolCalls: ProviderToolCall[] = [];
     for (const block of json?.content || []) {
       if (block?.type === 'text' && typeof block.text === 'string') {
         content += block.text;
-      } else if ((block?.type === 'thinking' || block?.type === 'redacted_thinking') && block.thinking) {
+      } else if (block?.type === 'thinking' && typeof block.thinking === 'string') {
         reasoning += block.thinking;
+        reasoningBlocks.push({ type: 'thinking', text: block.thinking, ...(block.signature ? { signature: block.signature } : {}) });
+      } else if (block?.type === 'redacted_thinking' && typeof block.data === 'string') {
+        reasoningBlocks.push({ type: 'redacted', data: block.data });
       } else if (block?.type === 'tool_use') {
         toolCalls.push({
           id: block.id,
@@ -290,20 +343,32 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     return {
       content,
       ...(reasoning ? { reasoning } : {}),
+      ...(reasoningBlocks.length ? { reasoningBlocks } : {}),
       usage: mapUsage(json?.usage),
       toolCalls: toolCalls.length ? toolCalls : undefined,
+      ...(json?.stop_reason ? { stopReason: json.stop_reason } : {}),
     };
   }
 }
 
+/**
+ * Anthropic reports uncached input, cache reads, and cache writes separately. The prompt
+ * total is their sum; the cache parts are kept so cost can price them correctly.
+ */
 function mapUsage(usage: any): TokenUsage | undefined {
   if (!usage) return undefined;
-  const prompt = usage.input_tokens || 0;
+  const input = usage.input_tokens || 0;
+  const cacheRead = usage.cache_read_input_tokens || 0;
+  const cacheWrite = usage.cache_creation_input_tokens || 0;
   const completion = usage.output_tokens || 0;
+  if (!input && !cacheRead && !cacheWrite && !completion) return undefined;
+  const prompt = input + cacheRead + cacheWrite;
   return {
     prompt_tokens: prompt,
     completion_tokens: completion,
     total_tokens: prompt + completion,
+    ...(cacheRead ? { cached_tokens: cacheRead } : {}),
+    ...(cacheWrite ? { cache_write_tokens: cacheWrite } : {}),
   };
 }
 
@@ -317,9 +382,18 @@ function mapToolChoice(
   return { type: 'auto' };
 }
 
-function finalizeBlocks(
-  blocks: Map<number, { type: string; id?: string; name?: string; json: string }>
-): ProviderToolCall[] | undefined {
+type StreamBlock = { type: string; id?: string; name?: string; json: string; text: string; signature?: string; data?: string };
+
+function reasoningFrom(blocks: Map<number, StreamBlock>): ReasoningBlock[] | undefined {
+  const out: ReasoningBlock[] = [];
+  for (const [, block] of [...blocks.entries()].sort((a, b) => a[0] - b[0])) {
+    if (block.type === 'thinking') out.push({ type: 'thinking', text: block.text, ...(block.signature ? { signature: block.signature } : {}) });
+    else if (block.type === 'redacted_thinking' && block.data) out.push({ type: 'redacted', data: block.data });
+  }
+  return out.length ? out : undefined;
+}
+
+function finalizeBlocks(blocks: Map<number, StreamBlock>): ProviderToolCall[] | undefined {
   const calls: ProviderToolCall[] = [];
   for (const [, block] of [...blocks.entries()].sort((a, b) => a[0] - b[0])) {
     if (block.type !== 'tool_use' || !block.name) continue;

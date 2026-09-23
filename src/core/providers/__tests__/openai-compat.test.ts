@@ -21,7 +21,7 @@ const streamResponse = (chunks: string[]): Response => {
 const jsonResponse = (payload: unknown): Response =>
   new Response(JSON.stringify(payload), { status: 200 });
 
-const collect = async (provider: OpenAICompatProvider, messages: any[], options: any = {}) => {
+const collect = async (provider: OpenAICompatProvider, messages: any[], options: any = { model: 'm' }) => {
   const events: any[] = [];
   for await (const chunk of provider.streamChat(messages, options)) events.push(chunk);
   return events;
@@ -153,7 +153,7 @@ test('the compatible client never sets Anthropic-only headers', async () => {
   }) as unknown as typeof fetch;
 
   const provider = new OpenAICompatProvider({ apiKey: 'sk-test', baseUrl: 'https://example.test/v1' });
-  await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], {});
+  await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], { model: 'm' });
 
   expect(headers['x-api-key']).toBeUndefined();
   expect(headers['anthropic-version']).toBeUndefined();

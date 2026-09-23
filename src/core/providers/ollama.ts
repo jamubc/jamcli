@@ -1,43 +1,74 @@
-import type { ChatMessage, TokenUsage } from '../types.js';
+import type { ChatMessage, ProviderToolCall, TokenUsage } from '../types.js';
 import type {
   ChatProvider,
   CompletionResult,
   ListableProvider,
+  ProviderFamily,
   ProviderModelInfo,
   ProviderRequestOptions,
   StreamChunk,
 } from './types.js';
+import { requireModel } from './types.js';
+import { ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
 import { extractReasoningDelta, parseToolCalls, readLines } from './openai-compat.js';
 
 export interface OllamaProviderOptions {
   endpoint: string;
+  /** Context window to request. Without it, the model's own limit is used, capped. */
+  numCtx?: number;
+  /** How failed requests are retried. Defaults to one quick retry. */
+  retryPolicy?: RetryPolicy;
 }
 
 const DEFAULT_ENDPOINT = 'http://localhost:11434';
-const DEFAULT_MODEL = 'llama3';
+/**
+ * Ollama allocates the whole context window up front, so asking for a model's full
+ * limit can exhaust memory. Without configuration, the request asks for the model's
+ * limit capped here, which fits a coding session on common hardware.
+ */
+export const DEFAULT_OLLAMA_CONTEXT_CAP = 16_384;
+const FALLBACK_CONTEXT = 8_192;
+
+/** A local server that refuses connections is rarely transient, so retry once, quickly. */
+const LOCAL_RETRY_POLICY: RetryPolicy = { maxAttempts: 2, baseDelayMs: 300, maxDelayMs: 2_000 };
 
 /**
- * The local-first path. Ollama exposes a native ndjson chat route that works
+ * The local-first path. Ollama exposes a native NDJSON chat route that works
  * without a network account; this client keeps that path intact. A base URL
  * that ends in `/v1` is served by the OpenAI-compatible client instead.
+ *
+ * Every request carries `num_ctx`: Ollama otherwise uses a small default and
+ * truncates the front of a longer conversation without saying so.
  */
 export class OllamaProvider implements ChatProvider, ListableProvider {
+  readonly family: ProviderFamily = 'ollama';
   private readonly endpoint: string;
+  private readonly numCtx?: number;
+  private readonly retryPolicy: RetryPolicy;
+  private readonly contextCache = new Map<string, number>();
 
   constructor(options: OllamaProviderOptions | string = DEFAULT_ENDPOINT) {
     const endpoint = typeof options === 'string' ? options : options.endpoint;
     this.endpoint = (endpoint || DEFAULT_ENDPOINT).replace(/\/+$/, '');
+    this.numCtx = typeof options === 'string' ? undefined : options.numCtx;
+    this.retryPolicy = (typeof options === 'string' ? undefined : options.retryPolicy) ?? LOCAL_RETRY_POLICY;
   }
 
   private url(path: string): string {
     return `${this.endpoint}${path}`;
   }
 
+  private send(path: string, init: RequestInit, options: ProviderRequestOptions): Promise<Response> {
+    return fetchWithRetry(this.url(path), init, {
+      provider: 'ollama',
+      signal: options.signal,
+      onRetry: options.onRetry,
+      policy: this.retryPolicy,
+    });
+  }
+
   async listModels(): Promise<ProviderModelInfo[]> {
-    const response = await globalThis.fetch(this.url('/api/tags'));
-    if (!response.ok) {
-      throw new Error(`ollama tags responded with status ${response.status}`);
-    }
+    const response = await this.send('/api/tags', {}, {});
     const data: any = await response.json();
     const models: any[] = Array.isArray(data?.models) ? data.models : [];
     return models
@@ -48,34 +79,71 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       .filter((model): model is ProviderModelInfo => model !== null);
   }
 
+  /** The model's reported context length from `/api/show`, or undefined when unknown. */
+  async modelContextLength(model: string): Promise<number | undefined> {
+    try {
+      const response = await globalThis.fetch(this.url('/api/show'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
+      });
+      if (!response.ok) return undefined;
+      const json: any = await response.json();
+      for (const [key, value] of Object.entries(json?.model_info ?? {})) {
+        if (key.endsWith('.context_length') && typeof value === 'number' && value > 0) return value;
+      }
+    } catch {
+      // Unknown; the caller falls back.
+    }
+    return undefined;
+  }
+
+  /** The `num_ctx` to send: the request's, the configured one, or the model's limit capped. */
+  async contextFor(model: string, options: ProviderRequestOptions): Promise<number> {
+    if (options.contextLength) return options.contextLength;
+    if (this.numCtx) return this.numCtx;
+    const cached = this.contextCache.get(model);
+    if (cached) return cached;
+    const reported = await this.modelContextLength(model);
+    const chosen = reported ? Math.min(reported, DEFAULT_OLLAMA_CONTEXT_CAP) : FALLBACK_CONTEXT;
+    this.contextCache.set(model, chosen);
+    return chosen;
+  }
+
+  private async body(messages: ChatMessage[], options: ProviderRequestOptions, stream: boolean) {
+    const model = requireModel('ollama', options.model);
+    const wantReasoning = options.reasoning === 'on' || options.reasoning === 'auto';
+    const nativeOptions: Record<string, unknown> = { num_ctx: await this.contextFor(model, options) };
+    if (options.temperature !== undefined) nativeOptions.temperature = options.temperature;
+    if (options.maxOutputTokens) nativeOptions.num_predict = options.maxOutputTokens;
+    return JSON.stringify({
+      model,
+      messages: messages.map(toOllamaMessage),
+      stream,
+      ...(wantReasoning ? { think: true } : {}),
+      ...(options.tools?.length ? { tools: options.tools } : {}),
+      options: nativeOptions,
+      ...(options.extraParams || {}),
+    });
+  }
+
   async *streamChat(
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): AsyncGenerator<StreamChunk> {
-    const wantReasoning = options.reasoning === 'on' || options.reasoning === 'auto';
-    const response = await globalThis.fetch(this.url('/api/chat'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: options.signal,
-      body: JSON.stringify({
-        model: options.model || DEFAULT_MODEL,
-        messages: messages.map(toOllamaMessage),
-        stream: true,
-        think: wantReasoning || undefined,
-        options: buildNativeOptions(options),
-        ...(options.extraParams || {}),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`ollama chat responded with status ${response.status}: ${await readErrorBody(response)}`);
-    }
+    const response = await this.send(
+      '/api/chat',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: await this.body(messages, options, true) },
+      options
+    );
     if (!response.body) {
-      throw new Error('Response body is not readable');
+      throw new ProviderError({ provider: 'ollama', detail: 'the response had no body' });
     }
 
     let usage: TokenUsage | undefined;
+    let stopReason: string | undefined;
     let sawDone = false;
+    const toolCalls: ProviderToolCall[] = [];
 
     for await (const line of readLines(response.body)) {
       const trimmed = line.trim();
@@ -86,22 +154,29 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       } catch {
         continue;
       }
+      if (json?.error) {
+        throw new ProviderError({ provider: 'ollama', detail: String(json.error), message: `ollama reported an error: ${json.error}` });
+      }
       const message = json?.message || {};
       const content = typeof message.content === 'string' ? message.content : '';
       const reasoning = extractReasoningDelta(message);
       if (content || reasoning) {
         yield { content, reasoning, done: false };
       }
+      // Since Ollama 0.8, tool calls arrive in whichever chunk parses them, not only the last.
+      const calls = parseToolCalls(message);
+      if (calls) toolCalls.push(...calls);
       const chunkUsage = ollamaUsage(json);
       if (chunkUsage) usage = chunkUsage;
       if (json?.done) {
         sawDone = true;
-        yield { content: '', done: true, usage, toolCalls: parseToolCalls(message) };
+        stopReason = json?.done_reason;
+        yield { content: '', done: true, usage, toolCalls: toolCalls.length ? toolCalls : undefined, stopReason };
       }
     }
 
     if (!sawDone) {
-      yield { content: '', done: true, usage };
+      yield { content: '', done: true, usage, toolCalls: toolCalls.length ? toolCalls : undefined, stopReason };
     }
   }
 
@@ -109,24 +184,11 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): Promise<CompletionResult> {
-    const wantReasoning = options.reasoning === 'on' || options.reasoning === 'auto';
-    const response = await globalThis.fetch(this.url('/api/chat'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: options.signal,
-      body: JSON.stringify({
-        model: options.model || DEFAULT_MODEL,
-        messages: messages.map(toOllamaMessage),
-        stream: false,
-        think: wantReasoning || undefined,
-        options: buildNativeOptions(options),
-        ...(options.extraParams || {}),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`ollama chat responded with status ${response.status}: ${await readErrorBody(response)}`);
-    }
+    const response = await this.send(
+      '/api/chat',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: await this.body(messages, options, false) },
+      options
+    );
 
     const json: any = await response.json();
     const message = json?.message || {};
@@ -136,13 +198,9 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       usage: ollamaUsage(json),
       toolCalls: parseToolCalls(message),
       ...(reasoning ? { reasoning } : {}),
+      ...(json?.done_reason ? { stopReason: json.done_reason } : {}),
     };
   }
-}
-
-function buildNativeOptions(options: ProviderRequestOptions): Record<string, unknown> {
-  if (options.temperature === undefined) return {};
-  return { temperature: options.temperature };
 }
 
 function ollamaUsage(json: any): TokenUsage | undefined {
@@ -159,8 +217,8 @@ function ollamaUsage(json: any): TokenUsage | undefined {
 function toOllamaMessage(message: ChatMessage): Record<string, unknown> {
   const out: Record<string, unknown> = { role: message.role, content: message.content ?? '' };
   if (message.tool_calls?.length) {
-    // Ollama's native shape carries neither the wire id nor the call type.
     out.tool_calls = message.tool_calls.map((call) => ({
+      ...(call.id ? { id: call.id } : {}),
       function: {
         name: call.function?.name,
         arguments: normalizeArguments(call.function?.arguments),
@@ -184,13 +242,4 @@ function normalizeArguments(value: unknown): Record<string, unknown> {
     }
   }
   return { value };
-}
-
-async function readErrorBody(response: Response): Promise<string> {
-  try {
-    const text = await response.text();
-    return text.slice(0, 400) || 'no response body';
-  } catch {
-    return 'unreadable response body';
-  }
 }

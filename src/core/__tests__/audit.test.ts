@@ -3,6 +3,10 @@ import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../tools/registry.js';
+import { startFakeProvider } from '../../testing/fakeProvider.js';
+import { AnthropicProvider } from '../providers/anthropic.js';
+import { OllamaProvider } from '../providers/ollama.js';
+import { OpenAICompatProvider } from '../providers/openai-compat.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -76,12 +80,52 @@ test('F12: grep finds a match past the 400th file and honors .gitignore (2.6)', 
     }
   }));
 test.todo('F13: ACP uses the configured provider (2.13)', pending);
-test.todo('F14: reasoning is not replayed to another provider family (2.8)', pending);
-test.todo('F15: a failed request reports the provider error body, and 429 retries (2.8)', pending);
+test('F14: reasoning is not replayed to another provider family (2.8)', async () => {
+  const server = startFakeProvider();
+  try {
+    server.enqueue({ text: 'ok' });
+    await new AnthropicProvider({ baseUrl: server.anthropicBaseUrl }).complete(
+      [
+        { role: 'user', content: 'a', timestamp: 0 },
+        { role: 'assistant', content: 'b', reasoning: 'unsigned', providerFamily: 'openai', timestamp: 0 },
+        { role: 'user', content: 'c', timestamp: 0 },
+      ],
+      { model: 'claude-x' }
+    );
+    expect(JSON.stringify(server.completions()[0].body)).not.toContain('thinking');
+  } finally {
+    server.close();
+  }
+});
+test('F15: a failed request reports the provider error body, and 429 retries (2.8)', async () => {
+  const server = startFakeProvider();
+  try {
+    const provider = new OpenAICompatProvider({ baseUrl: server.openaiBaseUrl, retryPolicy: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 5 } });
+    server.enqueue({ status: 429 }, { text: 'recovered' });
+    expect((await provider.complete([{ role: 'user', content: 'x', timestamp: 0 }], { model: 'm' })).content).toBe('recovered');
+    server.enqueue({ status: 400, errorBody: { error: { message: 'model does not exist' } } });
+    await expect(provider.complete([{ role: 'user', content: 'x', timestamp: 0 }], { model: 'm' })).rejects.toThrow(
+      'returned 400: model does not exist'
+    );
+  } finally {
+    server.close();
+  }
+});
 test.todo('F16: interface turns apply rules, hooks, and the trust gate (2.11, 6.4)', pending);
 test.todo('F17: resume restores tool calls and results (2.10)', pending);
 test.todo('F18: a created .jamcli directory ignores itself (5.1)', pending);
-test.todo('F19: Ollama requests carry num_ctx (2.8)', pending);
+test('F19: Ollama requests carry num_ctx (2.8)', async () => {
+  const server = startFakeProvider();
+  try {
+    server.enqueue({ text: 'ok' });
+    await new OllamaProvider({ endpoint: server.ollamaBaseUrl }).complete([{ role: 'user', content: 'x', timestamp: 0 }], {
+      model: 'fake-model',
+    });
+    expect(server.completions()[0].body.options.num_ctx).toBeGreaterThan(0);
+  } finally {
+    server.close();
+  }
+});
 test.todo('F20: compaction never separates a tool call from its result (4.3)', pending);
 test.todo('F21: tool output is escaped and bounded in the classifier prompt (2.11)', pending);
 

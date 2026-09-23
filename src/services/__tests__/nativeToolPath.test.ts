@@ -9,7 +9,9 @@ let bodies: any[] = [];
 
 const stubFetch = (script: unknown[]) => {
   bodies = [];
-  globalThis.fetch = (async (_url: any, init?: any) => {
+  globalThis.fetch = (async (url: any, init?: any) => {
+    // The Ollama client asks for the model's context length once; that is not a turn.
+    if (String(url).endsWith('/api/show')) return new Response('{}', { status: 404 });
     bodies.push(JSON.parse(init.body));
     const payload = script[Math.min(bodies.length - 1, script.length - 1)];
     return new Response(JSON.stringify(payload), { status: 200 });

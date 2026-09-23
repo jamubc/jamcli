@@ -3,10 +3,13 @@ import type {
   ChatProvider,
   CompletionResult,
   ListableProvider,
+  ProviderFamily,
   ProviderModelInfo,
   ProviderRequestOptions,
   StreamChunk,
 } from './types.js';
+import { requireModel } from './types.js';
+import { ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
 
 export type ProviderDialect = 'openai' | 'anthropic';
 
@@ -21,10 +24,15 @@ export interface OpenAICompatOptions {
    * stream reasoning deltas unconditionally, so this is opt-in configuration.
    */
   reasoningParam?: string;
+  /** Provider id used in errors, such as `openrouter` or a custom endpoint id. */
+  name?: string;
+  /** The environment variable the key comes from, named in authentication errors. */
+  keyVariable?: string;
+  /** How failed requests are retried. */
+  retryPolicy?: RetryPolicy;
 }
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
-const DEFAULT_MODEL = 'gpt-4o-mini';
 
 /**
  * One client for the OpenAI chat-completions wire format. Handles streaming and
@@ -32,11 +40,17 @@ const DEFAULT_MODEL = 'gpt-4o-mini';
  * usage. Ollama and OpenRouter are expressed as configurations of this client.
  */
 export class OpenAICompatProvider implements ChatProvider, ListableProvider {
+  readonly family: ProviderFamily = 'openai';
   private readonly apiKey?: string;
   private readonly baseUrl: string;
   private readonly extraHeaders: Record<string, string>;
   private readonly dialect: ProviderDialect;
   private readonly reasoningParam?: string;
+  private readonly name: string;
+  private readonly keyVariable?: string;
+  private readonly retryPolicy?: RetryPolicy;
+  /** Cleared when an endpoint rejects `stream_options`, so usage is not requested again. */
+  private streamUsage = true;
 
   constructor(options: OpenAICompatOptions = {}) {
     if (options.dialect === 'anthropic') {
@@ -47,6 +61,20 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     this.extraHeaders = { ...(options.headers || {}) };
     this.dialect = options.dialect || 'openai';
     this.reasoningParam = options.reasoningParam;
+    this.name = options.name || 'openai';
+    this.keyVariable = options.keyVariable;
+    this.retryPolicy = options.retryPolicy;
+  }
+
+  private send(path: string, init: RequestInit, options: ProviderRequestOptions): Promise<Response> {
+    return fetchWithRetry(this.url(path), init, {
+      provider: this.name,
+      signal: options.signal,
+      onRetry: options.onRetry,
+      secrets: [this.apiKey],
+      keyVariable: this.keyVariable,
+      policy: this.retryPolicy,
+    });
   }
 
   private url(path: string): string {
@@ -71,10 +99,12 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     stream: boolean
   ): Record<string, unknown> {
     const body: Record<string, unknown> = {
-      model: options.model || DEFAULT_MODEL,
+      model: requireModel(this.name, options.model),
       messages: messages.map(toProviderMessage),
       stream,
+      ...(stream && this.streamUsage ? { stream_options: { include_usage: true } } : {}),
       ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.maxOutputTokens ? { max_tokens: options.maxOutputTokens } : {}),
       ...(options.extraParams || {}),
     };
 
@@ -92,12 +122,7 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    const response = await globalThis.fetch(this.url('/models'), {
-      headers: this.buildHeaders({ Accept: 'application/json' }),
-    });
-    if (!response.ok) {
-      throw new Error(`models route responded with status ${response.status}`);
-    }
+    const response = await this.send('/models', { headers: this.buildHeaders({ Accept: 'application/json' }) }, {});
     const json: any = await response.json();
     const data: any[] = Array.isArray(json?.data)
       ? json.data
@@ -127,21 +152,13 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): AsyncGenerator<StreamChunk> {
-    const response = await globalThis.fetch(this.url('/chat/completions'), {
-      method: 'POST',
-      headers: this.buildHeaders({ Accept: 'text/event-stream' }),
-      signal: options.signal,
-      body: JSON.stringify(this.buildBody(messages, options, true)),
-    });
-
-    if (!response.ok) {
-      throw new Error(`chat completions responded with status ${response.status}`);
-    }
+    const response = await this.startStream(messages, options);
     if (!response.body) {
-      throw new Error('Response body is not readable');
+      throw new ProviderError({ provider: this.name, detail: 'the response had no body' });
     }
 
     let usage: TokenUsage | undefined;
+    let stopReason: string | undefined;
     let sawDone = false;
     const toolCalls = new Map<number, { id?: string; name?: string; args: string }>();
 
@@ -150,7 +167,7 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       const data = line.slice(5).trim();
       if (data === '[DONE]') {
         sawDone = true;
-        yield { content: '', done: true, usage, toolCalls: finalizeToolCalls(toolCalls) };
+        yield { content: '', done: true, usage, toolCalls: finalizeToolCalls(toolCalls), stopReason };
         continue;
       }
       let json: any;
@@ -159,7 +176,15 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       } catch {
         continue;
       }
+      if (json?.error) {
+        throw new ProviderError({
+          provider: this.name,
+          detail: String(json.error?.message ?? json.error),
+          message: `${this.name} reported an error mid-stream: ${String(json.error?.message ?? json.error)}`,
+        });
+      }
       const delta = json?.choices?.[0]?.delta;
+      if (json?.choices?.[0]?.finish_reason) stopReason = json.choices[0].finish_reason;
       const content = typeof delta?.content === 'string' ? delta.content : undefined;
       const reasoning = extractReasoningDelta(delta);
       if (content || reasoning) {
@@ -172,7 +197,30 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     }
 
     if (!sawDone) {
-      yield { content: '', done: true, usage, toolCalls: finalizeToolCalls(toolCalls) };
+      yield { content: '', done: true, usage, toolCalls: finalizeToolCalls(toolCalls), stopReason };
+    }
+  }
+
+  /** Open the stream, dropping `stream_options` once if the endpoint rejects it. */
+  private async startStream(messages: ChatMessage[], options: ProviderRequestOptions): Promise<Response> {
+    const request = () =>
+      this.send(
+        '/chat/completions',
+        {
+          method: 'POST',
+          headers: this.buildHeaders({ Accept: 'text/event-stream' }),
+          body: JSON.stringify(this.buildBody(messages, options, true)),
+        },
+        options
+      );
+    try {
+      return await request();
+    } catch (error) {
+      if (this.streamUsage && error instanceof ProviderError && error.status === 400 && /stream_options|include_usage/i.test(error.detail ?? '')) {
+        this.streamUsage = false;
+        return request();
+      }
+      throw error;
     }
   }
 
@@ -180,16 +228,15 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): Promise<CompletionResult> {
-    const response = await globalThis.fetch(this.url('/chat/completions'), {
-      method: 'POST',
-      headers: this.buildHeaders(),
-      signal: options.signal,
-      body: JSON.stringify(this.buildBody(messages, options, false)),
-    });
-
-    if (!response.ok) {
-      throw new Error(`chat completions responded with status ${response.status}`);
-    }
+    const response = await this.send(
+      '/chat/completions',
+      {
+        method: 'POST',
+        headers: this.buildHeaders(),
+        body: JSON.stringify(this.buildBody(messages, options, false)),
+      },
+      options
+    );
 
     const json: any = await response.json();
     const choice = json?.choices?.[0];
@@ -200,6 +247,7 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       usage: json?.usage ? mapUsage(json.usage) : undefined,
       toolCalls: parseToolCalls(message),
       ...(reasoning ? { reasoning } : {}),
+      ...(choice?.finish_reason ? { stopReason: choice.finish_reason } : {}),
     };
   }
 }
@@ -211,10 +259,12 @@ export function extractReasoningDelta(delta: any): string | undefined {
 function mapUsage(usage: any): TokenUsage {
   const prompt = usage.prompt_tokens || 0;
   const completion = usage.completion_tokens || 0;
+  const cached = usage.prompt_tokens_details?.cached_tokens;
   return {
     prompt_tokens: prompt,
     completion_tokens: completion,
     total_tokens: usage.total_tokens || prompt + completion,
+    ...(typeof cached === 'number' && cached > 0 ? { cached_tokens: cached } : {}),
   };
 }
 

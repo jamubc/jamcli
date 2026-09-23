@@ -91,7 +91,7 @@ test('translates thinking, text, and tool_use streaming events', async () => {
 
   const provider = new AnthropicProvider({ apiKey: 'sk-ant', baseUrl: 'https://api.anthropic.test' });
   const events: any[] = [];
-  for await (const chunk of provider.streamChat([{ role: 'user', content: 'hi', timestamp: 0 }], {})) {
+  for await (const chunk of provider.streamChat([{ role: 'user', content: 'hi', timestamp: 0 }], { model: 'claude-x' })) {
     events.push(chunk);
   }
 
@@ -119,7 +119,7 @@ test('preserves tool calls and thinking blocks in a non-streaming response', asy
     })) as unknown as typeof fetch;
 
   const provider = new AnthropicProvider({ apiKey: 'sk-ant', baseUrl: 'https://api.anthropic.test' });
-  const result = await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], {});
+  const result = await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], { model: 'claude-x' });
 
   expect(result.content).toBe('answer');
   expect(result.reasoning).toBe('why');
@@ -136,7 +136,7 @@ test('honors a base URL that already carries the version prefix', async () => {
   }) as unknown as typeof fetch;
 
   const provider = new AnthropicProvider({ apiKey: 'sk-ant', baseUrl: 'https://api.anthropic.test/v1' });
-  await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], {});
+  await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], { model: 'claude-x' });
 
   expect(url).toBe('https://api.anthropic.test/v1/messages');
 });
