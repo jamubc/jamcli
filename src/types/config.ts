@@ -1,9 +1,9 @@
 import type { McpServerConfig } from './mcp.js';
 
 export interface ApiRegistry {
-  ollama?: { endpoint?: string };
-  openai?: { api_key?: string; key_env_var?: string };
-  anthropic?: { api_key?: string; key_env_var?: string };
+  ollama?: { endpoint?: string; base_url?: string };
+  openai?: { api_key?: string; key_env_var?: string; base_url?: string };
+  anthropic?: { api_key?: string; key_env_var?: string; base_url?: string };
   openrouter?: {
     api_key?: string;
     key_env_var?: string;
@@ -11,7 +11,36 @@ export interface ApiRegistry {
     referer?: string;
     title?: string;
   };
+  endpoints?: EndpointConfig[];
 }
+
+export interface EndpointConfig {
+  id: string;
+  base_url: string;
+  dialect?: 'openai' | 'anthropic';
+  api_key?: string;
+  key_env_var?: string;
+  headers?: Record<string, string>;
+}
+
+export interface CategoryEntry {
+  model: string;
+  reasoning?: 'off' | 'on' | 'auto';
+}
+
+export type CategoryChain = CategoryEntry[];
+
+export interface DelegationConfig {
+  max_depth: number;
+  max_concurrent: number;
+  max_turns_per_child: number;
+}
+
+export const DEFAULT_DELEGATION_CONFIG: DelegationConfig = {
+  max_depth: 2,
+  max_concurrent: 3,
+  max_turns_per_child: 8,
+};
 
 export interface ModelInfo {
   id: string;
@@ -48,6 +77,8 @@ export interface Config {
   context_management?: ContextManagementConfig;
   agent_loop?: AgentLoopConfig;
   general?: GeneralConfig;
+  categories?: Record<string, CategoryChain>;
+  delegation?: DelegationConfig;
 }
 
 export type StatusTextStyleId = 'rainbow' | 'subtle' | 'minimal' | 'aurora' | 'mono' | `custom:${string}`;
