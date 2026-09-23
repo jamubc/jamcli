@@ -21,3 +21,10 @@ export {
   configureDelegationRuntime,
 } from './task.js';
 export type { DelegationRuntime } from './task.js';
+export {
+  ACP_TOOLS,
+  delegateToAcpRunner,
+  acpStatusRunner,
+  acpResultRunner,
+  acpCancelRunner,
+} from './acp.js';
