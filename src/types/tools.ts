@@ -86,12 +86,35 @@ export interface JsonSchema {
 export interface ToolRunPayload {
   output: string;
   metadata?: Record<string, unknown>;
+  /**
+   * How the work ended when it ran but did not succeed, such as a command that exited
+   * non-zero or timed out. Omitted means success.
+   */
+  status?: 'ok' | 'error' | 'timeout' | 'cancelled';
 }
+
+/** Rewrites a shell command to run inside a sandbox. Supplied by the runtime. */
+export type CommandWrapper = (
+  command: string,
+  options: { cwd: string; env: Record<string, string> }
+) => { file: string; args: string[] };
 
 export interface ToolContext {
   projectRoot: string;
   signal?: AbortSignal;
   ignorePatterns?: string[];
+  /** Streams partial output, such as a running command's output, to the surface. */
+  onProgress?: (chunk: string) => void;
+  /** Environment for processes a tool starts. Defaults to the caller's environment. */
+  env?: Record<string, string>;
+  /** Default command timeout in milliseconds. */
+  commandTimeoutMs?: number;
+  /** Characters of output kept before the middle is cut. */
+  maxOutputChars?: number;
+  /** Wraps commands in a sandbox when one is active. */
+  wrapCommand?: CommandWrapper;
+  /** Further directories tools may reach besides the project root. */
+  additionalRoots?: string[];
 }
 
 export type ToolRunner = (args: Record<string, any>, ctx: ToolContext) => Promise<ToolRunPayload>;
@@ -115,6 +138,7 @@ export interface RegistryToolResult {
   output: string;
   durationMs: number;
   metadata?: Record<string, unknown>;
+  status?: 'ok' | 'error' | 'timeout' | 'cancelled';
 }
 
 export interface ToolCall {

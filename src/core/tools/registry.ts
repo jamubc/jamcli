@@ -133,6 +133,7 @@ export class ToolRegistry {
       return {
         tool: name,
         success: false,
+        status: 'error',
         output: `Unknown tool: ${name}`,
         durationMs: Date.now() - started,
       };
@@ -143,6 +144,7 @@ export class ToolRegistry {
       return {
         tool: name,
         success: false,
+        status: 'error',
         output: `Invalid arguments for ${name}: ${validation.errors.join('; ')}`,
         durationMs: Date.now() - started,
       };
@@ -153,18 +155,22 @@ export class ToolRegistry {
 
     try {
       const payload = await tool.runner(normalizedArgs, ctx);
+      const status = payload.status ?? 'ok';
       return {
         tool: name,
-        success: true,
+        success: status === 'ok',
+        status,
         output: payload.output,
         metadata: payload.metadata,
         durationMs: Date.now() - started,
       };
     } catch (error: any) {
+      const cancelled = error?.name === 'AbortError' || ctx.signal?.aborted;
       return {
         tool: name,
         success: false,
-        output: `Tool ${name} failed: ${error?.message || error}`,
+        status: cancelled ? 'cancelled' : 'error',
+        output: cancelled ? `Tool ${name} was cancelled.` : `Tool ${name} failed: ${error?.message || error}`,
         durationMs: Date.now() - started,
       };
     }
