@@ -14,6 +14,7 @@ import { countOccurrences, resolveProjectPath } from './paths.js';
 import { READ_FILE_TOOL } from './read_file.js';
 import { WRITE_FILE_TOOL } from './write_file.js';
 import { TODO_TOOLS } from './todo.js';
+import { TASK_TOOLS } from './task.js';
 
 const DEFAULT_LIST_PATTERN = '**/*';
 const DEFAULT_CODE_PATTERN =
@@ -312,6 +313,7 @@ export const BUILTIN_TOOLS: RegisteredTool[] = [
   EDIT_TOOL,
   ...TODO_TOOLS,
   ...GIT_TOOLS,
+  ...TASK_TOOLS,
 ];
 
 export function registerBuiltinTools(registry: { register(tool: RegisteredTool): void }): void {
