@@ -81,7 +81,8 @@ the TUI booted and exercised after each. The TUI is the regression test for this
 
 ## Stage 4: Providers
 
-- [ ] 4.1 Build the compatible client. Files: `src/core/providers/openai-compat.ts`. One client handling streaming and non-streaming, content, reasoning deltas, tool calls, and usage. Reuse the parsing already in `src/services/LLMProvider.ts`.
+- [ ] 4.1 Build the compatible client.
+  - **Defect found while proving headless mode**: `OpenRouterProvider.streamChat` never checks `response.ok`. A rejected request returns an error body that contains no `data:` lines, so the SSE loop ends silently and the turn reports an empty success. The unified client must check the status, read the error body, and throw a descriptive error that names the status without echoing the key. Pinned by a test in 4.8. Files: `src/core/providers/openai-compat.ts`. One client handling streaming and non-streaming, content, reasoning deltas, tool calls, and usage. Reuse the parsing already in `src/services/LLMProvider.ts`.
 - [ ] 4.2 Migrate Ollama and OpenRouter onto it. Files: `src/core/providers/`, `src/services/LLMProvider.ts`. Delete the per-provider classes once their behavior is expressed as configuration.
 - [ ] 4.3 Add the Anthropic translation seam. Files: `src/core/providers/anthropic.ts`. Translate requests and streaming responses, preserving tool calls and reasoning blocks. Reference `design.md` for the study material and check its license before taking any code.
 - [ ] 4.4 Add endpoint configuration. Files: `src/types/config.ts`, `src/services/ConfigService.ts`. An endpoint declares an identifier, base URL, optional key, optional key environment variable, and optional headers.
