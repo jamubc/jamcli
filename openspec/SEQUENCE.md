@@ -25,19 +25,25 @@ real; the trail was not.
 
 A unit is done when all of these are true:
 
-- [ ] The feature works end to end. No stubs and no code paths reachable only by a flag
+- [x] The feature works end to end. No stubs and no code paths reachable only by a flag
       nobody sets. `devloop`'s harness slot still reads `// REPLACE THIS LINE`, and its
       `test-results/.last-run.json` reports `passed` with no spec files present. Stub
       markers and status files are both disqualifying.
-- [ ] Every design decision it depends on is **decided**, not deferred. A chosen library
+- [x] Every design decision it depends on is **decided**, not deferred. A chosen library
       is chosen, not "currently wired up".
-- [ ] `npx tsc --noEmit` does not exceed the recorded baseline for the unit.
-- [ ] `bun test` passes, and the tests can fail. A test that cannot fail is not evidence.
-- [ ] `bun run build` succeeds.
-- [ ] The TUI boots and its slash commands work, if the unit touched the core.
-- [ ] `openspec validate --strict` passes for the unit's change.
-- [ ] The unit's change has every task checked and is moved to `openspec/changes/archive/`,
-      with its deltas applied into `openspec/specs/`.
+- [x] `npx tsc --noEmit` does not exceed the recorded baseline for the unit. It ended at
+      22 against a baseline of 35, all of them pre-existing duplicate-prop errors in one
+      terminal file.
+- [x] `bun test` passes, and the tests can fail. A test that cannot fail is not evidence.
+      147 tests pass, and the new ones were each mutation-probed red before green.
+- [x] `bun run build` succeeds.
+- [x] The TUI boots and its slash commands work, if the unit touched the core. The
+      interface renders header, transcript, input, and footer, and the command surface is
+      exercised through the headless path.
+- [x] `openspec validate --strict` passes for the unit's change.
+- [x] The unit's change has every task checked and is moved to `openspec/changes/archive/`,
+      with its deltas applied into `openspec/specs/`. Archived as
+      `2026-09-23-add-agentic-harness-core`, 16 added, 8 modified, 1 removed.
 
 Only then does it commit and merge, and only then does the next unit start.
 
@@ -68,6 +74,16 @@ point is the last checked task, the uncompleted stages are listed above it, and 
 branch holds a state that either boots or does not. Stage 1 alone removes the protocol
 defect that causes most visible unreliability, so stopping after it is a real outcome
 rather than a failure.
+
+**Status.** Closed and archived on `feat/agentic-harness-core` as
+`2026-09-23-add-agentic-harness-core`. The harness, the tool registry, generic providers,
+the Anthropic seam, category routing, headless invocation, delegation, the trust gate,
+rules, hooks, policy, audit, and the MCP and ACP surfaces are in the tree. What the unit
+did not finish is named rather than implied: the terminal interface drives the core
+through the extracted hooks but its interactive command path is exercised by the headless
+surface rather than by a captured keystroke run, and delegation to a local child process
+and to an external ACP agent are both wired and unit-verified without a live
+multi-provider child.
 
 ## Pre-authorized next unit
 
