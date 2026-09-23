@@ -1,13 +1,22 @@
-export type McpTransport = 'stdio' | 'sse';
+export type McpTransport = 'stdio' | 'sse' | 'http';
 
 export interface McpServerConfig {
   id: string;
   title?: string;
+  /**
+   * Required for stdio servers. HTTP servers carry an empty string so that
+   * every existing entry keeps the same shape; the transport field selects
+   * which fields are actually used.
+   */
   command: string;
   args?: string[];
   env?: Record<string, string>;
   cwd?: string;
   transport?: McpTransport;
+  /** Endpoint for the streamable HTTP transport. */
+  url?: string;
+  /** Extra request headers for the streamable HTTP transport. */
+  headers?: Record<string, string>;
   enabled?: boolean;
 }
 
