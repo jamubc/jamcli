@@ -9,6 +9,16 @@ import type { Config, ToolPermission } from '../types/config.js';
 import type { Profile } from '../types/config.js';
 import type { Message } from '../core/types.js';
 
+const describeTrust = (cfg: Config): string => {
+  const trust = cfg.trust;
+  if (trust?.enabled === false) return 'off by configuration';
+
+  const classifier = trust?.model ?? cfg.categories?.quick?.[0]?.model;
+  if (!classifier) return 'off: no classifier model is configured (set trust.model or a quick category)';
+
+  return `on: screening with ${classifier}`;
+};
+
 interface InfoDeps {
   configService: ConfigService | null;
   mcpManager: McpManager | null;
@@ -201,6 +211,7 @@ export function useInfoPanels({ configService, mcpManager, addMessage, setConfig
         `Active profile: ${cfg.active_profile}`,
         `Preferred model: ${profile.preferred_model || 'n/a'} (${profile.preferred_provider || 'provider?'})`,
         `Telemetry: ${cfg.telemetry ? 'enabled' : 'disabled'}`,
+        `Trust gate: ${describeTrust(cfg)}`,
         '',
         'System prompt (first 200 chars):',
         profile.system_prompt_override?.slice(0, 200) || '(not set)',

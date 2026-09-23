@@ -1,4 +1,5 @@
 import { CoreAgent } from '../core/agent.js';
+import type { AgentOptions } from '../core/agent.js';
 import { createChatProvider } from '../core/providers/factory.js';
 import { createSession } from '../core/state.js';
 import type { AgentEvent, ChatMessage, RunResult, TokenUsage } from '../core/types.js';
@@ -10,7 +11,7 @@ import { ToolService } from '../services/ToolService.js';
 import { HistoryService } from '../services/HistoryService.js';
 import { McpManager } from '../services/McpManager.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
-import type { Profile } from '../types/config.js';
+import type { Config, Profile } from '../types/config.js';
 import { SAFE_TOOL_NAMES, ALL_TOOL_NAMES, TOOL_DEFINITIONS } from '../types/tools.js';
 import type { ToolName } from '../types/tools.js';
 import type { ToolDispatcher } from '../core/tools/dispatch.js';
@@ -50,6 +51,23 @@ const parseToolList = (values: string[] | undefined): ToolName[] => {
     }
   }
   return names;
+};
+
+const trustSettings = (config: Config): Partial<AgentOptions> => {
+  const trust = config.trust;
+  if (trust?.enabled === false) return { trustOffNote: true };
+
+  const classifierModel = trust?.model ?? config.categories?.quick?.[0]?.model;
+  if (!classifierModel) return { trustOffNote: true };
+
+  const providerName = classifierModel.includes(':') ? classifierModel.split(':')[0] : 'ollama';
+  const model = classifierModel.includes(':') ? classifierModel.slice(providerName.length + 1) : classifierModel;
+  try {
+    const trustProvider = createChatProvider(providerName, config.api_registry);
+    return { trustProvider, trustModel: model, trustOffNote: true };
+  } catch {
+    return { trustOffNote: true };
+  }
 };
 
 export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessResult> => {
@@ -141,6 +159,7 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
       ? `${buildSystemPrompt(profile, rulesPromptText(rules))}\n\nA tool is available. Call it rather than describing it.`
       : buildSystemPrompt(profile, rulesPromptText(rules)),
     hooks,
+    ...trustSettings(config),
   });
 
   const session = createSession(options.projectRoot, options.sessionId);

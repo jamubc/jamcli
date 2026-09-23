@@ -36,6 +36,18 @@ export interface DelegationConfig {
   max_turns_per_child: number;
 }
 
+export interface TrustConfig {
+  enabled?: boolean;
+  model?: string;
+  threshold?: number;
+  dedupe?: boolean;
+}
+
+export const DEFAULT_TRUST_CONFIG: TrustConfig = {
+  threshold: 0.3,
+  dedupe: true,
+};
+
 export const DEFAULT_DELEGATION_CONFIG: DelegationConfig = {
   max_depth: 2,
   max_concurrent: 3,
@@ -79,6 +91,7 @@ export interface Config {
   general?: GeneralConfig;
   categories?: Record<string, CategoryChain>;
   delegation?: DelegationConfig;
+  trust?: TrustConfig;
 }
 
 export type StatusTextStyleId = 'rainbow' | 'subtle' | 'minimal' | 'aurora' | 'mono' | `custom:${string}`;
