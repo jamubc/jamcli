@@ -68,12 +68,18 @@ Line references describe the tree when the change opened.
     - Mutation probes: not reading ignore files, or restoring a 400-file cap, turns the builtin cases red.
     - A real defect was caught while building it: ripgrep lets the last matching `--glob` win, so exclusions must follow the include glob.
     - `grep` gains `path`, `output_mode`, and a limit of up to 1,000. `glob` gains `path` and a limit of up to 1,000. F12 is live, and `search_code` and `list_files` are routed in 2.7.
-- [ ] 2.7 Rationalize the tool set (D5). Files: `src/core/tools/builtins.ts`, `src/core/tools/registry.ts`, `src/types/tools.ts`.
+- [x] 2.7 Rationalize the tool set (D5). Files: `src/core/tools/builtins.ts`, `src/core/tools/registry.ts`, `src/types/tools.ts`.
   - Add `hidden` and `aliasOf` to registered tools. `list_files` and `search_code` become hidden aliases.
   - `read_file` gains line windows, a long-line cut, and binary refusal.
   - `apply_patch` takes a multi-file unified diff applied all or nothing.
   - Add `git_log`.
   - Remove the five-name `ToolName` union as a source of truth; it stays only as a legacy type.
+  - **Verification**: `glob` and `grep` are the only advertised listing and search tools; `list_files` and `search_code` stay callable as hidden aliases with their old argument shapes.
+    - `apply_patch` now takes unified diffs only, across several files, with creation and deletion through `/dev/null`. Every hunk is checked before any write, and CRLF is kept. Its old find-and-replace mode duplicated `edit` and is gone; `edit` covers that job.
+    - `read_file` reads in line windows within an output budget and says where to continue. It cuts long lines for display while anchoring their full content, and refuses binary files with their size.
+    - `git_log` is added.
+    - The interim Ink tool path now offers every read-class tool rather than the legacy three names.
+    - 6 patch, 5 read, and 2 tool-set tests pass. Mutation probes: writing while planning breaks the all-or-nothing test, and advertising an alias breaks the tool-set test.
 - [ ] 2.8 Provider hardening (F13, F14, F15, F19). Files: `src/core/providers/*.ts`, tests against the fake server.
   - Add `withRetry`, and `ProviderError` with body text and hints.
   - Add `stream_options.include_usage`.
