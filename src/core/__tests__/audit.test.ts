@@ -1,4 +1,8 @@
-import { test } from 'bun:test';
+import { expect, test } from 'bun:test';
+import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
+import { createBuiltinRegistry } from '../tools/registry.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -9,11 +13,38 @@ import { test } from 'bun:test';
 
 const pending = () => {};
 
+const withProject = async (run: (root: string) => Promise<void>) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-'));
+  try {
+    await run(root);
+  } finally {
+    await fs.remove(root);
+  }
+};
+
 test.todo('F1: the interface offers the full tool set with Ollama and any wording (2.11, 6.4)', pending);
 test.todo('F2: headless and ACP offer write and execute tools from the registry (2.12, 2.13)', pending);
 test.todo('F3: headless and ACP advertise real tool schemas (2.12, 2.13)', pending);
-test.todo('F4: write_file creates a file under the project root (2.2)', pending);
-test.todo('F5: edit replacements keep $$, $&, $` and $\' literally (2.3)', pending);
+
+test('F4: write_file creates a file under the project root (2.2)', () =>
+  withProject(async (root) => {
+    const result = await createBuiltinRegistry().execute('write_file', { path: 'hello.txt', content: 'hi\n' }, { projectRoot: root });
+    expect(result.success).toBe(true);
+    expect(await fs.readFile(path.join(root, 'hello.txt'), 'utf-8')).toBe('hi\n');
+  }));
+
+test('F5: edit replacements keep $$, $&, $` and $\' literally (2.3)', () =>
+  withProject(async (root) => {
+    await fs.writeFile(path.join(root, 'run.sh'), 'echo PID\n');
+    const replacement = 'echo "pid=$$ match=$&"';
+    await createBuiltinRegistry().execute(
+      'edit',
+      { path: 'run.sh', find_string: 'echo PID', replace_string: replacement },
+      { projectRoot: root }
+    );
+    expect(await fs.readFile(path.join(root, 'run.sh'), 'utf-8')).toBe(`${replacement}\n`);
+  }));
+
 test.todo('F6: an ACP session sends earlier turns with the second prompt (2.13)', pending);
 test.todo('F7: tool steps stream, keep text beside calls, and send the system prompt first (2.9)', pending);
 test.todo('F8: calls after an approval request still run or are answered (2.9)', pending);
@@ -30,7 +61,21 @@ test.todo('F18: a created .jamcli directory ignores itself (5.1)', pending);
 test.todo('F19: Ollama requests carry num_ctx (2.8)', pending);
 test.todo('F20: compaction never separates a tool call from its result (4.3)', pending);
 test.todo('F21: tool output is escaped and bounded in the classifier prompt (2.11)', pending);
-test.todo('F22: a symbolic link out of the project is refused (2.4)', pending);
+
+test('F22: a symbolic link out of the project is refused (2.4)', () =>
+  withProject(async (root) => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-outside-'));
+    try {
+      await fs.writeFile(path.join(outside, 'secret'), 'SECRET');
+      await fs.symlink(outside, path.join(root, 'link'));
+      const result = await createBuiltinRegistry().execute('read_file', { path: 'link/secret' }, { projectRoot: root });
+      expect(result.success).toBe(false);
+      expect(result.output).not.toContain('SECRET');
+    } finally {
+      await fs.remove(outside);
+    }
+  }));
+
 test.todo('F23: MCP servers do not receive provider keys and run on every surface (2.11, 3.5)', pending);
 test.todo('F24: @ references expand on every surface (2.11)', pending);
 test.todo('F25: a failing hook is a notice, not assistant text (2.11)', pending);

@@ -40,9 +40,12 @@ Line references describe the tree when the change opened.
   - Add the events `turn_start`, `step_start`, `tool_progress`, `retry`, `compaction`, and `turn_end`, and a `notice` level.
   - Add an `ApprovalRequest` with a preview, a reason, and suggestions. `decide` accepts a boolean or an `ApprovalDecision`.
   - Additive only, so the Ink interface still compiles.
-- [ ] 2.2 Fix `write_file` (F4). Files: `src/core/tools/write_file.ts`, `src/core/tools/__tests__/writeFile.test.ts`. Verify create, refuse to overwrite, overwrite, refuse a directory, and refuse an escape.
-- [ ] 2.3 Make replacements literal and add `replace_all` (F5). Files: `src/services/FileSystemService.ts`, `src/core/tools/edit.ts`, tests. Verify `$$`, `$&`, `` $` ``, and `$'` survive, and CRLF files keep CRLF.
-- [ ] 2.4 Resolve symbolic links in path checks (F22). Files: `src/core/tools/paths.ts`, tests. Verify a link inside the project that points outside is refused for reads and writes.
+- [x] 2.2 Fix `write_file` (F4). Files: `src/core/tools/write_file.ts`, `src/core/tools/__tests__/writeFile.test.ts`. Verify create, refuse to overwrite, overwrite, refuse a directory, and refuse an escape.
+  - **Verification**: 5 tests pass. Mutation probe: restoring the reversed arguments turns four of them red. F4 in `audit.test.ts` is live.
+- [x] 2.3 Make replacements literal and add `replace_all` (F5). Files: `src/services/FileSystemService.ts`, `src/core/tools/edit.ts`, tests. Verify `$$`, `$&`, `` $` ``, and `$'` survive, and CRLF files keep CRLF.
+  - **Verification**: `src/core/tools/textEdit.ts` holds the literal replacement. `edit` gains `replace_all` and `occurrence` and reports a unified diff in its metadata. `FileSystemService.applyEdit` inserts literally too, which also fixes the Ink approval path until stage 6 removes it. 8 tests pass. Mutation probe: restoring the string replacement turns the `apply_patch` dollar test red. F5 is live.
+- [x] 2.4 Resolve symbolic links in path checks (F22). Files: `src/core/tools/paths.ts`, tests. Verify a link inside the project that points outside is refused for reads and writes.
+  - **Verification**: a read and a write through an outward link are refused, and nothing is created outside. A project root that is itself reached through a link still works. Mutation probe: disabling the real path check turns both escape tests red. F22 is live.
 - [ ] 2.5 Rebuild `run_command` (F11). Files: `src/core/tools/command.ts` (new), `src/core/tools/builtins.ts`, `src/services/ExecutionService.ts` (removed), tests.
   - Spawn, timeout, exit code or signal, and labeled streams.
   - Head and tail truncation with a note, and `tool_progress` events.
