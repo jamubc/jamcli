@@ -3,6 +3,8 @@ import { adaptLegacyProvider } from '../core/providers/legacy.js';
 import { createSession } from '../core/state.js';
 import type { AgentEvent, ChatMessage, RunResult, TokenUsage } from '../core/types.js';
 import { buildSystemPrompt } from '../core/prompt.js';
+import { applyRules, loadRules, rulesPromptText } from '../core/rules/index.js';
+import { createHookBus, emitHookEvent } from '../core/hooks/index.js';
 import { LLMFactory } from '../services/LLMProvider.js';
 import { ConfigService } from '../services/ConfigService.js';
 import { ToolService } from '../services/ToolService.js';
@@ -47,6 +49,9 @@ const parseToolList = (values: string[] | undefined): ToolName[] => {
 };
 
 export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessResult> => {
+  const hooks = createHookBus();
+  const rules = applyRules(loadRules(options.projectRoot, options.cwd ?? process.cwd()), undefined);
+
   const configService = new ConfigService(options.projectRoot);
   await configService.initialize();
   const config = await configService.getConfig();
@@ -128,18 +133,23 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
     truncationLimit:
       config.agent_loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars,
     systemPrompt: toolDefinitions.length
-      ? `${buildSystemPrompt(profile)}\n\nA tool is available. Call it rather than describing it.`
-      : buildSystemPrompt(profile),
+      ? `${buildSystemPrompt(profile, rulesPromptText(rules))}\n\nA tool is available. Call it rather than describing it.`
+      : buildSystemPrompt(profile, rulesPromptText(rules)),
+    hooks,
   });
 
   const session = createSession(options.projectRoot, options.sessionId);
   session.messages.push(...priorMessages.map((message) => ({ ...message })));
+
+  await emitHookEvent(hooks, 'session_start', { session, profile: config.active_profile });
 
   const events: AgentEvent[] = [];
   const result = await agent.run(session, options.prompt, (event) => {
     events.push(event);
     options.onEvent?.(event);
   });
+
+  await emitHookEvent(hooks, 'session_end', { session, status: result.status, turns: result.turns });
 
   const usage: TokenUsage | undefined = result.usage;
   const lastAssistant = [...session.messages].reverse().find((message) => message.role === 'assistant');

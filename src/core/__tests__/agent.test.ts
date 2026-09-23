@@ -2,6 +2,7 @@ import { test, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { CoreAgent } from '../agent.js';
 import { createSession } from '../state.js';
+import { createHookBus } from '../hooks/index.js';
 import type { ChatProvider, CompletionResult, StreamChunk } from '../providers/types.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
 import type { AgentEvent, ToolResult } from '../types.js';
@@ -425,4 +426,64 @@ test('the trust gate failing open keeps the result and says so once', async () =
   await agent.run(createSession('/tmp/trust-project', 'open-test'), 'read it', (e) => events.push(e));
   const notices = events.filter((e) => e.type === 'notice').map((e: any) => e.message);
   expect(notices).toEqual(['The trust gate failed open: classifier offline']);
+});
+
+test('the hook bus sees the turn, the tool, and the result in order', async () => {
+  const script: CompletionResult[] = [
+    { content: '', toolCalls: [{ id: 'c1', function: { name: 'read_file', arguments: { path: 'a.md' } } }] },
+    { content: 'done' },
+  ];
+  let completions = 0;
+  const provider: ChatProvider = {
+    async *streamChat() {
+      yield { content: '', done: true };
+    },
+    async complete(): Promise<CompletionResult> {
+      const next = script[completions++];
+      return next ?? { content: '' };
+    },
+  };
+  const dispatcher: ToolDispatcher = {
+    listTools: () => [{ name: 'read_file' }],
+    requiresApproval: () => false,
+    async execute(call): Promise<ToolResult> {
+      return { tool: call.name, success: true, output: 'contents', durationMs: 1 };
+    },
+  };
+  const seen: string[] = [];
+  const hooks = createHookBus();
+  hooks.on('turn_start', () => seen.push('turn_start'));
+  hooks.on('pre_tool', (payload) => seen.push(`pre_tool:${'call' in payload ? payload.call.name : ''}`));
+  hooks.on('post_tool', (payload) => seen.push(`post_tool:${'result' in payload ? payload.result.tool : ''}`));
+
+  const agent = new CoreAgent({
+    provider,
+    dispatcher,
+    toolDefinitions: [{ type: 'function', function: { name: 'read_file' } }],
+    hooks,
+  });
+  await agent.run(createSession('/tmp/hook-project', 'hook-run'), 'read it', () => {});
+  expect(seen).toEqual(['turn_start', 'pre_tool:read_file', 'post_tool:read_file']);
+});
+
+test('a throwing hook is reported and the turn still finishes', async () => {
+  const provider: ChatProvider = {
+    async *streamChat() {
+      yield { content: 'fine', done: false };
+      yield { content: '', done: true };
+    },
+    async complete(): Promise<CompletionResult> {
+      return { content: 'fine' };
+    },
+  };
+  const hooks = createHookBus();
+  hooks.on('turn_start', () => {
+    throw new Error('hook exploded');
+  }, 'explosive');
+  const agent = new CoreAgent({ provider, hooks });
+  const result = await agent.run(createSession('/tmp/hook-project', 'hook-fail'), 'hello', () => {});
+  expect(result.status).toBe('ok');
+  expect(hooks.failures()).toEqual([
+    { event: 'turn_start', handler: 'explosive', message: 'hook exploded' },
+  ]);
 });

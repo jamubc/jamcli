@@ -3,6 +3,7 @@ import { addModelUsage, addUsage, appendMessages, isCancelled } from './state.js
 import type { ChatProvider, ToolDefinition } from './providers/types.js';
 import { dispatchToolCalls, toProviderToolMessages, type ToolDispatcher } from './tools/dispatch.js';
 import { screenToolResults } from './trust/index.js';
+import { emitHookEvent, type HookBus } from './hooks/index.js';
 
 import type { AgentLoopConfig } from '../types/config.js';
 
@@ -22,6 +23,7 @@ export interface AgentOptions {
   trustProvider?: ChatProvider;
   trustModel?: string;
   trustOffNote?: boolean;
+  hooks?: HookBus;
 }
 
 const DEFAULT_MAX_STEPS = 8;
@@ -45,6 +47,7 @@ export class CoreAgent implements Agent {
   private trustModel?: string;
   private trustOffNote: boolean;
   private trustNoted = false;
+  private hooks?: HookBus;
 
   constructor(options: AgentOptions = {}) {
     const loop = options.loop;
@@ -62,6 +65,7 @@ export class CoreAgent implements Agent {
     this.trustProvider = options.trustProvider;
     this.trustModel = options.trustModel;
     this.trustOffNote = options.trustOffNote ?? false;
+    this.hooks = options.hooks;
   }
 
   cancel(sessionId: string): void {
@@ -72,6 +76,7 @@ export class CoreAgent implements Agent {
     if (this.dispatcher && this.toolDefinitions?.length) {
       return this.runWithTools(session, prompt, onEvent);
     }
+    await emitHookEvent(this.hooks, 'turn_start', { session, prompt, messages: session.messages });
     let working = appendMessages(session, [userMessage(prompt)]);
     let response = '';
     let turns = 0;
@@ -110,6 +115,7 @@ export class CoreAgent implements Agent {
     if (!this.provider || !this.dispatcher || !this.toolDefinitions?.length) {
       throw new Error('runWithTools requires a provider, a dispatcher, and tool definitions');
     }
+    await emitHookEvent(this.hooks, 'turn_start', { session, prompt, messages: session.messages });
     let working = appendMessages(session, [userMessage(prompt)]);
     if (this.systemPrompt) {
       working = appendMessages(working, [{ role: 'system', content: this.systemPrompt, timestamp: Date.now() }]);
@@ -175,6 +181,10 @@ export class CoreAgent implements Agent {
       }
 
       totalToolCalls += calls.length;
+      for (const call of calls) {
+        await emitHookEvent(this.hooks, 'pre_tool', { session: working, call });
+      }
+
       const outcome = await dispatchToolCalls(calls, this.dispatcher, onEvent, {
         maxCalls: this.maxToolCallsPerTurn,
         alreadyUsed: totalToolCalls - calls.length,
@@ -211,6 +221,17 @@ export class CoreAgent implements Agent {
       }
       for (const removal of [...screening.deduped, ...screening.dropped]) {
         onEvent({ type: 'notice', message: `Removed ${removal.tool} result: ${removal.reason}` });
+      }
+
+      for (let index = 0; index < calls.length; index += 1) {
+        const result = outcome.results[index];
+        if (!result) continue;
+        await emitHookEvent(this.hooks, 'post_tool', {
+          session: working,
+          call: calls[index],
+          result,
+          output: this.truncate(result.output),
+        });
       }
 
       const keptKeys = new Set(screening.kept.map((item) => `${item.tool}\u0000${item.output}`));

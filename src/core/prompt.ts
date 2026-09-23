@@ -1,7 +1,7 @@
 import type { Profile } from '../types/config.js';
 import type { McpToolDescriptor } from '../types/mcp.js';
 
-export function buildSystemPrompt(profile?: Profile | null): string {
+export function buildSystemPrompt(profile?: Profile | null, rulesText?: string): string {
   const base = profile?.system_prompt_override?.trim() || 'You are JamCLI, a meticulous AI software engineer.';
   const toolGuidance = [
     'TOOL USAGE RULES:',
@@ -18,6 +18,10 @@ export function buildSystemPrompt(profile?: Profile | null): string {
     '✅ "hello" -> no tools',
     '❌ "run \\"ls\\"" -> do not call list_files/read_file/search_code',
   ].join('\n');
+  const rules = rulesText?.trim();
+  if (rules) {
+    return `${base}\n\n${rules}\n\n${toolGuidance}`;
+  }
   return `${base}\n\n${toolGuidance}`;
 }
 
