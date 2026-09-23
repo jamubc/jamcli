@@ -8,6 +8,7 @@ import type { ToolName } from '../types/tools.js';
 import type { Config, ToolPermission } from '../types/config.js';
 import type { Profile } from '../types/config.js';
 import type { Message } from '../core/types.js';
+import { loadRules } from '../core/rules/index.js';
 
 const describeTrust = (cfg: Config): string => {
   const trust = cfg.trust;
@@ -26,9 +27,10 @@ interface InfoDeps {
   setConfig: (config: Config) => void;
   setActiveProfile: (profile: Profile) => void;
   setMcpServers: (servers: any[]) => void;
+  projectRoot: string;
 }
 
-export function useInfoPanels({ configService, mcpManager, addMessage, setConfig, setActiveProfile, setMcpServers }: InfoDeps) {
+export function useInfoPanels({ configService, mcpManager, addMessage, setConfig, setActiveProfile, setMcpServers, projectRoot }: InfoDeps) {
   const showToolStatus = useCallback(async () => {
     if (!configService) {
       addMessage({
@@ -206,12 +208,18 @@ export function useInfoPanels({ configService, mcpManager, addMessage, setConfig
     try {
       const cfg = await configService.getConfig();
       const profile = await configService.getActiveProfile();
+      const rules = loadRules(projectRoot, process.cwd());
       const summary = [
         'Configuration menu:',
         `Active profile: ${cfg.active_profile}`,
         `Preferred model: ${profile.preferred_model || 'n/a'} (${profile.preferred_provider || 'provider?'})`,
         `Telemetry: ${cfg.telemetry ? 'enabled' : 'disabled'}`,
         `Trust gate: ${describeTrust(cfg)}`,
+        '',
+        'Instruction files:',
+        ...(rules.files.length
+          ? rules.files.map((file) => `- ${file.displayPath} (${file.scope})`)
+          : ['- none loaded from the project root to the working directory']),
         '',
         'System prompt (first 200 chars):',
         profile.system_prompt_override?.slice(0, 200) || '(not set)',

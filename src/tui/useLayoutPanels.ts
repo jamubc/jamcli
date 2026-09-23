@@ -76,7 +76,7 @@ export function useLayoutPanels(ctx: LayoutContext) {
     showConfigMenu,
     showSystemPrompt,
     updateSystemPromptSetting,
-  } = useInfoPanels({ configService, mcpManager, addMessage, setConfig, setActiveProfile, setMcpServers: ctx.setMcpServers });
+  } = useInfoPanels({ configService, mcpManager, addMessage, setConfig, setActiveProfile, setMcpServers: ctx.setMcpServers, projectRoot });
 
   const handleTextInputChange = useTextInput({
     collapsedPaste,

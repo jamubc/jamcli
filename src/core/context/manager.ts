@@ -2,6 +2,7 @@ import type { ChatMessage } from '../types.js';
 import type { ContextManagementConfig } from '../../types/config.js';
 import { countTotalTokens } from '../../utils/tokenUtils.js';
 import type { ChatProvider } from '../providers/types.js';
+import type { HookBus } from '../hooks/index.js';
 
 export class ContextManager {
   static async manageContext(
@@ -9,7 +10,9 @@ export class ContextManager {
     config: ContextManagementConfig | undefined,
     provider: ChatProvider,
     modelId: string,
-    force: boolean = false
+    force: boolean = false,
+    hooks?: HookBus,
+    session?: any
   ): Promise<{ context: ChatMessage[]; systemNotice?: string }> {
     if ((!config || !config.enabled) && !force) {
       return { context: messages };
@@ -29,16 +32,30 @@ export class ContextManager {
 
     const strategy = config?.strategy || 'summarize';
 
+    const notice = async (next: { context: ChatMessage[]; systemNotice?: string }) => {
+      if (hooks && session) {
+        await hooks.emit('compaction', {
+          session,
+          beforeTokens: totalTokens,
+          afterTokens: countTotalTokens(next.context),
+          strategy,
+        });
+      }
+      return next;
+    };
+
     if (strategy === 'truncate') {
       const truncated = this.truncateContext(messages, maxTokens);
-      return {
+      return notice({
         context: truncated.context,
         systemNotice: `Context truncated to fit limit (${totalTokens} -> ${truncated.tokens} tokens, limit ${maxTokens}).`,
-      };
+      });
     }
 
     if (strategy === 'summarize') {
-      return await this.summarizeContext(messages, provider, modelId, totalTokens, maxTokens, thresholdLimit);
+      return notice(
+        await this.summarizeContext(messages, provider, modelId, totalTokens, maxTokens, thresholdLimit)
+      );
     }
 
     return { context: messages };
