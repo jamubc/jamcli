@@ -1,0 +1,36 @@
+import { test } from 'bun:test';
+
+/**
+ * Acceptance checks for the defects recorded in
+ * openspec/changes/rehaul-jamcli/audit.md. Each starts as a todo so every checkpoint
+ * stays green, and becomes a live test in the task that fixes it, named in parentheses.
+ * A todo left here at archive time means the finding is still open.
+ */
+
+const pending = () => {};
+
+test.todo('F1: the interface offers the full tool set with Ollama and any wording (2.11, 6.4)', pending);
+test.todo('F2: headless and ACP offer write and execute tools from the registry (2.12, 2.13)', pending);
+test.todo('F3: headless and ACP advertise real tool schemas (2.12, 2.13)', pending);
+test.todo('F4: write_file creates a file under the project root (2.2)', pending);
+test.todo('F5: edit replacements keep $$, $&, $` and $\' literally (2.3)', pending);
+test.todo('F6: an ACP session sends earlier turns with the second prompt (2.13)', pending);
+test.todo('F7: tool steps stream, keep text beside calls, and send the system prompt first (2.9)', pending);
+test.todo('F8: calls after an approval request still run or are answered (2.9)', pending);
+test.todo('F9: a read-edit-test cycle completes under the default loop limits (2.9)', pending);
+test.todo('F10: --allow-tool run_command runs the command headlessly (2.12)', pending);
+test.todo('F11: run_command reports exit codes and times out (2.5)', pending);
+test.todo('F12: grep finds a match past the 400th file and honors .gitignore (2.6)', pending);
+test.todo('F13: ACP uses the configured provider (2.13)', pending);
+test.todo('F14: reasoning is not replayed to another provider family (2.8)', pending);
+test.todo('F15: a failed request reports the provider error body, and 429 retries (2.8)', pending);
+test.todo('F16: interface turns apply rules, hooks, and the trust gate (2.11, 6.4)', pending);
+test.todo('F17: resume restores tool calls and results (2.10)', pending);
+test.todo('F18: a created .jamcli directory ignores itself (5.1)', pending);
+test.todo('F19: Ollama requests carry num_ctx (2.8)', pending);
+test.todo('F20: compaction never separates a tool call from its result (4.3)', pending);
+test.todo('F21: tool output is escaped and bounded in the classifier prompt (2.11)', pending);
+test.todo('F22: a symbolic link out of the project is refused (2.4)', pending);
+test.todo('F23: MCP servers do not receive provider keys and run on every surface (2.11, 3.5)', pending);
+test.todo('F24: @ references expand on every surface (2.11)', pending);
+test.todo('F25: a failing hook is a notice, not assistant text (2.11)', pending);
