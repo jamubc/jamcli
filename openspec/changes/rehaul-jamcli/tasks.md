@@ -137,9 +137,18 @@ Line references describe the tree when the change opened.
   - **Verification (redaction)**: `src/core/redact.ts` builds the redactor from the environment and named extras, and `executeBatch` applies it to every result and progress chunk. `CoreAgent` uses the environment's credentials unless the runtime passes its own, which 2.11 extends with configured `key_env_var` names and stored keys.
     - 4 tests: markers name the source, short values and ordinary variables are left alone, and a secret in a command's output is absent from the next request, the surfaced events, and the session file.
     - Mutation probes: not redacting output, not redacting progress, an identity default, not passing the redactor to the batch, no longest-first order, anchoring `PASSWORD`, no minimum length, and ignoring named extras each turn a test red.
-- [ ] 2.11 Build `createRuntime` (D2). Files: `src/core/runtime/` (new), tests.
+- [x] 2.11 Build `createRuntime` (D2). Files: `src/core/runtime/` (new), tests.
   - It is the one place that builds the provider, the full registry (built-ins plus MCP), policy (legacy semantics with F10 fixed), rules, hooks, context management, the trust gate (D21 repairs), and the transcript.
   - `@` references expand in the runtime, not in a surface (F24).
+  - **Verification**: `createRuntime` in `src/core/runtime/index.ts` assembles the provider, the registry with MCP server tools (`tools.ts`; read-only hints run without asking, a server that fails or hangs past 10 seconds becomes a notice), the policy (`policy.ts`), rules, hooks, the trust gate, redaction with configured keys and headers (`model.ts`), the system prompt (`prompt.ts`), `@` expansion (`references.ts`), and the session log.
+    - Policy: a deny from a flag or a setting wins; `--allow-tool` allows the named tool even where a setting asks, and restricts nothing else (F10); settings and flags for `list_files` and `search_code` apply to `glob` and `grep`; flags naming no tool are reported.
+    - A state-changing call allowed without asking is recorded with who allowed it and the rule (`autoApproval` in the dispatcher), so the log explains every change.
+    - Model references keep a model id's own colon (`qwen2.5-coder:7b`), where the old headless parser took `qwen2.5-coder` as a provider. A provider that cannot be built is reported by the first turn instead of failing assembly.
+    - Trust gate (D21): tool output and the task are escaped and bounded in the classifier prompt (F21), each removal names its own result where reasons could previously attach to the wrong one, and the configured threshold is honored where it was ignored.
+    - Context management is deferred to 4.3; the reason is recorded under D2.
+    - 7 policy, 9 assembly, and 13 runtime tests against the fake provider server with real tools in temporary projects.
+    - Mutation probes: a setting outranking `--allow-tool`, an allow list that denies others, allow outranking deny, ignoring aliases, offering denied tools, running a tool that was not offered, ignoring MCP read-only hints, one failing MCP server aborting assembly, not recording automatic approvals, unredacted references and tool output, expanding binary files, resuming empty, no escaping, no bounding, dropping the threshold, leaving rules out, splitting on any colon, a generic provider error, not recording a model switch, dropping startup notices, and not reporting unknown flags each turn a test red.
+    - F21 is live. F24 moves to 2.12 and 2.13, when headless and ACP start using the runtime.
 - [ ] 2.12 Move headless onto the runtime. Files: `src/cli/run.ts`, `src/cli.ts`, tests.
   - JSON carries `error`, `model`, `provider`, and `permission_denials`.
   - `stream-json` carries tool output and notices.

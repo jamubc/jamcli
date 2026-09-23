@@ -3,7 +3,7 @@ import type { ChatMessage } from '../types.js';
 import type { TranscriptEvent } from './events.js';
 
 /** A fence longer than any run of backticks in the text, so the text cannot close it. */
-const fenced = (text: string, language = ''): string => {
+export const fenced = (text: string, language = ''): string => {
   const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
   const fence = '`'.repeat(Math.max(3, longest + 1));
   return `${fence}${language}\n${text.replace(/\n$/, '')}\n${fence}`;

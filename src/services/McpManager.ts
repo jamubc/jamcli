@@ -226,6 +226,14 @@ export class McpManager {
     return ['Available MCP tools:', ...lines].join('\n');
   }
 
+  /** Close every open server connection, which stops stdio servers. */
+  async close(): Promise<void> {
+    const open = [...this.connections.values()];
+    this.connections.clear();
+    this.toolIndex.clear();
+    await Promise.allSettled(open.map((connection) => connection.client.close()));
+  }
+
   private buildServerToolName(serverId: string, toolName: string) {
     const normalized = toolName.replace(/[^a-zA-Z0-9_-]+/g, '_');
     return `${serverId}__${normalized}`;

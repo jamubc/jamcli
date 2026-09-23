@@ -117,6 +117,13 @@ The factory is the only place that constructs any of the following:
 - rules, hooks, context management, and the trust gate;
 - the transcript writer.
 
+As built in 2.11, `run` takes the prompt text, and the runtime also exposes the resolved
+model, the conversation, and the problems found while assembling (flags that name no tool,
+MCP servers that did not connect). `setPermissionMode` arrives with the permission engine
+(stage 3) and `compact` with context management (stage 4). The existing context manager
+is not wired into the runtime: it can separate a tool call from its result (F20), and
+wiring it into more surfaces before 4.3 makes it pair-safe would spread that defect.
+
 Surfaces differ in two ways only: how they render events, and how an `approval_request`
 is answered. The interface asks the user. Headless answers from flags and policy. ACP
 forwards the request to the editor. Workflows answer from the step's policy or pause.

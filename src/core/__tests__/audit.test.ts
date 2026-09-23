@@ -216,8 +216,8 @@ test('F22: a symbolic link out of the project is refused (2.4)', () =>
     }
   }));
 
-test.todo('F23: MCP servers do not receive provider keys and run on every surface (2.11, 3.5)', pending);
-test.todo('F24: @ references expand on every surface (2.11)', pending);
+test.todo('F23: MCP servers do not receive provider keys and run on every surface (2.13, 3.5)', pending);
+test.todo('F24: @ references expand on every surface (2.12, 2.13)', pending);
 test('F25: a failing hook is a notice, not assistant text (2.9)', async () => {
   const hooks = createHookBus();
   hooks.on('turn_start', () => {

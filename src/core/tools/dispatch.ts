@@ -1,5 +1,6 @@
 import type {
   AgentEvent,
+  ApprovalBy,
   ApprovalDecision,
   ApprovalScope,
   JamSession,
@@ -36,6 +37,8 @@ export interface ToolDispatcher {
   policyClass?(name: string): PolicyClass | 'unknown';
   /** Remember a grant the user chose at approval time. */
   grant?(call: ToolCall, scope: ApprovalScope, pattern?: string): void;
+  /** For a state-changing call that runs without asking: who allowed it, and by which rule. */
+  autoApproval?(call: ToolCall): { by: ApprovalBy; rule?: string } | undefined;
 }
 
 export interface BatchContext {
@@ -213,6 +216,19 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         continue;
       }
       if (read.scope !== 'once') ctx.dispatcher.grant?.(call, read.scope, read.pattern);
+    } else {
+      const auto = ctx.dispatcher.autoApproval?.(call);
+      if (auto) {
+        ctx.emit({
+          type: 'approval_decision',
+          callId: call.id,
+          tool: call.name,
+          allow: true,
+          scope: 'once',
+          by: auto.by,
+          ...(auto.rule ? { rule: auto.rule } : {}),
+        });
+      }
     }
     settle(i, await perform(call));
     ran += 1;

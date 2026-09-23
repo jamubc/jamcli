@@ -97,6 +97,9 @@ export interface ApprovalRequest {
 
 export type ApprovalScope = 'once' | 'session' | 'project';
 
+/** Who decided a call: a person, the configured policy, a hook, a run flag, or the mode. */
+export type ApprovalBy = 'user' | 'policy' | 'hook' | 'flag' | 'mode';
+
 /** `true` and `false` stay valid shorthands for allowing or denying once. */
 export type ApprovalDecision =
   | boolean
@@ -143,7 +146,7 @@ export type AgentEvent =
       allow: boolean;
       scope: ApprovalScope;
       feedback?: string;
-      by: 'user' | 'policy' | 'hook' | 'flag' | 'mode';
+      by: ApprovalBy;
       rule?: string;
     };
 
