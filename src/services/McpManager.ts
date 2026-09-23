@@ -1,6 +1,6 @@
 import { ConfigService } from './ConfigService.js';
 import type { McpServerConfig, McpToolDescriptor } from '../types/mcp.js';
-import { listTools } from '../core/tools/index.js';
+import { listVisibleTools } from '../core/tools/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -111,7 +111,7 @@ export class McpManager {
   getBuiltinTools(): McpToolDescriptor[] {
     // Built-in descriptors come from the registry so discovery sees the real
     // schemas declared by each tool rather than a permissive placeholder.
-    const core = listTools().map((tool) => ({
+    const core = listVisibleTools().map((tool) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,

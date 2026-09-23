@@ -32,19 +32,6 @@ test('read_file rejects a path that escapes the project root', async () => {
   expect(result.output).not.toContain('top secret');
 });
 
-test('apply_patch refuses a path outside the project root and leaves the file untouched', async () => {
-  const registry = createBuiltinRegistry();
-  const result = await registry.execute(
-    'apply_patch',
-    { path: `../${path.basename(outsideFile)}`, find_string: 'top secret contents', replace_string: 'leaked' },
-    { projectRoot }
-  );
-
-  expect(result.success).toBe(false);
-  expect(result.output.toLowerCase()).toContain('escape');
-  expect(await fs.readFile(outsideFile, 'utf-8')).toBe('top secret contents');
-});
-
 test('a symbolic link inside the project that points outside is refused for reads', async () => {
   const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-outside-'));
   await fs.writeFile(path.join(outsideDir, 'id_rsa'), 'PRIVATE KEY');

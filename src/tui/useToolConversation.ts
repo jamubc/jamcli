@@ -12,7 +12,7 @@ import { truncateOutput } from './layoutFormat.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
 import type { Config, Profile, ToolPermission } from '../types/config.js';
 import type { ToolName } from '../types/tools.js';
-import { SAFE_TOOL_NAMES } from '../types/tools.js';
+import { policyClassOf } from '../core/policy/index.js';
 
 interface ToolConversationDeps {
   mcpManager: McpManager | null;
@@ -66,7 +66,7 @@ export function useToolConversation({
       const allTools = await mcpManager.listAllTools();
       const exposedTools = selectToolsForQuery(
         allTools.filter(
-          (tool) => tool.source === 'server' || SAFE_TOOL_NAMES.includes(tool.name as ToolName)
+          (tool) => tool.source === 'server' || policyClassOf(tool.name) === 'read'
         ),
         userText
       );

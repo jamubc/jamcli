@@ -45,6 +45,21 @@ export async function gitDiffRunner(args: Record<string, any>, ctx: ToolContext)
   };
 }
 
+/** Show recent commits, optionally for one path. */
+export async function gitLogRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  const count = Math.min(Math.max(typeof args.limit === 'number' ? args.limit : 20, 1), 200);
+  const gitArgs = ['log', '--no-color', `--max-count=${count}`, '--date=short', '--format=%h %ad %an %s'];
+  if (typeof args.path === 'string' && args.path.length) {
+    const absolute = resolveProjectPath(ctx.projectRoot, args.path);
+    gitArgs.push('--', path.relative(ctx.projectRoot, absolute) || args.path);
+  }
+  const output = await runGit(gitArgs, ctx.projectRoot);
+  return {
+    output: output || 'No commits.',
+    metadata: { command: `git ${gitArgs.join(' ')}` },
+  };
+}
+
 const gitStatusSchema: JsonSchema = {
   type: 'object',
   properties: {},
@@ -57,6 +72,16 @@ const gitDiffSchema: JsonSchema = {
   properties: {
     path: { type: 'string', description: 'Limit the diff to this path under the project root.' },
     staged: { type: 'boolean', description: 'Show the staged diff (git diff --cached).' },
+  },
+  required: [],
+  additionalProperties: false,
+};
+
+const gitLogSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    limit: { type: 'integer', minimum: 1, maximum: 200, description: 'Number of commits to show. Defaults to 20.' },
+    path: { type: 'string', description: 'Limit the log to commits touching this path.' },
   },
   required: [],
   additionalProperties: false,
@@ -76,5 +101,12 @@ export const GIT_TOOLS: RegisteredTool[] = [
     inputSchema: gitDiffSchema,
     policy: 'read',
     runner: gitDiffRunner,
+  },
+  {
+    name: 'git_log',
+    description: 'Show recent commits (hash, date, author, subject), optionally for one path.',
+    inputSchema: gitLogSchema,
+    policy: 'read',
+    runner: gitLogRunner,
   },
 ];

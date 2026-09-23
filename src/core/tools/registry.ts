@@ -118,6 +118,11 @@ export class ToolRegistry {
     return [...this.tools.values()];
   }
 
+  /** The tools advertised to a model: everything except hidden aliases. */
+  visible(): RegisteredTool[] {
+    return this.list().filter((tool) => !tool.hidden);
+  }
+
   validateArgs(name: string, args: unknown): RegistryValidationResult {
     const tool = this.tools.get(name);
     if (!tool) {
@@ -204,6 +209,10 @@ export function getTool(name: string): RegisteredTool | undefined {
 
 export function listTools(): RegisteredTool[] {
   return defaultRegistry.list();
+}
+
+export function listVisibleTools(): RegisteredTool[] {
+  return defaultRegistry.visible();
 }
 
 export function validateArgs(name: string, args: unknown): RegistryValidationResult {

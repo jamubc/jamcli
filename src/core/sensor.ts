@@ -40,7 +40,7 @@ export function selectToolsForQuery(
     return [];
   }
 
-  for (const name of ['read_file', 'search_code', 'list_files']) {
+  for (const name of ['read_file', 'grep', 'glob']) {
     alwaysOn.add(name);
   }
 

@@ -1,3 +1,7 @@
+/**
+ * The five tool names of the original interface. Kept only for the legacy per-tool
+ * permission file and the Ink interface; the registry is the source of truth for tools.
+ */
 export type ToolName = 'list_files' | 'read_file' | 'search_code' | 'apply_patch' | 'run_command';
 
 export type ToolPolicyClass = 'read' | 'write' | 'execute';
@@ -127,6 +131,10 @@ export interface RegisteredTool {
   inputSchema: JsonSchema;
   policy: ToolPolicyClass;
   runner: ToolRunner;
+  /** Registered and callable, but not advertised to the model. */
+  hidden?: boolean;
+  /** The canonical tool this one stands in for, so rules and grants for either apply to both. */
+  aliasOf?: string;
 }
 
 export interface RegistryValidationResult {

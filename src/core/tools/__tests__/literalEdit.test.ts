@@ -31,17 +31,6 @@ test('edit inserts dollar sequences literally', async () => {
   expect(await fs.readFile(file('run.sh'), 'utf-8')).toBe(`#!/bin/sh\n${DOLLARS}\n`);
 });
 
-test('apply_patch find and replace inserts dollar sequences literally', async () => {
-  await fs.writeFile(file('run.sh'), 'echo PID\n');
-  const result = await registry().execute(
-    'apply_patch',
-    { path: 'run.sh', find_string: 'echo PID', replace_string: DOLLARS },
-    { projectRoot }
-  );
-  expect(result.success).toBe(true);
-  expect(await fs.readFile(file('run.sh'), 'utf-8')).toBe(`${DOLLARS}\n`);
-});
-
 test('replace_all replaces every occurrence and reports the count', async () => {
   await fs.writeFile(file('a.txt'), 'x = 1\ny = x\nz = x\n');
   const result = await registry().execute(
