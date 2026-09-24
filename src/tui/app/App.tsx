@@ -2,16 +2,18 @@
 import path from 'path';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useKeyboard, useRenderer } from '@opentui/react';
-import type { SyntaxStyle, TextareaRenderable } from '@opentui/core';
+import type { TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
-import { initialView, reduceView, type PendingApproval, type Row, type ViewState } from '../state/view.js';
+import { initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, gitBranch } from './controller.js';
-import { compactionLine, noticeLine, statusParts, toolLine } from './format.js';
-import { createSyntaxStyle, filetypeOf } from './syntax.js';
+import { statusParts } from './format.js';
+import { createSyntaxStyle } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
 import { Palette } from './Palette.js';
 import { Picker, filterItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
-import { THEMES, ThemeContext, useTheme, type Theme } from './theme.js';
+import { THEMES, ThemeContext, type Theme } from './theme.js';
+import { RowView } from './Rows.js';
+import { BypassConfirm, PermissionPrompt } from './Prompt.js';
 
 export interface AppProps {
   /** The session the interface opens on. */
@@ -27,113 +29,11 @@ export interface AppProps {
   theme?: Theme;
 }
 
-/** A unified diff, highlighted as the file it changes. */
-function DiffView({ diff, file, syntax }: { diff: string; file?: string; syntax: SyntaxStyle }) {
-  return <diff diff={diff} view="unified" filetype={filetypeOf(file)} syntaxStyle={syntax} showLineNumbers wrapMode="word" />;
-}
-
-function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
-  const theme = useTheme();
-  switch (row.kind) {
-    case 'user':
-      return (
-        <box marginTop={1}>
-          <text fg={theme.user}>{`> ${row.text}`}</text>
-        </box>
-      );
-    case 'assistant':
-      return (
-        <box flexDirection="column">
-          {row.reasoning ? <text fg={theme.dim}>{`thinking: ${row.streaming && !row.text ? row.reasoning.slice(-200) : row.reasoning.split('\n')[0].slice(0, 120)}`}</text> : null}
-          {row.text ? <markdown content={row.text} syntaxStyle={syntax} streaming={row.streaming} conceal /> : null}
-        </box>
-      );
-    case 'tool':
-      return (
-        <box flexDirection="column">
-          <text fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent}>{toolLine(row)}</text>
-          {!row.collapsed && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}
-          {!row.collapsed && !row.diff && row.output ? <text fg={theme.dim}>{row.output}</text> : null}
-        </box>
-      );
-    case 'notice':
-      return <text fg={row.level === 'error' ? theme.error : row.level === 'warn' ? theme.warn : theme.dim}>{noticeLine(row)}</text>;
-    case 'compaction':
-      return <text fg={theme.dim}>{compactionLine(row)}</text>;
-    case 'command':
-      return (
-        <box marginTop={1}>
-          <text fg={theme.accent}>{`> ${row.text}`}</text>
-        </box>
-      );
-    case 'output':
-      return <text>{row.text}</text>;
-  }
-}
-
 /** The pattern a prompt offers, by its place among the suggestions, and whether it is taking feedback. */
 interface PromptSelection {
   callId?: string;
   selected: number;
   feedback: boolean;
-}
-
-/** An input's submitted text: OpenTUI's React input hands over the value itself. */
-const submitted = (value: unknown): string => (typeof value === 'string' ? value : '');
-
-/**
- * The permission prompt, which replaces the composer while a call waits: the action, its
- * preview, why it asked, and the four choices of D6. A deny can carry feedback for the
- * model, typed on a line of its own.
- */
-function PermissionPrompt(props: {
-  approval: PendingApproval;
-  queued: number;
-  syntax: SyntaxStyle;
-  file?: string;
-  selected: number;
-  feedback: boolean;
-  onFeedback: (text: string) => void;
-}) {
-  const { approval, queued, syntax, file, selected, feedback } = props;
-  const theme = useTheme();
-  const preview = approval.preview?.kind === 'diff' ? undefined : approval.preview?.text.split('\n').slice(0, 12).join('\n');
-  const pattern = approval.suggestions[selected];
-  const others = approval.suggestions.length > 1 ? ` (${selected + 1} of ${approval.suggestions.length}; Up and Down choose)` : '';
-  return (
-    <box border borderColor={theme.warn} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
-      <text fg={theme.warn}>{`Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued} waiting)` : ''}`}</text>
-      <text fg={theme.dim}>{`Asked because ${approval.reason}.`}</text>
-      {approval.preview?.kind === 'diff' ? <DiffView diff={approval.preview.text} file={file} syntax={syntax} /> : null}
-      {preview ? <text>{preview}</text> : null}
-      {feedback ? (
-        <box flexDirection="column">
-          <text>Tell the model what to do instead, or press Enter to just deny:</text>
-          <input focused placeholder="feedback for the model" onSubmit={(value: unknown) => props.onFeedback(submitted(value))} />
-        </box>
-      ) : (
-        <box flexDirection="column">
-          <text>1 allow once</text>
-          {pattern ? <text>{`2 allow ${pattern} for this session${others}`}</text> : null}
-          {pattern ? <text>{`3 allow ${pattern} for this project, saved in .jamcli/config.local.json`}</text> : null}
-          <text>4 deny, and say why · Escape denies</text>
-        </box>
-      )}
-    </box>
-  );
-}
-
-/** Asks the person to type yes before bypass mode turns on. */
-function BypassConfirm({ onAnswer }: { onAnswer: (text: string) => void }) {
-  const theme = useTheme();
-  return (
-    <box border borderColor={theme.error} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
-      <text fg={theme.error}>Turn on bypass mode?</text>
-      <text>Nothing will ask before it runs: every edit and every command goes ahead, and only deny rules stop a call.</text>
-      <text>Type yes and press Enter to turn it on. Anything else, or Escape, leaves the mode as it is.</text>
-      <input focused placeholder="yes" onSubmit={(value: unknown) => onAnswer(submitted(value))} />
-    </box>
-  );
 }
 
 /** A composer line that starts with a slash and has no space yet is a command being named. */
