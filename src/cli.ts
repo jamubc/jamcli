@@ -12,6 +12,7 @@ import {
 } from './core/session/store.js';
 import { resolveJamcliProjectRoot } from './utils/projectRoot.js';
 import type { AgentEvent } from './core/types.js';
+import { JAMCLI_VERSION } from './core/version.js';
 
 const SESSIONS_ACTIONS = ['list', 'search', 'show', 'export', 'fork'] as const;
 type SessionsAction = (typeof SESSIONS_ACTIONS)[number];
@@ -171,7 +172,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
   const parsed = parseArgs(argv);
 
   if (parsed.version) {
-    process.stdout.write(`${process.env.npm_package_version ?? '1.0.0'}\n`);
+    process.stdout.write(`${JAMCLI_VERSION}\n`);
     return 0;
   }
 

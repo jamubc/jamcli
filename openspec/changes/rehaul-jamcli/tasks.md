@@ -192,7 +192,16 @@ Line references describe the tree when the change opened.
       - not recording the parent;
       - not describing categories;
       - an unknown category that names nothing.
-- [ ] 2.15 Lazy entry point. Files: `src/index.tsx`. Dispatch on arguments before importing the interface. Verify `--version` median at or under 120 ms here (the 60 ms budget is enforced after stage 6's build change).
+- [x] 2.15 Lazy entry point. Files: `src/index.tsx`. Dispatch on arguments before importing the interface. Verify `--version` median at or under 120 ms here (the 60 ms budget is enforced after stage 6's build change).
+  - **Verification**: `src/index.tsx` has no static imports. `--version` loads only `src/core/version.ts`, the command surfaces load `src/cli.ts` without the interface, and a bare `jamcli` loads `src/tui/start.tsx` with React and Ink. `--version` in both `src/index.tsx` and `src/cli.ts` prints `JAMCLI_VERSION`, where `cli.ts` printed `npm_package_version` or a hard-coded `1.0.0`.
+    - `--version`, median of 7 runs here, before and after:
+      - `node dist/index.js`: 503 ms to 41 ms.
+      - `bun src/index.tsx`: 271 ms to 19 ms.
+      - `bun dist/index.js`: 252 ms to 19 ms.
+    - The floors are `node -e 0` at 29 ms and `bun -e 0` at 5 ms, so both runners already meet the 60 ms budget.
+    - The interface still renders from the bundle under Node and from the sources under Bun, checked in a pseudo-terminal.
+    - 3 tests: the entry has no static imports, `--version` and `-v` print the recorded version, and `--help` reaches the command line.
+    - Mutation probes: a static import of the interface, and a wrong version, each turn a test red.
 - [ ] 2.16 The conformance test for one runtime. Files: `src/core/runtime/__tests__/surfaces.test.ts`. Drive the same scripted session through the headless and ACP assemblies and the interface's runtime factory call, and assert identical tool lists, provider requests, and transcripts.
 
 The Ink interface keeps running on its existing paths until stage 6; the checks above
