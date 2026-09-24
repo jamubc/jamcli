@@ -52,3 +52,17 @@ test("the default profile's temperature does not reach a Claude model that refus
   await older.run('hi');
   expect(lastBody().temperature).toBe(0.7);
 });
+
+test('a current Claude model thinks adaptively and shows it, and its signed thinking comes back whole', async () => {
+  configure('claude-opus-5-5');
+  const runtime = await start();
+  server.enqueue({ text: 'done', reasoning: 'weighing it', reasoningSignature: 'sig-1' });
+  const reasoning: string[] = [];
+  await runtime.run('think about it', (event) => {
+    if (event.type === 'reasoning') reasoning.push(event.delta);
+  });
+  expect(lastBody().thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+  expect(reasoning.join('')).toBe('weighing it');
+  const reply = runtime.session.messages.at(-1)!;
+  expect(reply.reasoningBlocks).toEqual([{ type: 'thinking', text: 'weighing it', signature: 'sig-1' }]);
+});

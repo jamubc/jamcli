@@ -168,6 +168,8 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
       ...(options.temperature !== undefined && acceptsTemperature(options) ? { temperature: options.temperature } : {}),
       ...(options.extraParams || {}),
     };
+    const thinking = thinkingFor(options, body.max_tokens as number);
+    if (thinking && body.thinking === undefined) body.thinking = thinking;
     if (system.length) body.system = system.join('\n\n');
     if (options.tools?.length) {
       body.tools = options.tools.map((tool) => ({
@@ -383,6 +385,29 @@ function mapUsage(usage: any): TokenUsage | undefined {
   };
 }
 
+
+/** The smallest thinking budget the API takes. */
+const MIN_THINKING_BUDGET = 1_024;
+
+/**
+ * The thinking a request asks for, from the model's style and the reasoning level. `auto`
+ * lets a model that thinks adaptively decide for itself; `on` also gives a model that
+ * takes a budget half of the output limit to think in; `off` turns thinking off where the
+ * model allows it, and leaves a model that always thinks at its default. Summaries are
+ * asked for, so the interface can show what the model is thinking.
+ */
+export function thinkingFor(options: ProviderRequestOptions, maxTokens: number): Record<string, unknown> | undefined {
+  const reasoning = options.reasoning ?? 'auto';
+  if (options.thinkingStyle === 'adaptive') {
+    if (reasoning === 'off') return options.alwaysThinks ? undefined : { type: 'disabled' };
+    return { type: 'adaptive', display: 'summarized' };
+  }
+  if (options.thinkingStyle === 'budget' && reasoning === 'on') {
+    const budget = Math.floor(maxTokens / 2);
+    return budget >= MIN_THINKING_BUDGET ? { type: 'enabled', budget_tokens: budget } : undefined;
+  }
+  return undefined;
+}
 
 /**
  * Whether a request may carry a temperature. Claude models from Opus 4.7 and Sonnet 5 on
