@@ -101,6 +101,13 @@ export class PermissionEngine {
     this.rules.push(rule);
   }
 
+  /** Take out the rules that match, and return them. */
+  remove(match: (rule: Rule) => boolean): Rule[] {
+    const removed = this.rules.filter(match);
+    this.rules = this.rules.filter((rule) => !match(rule));
+    return removed;
+  }
+
   /**
    * Grant a pattern, or a list of them, for this session. Returns an error, and grants
    * nothing, when any item is not a rule.
