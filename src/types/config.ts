@@ -133,9 +133,17 @@ export interface Config {
   otel?: OtelSettings;
   /** How the interface looks and moves. */
   ui?: UiSettings;
+  git?: GitSettings;
 }
 
 export type ThemeName = 'dark' | 'light' | 'high-contrast' | 'monochrome';
+
+export interface GitSettings {
+  /** A trailer added to every commit JamCLI makes. Off by default. */
+  attribution?: string;
+  /** Let bypass mode commit without asking. Off by default. */
+  allow_commit_in_bypass?: boolean;
+}
 
 export interface UiSettings {
   /** Defaults to dark. `NO_COLOR` forces monochrome. */

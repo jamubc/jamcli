@@ -459,6 +459,21 @@
       },
       "additionalProperties": false
     },
+    "git": {
+      "type": "object",
+      "properties": {
+        "attribution": {
+          "type": "string",
+          "description": "A trailer added to every commit JamCLI makes, such as \"Co-authored-by: ...\". Off by default: commits carry only your own identity."
+        },
+        "allow_commit_in_bypass": {
+          "type": "boolean",
+          "description": "Let bypass mode commit without asking. Off by default: a commit is always asked for, whatever the mode."
+        }
+      },
+      "additionalProperties": false,
+      "description": "How JamCLI commits."
+    },
     "ui": {
       "type": "object",
       "properties": {

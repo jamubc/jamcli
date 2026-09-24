@@ -155,6 +155,13 @@ export const ConfigFileSchema = z
         include_content: z.boolean().describe('Put prompts, outputs, tool arguments, and tool results on spans. Off by default.'),
       })
       .partial(),
+    git: z
+      .strictObject({
+        attribution: z.string().describe('A trailer added to every commit JamCLI makes, such as "Co-authored-by: ...". Off by default: commits carry only your own identity.'),
+        allow_commit_in_bypass: z.boolean().describe('Let bypass mode commit without asking. Off by default: a commit is always asked for, whatever the mode.'),
+      })
+      .partial()
+      .describe('How JamCLI commits.'),
     ui: z
       .strictObject({
         theme: z.enum(['dark', 'light', 'high-contrast', 'monochrome']).describe('The interface\'s colors. NO_COLOR forces monochrome. Defaults to dark.'),
