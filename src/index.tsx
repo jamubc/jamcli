@@ -36,6 +36,12 @@ const HEADLESS_INTENTS = new Set([
 ]);
 
 const startInterface = async () => {
+  // The OpenTUI interface is chosen by JAMCLI_INTERFACE=opentui until it replaces the Ink one.
+  if (process.env.JAMCLI_INTERFACE === 'opentui') {
+    const { startOpenTui } = await import('./tui/app/start.js');
+    await startOpenTui();
+    return;
+  }
   const { startTui } = await import('./tui/start.js');
   startTui();
 };
