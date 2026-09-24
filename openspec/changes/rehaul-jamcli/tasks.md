@@ -289,10 +289,35 @@ cover headless, ACP, and delegation.
     - losing the file's other settings;
     - not splitting lists;
     - forgetting an unsaveable grant.
-- [ ] 3.4 The sandbox adapters (D7). Files: `src/core/sandbox/` (new).
+- [x] 3.4 The sandbox adapters (D7). Files: `src/core/sandbox/` (new).
   - bubblewrap with a read-only root, writable project and temporary directory, hidden credential paths, and network off by default.
   - A Seatbelt profile generator, and `none`.
   - Detection and the reported kind.
+  - **Verification**: `src/core/sandbox/` holds the adapters and detection:
+    - `bwrap.ts`: bubblewrap arguments.
+    - `seatbelt.ts`: the Seatbelt profile.
+    - `detect.ts`: a probe that really starts the sandbox, cached, with the reason for `none`.
+    - `paths.ts`: the hidden paths.
+  - The runtime detects the sandbox, or takes one it is given. It reports it as `Runtime.sandbox`, wraps every command in it, and tells the permission engine whether `auto` can apply. The behavior is recorded under D7.
+  - 4 adapter tests:
+    - the bubblewrap mounts and their order;
+    - the Seatbelt profile, with quoting and rule order;
+    - detection outcomes;
+    - a real sandboxed command that writes the project, whose `/tmp` writes never reach the real file system, and whose write to the home directory fails with the sandbox named.
+  - 1 runtime test: commands run in the detected sandbox.
+  - Mutation probes, each turning a test red:
+    - a writable root;
+    - hidden mounts before the writable binds;
+    - the network always off;
+    - credentials not hidden;
+    - Seatbelt denies before its allows;
+    - unquoted Seatbelt paths;
+    - the Seatbelt network always on;
+    - ignoring `sandbox.enabled`;
+    - the runtime not wrapping;
+    - no note on failure;
+    - the engine never sandboxed.
+  - The first mount-order probe was built wrong and slipped through; it was redone as a real swap.
 - [ ] 3.5 The minimal environment for every subprocess (commands, hooks, MCP servers, language servers). Files: `src/core/sandbox/env.ts`, `src/services/McpManager.ts`. Verify a provider key in the parent environment is absent in a spawned command and an MCP server.
 - [ ] 3.6 Sandbox escape tests. Files: `src/core/sandbox/__tests__/escape.test.ts`. Under bubblewrap, reading `~/.ssh`, writing outside the project, network access, and reading a provider key all fail. Skipped with a stated reason when bubblewrap is absent.
 - [ ] 3.7 Seatbelt live check on macOS. Stays unchecked until run on a Mac: run the escape suite there and record the output here.

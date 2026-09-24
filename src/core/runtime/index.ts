@@ -19,6 +19,7 @@ import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { PermissionMode } from '../permissions/modes.js';
 import { LOCAL_CONFIG, grantedRules, writeProjectGrant } from '../permissions/grants.js';
+import { detectSandbox, type Sandbox, type SandboxKind, type SandboxSettings } from '../sandbox/index.js';
 import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
@@ -45,8 +46,8 @@ export interface RuntimeOptions {
   permissions?: Omit<PermissionFlags, 'allowTools' | 'denyTools'>;
   /** `--dangerously-bypass-permissions`: start in bypass mode. */
   bypassPermissions?: boolean;
-  /** Whether commands run in a sandbox, which `auto` mode requires. */
-  sandboxed?: boolean;
+  /** The sandbox commands run in. Detected from the platform and `sandbox` settings when not given. */
+  sandbox?: Sandbox;
   maxSteps?: number;
   signal?: AbortSignal;
   /** Serve this provider instead of building one from configuration. */
@@ -71,6 +72,8 @@ export interface Runtime {
   /** Problems found while assembling, also reported as notices by the first turn. */
   readonly notices: string[];
   readonly permissionMode: PermissionMode;
+  /** Where commands run: `bwrap`, `seatbelt`, or `none`, with the reason. */
+  readonly sandbox: { kind: SandboxKind; reason: string };
   /** Switch permission modes for later calls. Returns why not, changing nothing, when the mode is unavailable. */
   setPermissionMode(mode: PermissionMode, options?: { bypassConfirmed?: boolean }): string | undefined;
   run(input: string, onEvent?: (event: AgentEvent) => void): Promise<RunResult>;
@@ -105,6 +108,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
   const depth = options.parent ? options.parent.depth : 0;
 
+  const sandbox = options.sandbox ?? detectSandbox({ projectRoot, settings: (config as { sandbox?: SandboxSettings }).sandbox });
+
   let permissions: PermissionEngine;
   if (options.parent) {
     permissions = options.parent.permissions;
@@ -115,7 +120,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       legacyTools: mcpConfig.tools,
       flags: { allowTools: options.allowTools, denyTools: options.denyTools, ...options.permissions },
       bypass: options.bypassPermissions,
-      sandboxed: Boolean(options.sandboxed),
+      sandboxed: sandbox.kind !== 'none',
       env,
     });
     permissions = assembled.engine;
@@ -128,6 +133,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     configService,
     mcp,
     env: options.env,
+    sandbox,
     parent: () => ({ sessionId: log.id, depth: depth + 1, permissions }),
     create: createRuntime,
   });
@@ -160,6 +166,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         projectRoot,
         ignorePatterns: mcpConfig.ignore_patterns,
         commandTimeoutMs: config.agent_loop?.command_timeout_ms ?? DEFAULT_AGENT_LOOP_CONFIG.command_timeout_ms,
+        ...(sandbox.kind === 'none' ? {} : { wrapCommand: sandbox.wrap, sandboxNote: sandbox.note }),
         delegate: delegateChild,
         delegationDepth: depth,
         delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
@@ -247,6 +254,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     get permissionMode() {
       return permissions.mode;
     },
+    sandbox: { kind: sandbox.kind, reason: sandbox.reason },
 
     setPermissionMode(mode, modeOptions) {
       const from = permissions.mode;

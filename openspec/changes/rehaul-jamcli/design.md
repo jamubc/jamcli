@@ -434,6 +434,15 @@ interface Sandbox {
 - **none.** Used on Windows or when the sandbox is disabled. The status line says
   "unsandboxed", and `auto` mode is unavailable.
 
+As built (3.4), the sandbox is on by default wherever it starts, found by a probe that
+really runs it, and `sandbox.enabled: false` turns it off. `/tmp` inside bubblewrap is a
+private tmpfs, so writes there vanish with the command. A failed command that ran in a
+sandbox says so in its result and names `sandbox.network` and `sandbox.writable`, the
+settings that widen it. MCP servers the user configured are not sandboxed; plugin servers
+are, with their declared permissions (D18). The Seatbelt profile allows reading, then
+denies the hidden paths, because in a profile the last matching rule wins; it stays
+unverified until 3.7 runs it on a Mac.
+
 The hidden paths by default are `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`,
 `~/.config/gcloud`, `~/.config/gh`, `~/.docker/config.json`, `~/.kube`, `~/.netrc`, and
 `~/.npmrc`. The list is configurable.

@@ -336,7 +336,9 @@ async function runCommandRunner(args: Record<string, any>, ctx: ToolContext): Pr
 
   const result = await runShellCommand(options);
   const payload = formatCommandResult(command, result, timeoutMs);
-  return { ...payload, metadata: { ...payload.metadata, cwd } };
+  // A failure inside a sandbox may be the sandbox's doing; say so, and how to widen it.
+  const note = payload.status === 'error' && ctx.sandboxNote ? `\n\n${ctx.sandboxNote}` : '';
+  return { ...payload, output: `${payload.output}${note}`, metadata: { ...payload.metadata, cwd } };
 }
 
 async function commandOutputRunner(args: Record<string, any>): Promise<ToolRunPayload> {

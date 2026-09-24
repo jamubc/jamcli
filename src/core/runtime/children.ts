@@ -6,6 +6,7 @@ import type { ConfigService } from '../../services/ConfigService.js';
 import type { McpSource } from './tools.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { Runtime, RuntimeOptions } from './index.js';
+import type { Sandbox } from '../sandbox/types.js';
 
 /** What a child inherits from the session that delegates to it. */
 export interface ParentSession {
@@ -22,6 +23,8 @@ export interface ChildLauncherOptions {
   parent: () => ParentSession;
   mcp?: McpSource;
   env?: Record<string, string | undefined>;
+  /** The parent's sandbox, which the child's commands run in too. */
+  sandbox?: Sandbox;
   create: (options: RuntimeOptions) => Promise<Runtime>;
 }
 
@@ -63,6 +66,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         mcp: options.mcp ? borrowed(options.mcp) : false,
         env: options.env,
         configService: options.configService,
+        sandbox: options.sandbox,
         parent: options.parent(),
       });
     } catch (error: any) {

@@ -123,6 +123,8 @@ export interface ToolContext {
   maxOutputChars?: number;
   /** Wraps commands in a sandbox when one is active. */
   wrapCommand?: CommandWrapper;
+  /** Added to a failed command's result when it ran in a sandbox. */
+  sandboxNote?: string;
   /** Further directories tools may reach besides the project root. */
   additionalRoots?: string[];
   /** Force a search backend; `auto` uses ripgrep when it is on PATH. */

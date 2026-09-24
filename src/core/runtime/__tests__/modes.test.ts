@@ -6,6 +6,7 @@ import { createRuntime, type RuntimeOptions } from '../index.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 import { SessionLog } from '../../transcript/index.js';
 import type { AgentEvent } from '../../types.js';
+import { detectSandbox, unsandboxed as unsandboxedSandbox } from '../../sandbox/index.js';
 
 let server: FakeProviderServer;
 let root: string;
@@ -72,12 +73,13 @@ test('switching modes changes what is offered and asked, and is recorded', async
 
 test('auto mode needs a sandbox, whether asked for by a file or a switch', async () => {
   configure({ mode: 'auto' });
-  const unsandboxed = await start();
+  const unsandboxed = await start({ sandbox: unsandboxedSandbox('none in this test') });
   expect(unsandboxed.permissionMode).toBe('default');
   expect(unsandboxed.notices).toEqual([expect.stringContaining('.jamcli/config.json permissions.mode asks for auto mode')]);
   expect(unsandboxed.setPermissionMode('auto')).toContain('no sandbox');
+  expect(unsandboxed.sandbox).toEqual({ kind: 'none', reason: 'none in this test' });
 
-  const sandboxed = await start({ sandboxed: true });
+  const sandboxed = await start({ sandbox: { kind: 'bwrap', reason: 'a test sandbox', wrap: (command) => ({ file: '/bin/sh', args: ['-c', command] }) } });
   expect(sandboxed.permissionMode).toBe('auto');
   server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo in-auto' } }] }, { text: 'ok' });
   const asked: string[] = [];
@@ -116,4 +118,21 @@ test('a pattern granted for the session stops the prompts it was made for', asyn
     event.decide({ allow: true, scope: 'session', pattern: 'run_command(echo *)' });
   });
   expect(asked).toEqual(['echo one', 'ls']);
+});
+
+const detected = detectSandbox({ projectRoot: os.tmpdir() });
+
+test.skipIf(detected.kind !== 'bwrap')('commands run in the sandbox the runtime detects', async () => {
+  const runtime = await start({ allowTools: ['run_command'] });
+  expect(runtime.sandbox.kind).toBe('bwrap');
+  const probe = path.join(os.homedir(), `.jamcli-runtime-probe-${process.pid}`);
+  try {
+    server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: `touch ${probe}` } }] }, { text: 'ok' });
+    await runtime.run('try it');
+    expect(fs.existsSync(probe)).toBe(false);
+    const result = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool').content;
+    expect(result).toContain('bubblewrap sandbox');
+  } finally {
+    fs.rmSync(probe, { force: true });
+  }
 });
