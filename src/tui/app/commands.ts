@@ -17,6 +17,8 @@ import type { PickItem, PickRequest } from './Picker.js';
 import { THEME_NAMES, THEMES, noColor, type Theme } from './theme.js';
 import { keysHelp, type Keybindings } from './keys.js';
 import { setup } from './setup.js';
+import { style } from './style.js';
+import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
 /** Where a command comes from. Custom commands arrive with stage 8 and show their source in the palette. */
@@ -59,6 +61,9 @@ export interface CommandContext {
   pick(request: PickRequest): void;
   readonly theme: Theme;
   setTheme(theme: Theme): void;
+  /** The working indicator's style. */
+  readonly statusStyle: StatusStyleDefinition;
+  setStatusStyle(style: StatusStyleDefinition): void;
   /** Put text in the composer for the person to finish. */
   prefill(text: string): void;
   /** The keys in effect, for help. */
@@ -576,6 +581,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   help,
   setup,
   model,
+  style,
   mode,
   permissions,
   context,

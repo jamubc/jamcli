@@ -169,7 +169,7 @@ test('commands that change the session wait for a running turn, and the others a
   try {
     context.server.enqueue({ text: 'Too slow.', delayMs: 3_000 });
     await send(setup, 'take a while');
-    await frameWith(setup, (frame) => frame.includes('· thinking'));
+    await frameWith(setup, (frame) => frame.includes('thinking · default mode'));
     await send(setup, '/clear');
     await frameWith(setup, (frame) => frame.includes('A turn is running; start a new session when it ends, or press Escape to stop it.'));
     await send(setup, '/cost');

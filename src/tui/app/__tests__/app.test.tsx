@@ -111,7 +111,7 @@ test('Escape stops a running turn, and the interface says it stopped', async () 
     context.server.enqueue({ text: 'Too late.', delayMs: 3_000 });
     await setup.mockInput.typeText('take your time');
     setup.mockInput.pressEnter();
-    await frameWith(setup, (value) => value.includes('· thinking'));
+    await frameWith(setup, (value) => value.includes('thinking · default mode'));
     setup.mockInput.pressEscape();
     const after = await frameWith(setup, (value) => value.includes('Stopped.'));
     expect(after).toContain('· ready');

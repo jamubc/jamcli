@@ -7,6 +7,8 @@ import type { Runtime } from '../../core/runtime/index.js';
 import { initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, gitBranch } from './controller.js';
 import { statusParts } from './format.js';
+import { Indicator } from './Indicator.js';
+import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
 import { Palette } from './Palette.js';
@@ -38,7 +40,11 @@ export interface AppProps {
   keys?: { bindings: Keybindings; problems: string[] };
   /** No user configuration and no model: open setup at the start. */
   firstRun?: boolean;
+  /** The working indicator's spinner and colors. Defaults to the classic spinner with subtle words. */
+  statusStyle?: StatusStyleDefinition;
 }
+
+const WORKING = new Set(['thinking', 'streaming', 'tool', 'retrying', 'compacting']);
 
 const TODO_WORDS: Record<TodoView['status'], string> = { pending: 'to do', in_progress: 'doing', completed: 'done' };
 
@@ -88,6 +94,7 @@ export function App(props: AppProps) {
   const [exitArmed, setExitArmed] = useState(false);
   const branch = useMemo(() => gitBranch(projectRoot), [projectRoot]);
   const [theme, setTheme] = useState<Theme>(startTheme);
+  const [statusStyle, setStatusStyle] = useState<StatusStyleDefinition>(props.statusStyle ?? DEFAULT_STATUS_STYLE);
   const syntax = useMemo(() => createSyntaxStyle(theme), [theme]);
   useEffect(() => () => syntax.destroy(), [syntax]);
 
@@ -193,6 +200,8 @@ export function App(props: AppProps) {
     pick,
     theme,
     setTheme,
+    statusStyle,
+    setStatusStyle,
     prefill: (text) => {
       composer.current?.setText(text);
       composer.current?.gotoBufferEnd();
@@ -368,6 +377,10 @@ export function App(props: AppProps) {
     keys.bindings[action].filter((chord) => chord.name.length > 1 || /[a-z]/.test(chord.name)).map((chord) => ({ name: chord.name, ctrl: chord.ctrl, shift: chord.shift, meta: chord.meta, action: submitAs }));
 
   const plain = screenReader;
+  const status = statusParts(state.status);
+  // The indicator moves while JamCLI works, not while it waits for the person. Screen
+  // reader mode implies reduced motion, so it never draws there.
+  const moving = !reducedMotion && WORKING.has(state.status.phase);
   return (
     <ThemeContext.Provider value={theme}>
       <PlainContext.Provider value={plain}>
@@ -427,8 +440,9 @@ export function App(props: AppProps) {
                 </box>
               </box>
             )}
-            <box height={1} flexShrink={0}>
-              <text fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${statusParts(state.status).join(plain ? ', ' : ' · ')}`}</text>
+            <box height={1} flexShrink={0} flexDirection="row">
+              {moving ? <Indicator style={statusStyle} words={status.at(-1)!} /> : null}
+              <text fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${(moving ? status.slice(0, -1) : status).join(plain ? ', ' : ' · ')}`}</text>
             </box>
           </box>
         </MotionContext.Provider>
