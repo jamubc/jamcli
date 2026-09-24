@@ -11,7 +11,7 @@ import { userConfigDir } from '../../utils/paths.js';
  * Keys a prompt or a list uses (1 to 4, Up, Down, Tab, Escape to close) are fixed, so
  * they read the same everywhere.
  */
-export const KEY_ACTIONS = ['send', 'newline', 'interrupt', 'cycle_mode', 'history', 'tool_detail', 'todos', 'redraw', 'exit', 'help'] as const;
+export const KEY_ACTIONS = ['send', 'newline', 'interrupt', 'cycle_mode', 'history', 'tool_detail', 'todos', 'page_up', 'page_down', 'redraw', 'exit', 'help'] as const;
 export type KeyAction = (typeof KEY_ACTIONS)[number];
 
 export const ACTION_WORDS: Record<KeyAction, string> = {
@@ -22,6 +22,8 @@ export const ACTION_WORDS: Record<KeyAction, string> = {
   history: 'searches earlier messages',
   tool_detail: 'opens or closes the last tool block',
   todos: 'shows or hides the todo list',
+  page_up: 'scrolls the transcript up a page, and at the top shows earlier rows',
+  page_down: 'scrolls it down a page',
   redraw: 'redraws the screen',
   exit: 'leaves, pressed twice',
   help: 'lists the commands and keys, on an empty composer',
@@ -35,6 +37,8 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
   history: ['ctrl+r'],
   tool_detail: ['ctrl+o'],
   todos: ['ctrl+t'],
+  page_up: ['pageup'],
+  page_down: ['pagedown'],
   redraw: ['ctrl+l'],
   exit: ['ctrl+c'],
   help: ['?'],

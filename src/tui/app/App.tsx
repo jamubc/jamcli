@@ -2,7 +2,7 @@
 import path from 'path';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useKeyboard, useRenderer } from '@opentui/react';
-import type { TextareaRenderable } from '@opentui/core';
+import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, gitBranch } from './controller.js';
@@ -43,6 +43,16 @@ export interface AppProps {
   /** The working indicator's spinner and colors. Defaults to the classic spinner with subtle words. */
   statusStyle?: StatusStyleDefinition;
 }
+
+/**
+ * How many transcript rows are drawn at first. A long session resumes with its latest
+ * rows, and Page Up at the top draws as many again, so memory and the time to resume
+ * follow what the person reads, not the session's length.
+ */
+export const TRANSCRIPT_ROWS = 200;
+
+/** How long the view holds its place while earlier rows are laid out. */
+const ANCHOR_MS = 600;
 
 const WORKING = new Set(['thinking', 'streaming', 'tool', 'retrying', 'compacting']);
 
@@ -86,11 +96,24 @@ export function App(props: AppProps) {
   const bound = (action: KeyAction, key: KeyLike) => matchesAction(keys.bindings, action, key);
   const [showTodos, setShowTodos] = useState(false);
   const renderer = useRenderer();
-  const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState => initialView());
+  // A session opened with messages already in it shows them from the first frame.
+  const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState =>
+    first.session.messages.length ? reduceView(initialView(), { type: 'load', messages: first.session.messages }) : initialView()
+  );
   const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch), [runtime]);
   const commands = useMemo(() => [...BUILTIN_COMMANDS, ...extra], [extra]);
   const composer = useRef<TextareaRenderable | null>(null);
+  const transcript = useRef<ScrollBoxRenderable | null>(null);
+  /** How many of the latest rows are drawn; it starts over with each session. */
+  const [drawn, setDrawn] = useState(TRANSCRIPT_ROWS);
+  /**
+   * Where the view was when earlier rows were asked for, as the distance from its top to
+   * the bottom, which rows added above do not change. Until the new rows have their
+   * heights (Markdown takes a frame or more), each frame puts the view back there, so
+   * the row that was at the top stays there. The next page key lets go.
+   */
+  const anchor = useRef<{ fromBottom: number; until: number } | undefined>(undefined);
   const [exitArmed, setExitArmed] = useState(false);
   const branch = useMemo(() => gitBranch(projectRoot), [projectRoot]);
   const [theme, setTheme] = useState<Theme>(startTheme);
@@ -105,6 +128,28 @@ export function App(props: AppProps) {
   useEffect(() => {
     for (const problem of keys.problems) dispatch({ type: 'notice', level: 'warn', text: problem });
   }, [keys]);
+
+  // Another session starts at its latest rows, at the bottom, wherever this one was.
+  useEffect(() => {
+    setDrawn(TRANSCRIPT_ROWS);
+    anchor.current = { fromBottom: 0, until: Date.now() + ANCHOR_MS };
+  }, [runtime]);
+  useEffect(() => {
+    const keep = () => {
+      const box = transcript.current;
+      const held = anchor.current;
+      if (!box || !held) return;
+      if (Date.now() > held.until) anchor.current = undefined;
+      const target = Math.max(0, box.scrollHeight - held.fromBottom);
+      if (box.scrollTop !== target) {
+        box.scrollTop = target;
+        renderer.requestRender();
+      }
+    };
+    renderer.addPostProcessFn(keep);
+    return () => renderer.removePostProcessFn(keep);
+  }, [renderer]);
+  const hidden = Math.max(0, state.rows.length - drawn);
 
   const approval = state.approvals[0];
   /**
@@ -348,6 +393,18 @@ export function App(props: AppProps) {
         return setPalette({ draft, index: 0, closed: draft });
       }
     }
+    const up = bound('page_up', key);
+    if (up || bound('page_down', key)) {
+      key.preventDefault();
+      const box = transcript.current;
+      if (!box) return;
+      anchor.current = undefined;
+      if (up && box.scrollTop <= 0 && hidden > 0) {
+        anchor.current = { fromBottom: box.scrollHeight - box.scrollTop, until: Date.now() + ANCHOR_MS };
+        return setDrawn((count) => count + TRANSCRIPT_ROWS);
+      }
+      return box.scrollBy(up ? -1 : 1, 'viewport');
+    }
     if (bound('interrupt', key) && controller.running) {
       controller.cancel();
       return;
@@ -389,8 +446,11 @@ export function App(props: AppProps) {
             <box height={1} flexShrink={0}>
               <text fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
             </box>
-            <scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling {...(plain ? { verticalScrollbarOptions: { visible: false } } : {})}>
-              {state.rows.map((row) => (
+            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling {...(plain ? { verticalScrollbarOptions: { visible: false } } : {})}>
+              {hidden ? (
+                <text fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
+              ) : null}
+              {(hidden ? state.rows.slice(hidden) : state.rows).map((row) => (
                 <RowView key={row.id} row={row} syntax={syntax} />
               ))}
             </scrollbox>
