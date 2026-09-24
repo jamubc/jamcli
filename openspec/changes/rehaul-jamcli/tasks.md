@@ -604,7 +604,14 @@ cover headless, ACP, and delegation.
   - **Type errors: 0**, from the unit's baseline of 22. The gates now hold it at 0, and the staged CI workflow's baseline is 0.
   - Kept: `src/tui/runtime.ts`, the interface's assembly call, which the OpenTUI start now uses and the surfaces test checks, and the configuration service, which the MCP manager and the ACP client still read through.
   - Found along the way, and fixed first in its own commit: with the Bun shebang from 6.13, Bun read a `.env` and a `bunfig.toml` from the working directory, so a hostile repository could run its own code through a bunfig preload before JamCLI's, or change JamCLI's settings through its `.env`. The shebang now passes `--no-env-file` and `--config=/dev/null`, and the build's test runs the command in such a directory. The release binaries of stage 12 need `--no-compile-autoload-dotenv` and `--no-compile-autoload-bunfig` for the same reason.
-- [ ] 6.16 Boot and exercise. Run the interface in a pseudo-terminal, exercise every slash command, one approval, one rejection, `/resume`, `/compact`, `/undo` after stage 7, and a mode switch, and record the result.
+- [x] 6.16 Boot and exercise. Run the interface in a pseudo-terminal, exercise every slash command, one approval, one rejection, `/resume`, `/compact`, `/undo` after stage 7, and a mode switch, and record the result.
+  - **Verification**: `src/__tests__/exercise.test.ts` runs the entry point in a pseudo-terminal, read through a headless terminal emulator (`@xterm/headless`), against a fake Ollama, as a person would meet it. One session: a reply drawn from Markdown; an approval (the prompt, then 1); a rejection (Escape); a mode switch by Shift+Tab and back by `/mode`; every slash command (`/help`, `/setup`, `/model`, `/style`, `/theme`, `/config`, `/permissions`, `/context`, `/cost`, `/tools`, `/mcp`, `/categories`, `/profile`, `/doctor`, `/export`, `/copy`, `/compact`, `/fork`, `/clear`, `/resume` through its picker, and `/exit`, which leaves with code 0). `/undo` answers that it is not available yet; stage 7 adds it, and 7.2 extends this exercise. It passed four runs in a row, in about 11 seconds each.
+  - Found by it, each fixed in its own commit with a test that fails without the fix:
+    - A request whose server reports no token counts was not counted, so `/cost` said none had been made. It is counted now, unreported, at no cost for a free model and at an unknown cost otherwise.
+    - With that, a free local model showed `$0.00` in the status line, which pushed the phase off an 80-column line. A cost of nothing takes no room now.
+    - A compaction showed twice, as its row and as the notice meant for text surfaces.
+    - `/profile` named `~/.config/jamcli/profiles/` whatever directory was in use.
+    - The first frame's status line read "no model" and "no sandbox" until an effect refreshed it.
 
 ## Stage 7: Git workflows
 
