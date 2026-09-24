@@ -87,7 +87,7 @@ interface PromptSelection {
 const naming = (draft: string) => draft.startsWith('/') && !/\s/.test(draft);
 
 /** Commands the design names that arrive with later work. Typing one says so rather than calling it unknown. */
-const LATER = new Set(['commit', 'pr', 'skills', 'hooks', 'plugins', 'workflows']);
+const LATER = new Set(['pr', 'skills', 'hooks', 'plugins', 'workflows']);
 
 export function App(props: AppProps) {
   const { runtime: first, projectRoot, onExit, openSession: open, commands: extra = [], theme: startTheme = THEMES.dark, screenReader = false } = props;

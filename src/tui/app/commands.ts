@@ -21,6 +21,7 @@ import { setup } from './setup.js';
 import { style } from './style.js';
 import { rewind, undo } from './rewind.js';
 import { diff } from './review.js';
+import { commit } from './commit.js';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
@@ -593,9 +594,6 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   setup,
   model,
   style,
-  undo,
-  rewind,
-  diff,
   mode,
   permissions,
   context,
@@ -604,6 +602,10 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   clear,
   resume,
   fork,
+  undo,
+  rewind,
+  diff,
+  commit,
   tools,
   mcp,
   config,
