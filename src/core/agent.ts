@@ -343,6 +343,7 @@ export class CoreAgent implements Agent {
     const provider = this.options.provider;
     if (!context || !provider) return { session: working, compacted: false };
     const before = this.countContext(working.messages);
+    const started = Date.now();
     const result = await compact({
       messages: working.messages,
       provider,
@@ -368,6 +369,7 @@ export class CoreAgent implements Agent {
       replaced: result.replaced,
       summary: result.summary,
       trigger,
+      durationMs: Date.now() - started,
     });
     await emitHookEvent(this.options.hooks, 'compaction', { session: next, beforeTokens: before, afterTokens: after, strategy: result.strategy }, emit);
     const counts = `${before.toLocaleString('en-US')} to ${after.toLocaleString('en-US')} tokens`;

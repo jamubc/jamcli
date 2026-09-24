@@ -29,6 +29,10 @@ import { CostLedger, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
 import { loadConfig, permissionLayers, type LoadedConfig } from '../config/load.js';
 import { revealedKeys } from '../config/credentials.js';
+import { observerFor, type ObserveSettings } from '../observe/setup.js';
+import { instrumentProvider } from '../observe/instrument.js';
+import { observeSession, type SessionObservation } from '../observe/session.js';
+import type { Observer, Span } from '../observe/observer.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
 
@@ -67,6 +71,10 @@ export interface RuntimeOptions {
   configService?: ConfigService;
   /** Set on a delegated run: the session that started it, whose policy it decides with. */
   parent?: ParentSession;
+  /** Log level and files, from `-v`, `--log-file`, and `--trace-file`. The environment is read when absent. */
+  observe?: ObserveSettings;
+  /** Record into this observer instead, under `parentSpan`: a delegated run shares its parent's. */
+  observer?: { observer: Observer; parentSpan?: Span };
 }
 
 export interface ContextUsage {
@@ -152,6 +160,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   notices.push(...settings.errors);
   const { config, profile, mcp: mcpConfig } = settings;
   const redact = createRedactor(env, configuredSecrets(config.api_registry, env), revealedKeys);
+  let observer: Observer;
+  if (options.observer) observer = options.observer.observer;
+  else {
+    const made = observerFor(options.observe, env, redact);
+    observer = made.observer;
+    notices.push(...made.problems);
+  }
+  /** The session's spans and log lines; set once the session has an id. */
+  let observation: SessionObservation | undefined;
   const catalog = new ModelCatalog({ models: config.models, modelsSource: modelsLabel(settings), registry: config.api_registry });
   notices.push(...catalog.problems);
 
@@ -208,6 +225,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // While a turn runs, a child's request reaches this session's surface too; a background
     // child that outlives the turn is still counted and recorded.
     onUsage: (event) => (emitting ? emitting(event) : (account(event), recorder.handle(event))),
+    observer: () => ({ observer, parentSpan: observation?.current() }),
   });
   const taskTool = registry.get('task');
   const dryRunReport: DryRunEntry[] = [];
@@ -254,9 +272,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let toolSet = buildTools();
 
   const rules = applyRules(loadRules(projectRoot, cwd), undefined);
-  const hooks: HookBus = createHookBus();
+  const hooks: HookBus = createHookBus({ onRun: (run) => observation?.hookRun(run) });
+  /** A provider whose requests are timed and logged under the current turn. */
+  const observed = (target: ChatProvider, name: string, purpose?: string) =>
+    instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose });
   const trust = trustClassifier(config);
   if (trust.note) notices.push(trust.note);
+  if (trust.provider && trust.choice) trust.provider = observed(trust.provider, trust.choice.provider, 'trust');
   const buildPrompt = () =>
     buildRuntimePrompt({ profile, rulesText: rulesPromptText(rules), tools: toolSet.summaries, projectRoot, cwd, mode: permissions.mode });
   let systemPrompt = buildPrompt();
@@ -271,6 +293,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       providerError = error?.message ?? String(error);
     }
   }
+  if (provider) provider = observed(provider, choice.provider);
 
   let modelInfo: ModelInfo = catalog.lookup(choice.provider, choice.model, provider?.family);
   const trustKey = trust.choice ? `${trust.choice.provider}:${trust.choice.model}` : undefined;
@@ -341,6 +364,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     surface: options.surface,
     model: `${choice.provider}:${choice.model}`,
     onError: (error) => emitting?.({ type: 'notice', level: 'error', message: `The session log could not be written: ${error.message}` }),
+  });
+  observation = observeSession(observer, {
+    sessionId: log.id,
+    surface: options.surface,
+    provider: choice.provider,
+    model: choice.model,
+    permissionMode: permissions.mode,
+    sandbox: sandbox.kind,
+    parent: options.observer?.parentSpan,
   });
   await emitHookEvent(hooks, 'session_start', { session, profile: config.active_profile });
 
@@ -417,6 +449,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const emit = (event: AgentEvent) => {
         account(event);
         recorder.handle(event);
+        observation?.event(event);
         onEvent?.(event);
       };
       emitting = emit;
@@ -464,6 +497,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const emit = (event: AgentEvent) => {
         account(event);
         recorder.handle(event);
+        observation?.event(event);
         onEvent?.(event);
       };
       emitting = emit;
@@ -479,7 +513,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         for (const message of expanded.notices) emit({ type: 'notice', level: 'warn', message });
         turns += 1;
         turnAgent = agent;
-        const result = await turnAgent.run(session, expanded.prompt, emit);
+        observation?.startTurn(expanded.prompt);
+        let result: RunResult | undefined;
+        try {
+          result = await turnAgent.run(session, expanded.prompt, emit);
+        } catch (error) {
+          observation?.endTurn(undefined, error);
+          throw error;
+        }
+        observation?.endTurn(result);
         if (result.session) session = result.session;
         return result;
       } finally {
@@ -495,7 +537,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     setModel(ref) {
       const next = resolveModel(ref, profile, config.api_registry);
-      provider = createChatProvider(next.provider, config.api_registry);
+      provider = observed(createChatProvider(next.provider, config.api_registry), next.provider);
       providerError = undefined;
       choice = next;
       modelInfo = catalog.lookup(next.provider, next.model, provider.family);
@@ -511,6 +553,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     async close() {
       await emitHookEvent(hooks, 'session_end', { session, status: 'closed', turns });
       await mcp?.close?.();
+      await observation?.close('closed');
     },
   };
 }

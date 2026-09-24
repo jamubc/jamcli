@@ -31,6 +31,8 @@ export interface ChildLauncherOptions {
   create: (options: RuntimeOptions) => Promise<Runtime>;
   /** Each request a child makes, marked with the session that made it, so the parent can count it. */
   onUsage?: (event: UsageEvent) => void;
+  /** The parent's observer and the span a child starts under, so a delegated run shares its trace. */
+  observer?: () => RuntimeOptions['observer'];
 }
 
 /** The categories in effect: the configured ones, or the documented defaults. */
@@ -73,6 +75,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         configService: options.configService,
         sandbox: options.sandbox,
         parent: options.parent(),
+        observer: options.observer?.(),
       });
     } catch (error: any) {
       return { status: 'error', response: '', category: request.category, resolvedModel: route.model, reason: error?.message ?? String(error) };

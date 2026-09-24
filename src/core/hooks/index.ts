@@ -41,7 +41,10 @@ interface Registration {
   handler: HookHandler;
 }
 
-export const createHookBus = (options: { enabled?: boolean } = {}): HookBus => {
+/** Told of every handler run, with when it started and ended, for tracing. */
+export type HookRunObserver = (run: { event: HookEventName; handler: string; startMs: number; endMs: number; error?: string }) => void;
+
+export const createHookBus = (options: { enabled?: boolean; onRun?: HookRunObserver } = {}): HookBus => {
   const registrations = new Map<HookEventName, Registration[]>();
   const recorded: HookFailure[] = [];
   let enabled = options.enabled ?? true;
@@ -70,17 +73,17 @@ export const createHookBus = (options: { enabled?: boolean } = {}): HookBus => {
     if (!enabled) return failures;
     const list = registrations.get(event) ?? [];
     for (const registration of list) {
+      const startMs = Date.now();
+      let message: string | undefined;
       try {
         await registration.handler(payload);
       } catch (error: any) {
-        const failure: HookFailure = {
-          event,
-          handler: registration.name,
-          message: error?.message ?? String(error),
-        };
+        message = error?.message ?? String(error);
+        const failure: HookFailure = { event, handler: registration.name, message: message! };
         failures.push(failure);
         recorded.push(failure);
       }
+      options.onRun?.({ event, handler: registration.name, startMs, endMs: Date.now(), ...(message ? { error: message } : {}) });
     }
     return failures;
   };

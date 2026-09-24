@@ -151,6 +151,8 @@ export type AgentEvent =
       summary: string;
       /** `auto` when the context passed its threshold; `manual` for `/compact`. */
       trigger: 'auto' | 'manual';
+      /** How long it took, the summary request included. */
+      durationMs?: number;
     }
   | { type: 'notice'; message: string; level?: 'info' | 'warn' | 'error'; code?: string }
   | {
