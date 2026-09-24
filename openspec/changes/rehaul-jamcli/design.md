@@ -1070,6 +1070,15 @@ files a write tool is about to change are copied into
 - Both show a diff preview and ask first.
 - Rewinding can restore code, conversation, or both.
 
+As built (7.1, 7.2), a checkpoint has two ends: the working copy before a step's first
+change and once the step is done. A restore writes back only the paths that differ
+between the two, so what the person changed after the step stays. This departs from
+restoring the whole tree, which the end-to-end exercise showed would delete a file the
+person had written since. A step that changed nothing leaves no checkpoint. The
+temporary index is a copy of the person's with its times kept, so git's check for a file
+changed in the same second as its entry still applies. A delegated run takes none of
+its own; the checkpoint around the parent's task call covers it.
+
 **Review.** `/diff` shows the working-tree diff by file and hunk. A hunk can be staged,
 unstaged, or reverted through `git apply --cached` and `git apply -R`.
 
