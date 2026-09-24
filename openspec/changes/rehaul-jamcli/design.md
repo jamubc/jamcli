@@ -443,6 +443,14 @@ are, with their declared permissions (D18). The Seatbelt profile allows reading,
 denies the hidden paths, because in a profile the last matching rule wins; it stays
 unverified until 3.7 runs it on a Mac.
 
+The escape suite (3.6) found that a read-only mount does not stop connecting to a Unix
+socket, so a sandboxed command could reach the Docker daemon or an SSH agent. bubblewrap
+now mounts an empty `/run`, which holds the Docker, containerd, podman, and user session
+sockets. It also hides Docker Desktop's and 1Password's socket directories and the socket
+`SSH_AUTH_SOCK` names, and Seatbelt allows no Unix sockets while the network is off.
+Sockets elsewhere stay reachable under bubblewrap. Closing them all needs a seccomp
+filter, which is recorded as a residual risk in `docs/security.md` (stage 12).
+
 The hidden paths by default are `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`,
 `~/.config/gcloud`, `~/.config/gh`, `~/.docker/config.json`, `~/.kube`, `~/.netrc`, and
 `~/.npmrc`. The list is configurable.

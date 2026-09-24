@@ -14,6 +14,10 @@ export const DEFAULT_HIDDEN = [
   '~/.kube',
   '~/.netrc',
   '~/.npmrc',
+  // Sockets for Docker Desktop and 1Password's SSH agent, which a read-only mount does not stop.
+  '~/.docker/run',
+  '~/.docker/desktop',
+  '~/.1password',
 ];
 
 export const expandHome = (value: string, home = os.homedir()) =>

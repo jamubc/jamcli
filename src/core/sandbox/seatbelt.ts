@@ -43,7 +43,7 @@ export function seatbeltProfile(options: SeatbeltOptions): string {
     '(allow mach-lookup)',
     '(allow ipc-posix-shm* ipc-posix-sem)',
     '(allow pseudo-tty)',
-    '(allow network-outbound (remote unix-socket))',
+    // With the network off, Unix sockets are off too: one reaches the Docker daemon as easily as a port.
     ...(options.network ? ['(allow network*)'] : []),
   ].join('\n');
 }

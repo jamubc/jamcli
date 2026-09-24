@@ -25,12 +25,17 @@ test('bubblewrap binds everything read-only, the project writable, and hides cre
   const args = bwrapArgs({ projectRoot: project, executable: 'bwrap', home, writable: ['~/cache'] }, 'npm test', project);
   expect(args.slice(0, 3)).toEqual(['--ro-bind', '/', '/']);
   expect(args).toContain('--unshare-net');
+  // Its own process tree, so no other process's environment or memory is visible.
+  expect(args).toContain('--unshare-pid');
+  expect(args).toContain('--die-with-parent');
   expect(pairs(args, '--bind')).toEqual([[project, project]]);
-  expect(args[args.indexOf('--tmpfs', 8) + 1]).toBe(path.join(home, '.ssh'));
+  const tmpfs = args.flatMap((arg, i) => (arg === '--tmpfs' ? [args[i + 1]] : []));
+  expect(tmpfs).toContain(path.join(home, '.ssh'));
+  if (fs.existsSync('/run')) expect(tmpfs).toContain('/run');
   expect(pairs(args, '--ro-bind')).toContainEqual(['/dev/null', path.join(home, '.netrc')]);
   expect(args.slice(-6)).toEqual(['--chdir', project, '--', '/bin/sh', '-c', 'npm test']);
   // Hidden mounts come after the writable binds, so they win.
-  expect(args.lastIndexOf('--tmpfs')).toBeGreaterThan(args.lastIndexOf('--bind'));
+  expect(args.lastIndexOf(path.join(home, '.ssh'))).toBeGreaterThan(args.lastIndexOf('--bind'));
 
   fs.mkdirSync(path.join(home, 'cache'));
   const widened = bwrapArgs({ projectRoot: project, executable: 'bwrap', home, writable: ['~/cache'], network: true }, 'ls', project);
