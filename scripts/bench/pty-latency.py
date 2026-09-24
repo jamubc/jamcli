@@ -80,7 +80,7 @@ def main():
     parser.add_argument('--json')
     parser.add_argument('--full-view', action='store_true', help='press Ctrl+R after resuming, to render the whole history (the Ink interface)')
     parser.add_argument('--ready', default='ready', help='the text that shows the first frame is drawn')
-    parser.add_argument('--command', default=f'bun {os.path.join(REPO, "dist", "index.js")}')
+    parser.add_argument('--command', default=os.path.join(REPO, 'dist', 'index.js'))
     args = parser.parse_args()
 
     base = tempfile.mkdtemp(prefix='jamcli-pty-')

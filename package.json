@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "bun scripts/build.ts",
-    "start": "bun dist/index.js",
+    "start": "dist/index.js",
     "dev": "bun --watch src/index.tsx",
     "test": "bun test",
     "test:history": "node --import tsx scripts/test-history.ts",

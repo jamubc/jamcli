@@ -15,9 +15,10 @@ const RUNS = 5;
 const repo = path.resolve(import.meta.dir, '../..');
 const entry = path.join(repo, 'dist', 'index.js');
 
+/** The built command, run through its own shebang as a person runs it. */
 const run = (args: string[], options: { cwd?: string; env?: Record<string, string | undefined> } = {}) =>
   new Promise<{ code: number | null; stdout: string }>((resolve, reject) => {
-    const child = spawn(process.env.BENCH_RUNTIME ?? process.execPath, [entry, ...args], { cwd: options.cwd, env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn(entry, args, { cwd: options.cwd, env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'ignore'] });
     let stdout = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.on('error', reject);
