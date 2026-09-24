@@ -182,6 +182,11 @@ export interface Runtime {
   withCheckpoint<T>(label: string, change: () => Promise<T>, files?: string[]): Promise<T>;
   /** Ask this session's model for a conventional commit message for what would be committed. */
   draftCommitMessage(paths?: string[], signal?: AbortSignal): Promise<string>;
+  /**
+   * One request to this session's model, outside the conversation, such as for a pull
+   * request's description. It is counted and priced like the session's other requests.
+   */
+  complete(prompt: string, options?: { maxOutputTokens?: number; signal?: AbortSignal }): Promise<string>;
   close(): Promise<void>;
 }
 
@@ -506,6 +511,24 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         ts: event.ts,
         ...(event.turn !== undefined ? { turn: event.turn } : {}),
       }));
+  /** One request outside the conversation, counted and priced like the session's others. */
+  async function completeOnce(prompt: string, request: { maxOutputTokens?: number; signal?: AbortSignal } = {}): Promise<string> {
+    if (!provider) throw new Error(providerError ?? 'No model provider is configured for this session.');
+    const result = await provider.complete([{ role: 'user', content: prompt, timestamp: Date.now() }], {
+      model: choice.model,
+      maxOutputTokens: request.maxOutputTokens ?? 800,
+      contextLength: modelInfo.contextWindow,
+      ...(request.signal ? { signal: request.signal } : {}),
+    });
+    if (result.usage) {
+      const cost = requestCost(result.usage, modelInfo.price);
+      const event: AgentEvent = { type: 'usage', usage: result.usage, model: `${choice.provider}:${choice.model}`, ...(cost !== undefined ? { cost } : {}) };
+      account(event);
+      recorder.handle(event);
+    }
+    return result.content ?? '';
+  }
+
   /** A change the person asked for, between two checkpoints, recorded like a step's. */
   async function withCheckpoint<T>(label: string, change: () => Promise<T>, files: string[] = []): Promise<T> {
     if (running) throw new Error('A turn is running; wait for it to end.');
@@ -787,26 +810,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     withCheckpoint,
 
     async draftCommitMessage(paths = [], signal) {
-      if (!provider) throw new Error(providerError ?? 'No model provider is configured for this session.');
       const plan = planCommit(projectRoot, paths);
       if (!plan.files.length) throw new Error('Nothing would be committed, so there is nothing to describe.');
-      const result = await provider.complete([{ role: 'user', content: draftPrompt(plan), timestamp: Date.now() }], {
-        model: choice.model,
-        maxOutputTokens: 400,
-        contextLength: modelInfo.contextWindow,
-        ...(signal ? { signal } : {}),
-      });
-      // The request is the session's like any other, so it is counted and priced.
-      if (result.usage) {
-        const cost = requestCost(result.usage, modelInfo.price);
-        const event: AgentEvent = { type: 'usage', usage: result.usage, model: `${choice.provider}:${choice.model}`, ...(cost !== undefined ? { cost } : {}) };
-        account(event);
-        recorder.handle(event);
-      }
-      const message = cleanDraft(result.content ?? '');
+      const message = cleanDraft(await completeOnce(draftPrompt(plan), { maxOutputTokens: 400, ...(signal ? { signal } : {}) }));
       if (!message) throw new Error('The model sent back an empty message.');
       return message;
     },
+
+    complete: completeOnce,
 
     async close() {
       await emitHookEvent(hooks, 'session_end', { session, status: 'closed', turns });
