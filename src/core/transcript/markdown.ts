@@ -58,6 +58,7 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
     facts.push(`- Project: ${path.basename(header.projectRoot)} (\`${header.projectRoot}\`)`);
     facts.push(`- Started: ${new Date(header.ts).toISOString()} on ${header.surface}, JamCLI ${header.jamcli}`);
     if (header.parent) facts.push(`- Forked from: \`${header.parent.session}\` at event ${header.parent.event}`);
+    if (header.permissionMode) facts.push(`- Permission mode: ${header.permissionMode}`);
   }
   facts.push(`- Messages: ${messages}`, `- Tokens: ${tokens}`);
   out.push(facts.join('\n'), '---');
@@ -70,7 +71,7 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
         break;
       case 'approval': {
         const verdict = event.allow ? `allowed ${event.scope === 'once' ? 'once' : `for this ${event.scope}`}` : 'denied';
-        const rule = event.rule ? `, rule \`${event.rule}\`` : '';
+        const rule = event.rule ? `, rule \`${event.rule}\`` : event.reason ? `, because ${event.reason}` : '';
         const feedback = event.feedback ? `\n> Feedback: ${event.feedback}` : '';
         out.push(`> **Approval**: \`${event.tool}\` \`${event.callId}\` ${verdict} by ${event.by} on ${event.surface}${rule}${feedback}`);
         break;
@@ -86,6 +87,9 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
       }
       case 'model':
         out.push(`*Model changed${event.from ? ` from ${event.from}` : ''} to ${event.to}*`);
+        break;
+      case 'permission_mode':
+        out.push(`*Permission mode changed from ${event.from} to ${event.to}*`);
         break;
       case 'compaction':
         out.push(

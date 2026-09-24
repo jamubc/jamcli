@@ -88,8 +88,8 @@ test('--allow-tool runs a command and an edit without asking, and records who al
   expect(command?.type === 'tool_result' && command.result.output).toContain('new');
   const approvals = SessionLog.open(root, runtime.sessionId).events().filter((event) => event.type === 'approval');
   expect(approvals).toEqual([
-    expect.objectContaining({ callId: 'e1', allow: true, by: 'flag', rule: '--allow-tool edit', surface: 'headless' }),
-    expect.objectContaining({ callId: 'c1', allow: true, by: 'flag', rule: '--allow-tool run_command' }),
+    expect.objectContaining({ callId: 'e1', allow: true, by: 'flag', rule: 'edit', reason: 'edit allows it (--allow-tool edit)', surface: 'headless' }),
+    expect.objectContaining({ callId: 'c1', allow: true, by: 'flag', rule: 'run_command' }),
   ]);
 });
 
@@ -106,7 +106,7 @@ test('without a flag a state change asks, with a diff preview, and the answer is
   expect(requests).toHaveLength(1);
   const request = requests[0].type === 'approval_request' ? requests[0].request : undefined;
   expect(request?.preview?.kind).toBe('diff');
-  expect(request?.reason).toBe('tools that change state ask first');
+  expect(request?.reason).toBe('default mode asks before tools that change files');
   expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
   const approval = SessionLog.open(root, runtime.sessionId).events().find((event) => event.type === 'approval');
   expect(approval).toMatchObject({ by: 'user', surface: 'acp', allow: true });
@@ -118,13 +118,16 @@ test('denied tools are not offered, and flags naming nothing are reported', asyn
   const names = runtime.tools.map((tool) => tool.name);
   expect(names).not.toContain('run_command');
   expect(names).not.toContain('write_file');
-  expect(runtime.notices).toEqual(['No tool is named edt, so the flag naming it has no effect.']);
+  expect(runtime.notices).toEqual(['The rule edt (--allow-tool edt) names no tool, so it has no effect.']);
   server.enqueue({ toolCalls: [{ id: 'w', name: 'write_file', arguments: { path: 'x', content: 'y' } }] }, { text: 'ok' });
   const { events, onEvent } = collect();
   await runtime.run('write', onEvent);
   expect(events.find((event) => event.type === 'notice')).toMatchObject({ message: runtime.notices[0] });
   const result = events.find((event) => event.type === 'tool_result');
-  expect(result?.type === 'tool_result' && result.result.output).toBe('Tool write_file is not available in this session.');
+  expect(result?.type === 'tool_result' && result.result).toMatchObject({
+    status: 'denied',
+    output: 'Not run: write_file denies it (--deny-tool write_file).',
+  });
   expect(fs.existsSync(path.join(root, 'x'))).toBe(false);
 });
 

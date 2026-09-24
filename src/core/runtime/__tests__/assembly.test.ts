@@ -4,6 +4,9 @@ import os from 'os';
 import path from 'path';
 import { configuredSecrets, resolveModel } from '../model.js';
 import { createToolSet, registerMcpTools, type McpSource } from '../tools.js';
+import { sessionPermissions } from '../permissions.js';
+import type { ToolRegistry } from '../../tools/registry.js';
+import type { PermissionFlags } from '../../permissions/config.js';
 import { expandReferences } from '../references.js';
 import { buildRuntimePrompt } from '../prompt.js';
 import { createBuiltinRegistry } from '../../tools/registry.js';
@@ -35,6 +38,9 @@ test('configured keys, key variables, and auth headers are known secrets', () =>
     { name: 'config:lab.headers.Authorization', value: 'lab-token-5678' },
   ]);
 });
+
+const engineFor = (registry: ToolRegistry, flags: PermissionFlags = {}, legacyTools?: Record<string, any>) =>
+  sessionPermissions({ projectRoot: os.tmpdir(), registry, flags, legacyTools, sandboxed: false, env: {} }).engine;
 
 const descriptor = (name: string, annotations?: McpToolDescriptor['annotations']): McpToolDescriptor => ({
   name: `srv__${name}`,
@@ -68,7 +74,7 @@ test('MCP tools run through the same registry, schemas, and policy as built-ins'
   const notices: string[] = [];
   const servers = await registerMcpTools(registry, fakeMcp(calls), notices);
   expect(notices).toEqual(['MCP server broken is unavailable: spawn failed']);
-  const set = createToolSet({ registry, mcpServers: servers, context: () => ({ projectRoot: os.tmpdir() }) });
+  const set = createToolSet({ registry, mcpServers: servers, permissions: engineFor(registry), context: () => ({ projectRoot: os.tmpdir() }) });
 
   expect(set.summaries.find((tool) => tool.name === 'srv__lookup')).toMatchObject({ source: 'mcp', server: 'srv', policyClass: 'read' });
   expect(set.dispatcher.requiresApproval('srv__lookup')).toBe(false);
@@ -82,18 +88,30 @@ test('MCP tools run through the same registry, schemas, and policy as built-ins'
 });
 
 test('settings and flags for an old tool name apply to the tool that replaced it', () => {
-  const set = createToolSet({ permissions: { list_files: false }, denyTools: ['search_code'], context: () => ({ projectRoot: os.tmpdir() }) });
+  const registry = createBuiltinRegistry();
+  const permissions = engineFor(registry, { denyTools: ['search_code'] }, { list_files: false });
+  const set = createToolSet({ registry, permissions, context: () => ({ projectRoot: os.tmpdir() }) });
   const names = set.summaries.map((tool) => tool.name);
   expect(names).not.toContain('glob');
   expect(names).not.toContain('grep');
   expect(names).toContain('read_file');
 });
 
-test('a state change allowed by policy reports who allowed it; a read reports nothing', () => {
-  const set = createToolSet({ allowTools: ['edit'], context: () => ({ projectRoot: os.tmpdir() }) });
-  expect(set.dispatcher.autoApproval?.({ id: 'a', name: 'edit', arguments: {} })).toEqual({ by: 'flag', rule: '--allow-tool edit' });
-  expect(set.dispatcher.autoApproval?.({ id: 'b', name: 'read_file', arguments: {} })).toBeUndefined();
-  expect(set.dispatcher.autoApproval?.({ id: 'c', name: 'run_command', arguments: {} })).toBeUndefined();
+test('every decision says who made it and why', () => {
+  const registry = createBuiltinRegistry();
+  const set = createToolSet({ registry, permissions: engineFor(registry, { allowTools: ['edit'] }), context: () => ({ projectRoot: os.tmpdir() }) });
+  expect(set.dispatcher.decide!({ id: 'a', name: 'edit', arguments: { path: 'a.ts' } })).toEqual({
+    decision: 'allow',
+    by: 'flag',
+    rule: 'edit',
+    reason: 'edit allows it (--allow-tool edit)',
+  });
+  expect(set.dispatcher.decide!({ id: 'b', name: 'read_file', arguments: { path: 'a.ts' } })).toMatchObject({ decision: 'allow', by: 'mode' });
+  expect(set.dispatcher.decide!({ id: 'c', name: 'run_command', arguments: { command: 'make' } })).toEqual({
+    decision: 'ask',
+    by: 'mode',
+    reason: 'default mode asks before tools that run commands',
+  });
 });
 
 test('the classifier prompt escapes tool output and bounds its length (F21)', () => {

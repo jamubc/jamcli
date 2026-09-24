@@ -1,5 +1,6 @@
 import type { Profile } from '../../types/config.js';
 import type { ToolSummary } from './tools.js';
+import { PLAN_NOTE, type PermissionMode } from '../permissions/modes.js';
 
 export interface PromptInputs {
   profile?: Profile | null;
@@ -9,6 +10,8 @@ export interface PromptInputs {
   cwd: string;
   platform?: string;
   date?: Date;
+  /** Plan mode adds a note, so the model knows why it can only read. */
+  mode?: PermissionMode;
 }
 
 const DEFAULT_IDENTITY =
@@ -36,6 +39,7 @@ export function buildRuntimePrompt(inputs: PromptInputs): string {
   const rules = inputs.rulesText?.trim();
   if (rules) parts.push(rules);
   if (inputs.tools.length) parts.push(toolGuidance(inputs.tools));
+  if (inputs.mode === 'plan') parts.push(PLAN_NOTE);
   const date = (inputs.date ?? new Date()).toISOString().slice(0, 10);
   parts.push(
     [

@@ -52,6 +52,17 @@ const strongest = (rules: Rule[]): Rule | undefined => {
 
 const SAFE_REDIRECTS = new Set(['/dev/null', '/dev/stdout', '/dev/stderr', '/dev/tty']);
 
+/** What each class of tool does, for the reasons a mode gives. */
+const WHAT_TOOLS_DO: Record<string, string> = {
+  read: 'read the project',
+  write: 'change files',
+  execute: 'run commands',
+  network: 'reach the network',
+  delegate: 'start other agents',
+  state: 'keep the plan',
+  unknown: 'JamCLI cannot classify',
+};
+
 /**
  * Decides every tool call from rules and the mode. A deny from any scope wins; plan mode
  * denies changes; bypass allows the rest; code a rule cannot see always asks; then a
@@ -149,11 +160,12 @@ export class PermissionEngine {
 
   private modeDefault(byMode: ModeDefault, toolClass: string, subjects: Subject[]): Verdict {
     const mode = this.currentMode;
+    const what = WHAT_TOOLS_DO[toolClass] ?? WHAT_TOOLS_DO.unknown;
     switch (byMode) {
       case 'allow':
-        return { decision: 'allow', by: 'mode', reason: `${mode} mode allows ${toolClass} tools` };
+        return { decision: 'allow', by: 'mode', reason: `${mode} mode allows tools that ${what}` };
       case 'deny':
-        return { decision: 'deny', by: 'mode', reason: `${mode} mode does not allow ${toolClass} tools` };
+        return { decision: 'deny', by: 'mode', reason: `${mode} mode does not allow tools that ${what}` };
       case 'inside': {
         const inside = subjects.every((subject) => subject.kind !== 'path' || subject.relative !== undefined);
         return inside
@@ -165,7 +177,7 @@ export class PermissionEngine {
           ? { decision: 'allow', by: 'mode', reason: `${mode} mode allows commands inside the sandbox` }
           : { decision: 'ask', by: 'mode', reason: `${mode} mode asks before commands when there is no sandbox` };
       default:
-        return { decision: 'ask', by: 'mode', reason: toolClass === 'read' ? 'reads ask in this mode' : 'tools that change state ask first' };
+        return { decision: 'ask', by: 'mode', reason: `${mode} mode asks before tools that ${what}` };
     }
   }
 

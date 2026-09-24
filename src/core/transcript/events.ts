@@ -19,6 +19,8 @@ export type TranscriptEvent =
       parent?: { session: string; event: number };
       /** Set on a delegated run: the session whose task call started it. */
       delegatedBy?: string;
+      /** The permission mode the session started in. */
+      permissionMode?: string;
     }
   | { v: 2; type: 'message'; ts: number; message: ChatMessage }
   | {
@@ -33,10 +35,12 @@ export type TranscriptEvent =
       surface: string;
       rule?: string;
       feedback?: string;
+      reason?: string;
     }
   | { v: 2; type: 'usage'; ts: number; model?: string; usage: TokenUsage; cost?: number }
   | { v: 2; type: 'notice'; ts: number; level: 'info' | 'warn' | 'error'; message: string; code?: string }
   | { v: 2; type: 'model'; ts: number; from?: string; to: string }
+  | { v: 2; type: 'permission_mode'; ts: number; from: string; to: string }
   | { v: 2; type: 'compaction'; ts: number; summary: string; replaced: number; before: number; after: number }
   | { v: 2; type: 'checkpoint'; ts: number; ref: string; files?: string[] }
   | { v: 2; type: 'end'; ts: number; status: RunStatus };

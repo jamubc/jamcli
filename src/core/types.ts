@@ -151,6 +151,8 @@ export type AgentEvent =
       feedback?: string;
       by: ApprovalBy;
       rule?: string;
+      /** Why, in words, when a rule or the mode decided. */
+      reason?: string;
     };
 
 export interface RunResult {

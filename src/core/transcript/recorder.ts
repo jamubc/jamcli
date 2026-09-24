@@ -46,6 +46,7 @@ export class TranscriptRecorder {
           surface: this.options.surface,
           ...(event.rule ? { rule: event.rule } : {}),
           ...(event.feedback ? { feedback: event.feedback } : {}),
+          ...(event.reason ? { reason: event.reason } : {}),
         });
         return;
       case 'usage':
@@ -62,6 +63,11 @@ export class TranscriptRecorder {
         return;
     }
   };
+
+  /** Record a change of permission mode. */
+  switchPermissionMode(from: string, to: string): void {
+    if (from !== to) this.write({ type: 'permission_mode', from, to });
+  }
 
   /** Record a model switch; later usage is attributed to the new model. */
   switchModel(to: string): void {

@@ -66,7 +66,7 @@ test('jamcli -p edits a file with --allow-tool edit and reports it as JSON', asy
   expect(request.messages.find((message: any) => message.role === 'user').content).toContain('File a.txt');
 
   const approval = SessionLog.open(root, result.session_id).events().find((event) => event.type === 'approval');
-  expect(approval).toMatchObject({ by: 'flag', rule: '--allow-tool edit', surface: 'headless' });
+  expect(approval).toMatchObject({ by: 'flag', rule: 'edit', surface: 'headless' });
 });
 
 test('jamcli -p runs a command with --allow-tool run_command and streams its output (F10)', async () => {
@@ -92,7 +92,12 @@ test('a call that would ask is not made, the model is told why, and the run carr
   const result = lastLine(out);
   expect(result.response).toBe('I could not edit it.');
   expect(result.permission_denials).toEqual([
-    { tool: 'edit', call_id: 'e1', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' }, reason: 'tools that change state ask first' },
+    {
+      tool: 'edit',
+      call_id: 'e1',
+      arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' },
+      reason: 'default mode asks before tools that change files',
+    },
   ]);
   const told = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
   expect(told.content).toContain('--allow-tool edit');
@@ -131,7 +136,7 @@ test('text output keeps stdout for the answer and reports notices on stderr', as
   const { out, err, code } = await jam(['-p', 'hi', '--allow-tool', 'edt']);
   expect(code).toBe(0);
   expect(out).toBe('Answer.\n');
-  expect(err).toContain('warn: No tool is named edt');
+  expect(err).toContain('warn: The rule edt (--allow-tool edt) names no tool');
   const missing = await jam(['-p', 'hi', '--resume', 'no-such-session']);
   expect(missing.code).toBe(1);
   expect(missing.err).toContain('No session named no-such-session');

@@ -43,6 +43,18 @@ export interface ToolDispatcher {
   grant?(call: ToolCall, scope: ApprovalScope, pattern?: string): void;
   /** For a state-changing call that runs without asking: who allowed it, and by which rule. */
   autoApproval?(call: ToolCall): { by: ApprovalBy; rule?: string } | undefined;
+  /**
+   * The whole decision for one call, with who made it and why. When present it replaces
+   * `requiresApproval`, `approvalReason`, and `autoApproval`.
+   */
+  decide?(call: ToolCall): DispatchVerdict;
+}
+
+export interface DispatchVerdict {
+  decision: 'allow' | 'ask' | 'deny';
+  by?: ApprovalBy;
+  rule?: string;
+  reason?: string;
 }
 
 export interface BatchContext {
@@ -135,10 +147,22 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
     results[index] = result;
   };
 
-  const readOnly = (call: ToolCall) =>
-    Boolean(ctx.dispatcher.isReadOnly?.(call.name)) && !ctx.dispatcher.requiresApproval(call.name, call);
+  const verdictOf = (call: ToolCall): DispatchVerdict => {
+    if (ctx.dispatcher.decide) return ctx.dispatcher.decide(call);
+    if (ctx.dispatcher.requiresApproval(call.name, call)) return { decision: 'ask', reason: ctx.dispatcher.approvalReason?.(call) };
+    const auto = ctx.dispatcher.autoApproval?.(call);
+    return { decision: 'allow', ...(auto ?? {}) };
+  };
 
-  const waitForDecision = (call: ToolCall, prebuilt?: ApprovalRequest): Promise<ApprovalDecision | 'cancelled'> =>
+  const readOnly = (call: ToolCall) => Boolean(ctx.dispatcher.isReadOnly?.(call.name)) && verdictOf(call).decision === 'allow';
+
+  /** Reads and the agent's own plan are not decisions worth recording; everything else is. */
+  const recorded = (call: ToolCall) => {
+    const policyClass = ctx.dispatcher.policyClass?.(call.name);
+    return policyClass ? policyClass !== 'read' && policyClass !== 'state' : !ctx.dispatcher.isReadOnly?.(call.name);
+  };
+
+  const waitForDecision = (call: ToolCall, prebuilt?: ApprovalRequest, reason?: string): Promise<ApprovalDecision | 'cancelled'> =>
     new Promise((resolve) => {
       if (ctx.signal.aborted) return resolve('cancelled');
       const onAbort = () => resolve('cancelled');
@@ -148,7 +172,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         buildApprovalRequest(call, {
           projectRoot: ctx.projectRoot,
           policyClass: ctx.dispatcher.policyClass?.(call.name),
-          reason: ctx.dispatcher.approvalReason?.(call),
+          reason: reason ?? ctx.dispatcher.approvalReason?.(call),
         });
       ctx.emit({
         type: 'approval_request',
@@ -197,8 +221,27 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
     }
 
     await announce(call);
-    if (ctx.dispatcher.requiresApproval(call.name, call)) {
-      const decision = await waitForDecision(call);
+    const verdict = verdictOf(call);
+    if (verdict.decision === 'deny') {
+      // A rule or the mode said no. The model hears why, and the rest of the step goes on.
+      ctx.emit({
+        type: 'approval_decision',
+        callId: call.id,
+        tool: call.name,
+        allow: false,
+        scope: 'once',
+        by: verdict.by ?? 'policy',
+        ...(verdict.rule ? { rule: verdict.rule } : {}),
+        ...(verdict.reason ? { reason: verdict.reason } : {}),
+      });
+      const result = resultFor(call, 'denied', `Not run: ${verdict.reason ?? 'the permission policy denies it'}.`);
+      ctx.emit({ type: 'tool_result', result });
+      settle(i, result);
+      i += 1;
+      continue;
+    }
+    if (verdict.decision === 'ask') {
+      const decision = await waitForDecision(call, undefined, verdict.reason);
       if (decision === 'cancelled') {
         stopped = 'cancelled';
         continue;
@@ -224,25 +267,26 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         const result = resultFor(call, 'denied', output);
         ctx.emit({ type: 'tool_result', result });
         settle(i, result);
-        denial = { feedback: read.feedback };
-        stopped = 'denied';
+        // Only a person saying no takes the rest of the step back.
+        if (read.by === 'user') {
+          denial = { feedback: read.feedback };
+          stopped = 'denied';
+        }
         i += 1;
         continue;
       }
       if (read.scope !== 'once') ctx.dispatcher.grant?.(call, read.scope, read.pattern);
-    } else {
-      const auto = ctx.dispatcher.autoApproval?.(call);
-      if (auto) {
-        ctx.emit({
-          type: 'approval_decision',
-          callId: call.id,
-          tool: call.name,
-          allow: true,
-          scope: 'once',
-          by: auto.by,
-          ...(auto.rule ? { rule: auto.rule } : {}),
-        });
-      }
+    } else if (verdict.by && recorded(call)) {
+      ctx.emit({
+        type: 'approval_decision',
+        callId: call.id,
+        tool: call.name,
+        allow: true,
+        scope: 'once',
+        by: verdict.by,
+        ...(verdict.rule ? { rule: verdict.rule } : {}),
+        ...(verdict.reason ? { reason: verdict.reason } : {}),
+      });
     }
     settle(i, await perform(call));
     ran += 1;

@@ -4,7 +4,8 @@ import type { McpServerConfig, McpToolDescriptor } from '../../types/mcp.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
 import type { ToolDefinition } from '../providers/types.js';
 import type { PolicyClass } from '../types.js';
-import { createToolPolicy, type ToolPolicy, type ToolPolicyOptions } from './policy.js';
+import type { PermissionEngine } from '../permissions/engine.js';
+import { suggestPatterns } from '../approval.js';
 
 /** A tool as the model is offered it. */
 export interface ToolSummary {
@@ -77,55 +78,50 @@ export async function registerMcpTools(
   return servers;
 }
 
-export interface ToolSetOptions extends Pick<ToolPolicyOptions, 'permissions' | 'allowTools' | 'denyTools'> {
-  registry?: ToolRegistry;
+/** How the permission engine sees a registry: each tool's class and every name it answers to. */
+export function toolNaming(registry: ToolRegistry) {
+  const aliases = new Map<string, string[]>();
+  for (const tool of registry.list()) {
+    if (tool.aliasOf) aliases.set(tool.aliasOf, [...(aliases.get(tool.aliasOf) ?? []), tool.name]);
+  }
+  const canonical = (name: string) => registry.get(name)?.aliasOf ?? name;
+  return {
+    canonical,
+    namesOf: (name: string) => [canonical(name), ...(aliases.get(canonical(name)) ?? [])],
+    classOf: (name: string): PolicyClass | 'unknown' => registry.get(name)?.policy ?? 'unknown',
+  };
+}
+
+export interface ToolSetOptions {
+  registry: ToolRegistry;
+  /** Decides every call. A delegated run shares its parent's. */
+  permissions: PermissionEngine;
   /** Tool names that came from MCP servers, mapped to their server. */
   mcpServers?: Map<string, string>;
-  /** Decide with this policy instead of building one, as a delegated run does with its parent's. */
-  policy?: ToolPolicy;
   /** Descriptions to offer instead of a tool's own, such as `task` listing the categories. */
   descriptions?: Record<string, string>;
   /** The context every call runs with, less what each call supplies. */
   context: () => ToolContext;
+  /** Write a pattern the user granted for the project. */
+  grantProject?: (pattern: string) => void;
 }
 
 export interface ToolSet {
   registry: ToolRegistry;
-  policy: ToolPolicy;
+  permissions: PermissionEngine;
   summaries: ToolSummary[];
   definitions: ToolDefinition[];
   dispatcher: ToolDispatcher;
 }
 
 /**
- * The tools of one session: every visible registry tool the policy does not deny, the
- * definitions the model is offered, and the dispatcher that decides and runs calls.
+ * The tools of one session: every visible registry tool the permission engine offers,
+ * the definitions the model sees, and the dispatcher that decides and runs calls.
  */
 export function createToolSet(options: ToolSetOptions): ToolSet {
-  const registry = options.registry ?? createBuiltinRegistry();
-  const aliases = new Map<string, string[]>();
-  for (const tool of registry.list()) {
-    if (tool.aliasOf) aliases.set(tool.aliasOf, [...(aliases.get(tool.aliasOf) ?? []), tool.name]);
-  }
-  const canonical = (name: string) => registry.get(name)?.aliasOf ?? name;
-  const namesOf = (name: string) => {
-    const root = canonical(name);
-    return [root, ...(aliases.get(root) ?? [])];
-  };
-  const classOf = (name: string): PolicyClass | 'unknown' => registry.get(name)?.policy ?? 'unknown';
-
-  const policy =
-    options.policy ??
-    createToolPolicy({
-      permissions: options.permissions,
-      allowTools: options.allowTools,
-      denyTools: options.denyTools,
-      classOf,
-      namesOf,
-      known: (name) => Boolean(registry.get(name)),
-    });
-
-  const offered = registry.visible().filter((tool) => policy.decide(tool.name).decision !== 'deny');
+  const { registry, permissions } = options;
+  const { canonical, classOf } = toolNaming(registry);
+  const offered = registry.visible().filter((tool) => permissions.offers(tool.name));
   const offeredNames = new Set(offered.map((tool) => tool.name));
   const summaries: ToolSummary[] = offered.map((tool) => {
     const server = options.mcpServers?.get(tool.name);
@@ -145,13 +141,17 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
 
   const dispatcher: ToolDispatcher = {
     listTools: () => summaries.map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters as Record<string, unknown> })),
-    requiresApproval: (name) => policy.decide(name).decision === 'ask',
+    requiresApproval: (name, call) => permissions.decide(call ?? { id: '', name, arguments: {} }).decision === 'ask',
     isReadOnly: (name) => classOf(name) === 'read',
-    approvalReason: (call) => policy.decide(call.name).reason,
     policyClass: classOf,
-    autoApproval: (call) => {
-      const verdict = policy.decide(call.name);
-      return verdict.decision === 'allow' && classOf(call.name) !== 'read' ? { by: verdict.by, rule: verdict.rule } : undefined;
+    decide: (call) => {
+      const verdict = permissions.decide(call);
+      return { decision: verdict.decision, by: verdict.by, ...(verdict.rule ? { rule: verdict.rule } : {}), reason: verdict.reason };
+    },
+    grant: (call, scope, pattern) => {
+      const text = pattern ?? suggestPatterns(call)[0] ?? call.name;
+      if (scope === 'project' && options.grantProject) options.grantProject(text);
+      else permissions.grant(text);
     },
     execute: async (call, context) => {
       if (!offeredNames.has(canonical(call.name))) {
@@ -180,5 +180,5 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
     },
   };
 
-  return { registry, policy, summaries, definitions, dispatcher };
+  return { registry, permissions, summaries, definitions, dispatcher };
 }

@@ -246,7 +246,29 @@ cover headless, ACP, and delegation.
     - the loader across scopes with the legacy mapping and mode precedence;
     - flag lists.
   - 21 mutation probes each turn a test red. One, a flag outranked by the environment, first slipped through and got its own case.
-- [ ] 3.2 Modes. Files: `src/core/permissions/modes.ts`, runtime wiring, tests. `plan`, `default`, `accept-edits`, `auto` (refused without a sandbox), and `bypass` (flag or confirmation, recorded).
+- [x] 3.2 Modes. Files: `src/core/permissions/modes.ts`, runtime wiring, tests. `plan`, `default`, `accept-edits`, `auto` (refused without a sandbox), and `bypass` (flag or confirmation, recorded).
+  - **Verification**: the runtime builds its tools and dispatcher on the engine (`src/core/runtime/permissions.ts`), and the stage 2 policy is removed. The dispatcher returns one verdict per call, with who decided and why, in place of three separate answers. `Runtime.setPermissionMode` switches modes and rebuilds what is offered and the prompt. The behavior is recorded under D6.
+    - Mode reasons name the mode and what the tools do, such as `default mode asks before tools that change files`, and flag rules keep their text (`edit`) with the source in the reason.
+    - A test preload gives every run its own user configuration and state directories.
+    - 5 runtime tests:
+      - plan mode offers only reads and the plan, and says why;
+      - a switch changes what is offered and asked, and is recorded;
+      - `auto` needs a sandbox;
+      - `bypass` starts only from the flag and is recorded;
+      - a session grant stops its prompts.
+    - 3 batch tests: a policy denial goes on with the step, only a person's denial stops it, and only changes are recorded.
+    - Mutation probes, each turning a test red:
+      - no plan note;
+      - keeping the old tools after a switch;
+      - not recording the switch;
+      - keeping an unmet mode;
+      - `bypass` from a file;
+      - ignoring grants;
+      - a policy denial stopping the step;
+      - any denial stopping it;
+      - recording the plan;
+      - leaving the mode off the session line;
+      - children deciding alone.
 - [ ] 3.3 Grants. Files: runtime, `src/core/permissions/grants.ts`. Session grants and project grants written to `.jamcli/config.local.json`, with suggested patterns derived from the call.
 - [ ] 3.4 The sandbox adapters (D7). Files: `src/core/sandbox/` (new).
   - bubblewrap with a read-only root, writable project and temporary directory, hidden credential paths, and network off by default.

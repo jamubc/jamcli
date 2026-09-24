@@ -4,14 +4,15 @@ import { resolveRoute } from '../routing/resolve.js';
 import type { Delegate, DelegationOutcome } from '../delegation/types.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import type { McpSource } from './tools.js';
-import type { ToolPolicy } from './policy.js';
+import type { PermissionEngine } from '../permissions/engine.js';
 import type { Runtime, RuntimeOptions } from './index.js';
 
 /** What a child inherits from the session that delegates to it. */
 export interface ParentSession {
   sessionId: string;
   depth: number;
-  policy: ToolPolicy;
+  /** The parent's permission engine, which the child decides with. */
+  permissions: PermissionEngine;
 }
 
 export interface ChildLauncherOptions {
@@ -39,8 +40,8 @@ const STATUS: Record<string, DelegationOutcome['status']> = { ok: 'ok', cancelle
 
 /**
  * Children run in this process as runtimes of their own, with their own session. A child
- * decides with its parent's policy, so nothing it is configured with can widen what the
- * parent allows. What the parent would ask about, the child asks the parent's surface,
+ * decides with its parent's permission engine, so nothing it is configured with can widen
+ * what the parent allows. What the parent would ask about, the child asks the parent's surface,
  * unless it runs in the background, where nobody can answer and the call is not made.
  */
 export function childLauncher(options: ChildLauncherOptions): Delegate {

@@ -363,6 +363,22 @@ Details settled in 3.1:
 - The `state` class (the todo list) is allowed in every mode, and a tool with no class is
   treated as `execute`. `task_status` and `task_result` are `read`.
 
+Wired into the runtime (3.2):
+
+- A tool that a rule without a pattern denies, or that the mode denies by class, is not
+  offered at all. In plan mode, the system prompt says why. A call that reaches a denial
+  anyway is answered `Not run:` with the reason, and the rest of the step goes on.
+- Only a person's denial takes back the rest of a step. A denial by a rule, the mode, or
+  a headless surface answers that one call.
+- A mode whose precondition fails at startup, such as `auto` without a sandbox or `bypass`
+  written in a file, falls back to `default` with a notice naming the setting. `bypass`
+  starts only from `--dangerously-bypass-permissions`.
+- The session line records the starting mode, and a `permission_mode` event records each
+  switch. Allowed changes are recorded with who allowed them and why; reads and the
+  todo list are not.
+- A delegated run decides with its parent's engine, so a session grant or a mode switch in
+  the parent applies to it too.
+
 Every decision returns the rule and scope that produced it. That provenance is shown in
 the approval prompt and recorded in the transcript.
 

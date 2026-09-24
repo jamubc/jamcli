@@ -12,8 +12,12 @@ import { createBuiltinRegistry } from '../tools/registry.js';
 import { ConfigService } from '../../services/ConfigService.js';
 import { McpManager } from '../../services/McpManager.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
-import { createToolSet, registerMcpTools, type McpSource, type ToolSummary } from './tools.js';
+import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type ToolSummary } from './tools.js';
 import { categoriesOf, childLauncher, type ParentSession } from './children.js';
+import { sessionPermissions } from './permissions.js';
+import type { PermissionFlags } from '../permissions/config.js';
+import type { PermissionEngine } from '../permissions/engine.js';
+import type { PermissionMode } from '../permissions/modes.js';
 import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
@@ -36,6 +40,12 @@ export interface RuntimeOptions {
   allowTools?: string[];
   /** `--deny-tool` names for this run. */
   denyTools?: string[];
+  /** `--allowed-tools`, `--disallowed-tools`, and `--permission-mode`. */
+  permissions?: Omit<PermissionFlags, 'allowTools' | 'denyTools'>;
+  /** `--dangerously-bypass-permissions`: start in bypass mode. */
+  bypassPermissions?: boolean;
+  /** Whether commands run in a sandbox, which `auto` mode requires. */
+  sandboxed?: boolean;
   maxSteps?: number;
   signal?: AbortSignal;
   /** Serve this provider instead of building one from configuration. */
@@ -59,6 +69,9 @@ export interface Runtime {
   readonly session: JamSession;
   /** Problems found while assembling, also reported as notices by the first turn. */
   readonly notices: string[];
+  readonly permissionMode: PermissionMode;
+  /** Switch permission modes for later calls. Returns why not, changing nothing, when the mode is unavailable. */
+  setPermissionMode(mode: PermissionMode, options?: { bypassConfirmed?: boolean }): string | undefined;
   run(input: string, onEvent?: (event: AgentEvent) => void): Promise<RunResult>;
   cancel(): void;
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
@@ -90,42 +103,60 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const mcp = options.mcp === false ? undefined : (options.mcp ?? new McpManager({ configService }));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
   const depth = options.parent ? options.parent.depth : 0;
+
+  let permissions: PermissionEngine;
+  if (options.parent) {
+    permissions = options.parent.permissions;
+  } else {
+    const assembled = sessionPermissions({
+      projectRoot,
+      registry,
+      legacyTools: mcpConfig.tools,
+      flags: { allowTools: options.allowTools, denyTools: options.denyTools, ...options.permissions },
+      bypass: options.bypassPermissions,
+      sandboxed: Boolean(options.sandboxed),
+      env,
+    });
+    permissions = assembled.engine;
+    notices.push(...assembled.notices);
+  }
+
   const delegateChild = childLauncher({
     projectRoot,
     config,
     configService,
     mcp,
     env: options.env,
-    parent: () => ({ sessionId: log.id, depth: depth + 1, policy: toolSet.policy }),
+    parent: () => ({ sessionId: log.id, depth: depth + 1, permissions }),
     create: createRuntime,
   });
   const taskTool = registry.get('task');
-  const toolSet = createToolSet({
-    registry,
-    mcpServers,
-    permissions: mcpConfig.tools,
-    allowTools: options.allowTools,
-    denyTools: options.denyTools,
-    policy: options.parent?.policy,
-    descriptions: taskTool
-      ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }
-      : undefined,
-    context: () => ({
-      projectRoot,
-      ignorePatterns: mcpConfig.ignore_patterns,
-      commandTimeoutMs: config.agent_loop?.command_timeout_ms ?? DEFAULT_AGENT_LOOP_CONFIG.command_timeout_ms,
-      delegate: delegateChild,
-      delegationDepth: depth,
-      delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
-    }),
-  });
-  for (const name of toolSet.policy.unknownFlags) notices.push(`No tool is named ${name}, so the flag naming it has no effect.`);
+  const buildTools = (): ToolSet =>
+    createToolSet({
+      registry,
+      mcpServers,
+      permissions,
+      descriptions: taskTool
+        ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }
+        : undefined,
+      context: () => ({
+        projectRoot,
+        ignorePatterns: mcpConfig.ignore_patterns,
+        commandTimeoutMs: config.agent_loop?.command_timeout_ms ?? DEFAULT_AGENT_LOOP_CONFIG.command_timeout_ms,
+        delegate: delegateChild,
+        delegationDepth: depth,
+        delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
+      }),
+    });
+  let toolSet = buildTools();
 
   const rules = applyRules(loadRules(projectRoot, cwd), undefined);
   const hooks: HookBus = createHookBus();
   const trust = trustClassifier(config);
   if (trust.note) notices.push(trust.note);
-  const systemPrompt = buildRuntimePrompt({ profile, rulesText: rulesPromptText(rules), tools: toolSet.summaries, projectRoot, cwd });
+  const buildPrompt = () =>
+    buildRuntimePrompt({ profile, rulesText: rulesPromptText(rules), tools: toolSet.summaries, projectRoot, cwd, mode: permissions.mode });
+  let systemPrompt = buildPrompt();
 
   let choice = resolveModel(options.model, profile, config.api_registry);
   let provider: ChatProvider | undefined = options.provider;
@@ -163,7 +194,12 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   const log = options.sessionId
     ? SessionLog.open(projectRoot, options.sessionId)
-    : SessionLog.create(projectRoot, { cwd, surface: options.surface, delegatedBy: options.parent?.sessionId });
+    : SessionLog.create(projectRoot, {
+        cwd,
+        surface: options.surface,
+        delegatedBy: options.parent?.sessionId,
+        permissionMode: permissions.mode,
+      });
   let session = options.sessionId ? log.toSession() : createSession(projectRoot, log.id);
   let emitting: ((event: AgentEvent) => void) | undefined;
   const recorder = new TranscriptRecorder(log, {
@@ -184,11 +220,28 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     get model() {
       return { ...choice };
     },
-    tools: toolSet.summaries,
+    get tools() {
+      return toolSet.summaries;
+    },
     get session() {
       return session;
     },
     notices,
+    get permissionMode() {
+      return permissions.mode;
+    },
+
+    setPermissionMode(mode, modeOptions) {
+      const from = permissions.mode;
+      const refusal = permissions.setMode(mode, modeOptions);
+      if (refusal || from === mode) return refusal;
+      // What is offered, and what the model is told, both depend on the mode.
+      toolSet = buildTools();
+      systemPrompt = buildPrompt();
+      agent = buildAgent();
+      recorder.switchPermissionMode(from, mode);
+      return undefined;
+    },
 
     async run(input, onEvent) {
       if (running) throw new Error('A turn is already running in this session.');

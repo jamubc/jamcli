@@ -8,7 +8,10 @@ import type { AgentEvent } from '../../types.js';
 import { SessionLog } from '../../transcript/index.js';
 import { taskCancelRunner, taskResultRunner, taskRunner, taskStatusRunner } from '../../tools/task.js';
 import type { DelegationRequest } from '../../delegation/types.js';
-import { createToolPolicy } from '../policy.js';
+import { PermissionEngine } from '../../permissions/engine.js';
+import { parseRule, type Rule } from '../../permissions/rules.js';
+import { createBuiltinRegistry } from '../../tools/registry.js';
+import { toolNaming } from '../tools.js';
 
 let server: FakeProviderServer;
 let root: string;
@@ -70,7 +73,7 @@ test('a child edits under the delegated policy, on its own model and session', a
   const childId = taskResult.match(/child session (\S+)/)[1];
   const childLog = SessionLog.open(root, childId);
   expect(childLog.events()[0]).toMatchObject({ surface: 'child', delegatedBy: parent.sessionId });
-  expect(childLog.events().find((event) => event.type === 'approval')).toMatchObject({ by: 'flag', rule: '--allow-tool edit', surface: 'child' });
+  expect(childLog.events().find((event) => event.type === 'approval')).toMatchObject({ by: 'flag', rule: 'edit', surface: 'child' });
 });
 
 test('what the parent would ask about, the child asks the parent surface, under the parent call', async () => {
@@ -89,13 +92,9 @@ test('what the parent would ask about, the child asks the parent surface, under 
 });
 
 test('a child cannot widen the policy it inherits', async () => {
-  const inherited = createToolPolicy({
-    denyTools: ['run_command'],
-    classOf: (tool) => (['read_file', 'glob', 'grep'].includes(tool) ? 'read' : 'write'),
-    namesOf: (tool) => [tool],
-    known: () => true,
-  });
-  const child = await start({ surface: 'child', allowTools: ['edit', 'run_command'], parent: { sessionId: 'parent', depth: 1, policy: inherited } });
+  const deny = (parseRule('run_command', 'deny', 'flag', '--deny-tool run_command') as { rule: Rule }).rule;
+  const inherited = new PermissionEngine({ projectRoot: root, rules: [deny], ...toolNaming(createBuiltinRegistry()) });
+  const child = await start({ surface: 'child', allowTools: ['edit', 'run_command'], parent: { sessionId: 'parent', depth: 1, permissions: inherited } });
   expect(child.tools.map((tool) => tool.name)).not.toContain('run_command');
   server.enqueue({ toolCalls: [editCall] }, { text: 'asked' });
   const asked: string[] = [];
