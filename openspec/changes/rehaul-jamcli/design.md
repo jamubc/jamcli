@@ -1006,6 +1006,18 @@ load. Keys now read the selection through a ref that changes at once. Up and the
 arriving together, grant the pattern Up chose, not the one last drawn. That matters for
 a grant.
 
+As built (6.7), slash commands live in a registry that custom commands will join in
+stage 8, each with its name, arguments, a summary, and its source. Three behaviors
+differ from the Ink interface:
+- `/clear` starts a new session rather than emptying the view over the same
+  conversation. The model's context and the screen then agree, and the last session
+  stays open to `/resume`.
+- `/profile <name>` switches this session to another profile for the rest of the
+  interface's life and writes nothing, where Ink said it was not implemented.
+- `/permissions allow|ask|deny <rule>` saves to `.jamcli/config.local.json` unless a
+  scope is named. That file is the one a prompt's project grant uses, and it stays out
+  of the repository.
+
 **Tests.** Frame-text snapshots of key states through the OpenTUI test renderer, with
 mock keys driving flows. Snapshots compare text, not escape codes. This amends the
 testing strategy in `project.md`, per the owner's decision.
