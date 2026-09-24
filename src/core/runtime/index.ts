@@ -11,7 +11,6 @@ import { createRedactor } from '../redact.js';
 import { SessionLog, TranscriptRecorder } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
 import { ConfigService } from '../../services/ConfigService.js';
-import { McpManager } from '../../services/McpManager.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
 import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type ToolSummary } from './tools.js';
 import { categoriesOf, childLauncher, type ParentSession } from './children.js';
@@ -198,10 +197,16 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     });
 
   const registry = createBuiltinRegistry();
-  const mcp =
+  // The MCP client is loaded only when a server is configured: it is the heaviest import a
+  // session would otherwise make for nothing.
+  const serversConfigured = (mcpConfig.servers ?? []).some((server) => server.enabled !== false);
+  const mcp: McpSource | undefined =
     options.mcp === false
       ? undefined
-      : (options.mcp ?? new McpManager({ configService, envFor: (server) => envFor(server.env_passthrough, server.env) }));
+      : (options.mcp ??
+        (serversConfigured
+          ? new (await import('../../services/McpManager.js')).McpManager({ configService, envFor: (server) => envFor(server.env_passthrough, server.env) })
+          : undefined));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
   const depth = options.parent ? options.parent.depth : 0;
 

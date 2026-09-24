@@ -97,3 +97,21 @@ test('a key stored with jamcli auth serves its provider, and never reaches the m
     forgetStoredKeys();
   }
 });
+
+test('a configured MCP server is started and its tools offered; with none, no MCP client is made', async () => {
+  userConfig({ api_registry: { ollama: { endpoint: server.ollamaBaseUrl } }, model: 'ollama:fake-model' });
+  const plain = createRuntime({ projectRoot: root, surface: 'headless', env: {} });
+  expect((await plain).tools.some((tool) => tool.name.includes('env_names'))).toBe(false);
+  await (await plain).close();
+
+  write(path.join(root, '.jamcli', 'mcp.json'), {
+    servers: [{ id: 'envcheck', command: process.execPath, args: [path.join(import.meta.dir, '../../../testing/envMcpServer.ts')] }],
+  });
+  const runtime = await createRuntime({ projectRoot: root, surface: 'headless', env: {} });
+  try {
+    expect(runtime.notices).toEqual([]);
+    expect(runtime.tools.map((tool) => tool.name)).toContainEqual(expect.stringContaining('env_names'));
+  } finally {
+    await runtime.close();
+  }
+});

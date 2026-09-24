@@ -1,6 +1,5 @@
 import { runHeadless, type HeadlessResult } from './cli/run.js';
 import { runAuditCli } from './cli/audit.js';
-import { runMcpCommand } from './cli/mcp.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from './cli/config.js';
 import { AUTH_ACTIONS, AUTH_USAGE, runAuthCommand, type AuthAction } from './cli/auth.js';
 import {
@@ -326,6 +325,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
   }
 
   if (parsed.mcpCommand) {
+    const { runMcpCommand } = await import('./cli/mcp.js');
     return runMcpCommand(parsed.mcpCommand, projectRoot);
   }
 
