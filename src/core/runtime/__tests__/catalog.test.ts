@@ -128,7 +128,7 @@ test('mistakes in the models block are reported by the first turn', async () => 
   await runtime.run('hi', (event) => {
     if (event.type === 'notice') notices.push(event.message);
   });
-  expect(notices).toEqual(['.jamcli/config.json models["ollama:fake-model"].context_window must be a whole number of tokens above zero; it is ignored.']);
+  expect(notices).toEqual(['.jamcli/config.json models["ollama:fake-model"].context_window should be a whole number above zero, so it is ignored.']);
 });
 
 test('switching models sizes the next request from the new model', async () => {

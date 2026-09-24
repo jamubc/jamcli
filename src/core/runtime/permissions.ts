@@ -1,13 +1,15 @@
 import type { ToolPermissionValue } from '../../types/config.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import { PermissionEngine } from '../permissions/engine.js';
-import { loadPermissions, type PermissionFlags } from '../permissions/config.js';
+import { loadPermissions, type PermissionFlags, type PermissionLayer } from '../permissions/config.js';
 import { modeRefusal, type PermissionMode } from '../permissions/modes.js';
 import { toolNaming } from './tools.js';
 
 export interface SessionPermissionOptions {
   projectRoot: string;
   registry: ToolRegistry;
+  /** The configuration's layers, as resolved; read from their files when not given. */
+  layers?: PermissionLayer[];
   /** The legacy per-tool block of `.jamcli/mcp.json`. */
   legacyTools?: Record<string, ToolPermissionValue | undefined>;
   flags?: PermissionFlags;
@@ -23,7 +25,13 @@ export interface SessionPermissionOptions {
  * `default` with a notice saying which setting asked for it and why it cannot apply.
  */
 export function sessionPermissions(options: SessionPermissionOptions): { engine: PermissionEngine; notices: string[] } {
-  const loaded = loadPermissions({ projectRoot: options.projectRoot, legacyTools: options.legacyTools, flags: options.flags, env: options.env });
+  const loaded = loadPermissions({
+    projectRoot: options.projectRoot,
+    layers: options.layers,
+    legacyTools: options.legacyTools,
+    flags: options.flags,
+    env: options.env,
+  });
   const notices = [...loaded.errors];
   let mode: PermissionMode = options.bypass ? 'bypass' : loaded.mode;
   const refusal = modeRefusal(mode, { sandboxed: options.sandboxed, bypassConfirmed: options.bypass });

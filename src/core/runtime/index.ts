@@ -27,6 +27,7 @@ import { expandReferences } from './references.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
+import { loadConfig, permissionLayers, type LoadedConfig } from '../config/load.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
 
@@ -128,6 +129,12 @@ export interface Runtime {
   close(): Promise<void>;
 }
 
+/** Where the `models` block came from, for the catalog's messages: its file when only one layer sets it. */
+function modelsLabel(settings: LoadedConfig): string {
+  const labels = new Set([...settings.origins].filter(([key]) => key === 'models' || key.startsWith('models[') || key.startsWith('models.')).map(([, label]) => label));
+  return labels.size === 1 ? `${[...labels][0]} models` : 'models';
+}
+
 /**
  * The one place a session is assembled. Every surface gets the same provider, tools,
  * policy, rules, hooks, trust gate, redaction, and session log from here, and differs
@@ -140,14 +147,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const notices: string[] = [];
 
   const configService = options.configService ?? new ConfigService(projectRoot);
-  const config = await configService.getConfig();
-  const profile = await configService.getActiveProfile();
-  const mcpConfig = await configService.getMcpConfig();
+  const settings = loadConfig({ projectRoot, env });
+  notices.push(...settings.errors);
+  const { config, profile, mcp: mcpConfig } = settings;
   const redact = createRedactor(env, configuredSecrets(config.api_registry, env));
-  const catalog = new ModelCatalog({ models: config.models, modelsSource: '.jamcli/config.json models', registry: config.api_registry });
+  const catalog = new ModelCatalog({ models: config.models, modelsSource: modelsLabel(settings), registry: config.api_registry });
   notices.push(...catalog.problems);
 
-  const sandboxSettings = (config as { sandbox?: SandboxSettings }).sandbox ?? {};
+  const sandboxSettings: SandboxSettings = config.sandbox ?? {};
   const withheld = keyVariables(config.api_registry);
   /** Every process the session starts inherits this, with no credential unless one is named. */
   const envFor = (passthrough: string[] = [], values?: Record<string, string>) =>
@@ -177,6 +184,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     const assembled = sessionPermissions({
       projectRoot,
       registry,
+      layers: permissionLayers(settings),
       legacyTools: mcpConfig.tools,
       flags: { allowTools: options.allowTools, denyTools: options.denyTools, ...options.permissions },
       bypass: options.bypassPermissions,
@@ -252,7 +260,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     buildRuntimePrompt({ profile, rulesText: rulesPromptText(rules), tools: toolSet.summaries, projectRoot, cwd, mode: permissions.mode });
   let systemPrompt = buildPrompt();
 
-  let choice = resolveModel(options.model, profile, config.api_registry);
+  let choice = resolveModel(options.model ?? config.model, profile, config.api_registry);
   let provider: ChatProvider | undefined = options.provider;
   let providerError: string | undefined;
   if (!provider) {
