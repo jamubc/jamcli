@@ -632,6 +632,51 @@ assistant tool call from its results: the boundary moves to the nearest user mes
 A failed summary falls back to dropping whole older turns, and the notice says so. The
 `compaction` event carries token counts before and after, which fixes F20.
 
+As built (4.3), context management runs in the agent loop, before every step, on every
+surface.
+
+- **Budget.** The output reserve is the output a request asks for (D9), or 8,192 tokens,
+  or a quarter of the window when that is smaller. A reserve larger than half the window
+  is taken as half.
+- **Estimate.** It is four characters a token over the message text, the reasoning (the
+  signed blocks where there are any, instead of the plain text they repeat), and each
+  tool call's name and arguments, plus four tokens a message, plus the system prompt and
+  the tool definitions. The correction is the latest ratio of reported to estimated
+  prompt tokens for a main request, between 0.5 and 3. Ollama's counts are not used: its
+  count can leave out a prefix it had cached.
+- **Where to cut.** D10 moves the cut to the nearest user message. As built, the cut
+  prefers the start of a user turn. When the current turn alone is longer than the room
+  to keep, it falls at the start of an assistant step instead, which parts no call from
+  its results either. A cut inside the current turn keeps that turn's request verbatim
+  at the end of the summary.
+- **What is kept.** The room to keep verbatim is 30 percent of the budget. When
+  everything fits, the latest turn is kept whole. A single turn that fits, or a previous
+  summary on its own, is not compacted.
+- **The summary** is one request to the session's model for at most 8,192 tokens. The
+  summarizer reads tool results and arguments cut to 2,000 characters in the middle. The
+  request is counted in the cost ledger.
+- **Unknown windows.** This resolves a conflict between D9 and D10. D9's default of 8,192
+  tokens, compacted against from the start, would summarize an unknown model's
+  conversation after about 1,200 tokens: a request's system prompt and 22 tool
+  definitions already take about 3,300. So a window that is only a guess is not
+  compacted against ahead of time. Instead, whenever any provider refuses a request as
+  too long (a 400 or 413 naming the context or the token limit), the conversation is
+  compacted and the step retried once, as D8's error table says. Ollama's window is the
+  one JamCLI asks for, so it always counts as known.
+- **When it cannot help.** A context that compaction cannot bring under the threshold,
+  such as a window too small for the system prompt and tools, is reported once a turn
+  and not compacted again at every step.
+- **Setting.** `context.auto_compact` is on by default. The old `context_management`
+  block is written into every existing configuration with `enabled: false`, so honoring
+  it would have left this off for everyone. It now configures only the legacy interface,
+  whose manager also cuts only where no call is parted from its results.
+- **`/compact [focus]`** is `Runtime.compact(focus)`. The command reaches users with the
+  interface in stage 6 and command routing in stage 8.
+- **Records.** Each compaction records its token counts before and after, whether it
+  summarized or left messages out, how many messages it replaced, and whether it was
+  automatic or requested. A continued session rebuilds the same conversation from the
+  log.
+
 ### D11. Layered configuration
 
 Configuration is resolved from these layers, lowest to highest:

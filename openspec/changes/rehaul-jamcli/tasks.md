@@ -416,7 +416,25 @@ cover headless, ACP, and delegation.
   - Headless JSON carries `total_cost_usd`, `unpriced_requests`, `model_usage`, and `delegated`, with `null` for a cost none of whose requests had a price. Stream `usage` events carry `model` and `cost_usd`, and an export states the cost and marks each request.
   - The fake server now reports cache reads and writes the way each API does, and serves a scripted turn to one model only, so sessions running at once each get their own turns.
   - 41 mutation probes, each turning a test red, across pricing, the ledger, the runtime, delegation, the log, headless JSON, and exports.
-- [ ] 4.3 Context management v2 (D10; F20). Files: `src/core/context/`, tests. On by default, budgets from the catalog, estimates corrected by reported usage, pair-safe compaction, `/compact [focus]`, and a fallback that is reported.
+- [x] 4.3 Context management v2 (D10; F20). Files: `src/core/context/`, tests. On by default, budgets from the catalog, estimates corrected by reported usage, pair-safe compaction, `/compact [focus]`, and a fallback that is reported.
+  - **Verification**: built as recorded under D10, including the unknown-window decision. The module tests cover:
+    - the estimate over text, reasoning, tool calls, the system prompt, and the tool definitions;
+    - a correction learned within its range;
+    - the budget arithmetic;
+    - where a cut falls;
+    - 200 random conversations cut at five sizes, with no tool result ever parted from its call;
+    - a summary with its focus and bounded tool output;
+    - the fallback, an empty summary, a request kept verbatim and carried over, cancellation, and the words providers use to refuse a request.
+  - Through the runtime:
+    - a turn that outgrows the window is summarized between steps, the next request starts from the summary with no orphaned result, the log rebuilds the same conversation, and the summary request is counted;
+    - a failed summary leaves the older steps out and says so;
+    - `compact(focus)` sends the focus, keeps the latest turn, and refuses while a turn runs;
+    - a model with a guessed window is compacted only when refused, and retried once, not twice;
+    - a context that compaction cannot bring under the threshold is reported once;
+    - `auto_compact: false` compacts nothing;
+    - the estimate learns from OpenAI's counts and not from Ollama's.
+  - F20 is live: an agent turn compacts mid-turn, and every request, the summary's included, carries each result with its call. The legacy interface's manager was fixed the same way; its two new tests fail without the fix.
+  - 35 mutation probes, each turning a test red, across the estimate, the budget, the cut, the summary, the agent loop, the log, and the runtime.
 - [ ] 4.4 Anthropic caching and thinking (D8). Files: `src/core/providers/anthropic.ts`, tests. Load the `claude-api` skill before editing for current model identifiers, caching rules, and thinking signatures.
 - [ ] 4.5 Optional: an OpenAI Responses API adapter. If it does not land, record the gap in `docs/feature-matrix.md`.
 

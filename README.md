@@ -177,6 +177,18 @@ settings are `tools`, `reasoning`, `images`, `thinking` (`adaptive` or `budget`)
 caps how much each reply may write, 32,000 by default and never more than the model
 allows. A reply cut off at that limit says so.
 
+### Context
+
+When a conversation nears the model's context window, JamCLI summarizes its older part
+and keeps the latest messages as they were. It never separates a tool call from its
+results, and a request cut in the middle keeps its wording. The budget is the window,
+less the output a reply may need, less a tenth; compaction starts at 85 percent of it.
+The estimate learns from the token counts the provider reports. For a model whose window
+JamCLI does not know, it compacts only when the provider refuses a request as too long,
+then retries once. A summary that fails leaves the older messages out, and the notice
+says so. Set `"context": { "auto_compact": false }` in `config.json` to turn it off; the
+older `context_management` block applies only to the legacy interface.
+
 ## Development
 
 ### Run Locally (without installing)
