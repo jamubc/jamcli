@@ -154,8 +154,8 @@ export function detectStore(env: Record<string, string | undefined> = process.en
 
 /** Keys the store has handed out in this process, so every surface can redact them. */
 const revealed = new Map<string, string>();
-/** What each account resolved to, so a keychain is asked once per process. */
-const looked = new Map<string, string | null>();
+/** Keys found, so a keychain is asked once per process for each. A key not found is asked for again, since one may be stored meanwhile. */
+const looked = new Map<string, string>();
 
 /**
  * The stored key for a provider, or nothing. A store that cannot be read counts as
@@ -163,15 +163,17 @@ const looked = new Map<string, string | null>();
  */
 export function storedKey(account: string): string | undefined {
   const known = looked.get(account);
-  if (known !== undefined) return known ?? undefined;
+  if (known) return known;
   let value: string | undefined;
   try {
     value = detectStore().get(account);
   } catch {
     value = undefined;
   }
-  looked.set(account, value ?? null);
-  if (value) revealed.set(account, value);
+  if (value) {
+    looked.set(account, value);
+    revealed.set(account, value);
+  }
   return value;
 }
 

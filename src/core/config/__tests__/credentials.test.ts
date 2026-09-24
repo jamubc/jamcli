@@ -135,3 +135,13 @@ test('a stored key is used last, after the declared variable, the configuration,
   expect(revealedKeys()).toContainEqual({ name: 'stored:openrouter', value: 'sk-or-v1-stored' });
   expect(storedKey('nobody')).toBeUndefined();
 });
+
+test('a key stored while a session runs is found, where one found is not asked for again', () => {
+  expect(storedKey('anthropic')).toBeUndefined();
+  fileStore().set('anthropic', 'sk-ant-stored-later');
+  expect(storedKey('anthropic')).toBe('sk-ant-stored-later');
+  fileStore().remove('anthropic');
+  expect(storedKey('anthropic')).toBe('sk-ant-stored-later');
+  forgetStoredKeys();
+  expect(storedKey('anthropic')).toBeUndefined();
+});
