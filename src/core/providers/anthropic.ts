@@ -41,8 +41,9 @@ interface AnthropicContentBlock {
  * needs to accept it: a signature for thinking, or the opaque payload for redacted
  * thinking. Anything else stays in the transcript and is left out of the request.
  */
-const replayableReasoning = (message: ChatMessage): AnthropicContentBlock[] => {
+const replayableReasoning = (message: ChatMessage, since?: number): AnthropicContentBlock[] => {
   if (message.providerFamily !== 'anthropic' || !message.reasoningBlocks?.length) return [];
+  if (since !== undefined && message.timestamp < since) return [];
   const blocks: AnthropicContentBlock[] = [];
   for (const block of message.reasoningBlocks) {
     if (block.type === 'thinking' && block.signature) {
@@ -168,7 +169,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
         continue;
       }
       if (message.role === 'assistant') {
-        const blocks: AnthropicContentBlock[] = [...replayableReasoning(message)];
+        const blocks: AnthropicContentBlock[] = [...replayableReasoning(message, options.replayReasoningSince)];
         if (message.content) {
           blocks.push({ type: 'text', text: message.content });
         }

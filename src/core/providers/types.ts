@@ -56,7 +56,17 @@ export interface ProviderRequestOptions {
   thinkingStyle?: ThinkingStyle;
   /** The model thinks whatever the request says, so thinking cannot be turned off. */
   alwaysThinks?: boolean;
+  /**
+   * Replay signed reasoning only from messages created at or after this time. A signature
+   * holds only while the system prompt, the tools, and the messages before it are as they
+   * were, so reasoning from before any of them changed is left out: dropping the oldest
+   * blocks is allowed, where sending them would be refused.
+   */
+  replayReasoningSince?: number;
 }
+
+/** A `replayReasoningSince` for a prefix set now: after every message that already exists. */
+export const prefixSetNow = (): number => Date.now() + 1;
 
 /** The wire family a provider speaks. Signed reasoning is replayed only within a family. */
 export type ProviderFamily = 'openai' | 'anthropic' | 'ollama';

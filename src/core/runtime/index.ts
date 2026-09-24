@@ -4,7 +4,7 @@ import type { AgentEvent, ApprovalPreview, JamSession, RunResult, ToolCall } fro
 import { describeCall, previewCall } from '../approval.js';
 import { createSession } from '../state.js';
 import { createChatProvider } from '../providers/factory.js';
-import type { ChatProvider } from '../providers/types.js';
+import { prefixSetNow, type ChatProvider } from '../providers/types.js';
 import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
 import { createHookBus, emitHookEvent, type HookBus } from '../hooks/index.js';
 import { createRedactor } from '../redact.js';
@@ -273,6 +273,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const counter = new TokenCounter();
   const autoCompact = config.context?.auto_compact !== false;
   const budgetFor = () => contextBudget(modelInfo.contextWindow, requestedOutputTokens(modelInfo, loop?.max_output_tokens));
+  /**
+   * When the request's prefix was last set: this process's start, a change of system prompt
+   * or tools, or a compaction. Signed reasoning from before it is not replayed.
+   */
+  let reasoningSince = prefixSetNow();
   /** A guessed window is not compacted ahead of; Ollama's window is the one JamCLI asks for, so it is always known. */
   const windowKnown = () => modelInfo.sources.contextWindow !== 'default' || modelInfo.provider === 'ollama';
   const buildAgent = () =>
@@ -299,6 +304,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       price: modelInfo.price,
       thinkingStyle: modelInfo.thinking,
       alwaysThinks: modelInfo.alwaysThinks,
+      reasoningSince,
       trustThreshold: config.trust?.threshold,
       trustOffNote: true,
       redact,
@@ -319,6 +325,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const ledger = options.sessionId ? CostLedger.fromEvents(log.events()) : new CostLedger();
   const account = (event: AgentEvent) => {
     if (event.type === 'usage') ledger.record({ model: event.model, usage: event.usage, cost: event.cost, delegated: Boolean(event.delegatedSession) });
+    // The agent that compacted moved its own; later agents start from here.
+    if (event.type === 'compaction') reasoningSince = prefixSetNow();
   };
   let emitting: ((event: AgentEvent) => void) | undefined;
   const recorder = new TranscriptRecorder(log, {
@@ -436,6 +444,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       // What is offered, and what the model is told, both depend on the mode.
       toolSet = buildTools();
       systemPrompt = buildPrompt();
+      reasoningSince = prefixSetNow();
       agent = buildAgent();
       recorder.switchPermissionMode(from, mode);
       return undefined;

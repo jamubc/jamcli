@@ -1,6 +1,6 @@
 import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage, ToolCall, ToolResult } from './types.js';
 import { addModelUsage, addUsage, appendMessages } from './state.js';
-import type { ChatProvider, ProviderRequestOptions, StreamChunk, ToolDefinition } from './providers/types.js';
+import { prefixSetNow, type ChatProvider, type ProviderRequestOptions, type StreamChunk, type ToolDefinition } from './providers/types.js';
 import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';
 import { HeadTailBuffer } from './tools/command.js';
 import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
@@ -45,6 +45,8 @@ export interface AgentOptions {
   /** How the model thinks, from the catalog, for providers that configure thinking per model. */
   thinkingStyle?: ProviderRequestOptions['thinkingStyle'];
   alwaysThinks?: boolean;
+  /** When the request's prefix was last set: reasoning from before it is not replayed. A compaction moves it. */
+  reasoningSince?: number;
   /**
    * Context management: the budget every request must fit, and the counter that estimates
    * requests and learns from what the provider reports. Without it, nothing is compacted.
@@ -88,6 +90,7 @@ export class CoreAgent implements Agent {
   private readonly truncationLimit: number;
   private readonly redact: Redactor;
   private trustNoted = false;
+  private reasoningSince?: number;
 
   constructor(private readonly options: AgentOptions = {}) {
     const loop = options.loop;
@@ -96,6 +99,7 @@ export class CoreAgent implements Agent {
       options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn;
     this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars;
     this.redact = options.redact ?? createRedactor();
+    this.reasoningSince = options.reasoningSince;
   }
 
   /**
@@ -342,6 +346,8 @@ export class CoreAgent implements Agent {
       contextLength: this.options.contextLength,
     });
     if (!result) return { session: working, compacted: false };
+    // The kept messages' reasoning was signed against the conversation the summary replaced.
+    this.reasoningSince = prefixSetNow();
     let next: JamSession = { ...working, messages: result.messages, updatedAt: Date.now() };
     if (result.usage) next = this.account(next, result.usage, this.options.modelUsageKey, this.options.price, emit);
     const after = this.countContext(next.messages);
@@ -414,6 +420,7 @@ export class CoreAgent implements Agent {
         contextLength: this.options.contextLength,
         thinkingStyle: this.options.thinkingStyle,
         alwaysThinks: this.options.alwaysThinks,
+        replayReasoningSince: this.reasoningSince,
         onRetry: (info) => emit({ type: 'retry', attempt: info.attempt, delayMs: info.delayMs, reason: info.reason }),
       })) {
         if (chunk.content) {
