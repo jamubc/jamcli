@@ -21,12 +21,13 @@ test('a typed prefix lists names that start with it first, then names that conta
   expect(names('/')).toHaveLength(BUILTIN_COMMANDS.length);
   expect(findCommand(BUILTIN_COMMANDS, 'quit')?.name).toBe('exit');
   expect(findCommand(BUILTIN_COMMANDS, 'new')?.name).toBe('clear');
-  expect(findCommand(BUILTIN_COMMANDS, 'undo')).toBeUndefined();
+  expect(findCommand(BUILTIN_COMMANDS, 'undo')?.name).toBe('undo');
+  expect(findCommand(BUILTIN_COMMANDS, 'diff')).toBeUndefined();
 });
 
 test('the palette reaches every command the interface has today', () => {
   const names = BUILTIN_COMMANDS.map((command) => command.name);
-  for (const name of ['help', 'model', 'mode', 'permissions', 'context', 'cost', 'compact', 'clear', 'resume', 'fork', 'tools', 'mcp', 'config', 'copy', 'profile', 'categories', 'doctor', 'export', 'exit']) {
+  for (const name of ['help', 'model', 'mode', 'permissions', 'context', 'cost', 'compact', 'clear', 'resume', 'fork', 'undo', 'rewind', 'tools', 'mcp', 'config', 'copy', 'profile', 'categories', 'doctor', 'export', 'exit']) {
     expect(names).toContain(name);
   }
   expect(new Set(names).size).toBe(names.length);

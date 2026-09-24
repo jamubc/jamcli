@@ -60,7 +60,12 @@ function PlainRow({ row }: { row: Row }) {
     case 'command':
       return <text fg={theme.text}>{`Command: ${row.text}`}</text>;
     case 'output':
-      return <text fg={theme.text}>{`Result: ${row.text}`}</text>;
+      return (
+        <box flexDirection="column">
+          <text fg={theme.text}>{`Result: ${row.text}`}</text>
+          {row.diff ? <text fg={theme.text}>{`Diff:\n${row.diff}`}</text> : null}
+        </box>
+      );
   }
 }
 
@@ -100,6 +105,11 @@ export function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
         </box>
       );
     case 'output':
-      return <text fg={theme.text}>{row.text}</text>;
+      return (
+        <box flexDirection="column">
+          <text fg={theme.text}>{row.text}</text>
+          {row.diff ? <DiffView diff={row.diff} syntax={syntax} /> : null}
+        </box>
+      );
   }
 }

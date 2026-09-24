@@ -39,7 +39,7 @@ export type Row =
   /** A slash command as the person typed it. */
   | { kind: 'command'; id: number; text: string }
   /** What a command reports: a table, a list, or a few lines. */
-  | { kind: 'output'; id: number; text: string }
+  | { kind: 'output'; id: number; text: string; diff?: string }
   | { kind: 'compaction'; id: number; trigger: 'auto' | 'manual'; strategy: 'summary' | 'drop'; beforeTokens: number; afterTokens: number };
 
 /** A call waiting for the person, as the permission prompt shows it. */
@@ -102,7 +102,7 @@ export type ViewAction =
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; text: string }
   /** The person ran a slash command, which never reaches the model. */
   | { type: 'command'; text: string }
-  | { type: 'output'; text: string }
+  | { type: 'output'; text: string; diff?: string }
   | { type: 'toggle'; id: number }
   | { type: 'clear' };
 
@@ -370,7 +370,7 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     }
     case 'command':
     case 'output': {
-      const row: Row = { kind: action.type, id: state.nextId, text: action.text };
+      const row: Row = action.type === 'output' && action.diff ? { kind: 'output', id: state.nextId, text: action.text, diff: action.diff } : { kind: action.type, id: state.nextId, text: action.text };
       return { ...state, rows: [...closeStreaming(state.rows), row], nextId: state.nextId + 1 };
     }
     case 'toggle':
