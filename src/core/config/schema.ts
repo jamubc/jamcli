@@ -155,6 +155,14 @@ export const ConfigFileSchema = z
         include_content: z.boolean().describe('Put prompts, outputs, tool arguments, and tool results on spans. Off by default.'),
       })
       .partial(),
+    ui: z
+      .strictObject({
+        theme: z.enum(['dark', 'light', 'high-contrast', 'monochrome']).describe('The interface\'s colors. NO_COLOR forces monochrome. Defaults to dark.'),
+        screen_reader: z.boolean().describe('Draw the interface as plain labeled lines, with no boxes, marks, or animation. --screen-reader turns it on for one run.'),
+        reduced_motion: z.boolean().describe('Stop the spinner and shimmer. On by itself in screen reader mode.'),
+      })
+      .partial()
+      .describe('How the interface looks and moves.'),
     // Read by the legacy interface only.
     context_management: z
       .strictObject({

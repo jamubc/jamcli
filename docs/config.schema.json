@@ -459,6 +459,31 @@
       },
       "additionalProperties": false
     },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "theme": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light",
+            "high-contrast",
+            "monochrome"
+          ],
+          "description": "The interface's colors. NO_COLOR forces monochrome. Defaults to dark."
+        },
+        "screen_reader": {
+          "type": "boolean",
+          "description": "Draw the interface as plain labeled lines, with no boxes, marks, or animation. --screen-reader turns it on for one run."
+        },
+        "reduced_motion": {
+          "type": "boolean",
+          "description": "Stop the spinner and shimmer. On by itself in screen reader mode."
+        }
+      },
+      "additionalProperties": false,
+      "description": "How the interface looks and moves."
+    },
     "context_management": {
       "type": "object",
       "properties": {

@@ -131,6 +131,19 @@ export interface Config {
   sandbox?: SandboxSettings;
   /** The OpenTelemetry exporter, off unless `enabled`. */
   otel?: OtelSettings;
+  /** How the interface looks and moves. */
+  ui?: UiSettings;
+}
+
+export type ThemeName = 'dark' | 'light' | 'high-contrast' | 'monochrome';
+
+export interface UiSettings {
+  /** Defaults to dark. `NO_COLOR` forces monochrome. */
+  theme?: ThemeName;
+  /** Plain labeled lines: no boxes, no marks, no animation. */
+  screen_reader?: boolean;
+  /** No spinner or shimmer. */
+  reduced_motion?: boolean;
 }
 
 export interface ContextSettings {

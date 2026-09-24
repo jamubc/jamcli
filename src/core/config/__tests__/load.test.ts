@@ -143,3 +143,12 @@ test("the user's file follows XDG_CONFIG_HOME, and JAMCLI_CONFIG_DIR above it", 
     else process.env.XDG_CONFIG_HOME = saved.xdg;
   }
 });
+
+test('the ui block merges by key, and a theme it does not know is named and left out', () => {
+  user({ ui: { theme: 'light', reduced_motion: true } });
+  project({ ui: { theme: 'solarized', screen_reader: true } });
+  const { config, errors, origins } = load();
+  expect(config.ui).toEqual({ theme: 'light', reduced_motion: true, screen_reader: true });
+  expect(origins.get('ui.screen_reader')).toBe('.jamcli/config.json');
+  expect(errors).toEqual(['.jamcli/config.json ui.theme should be one of "dark", "light", "high-contrast", "monochrome", so it is ignored.']);
+});
