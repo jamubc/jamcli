@@ -19,6 +19,8 @@ const withArticle = (noun: string) => (/^[aeiou]/.test(noun) ? `an ${noun}` : `a
 
 /** What the schema expected, in words; never the value found, which may be a key. */
 function expectation(issue: z.core.$ZodIssue): string {
+  // A schema that names its shape is taken at its word.
+  if (issue.message.startsWith('expected ')) return issue.message.slice('expected '.length);
   switch (issue.code) {
     case 'invalid_type':
       return withArticle(issue.expected === 'int' ? 'integer' : issue.expected === 'record' ? 'object' : String(issue.expected));

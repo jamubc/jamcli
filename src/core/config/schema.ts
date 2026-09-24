@@ -7,8 +7,16 @@ import { PERMISSION_MODES, type PermissionMode } from '../permissions/modes.js';
  * not match is reported by file, key, and expected shape.
  */
 
-const positiveInt = () => z.number().int().positive();
-const nonNegativeInt = () => z.number().int().nonnegative();
+/** A message the validator reports as the expected shape, in place of Zod's own. */
+const expected = (shape: string) => ({ error: `expected ${shape}` });
+const positiveInt = () => {
+  const shape = expected('a whole number above zero');
+  return z.number(shape).int(shape).positive(shape);
+};
+const nonNegativeInt = () => {
+  const shape = expected('a whole number of 0 or more');
+  return z.number(shape).int(shape).nonnegative(shape);
+};
 const ruleList = (decision: string) => z.array(z.string()).describe(`Rules that ${decision}, such as "run_command(npm test *)". Lists from every layer apply.`);
 
 const keyed = {

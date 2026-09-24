@@ -89,7 +89,7 @@ test('a value that does not fit is reported and the layer below shows through', 
   expect(config.permissions).toBeUndefined();
   // In layer order.
   expect(errors).toHaveLength(3);
-  expect(errors[0]).toBe('.jamcli/config.json agent_loop.max_steps should be a positive number, so it is ignored.');
+  expect(errors[0]).toBe('.jamcli/config.json agent_loop.max_steps should be a whole number above zero, so it is ignored.');
   expect(errors[1]).toStartWith('.jamcli/config.local.json is not valid JSON, so it is ignored:');
   expect(errors[2]).toBe('JAMCLI_PERMISSION_MODE should be one of "plan", "default", "accept-edits", "auto", "bypass", so it is ignored.');
 });

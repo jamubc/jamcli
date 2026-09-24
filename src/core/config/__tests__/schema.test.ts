@@ -53,7 +53,7 @@ test('a value that does not fit is named by file, key, and expected shape, and t
   expect(errors).toEqual([
     '.jamcli/config.json api_registry.openrouter.api_key should be a string, so it is ignored.',
     '.jamcli/config.json permissions.mode should be one of "plan", "default", "accept-edits", "auto", "bypass", so it is ignored.',
-    '.jamcli/config.json agent_loop.max_steps should be a number, so it is ignored.',
+    '.jamcli/config.json agent_loop.max_steps should be a whole number above zero, so it is ignored.',
     '.jamcli/config.json: modle is not a setting JamCLI knows, so it is ignored.',
   ]);
   expect(value).toEqual({
@@ -76,7 +76,7 @@ test('an entry missing what it needs is left out whole, and odd keys are quoted'
   );
   expect(errors).toEqual([
     'config.json api_registry.endpoints[0].base_url should be a string, so it is ignored.',
-    'config.json models["ollama:qwen2.5-coder:7b"].context_window should be a positive number, so it is ignored.',
+    'config.json models["ollama:qwen2.5-coder:7b"].context_window should be a whole number above zero, so it is ignored.',
   ]);
   expect(value).toEqual({ api_registry: { endpoints: [{ id: 'ok', base_url: 'https://ok.example/v1' }] }, });
   expect(formatPath(['a', 0, 'b-c', 'd'])).toBe('a[0]["b-c"].d');
