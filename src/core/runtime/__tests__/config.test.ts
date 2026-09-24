@@ -5,6 +5,7 @@ import path from 'path';
 import { createRuntime } from '../index.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 import type { AgentEvent } from '../../types.js';
+import { fileStore, forgetStoredKeys } from '../../config/credentials.js';
 
 let server: FakeProviderServer;
 let root: string;
@@ -72,4 +73,27 @@ test("a deny rule in the user's configuration holds in every project, and bad va
   expect(results).toHaveLength(1);
   expect((results[0] as Extract<AgentEvent, { type: 'tool_result' }>).result.status).toBe('denied');
   expect(fs.existsSync(path.join(root, 'x.txt'))).toBe(false);
+});
+
+test('a key stored with jamcli auth serves its provider, and never reaches the model', async () => {
+  const saved = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  forgetStoredKeys();
+  try {
+    const key = 'sk-ant-stored-0123456789abcdef';
+    fileStore().set('anthropic', key);
+    userConfig({ api_registry: { anthropic: { base_url: server.anthropicBaseUrl } }, model: 'anthropic:claude-x' });
+    fs.writeFileSync(path.join(root, 'leak.txt'), `the key is ${key}\n`);
+    const runtime = await start({ allowTools: ['read_file'] });
+    server.enqueue({ toolCalls: [{ id: 'r1', name: 'read_file', arguments: { path: 'leak.txt' } }] }, { text: 'read' });
+    await runtime.run('read leak.txt');
+    const [first, second] = server.completions().slice(-2);
+    expect(first.headers['x-api-key']).toBe(key);
+    const sent = JSON.stringify(second.body.messages);
+    expect(sent).not.toContain(key);
+    expect(sent).toContain('[redacted:stored:anthropic]');
+  } finally {
+    if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
+    forgetStoredKeys();
+  }
 });

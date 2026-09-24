@@ -28,6 +28,7 @@ import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/
 import { CostLedger, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
 import { loadConfig, permissionLayers, type LoadedConfig } from '../config/load.js';
+import { revealedKeys } from '../config/credentials.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
 
@@ -150,7 +151,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const settings = loadConfig({ projectRoot, env });
   notices.push(...settings.errors);
   const { config, profile, mcp: mcpConfig } = settings;
-  const redact = createRedactor(env, configuredSecrets(config.api_registry, env));
+  const redact = createRedactor(env, configuredSecrets(config.api_registry, env), revealedKeys);
   const catalog = new ModelCatalog({ models: config.models, modelsSource: modelsLabel(settings), registry: config.api_registry });
   notices.push(...catalog.problems);
 

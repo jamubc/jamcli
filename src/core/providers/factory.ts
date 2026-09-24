@@ -3,6 +3,7 @@ import type { ChatProvider } from './types.js';
 import { OpenAICompatProvider, type ProviderDialect } from './openai-compat.js';
 import { AnthropicProvider } from './anthropic.js';
 import { OllamaProvider } from './ollama.js';
+import { storedKey } from '../config/credentials.js';
 
 export const SUPPORTED_PROVIDERS = ['ollama', 'openrouter', 'openai', 'anthropic'] as const;
 export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
@@ -28,11 +29,11 @@ const readEnv = (name: string): string | undefined => {
 };
 
 /**
- * Resolves a credential, preferring the declared environment variable over a
- * value stored in configuration, and falling back to the provider's well-known
- * environment variable when neither is set.
+ * Resolves a credential from, in order: the declared environment variable, a key in
+ * configuration, the provider's well-known environment variable, and the key stored for
+ * `account` by `jamcli auth`, in the keychain or the credentials file.
  */
-export const resolveApiKey = (config: KeyConfig | undefined, fallbackEnv?: string): string | undefined => {
+export const resolveApiKey = (config: KeyConfig | undefined, fallbackEnv?: string, account?: string): string | undefined => {
   if (config?.key_env_var) {
     const fromDeclaredEnv = readEnv(config.key_env_var);
     if (fromDeclaredEnv) return fromDeclaredEnv;
@@ -40,7 +41,9 @@ export const resolveApiKey = (config: KeyConfig | undefined, fallbackEnv?: strin
   if (config?.api_key && config.api_key.trim()) {
     return config.api_key.trim();
   }
-  return fallbackEnv ? readEnv(fallbackEnv) : undefined;
+  const fromEnv = fallbackEnv ? readEnv(fallbackEnv) : undefined;
+  if (fromEnv) return fromEnv;
+  return account ? storedKey(account) : undefined;
 };
 
 const unconfigured = (name: string): Error => {
@@ -73,7 +76,7 @@ const buildOllama = (config: ApiRegistry['ollama']): ChatProvider => {
 };
 
 const buildOpenRouter = (config: ApiRegistry['openrouter']): ChatProvider => {
-  const apiKey = resolveApiKey(config, FALLBACK_ENV.openrouter);
+  const apiKey = resolveApiKey(config, FALLBACK_ENV.openrouter, 'openrouter');
   if (!apiKey && !config?.base_url) throw unconfigured('openrouter');
   return new OpenAICompatProvider({
     apiKey,
@@ -90,7 +93,7 @@ const buildOpenRouter = (config: ApiRegistry['openrouter']): ChatProvider => {
 };
 
 const buildOpenAI = (config: ApiRegistry['openai']): ChatProvider => {
-  const apiKey = resolveApiKey(config, FALLBACK_ENV.openai);
+  const apiKey = resolveApiKey(config, FALLBACK_ENV.openai, 'openai');
   if (!apiKey && !config?.base_url) throw unconfigured('openai');
   return new OpenAICompatProvider({
     apiKey,
@@ -102,7 +105,7 @@ const buildOpenAI = (config: ApiRegistry['openai']): ChatProvider => {
 };
 
 const buildAnthropic = (config: ApiRegistry['anthropic']): ChatProvider => {
-  const apiKey = resolveApiKey(config, FALLBACK_ENV.anthropic);
+  const apiKey = resolveApiKey(config, FALLBACK_ENV.anthropic, 'anthropic');
   if (!apiKey && !config?.base_url) throw unconfigured('anthropic');
   return new AnthropicProvider({
     apiKey,
@@ -117,7 +120,7 @@ export const endpointDialect = (endpoint: EndpointConfig): ProviderDialect =>
 
 const buildEndpoint = (endpoint: EndpointConfig): ChatProvider => {
   if (!endpoint.base_url) throw unconfigured(endpoint.id);
-  const apiKey = resolveApiKey(endpoint, `${endpoint.id.toUpperCase()}_API_KEY`);
+  const apiKey = resolveApiKey(endpoint, `${endpoint.id.toUpperCase()}_API_KEY`, endpoint.id);
   if (endpointDialect(endpoint) === 'anthropic') {
     return new AnthropicProvider({
       apiKey,
@@ -167,13 +170,13 @@ export function createChatProvider(name: string, registry: ApiRegistry = {}): Ch
 export function listConfiguredProviders(registry: ApiRegistry = {}): string[] {
   const ids: string[] = [];
   if (registry.ollama) ids.push('ollama');
-  if (registry.openrouter && (resolveApiKey(registry.openrouter, FALLBACK_ENV.openrouter) || registry.openrouter.base_url)) {
+  if (registry.openrouter && (resolveApiKey(registry.openrouter, FALLBACK_ENV.openrouter, 'openrouter') || registry.openrouter.base_url)) {
     ids.push('openrouter');
   }
-  if (registry.openai && (resolveApiKey(registry.openai, FALLBACK_ENV.openai) || registry.openai.base_url)) {
+  if (registry.openai && (resolveApiKey(registry.openai, FALLBACK_ENV.openai, 'openai') || registry.openai.base_url)) {
     ids.push('openai');
   }
-  if (registry.anthropic && (resolveApiKey(registry.anthropic, FALLBACK_ENV.anthropic) || registry.anthropic.base_url)) {
+  if (registry.anthropic && (resolveApiKey(registry.anthropic, FALLBACK_ENV.anthropic, 'anthropic') || registry.anthropic.base_url)) {
     ids.push('anthropic');
   }
   for (const endpoint of registry.endpoints || []) {

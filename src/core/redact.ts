@@ -11,24 +11,32 @@ const MIN_SECRET_LENGTH = 8;
 
 export type Redactor = (text: string) => string;
 
+type Secret = { name: string; value: string };
+
+/**
+ * `later` is asked again at every call, for credentials that become known after the
+ * redactor is made, such as a key read from the store when a provider is switched to.
+ */
 export function createRedactor(
   env: Record<string, string | undefined> = process.env,
-  extra: { name: string; value: string }[] = []
+  extra: Secret[] = [],
+  later?: () => Secret[]
 ): Redactor {
-  const secrets: { name: string; value: string }[] = [];
+  const fixed: Secret[] = [];
   for (const [name, value] of Object.entries(env)) {
     if (typeof value === 'string' && value.length >= MIN_SECRET_LENGTH && SECRET_NAME.test(name)) {
-      secrets.push({ name, value });
+      fixed.push({ name, value });
     }
   }
-  for (const entry of extra) {
-    if (entry.value && entry.value.length >= MIN_SECRET_LENGTH) secrets.push(entry);
-  }
-  // Longest first, so a secret that contains another is replaced whole.
-  secrets.sort((a, b) => b.value.length - a.value.length);
-  if (!secrets.length) return (text) => text;
+  fixed.push(...extra);
+  const usable = (list: Secret[]) =>
+    // Longest first, so a secret that contains another is replaced whole.
+    list.filter((entry) => entry.value && entry.value.length >= MIN_SECRET_LENGTH).sort((a, b) => b.value.length - a.value.length);
+  const always = usable(fixed);
+  if (!always.length && !later) return (text) => text;
   return (text: string) => {
     if (!text) return text;
+    const secrets = later ? usable([...fixed, ...later()]) : always;
     let out = text;
     for (const secret of secrets) {
       if (out.includes(secret.value)) out = out.split(secret.value).join(`[redacted:${secret.name}]`);
