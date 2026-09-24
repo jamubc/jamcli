@@ -13,7 +13,8 @@
     "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
     "test": "bun test",
     "test:history": "node --import tsx scripts/test-history.ts",
-    "config-schema": "bun src/core/config/writeSchema.ts"
+    "config-schema": "bun src/core/config/writeSchema.ts",
+    "bench": "bun scripts/bench/run.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
