@@ -135,6 +135,8 @@ export type AgentEvent =
       model?: string;
       /** US dollars. Absent when the model has no known price. */
       cost?: number;
+      /** The server reported no token counts for this request. */
+      unreported?: true;
       /** Set when a session this one delegated to made the request. */
       delegatedSession?: string;
     }

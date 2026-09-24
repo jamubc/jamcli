@@ -241,6 +241,13 @@ export class CoreAgent implements Agent {
         working = this.account(working, usage, this.options.modelUsageKey, this.options.price, emit);
         // Ollama can leave a cached prefix out of its count, so its counts do not correct the estimate.
         if (context && provider.family !== 'ollama') context.counter.observe(estimated, usage.prompt_tokens);
+      } else if (step.done) {
+        // A server that reports no counts was still asked: the request is counted, with no
+        // tokens and a cost that is known only when the model is free.
+        const price = this.options.price;
+        const free = price !== undefined && price.input === 0 && price.output === 0;
+        const model = this.options.modelUsageKey;
+        emit({ type: 'usage', usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, ...(model ? { model } : {}), ...(free ? { cost: 0 } : {}), unreported: true });
       }
 
       const { calls, unusable } = normalizeCalls(step.done?.toolCalls, steps);

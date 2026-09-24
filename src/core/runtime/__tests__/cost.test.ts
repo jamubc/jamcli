@@ -237,3 +237,22 @@ test("a grandchild's request is attributed to the grandchild, all the way up", a
   expect(SessionLog.open(root, grandchild).events()[0]).toMatchObject({ delegatedBy: child });
   expect(parent.spend().delegated.requests).toBe(3);
 });
+
+test('a request whose server reports no counts is still counted, and priced only when the model is free', async () => {
+  configure({}, { preferred_provider: 'ollama', preferred_model: 'fake-model' });
+  const free = await start();
+  const events: AgentEvent[] = [];
+  server.enqueue({ text: 'No counts.' });
+  await free.run('hi', (event) => events.push(event));
+  expect(events.find((event) => event.type === 'usage')).toMatchObject({ unreported: true, cost: 0 });
+  expect(free.spend()).toMatchObject({ requests: 1, unpriced: 0, cost: 0 });
+  await free.close();
+
+  configure({ models: { 'ollama:fake-model': { price: { input: 1, output: 2 } } } }, { preferred_provider: 'ollama', preferred_model: 'fake-model' });
+  const priced = await start();
+  server.enqueue({ text: 'No counts either.' });
+  await priced.run('hi');
+  // Tokens were spent but not reported, so the cost is unknown, not nothing.
+  expect(priced.spend()).toMatchObject({ requests: 1, unpriced: 1, cost: 0 });
+  await priced.close();
+});
