@@ -199,14 +199,17 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         tool: call.name,
         allow: read.allow,
         scope: read.scope,
-        by: 'user',
+        by: read.by,
         ...(read.feedback ? { feedback: read.feedback } : {}),
         ...(read.pattern ? { rule: read.pattern } : {}),
       });
       if (!read.allow) {
-        const output = read.feedback
-          ? `Denied by the user, who said: ${read.feedback}`
-          : 'Denied by the user. The call did not run.';
+        const output =
+          read.by !== 'user'
+            ? `Not run: ${read.feedback ?? `denied by ${read.by}`}`
+            : read.feedback
+              ? `Denied by the user, who said: ${read.feedback}`
+              : 'Denied by the user. The call did not run.';
         const result = resultFor(call, 'denied', output);
         ctx.emit({ type: 'tool_result', result });
         settle(i, result);

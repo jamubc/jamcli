@@ -1,4 +1,4 @@
-import { runHeadless } from './cli/run.js';
+import { runHeadless, type HeadlessResult } from './cli/run.js';
 import { runAuditCli } from './cli/audit.js';
 import { runMcpCommand } from './cli/mcp.js';
 import {
@@ -212,69 +212,130 @@ export const runCli = async (argv: string[]): Promise<number> => {
     return 0;
   }
 
-  const sessionId = parsed.resume ? parsed.resume : parsed.continueLast ? (await latestSessionId(projectRoot)) ?? undefined : undefined;
-  const startedAt = Date.now();
+  let sessionId = parsed.resume;
+  if (!sessionId && parsed.continueLast) {
+    sessionId = (await latestSessionId(projectRoot)) ?? undefined;
+    if (!sessionId) process.stderr.write('No earlier session in this project, so a new one was started.\n');
+  }
 
-  const { result, refusals } = await runHeadless({
-    prompt: parsed.prompt,
-    projectRoot,
-    maxTurns: parsed.maxTurns,
-    model: parsed.model,
-    sessionId,
-    allowTools: parsed.allowTools,
-    denyTools: parsed.denyTools,
-    onEvent:
-      parsed.outputFormat === 'stream-json'
+  // The first interrupt cancels the turn and reports what happened; a second one exits.
+  const controller = new AbortController();
+  let interrupted = false;
+  const onInterrupt = () => {
+    if (interrupted) process.exit(130);
+    interrupted = true;
+    controller.abort();
+  };
+  process.on('SIGINT', onInterrupt);
+
+  const startedAt = Date.now();
+  const streaming = parsed.outputFormat === 'stream-json';
+  let outcome: HeadlessResult;
+  try {
+    outcome = await runHeadless({
+      prompt: parsed.prompt,
+      projectRoot,
+      cwd: process.cwd(),
+      maxTurns: parsed.maxTurns,
+      model: parsed.model,
+      sessionId,
+      allowTools: parsed.allowTools,
+      denyTools: parsed.denyTools,
+      signal: controller.signal,
+      onEvent: streaming
         ? (event: AgentEvent) => {
-            process.stdout.write(`${JSON.stringify(eventToJson(event))}\n`);
+            const line = eventToJson(event);
+            if (line) process.stdout.write(`${JSON.stringify(line)}\n`);
           }
         : undefined,
-  });
-
-  const durationMs = Date.now() - startedAt;
-
-  for (const refusal of refusals) {
-    process.stderr.write(`${refusal}\n`);
+    });
+  } catch (error: any) {
+    process.stderr.write(`${error?.message ?? error}\n`);
+    return 1;
+  } finally {
+    process.off('SIGINT', onInterrupt);
   }
 
-  if (parsed.outputFormat === 'json' || parsed.outputFormat === 'stream-json') {
-    process.stdout.write(
-      `${JSON.stringify({
-        session_id: result.sessionId,
-        status: result.status,
-        response: result.response,
-        duration_ms: durationMs,
-        turns: result.turns,
-        usage: serializeUsage(result.usage),
-      })}\n`
-    );
+  const { result } = outcome;
+  if (parsed.outputFormat === 'text') {
+    for (const notice of outcome.notices) process.stderr.write(`${notice.level}: ${notice.message}\n`);
+    for (const denial of outcome.permissionDenials) {
+      process.stderr.write(`Not run: ${denial.tool}, because ${denial.reason}. Pass --allow-tool ${denial.tool} to allow it.\n`);
+    }
+    if (result.error && !outcome.notices.some((notice) => notice.message === result.error)) {
+      process.stderr.write(`${result.error}\n`);
+    }
+    if (result.response) process.stdout.write(`${result.response}\n`);
   } else {
-    process.stdout.write(`${result.response}\n`);
+    process.stdout.write(`${JSON.stringify(resultToJson(outcome, Date.now() - startedAt))}\n`);
   }
 
-  if (result.status === 'ok') return 0;
-  if (result.error) {
-    process.stderr.write(`${result.error}\n`);
-  }
-  return 1;
+  if (interrupted || result.status === 'cancelled') return 130;
+  return result.status === 'ok' ? 0 : 1;
 };
 
-const eventToJson = (event: AgentEvent): Record<string, unknown> => {
+/** The last line of `json` and `stream-json` output. */
+const resultToJson = (outcome: HeadlessResult, durationMs: number): Record<string, unknown> => ({
+  type: 'result',
+  session_id: outcome.sessionId,
+  status: outcome.result.status,
+  response: outcome.result.response,
+  ...(outcome.result.error ? { error: outcome.result.error } : {}),
+  provider: outcome.provider,
+  model: outcome.model,
+  duration_ms: durationMs,
+  turns: outcome.result.turns,
+  usage: serializeUsage(outcome.result.usage),
+  permission_denials: outcome.permissionDenials.map((denial) => ({
+    tool: denial.tool,
+    call_id: denial.callId,
+    arguments: denial.arguments,
+    reason: denial.reason,
+  })),
+  notices: outcome.notices,
+});
+
+/** One `stream-json` line per event worth reporting; the rest are left out. */
+const eventToJson = (event: AgentEvent): Record<string, unknown> | null => {
   switch (event.type) {
     case 'text':
       return { type: 'text', delta: event.delta };
     case 'reasoning':
       return { type: 'reasoning', delta: event.delta };
     case 'tool_call':
-      return { type: 'tool_call', tool: event.call.name, arguments: event.call.arguments };
+      return { type: 'tool_call', id: event.call.id, tool: event.call.name, arguments: event.call.arguments };
+    case 'tool_progress':
+      return { type: 'tool_progress', id: event.callId, tool: event.tool, chunk: event.chunk };
     case 'tool_result':
-      return { type: 'tool_result', tool: event.result.tool, success: event.result.success };
+      return {
+        type: 'tool_result',
+        id: event.result.callId,
+        tool: event.result.tool,
+        status: event.result.status,
+        success: event.result.success,
+        output: event.result.output,
+        duration_ms: event.result.durationMs,
+      };
+    case 'approval_request':
+      return { type: 'approval_request', id: event.call.id, tool: event.call.name, reason: event.request?.reason };
+    case 'approval_decision':
+      return {
+        type: 'approval_decision',
+        id: event.callId,
+        tool: event.tool,
+        allow: event.allow,
+        by: event.by,
+        ...(event.rule ? { rule: event.rule } : {}),
+        ...(event.feedback ? { feedback: event.feedback } : {}),
+      };
     case 'usage':
       return { type: 'usage', usage: event.usage };
-    case 'approval_request':
-      return { type: 'approval_request', tool: event.call.name };
+    case 'retry':
+      return { type: 'retry', attempt: event.attempt, delay_ms: event.delayMs, reason: event.reason };
+    case 'notice':
+      return { type: 'notice', level: event.level ?? 'info', message: event.message, ...(event.code ? { code: event.code } : {}) };
     default:
-      return { type: 'unknown' };
+      return null;
   }
 };
 

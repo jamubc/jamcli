@@ -100,10 +100,13 @@ export type ApprovalScope = 'once' | 'session' | 'project';
 /** Who decided a call: a person, the configured policy, a hook, a run flag, or the mode. */
 export type ApprovalBy = 'user' | 'policy' | 'hook' | 'flag' | 'mode';
 
-/** `true` and `false` stay valid shorthands for allowing or denying once. */
+/**
+ * `true` and `false` stay valid shorthands for allowing or denying once. `by` names who
+ * decided when it was not a person, such as a surface that cannot ask.
+ */
 export type ApprovalDecision =
   | boolean
-  | { allow: boolean; scope?: ApprovalScope; pattern?: string; feedback?: string };
+  | { allow: boolean; scope?: ApprovalScope; pattern?: string; feedback?: string; by?: ApprovalBy };
 
 export interface JamSession {
   id: string;
@@ -169,7 +172,13 @@ export interface Agent {
 /** Normalize an approval decision to its parts. */
 export const readDecision = (
   decision: ApprovalDecision
-): { allow: boolean; scope: ApprovalScope; pattern?: string; feedback?: string } =>
+): { allow: boolean; scope: ApprovalScope; pattern?: string; feedback?: string; by: ApprovalBy } =>
   typeof decision === 'boolean'
-    ? { allow: decision, scope: 'once' }
-    : { allow: decision.allow, scope: decision.scope ?? 'once', pattern: decision.pattern, feedback: decision.feedback };
+    ? { allow: decision, scope: 'once', by: 'user' }
+    : {
+        allow: decision.allow,
+        scope: decision.scope ?? 'once',
+        pattern: decision.pattern,
+        feedback: decision.feedback,
+        by: decision.by ?? 'user',
+      };

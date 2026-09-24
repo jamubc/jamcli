@@ -94,11 +94,12 @@ jamcli -p "list the tool registry" --output-format json | jq -r .response
 jamcli -p "read package.json and report the version" --output-format stream-json | jq -c 'select(.type=="tool_call")'
 ```
 
-- `--output-format text` prints the answer, `json` prints one object with `session_id`, `status`, `response`, `duration_ms`, `turns`, and `usage`, and `stream-json` prints one event per line while it runs.
-- Exit codes: `0` on success, `1` on a refused or limited run, `2` on a usage error.
-- `--allow-tool <name>` and `--deny-tool <name>` govern the run without prompting. A headless run never prompts: a state-changing tool that would ask is refused, and the message names the flag that would permit it. A deny always wins.
-- `--cwd`, `--max-turns`, `--model`, `--continue`, and `--resume <id>` bound and shape the run.
-- `jamcli sessions list`, `jamcli sessions search <query>`, and `jamcli sessions export <id>` read the existing history files without migrating them.
+- `--output-format text` prints the answer on stdout and notices on stderr. `json` prints one object with `type` (`result`), `session_id`, `status`, `response`, `error` when there was one, `provider`, `model`, `duration_ms`, `turns`, `usage`, `permission_denials`, and `notices`. `stream-json` prints one event per line while it runs, including tool output, approval decisions, retries, and notices, and ends with the same result object.
+- Exit codes: `0` on success, `1` on an error or a limited run, `2` on a usage error, and `130` when interrupted. The first Ctrl+C cancels the turn and still prints the result; a second one exits at once.
+- `--allow-tool <name>` and `--deny-tool <name>` govern the run without prompting. `--allow-tool` lets the named tool run without asking and leaves every other tool as it was. A headless run never prompts: a call that would ask is not made, the model is told why and which flag would allow it, the run carries on, and the call is listed in `permission_denials`. A deny always wins.
+- `--cwd`, `--max-turns`, `--model`, `--continue`, and `--resume <id>` bound and shape the run. `--model` takes `provider:model` or a model on the profile's provider, and a model id with its own colon, such as `qwen2.5-coder:7b`, stays whole.
+- `@path` in a prompt includes that file or directory listing, as it does in the interface.
+- `jamcli sessions list`, `search <query>`, `show <id>`, `export <id>`, and `fork <id>` work on this project's sessions. Sessions record every message, tool call, result, and approval decision, and older history files are read without being rewritten.
 - `jamcli mcp add|list|test|remove` manages MCP servers, and `jamcli audit` reports tool access, isolation, and guardrail findings by severity without writing anything.
 - `jamcli acp` serves the Agent Client Protocol over stdio for an ACP client such as Zed:
 

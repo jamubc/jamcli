@@ -14,6 +14,7 @@ import { createScriptedProvider } from '../../testing/scriptedProvider.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
 import { SessionLog, TranscriptRecorder } from '../transcript/index.js';
 import { buildClassifierPrompt } from '../trust/index.js';
+import { runHeadless } from '../../cli/run.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -110,7 +111,20 @@ test('F9: a read-edit-test cycle completes under the default loop limits (2.9)',
   expect(result.status).toBe('ok');
   expect(result.response).toBe('fixed');
 });
-test.todo('F10: --allow-tool run_command runs the command headlessly (2.12)', pending);
+test('F10: --allow-tool run_command runs the command headlessly (2.12)', () =>
+  withProject(async (root) => {
+    const server = startFakeProvider();
+    try {
+      await fs.outputJson(path.join(root, '.jamcli', 'config.json'), { api_registry: { ollama: { endpoint: server.ollamaBaseUrl } } });
+      await fs.outputJson(path.join(root, '.jamcli', 'profiles', 'default.json'), { name: 'Default', preferred_model: 'fake-model' });
+      server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo f10-ran' } }] }, { text: 'ok' });
+      const outcome = await runHeadless({ prompt: 'run it', projectRoot: root, allowTools: ['run_command'], runtime: { mcp: false } });
+      expect(outcome.permissionDenials).toEqual([]);
+      expect(server.completions().at(-1)!.body.messages.find((m: any) => m.role === 'tool').content).toContain('f10-ran');
+    } finally {
+      server.close();
+    }
+  }));
 test('F11: run_command reports exit codes and times out (2.5)', () =>
   withProject(async (root) => {
     const registry = createBuiltinRegistry();

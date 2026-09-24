@@ -149,11 +149,18 @@ Line references describe the tree when the change opened.
     - 7 policy, 9 assembly, and 13 runtime tests against the fake provider server with real tools in temporary projects.
     - Mutation probes: a setting outranking `--allow-tool`, an allow list that denies others, allow outranking deny, ignoring aliases, offering denied tools, running a tool that was not offered, ignoring MCP read-only hints, one failing MCP server aborting assembly, not recording automatic approvals, unredacted references and tool output, expanding binary files, resuming empty, no escaping, no bounding, dropping the threshold, leaving rules out, splitting on any colon, a generic provider error, not recording a model switch, dropping startup notices, and not reporting unknown flags each turn a test red.
     - F21 is live. F24 moves to 2.12 and 2.13, when headless and ACP start using the runtime.
-- [ ] 2.12 Move headless onto the runtime. Files: `src/cli/run.ts`, `src/cli.ts`, tests.
+- [x] 2.12 Move headless onto the runtime. Files: `src/cli/run.ts`, `src/cli.ts`, tests.
   - JSON carries `error`, `model`, `provider`, and `permission_denials`.
   - `stream-json` carries tool output and notices.
   - `--allow-tool` allows (F10). Exit code 130 on interrupt.
   - Verify with the fake server: `jamcli -p` edits a file with `--allow-tool edit`, runs a command with `--allow-tool run_command`, and resumes with the tool calls intact.
+  - **Verification**: `runHeadless` is now a surface over `createRuntime`: it renders nothing itself and answers each approval request by not making the call, telling the model why and which flag would allow it, and carrying on. The denial is recorded as decided by the mode (`ApprovalDecision.by`), not by a person, and listed in `permission_denials`.
+    - The result object gains `type`, `error`, `provider`, `model`, `permission_denials`, and `notices`; `stream-json` adds tool output, progress, approval decisions, retries, and notices. The delegation child parser still reads both.
+    - The first interrupt cancels the turn and prints the result with exit code 130; a second one exits at once. `--resume` with an unknown id fails with the path it looked in; `--continue` with no earlier session says so and starts one.
+    - Text output keeps stdout for the answer and reports notices and denials on stderr.
+    - 7 end-to-end tests run the real command line as a subprocess against the fake server: an edit with `--allow-tool edit` (full tool set with schemas offered, `@a.txt` expanded, approval recorded by flag), a command with `--allow-tool run_command` in `stream-json`, a denied edit that the run survives, `--resume` and `--continue` with tool calls in the next request, a provider error, text output and an unknown resume id, and an interrupt.
+    - Mutation probes: approving, denying without an explanation, recording the denial as the user's, no interrupt handler, exit 1 on cancel, no denials, no tool output, hidden notices, no provider, no error, ignoring `--resume`, and dropping `--allow-tool` each turn a test red.
+    - F10 is live. The README's headless section describes the new output, exit codes, and flags.
 - [ ] 2.13 Move ACP onto the runtime (F6). Files: `src/acp/session.ts`, `src/acp/server.ts`, tests. Verify the second prompt of an ACP session reaches the provider with the first exchange in context, the session persists to history, and write tools are offered.
 - [ ] 2.14 Move delegation children onto the runtime. Files: `src/core/tools/task.ts`, `src/core/delegation/`. Verify a child can edit under the delegated policy and cannot widen it.
 - [ ] 2.15 Lazy entry point. Files: `src/index.tsx`. Dispatch on arguments before importing the interface. Verify `--version` median at or under 120 ms here (the 60 ms budget is enforced after stage 6's build change).
