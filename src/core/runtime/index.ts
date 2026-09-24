@@ -3,8 +3,8 @@ import { CoreAgent } from '../agent.js';
 import type { AgentEvent, ApprovalPreview, JamSession, RunResult, ToolCall } from '../types.js';
 import { describeCall, previewCall } from '../approval.js';
 import { createSession } from '../state.js';
-import { createChatProvider } from '../providers/factory.js';
-import { prefixSetNow, type ChatProvider } from '../providers/types.js';
+import { createChatProvider, listConfiguredProviders } from '../providers/factory.js';
+import { isListableProvider, prefixSetNow, type ChatProvider } from '../providers/types.js';
 import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
 import { createHookBus, emitHookEvent, type HookBus } from '../hooks/index.js';
 import { createRedactor } from '../redact.js';
@@ -40,6 +40,8 @@ export type { ToolSummary, McpSource } from './tools.js';
 /** Where a person may add a rule: for this session, or in one of the configuration files. */
 export type EditableRuleScope = 'session' | 'local' | 'project' | 'user';
 const EDITABLE: RuleScope[] = ['session', 'local', 'project', 'user'];
+/** How long a provider has to list its models. */
+const LIST_TIMEOUT_MS = 5_000;
 /** The per-tool block of the legacy MCP file, whose rules are edited in that file. */
 const LEGACY_TOOLS_FILE = '.jamcli/mcp.json';
 
@@ -154,6 +156,12 @@ export interface Runtime {
   cancel(): void;
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
   setModel(ref: string): void;
+  /**
+   * Every model the configured providers list, each with what the catalog knows of it
+   * without asking further, and why any provider could not be asked. Each provider has
+   * `timeoutMs` to answer, and one that does not is left out.
+   */
+  listModels(timeoutMs?: number): Promise<{ models: ModelInfo[]; problems: string[] }>;
   /** Copy this session, up to an event, into a new one, and return the new id. */
   fork(atEvent?: number): string;
   close(): Promise<void>;
@@ -635,6 +643,33 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       agent = buildAgent();
       recorder.switchModel(`${next.provider}:${next.model}`);
       modelReady = resolveModelInfo();
+    },
+
+    async listModels(timeoutMs = LIST_TIMEOUT_MS) {
+      const problems: string[] = [];
+      const lists = await Promise.all(
+        listConfiguredProviders(config.api_registry).map(async (id): Promise<ModelInfo[]> => {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const listed = createChatProvider(id, config.api_registry);
+            if (!isListableProvider(listed)) return [];
+            const late = new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error(`did not answer within ${Math.round(timeoutMs / 100) / 10} s`)), timeoutMs);
+            });
+            const offered = await Promise.race([listed.listModels(), late]);
+            return offered.map((entry) => {
+              const info = catalog.lookup(id, entry.id, listed.family);
+              return info.tools === undefined && entry.supports_tool_calling !== undefined ? { ...info, tools: entry.supports_tool_calling } : info;
+            });
+          } catch (error: any) {
+            problems.push(`${id}: ${redact(error?.message ?? String(error))}`);
+            return [];
+          } finally {
+            clearTimeout(timer);
+          }
+        })
+      );
+      return { models: lists.flat(), problems };
     },
 
     fork(atEvent) {
