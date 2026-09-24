@@ -513,7 +513,15 @@ cover headless, ACP, and delegation.
 
 ## Stage 6: The interface on OpenTUI
 
-- [ ] 6.1 Benchmark before. Files: `scripts/bench/pty-latency.py`, this file. Record keystroke echo latency and frame sizes for the Ink interface on a 1,000-message session.
+- [x] 6.1 Benchmark before. Files: `scripts/bench/pty-latency.py`, this file. Record keystroke echo latency and frame sizes for the Ink interface on a 1,000-message session.
+  - **Verification**: `python3 scripts/bench/pty-latency.py` writes a 1,000-message session with `scripts/bench/make-session.ts`, opens the built interface in a 120 by 40 pseudo-terminal, resumes the session through `/resume` and the picker, and types 30 keys one at a time, each timed to its first output byte and sized until the screen is quiet for 250 ms. The Ink interface, on Node 22, 2026-09-24:
+
+    | View | First output | Resume | Echo median | Echo p95 | Bytes per key |
+    |---|---|---|---|---|---|
+    | Latest messages (Ink shows 5 of 1,001) | 636 ms | 1,082 ms | 15.5 ms | 23.1 ms | 16,564 |
+    | Full history (Ctrl+R) | 630 ms | 1,097 ms | 14.0 ms | 19.7 ms | 6,810 |
+
+    A run without the session echoed in 11.3 ms at the median, 16.8 ms at p95, with 5,535 bytes a key. The first output is the Ink bundle loading; the p95 misses D24's 16 ms budget in both views.
 - [ ] 6.2 Add `@opentui/core` and `@opentui/react` at exact versions, in their own commit. Run `npx skills add anomalyco/opentui --skill opentui` for reference material, and do not commit what it installs unless it belongs in the repository.
 - [ ] 6.3 The view reducer. Files: `src/tui/state/` (new), tests. Runtime events reduce to view state (transcript rows, tool blocks, pending approval, status line data) as a pure function.
 - [ ] 6.4 The app shell. Files: `src/tui/app/` (new). Header, transcript scroll box with windowing, composer, and status line, all driven by the runtime.
