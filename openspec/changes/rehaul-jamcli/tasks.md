@@ -545,7 +545,17 @@ cover headless, ACP, and delegation.
   - The runtime gained what `/permissions` stands on: it lists every rule with its scope and source, adds one for the session or to the user, project, or project-local file, and removes one wherever a person can edit it, keeping built-in rules, flags, and the legacy `.jamcli/mcp.json` block and naming them. `/config` and `/mcp` run the same code as `jamcli config` and `jamcli mcp`.
   - Tests: 8 on the rule API, 3 on rule files, 10 on the command text and reports, 9 through the interface (the palette; `/cost`, `/context`, and `/model`; `/permissions`; `/clear`, `/resume`, and `/fork`; waiting for a running turn; `/compact`; `/export` and `/copy`; `/tools`, `/mcp`, `/categories`, `/doctor`, and `/config`; `/profile`), and 1 more on the reducer.
   - 34 mutation probes on the rule API and the commands, each turning a test red but one. Two survived at first and got tests: a rule file rewritten when nothing changed, and the CLI's messages naming `jamcli mcp` where `/mcp` was typed. The last survivor is equivalent: the palette keeps Up and Down from the composer, but on a one-line draft the composer does nothing with them.
-- [ ] 6.8 Overlays: model picker (with catalog data), session picker, help, configuration, and themes.
+- [x] 6.8 Overlays: model picker (with catalog data), session picker, help, configuration, and themes.
+  - **Verification**: an overlay opens over the composer with a list the person narrows by typing. It opens on the choice in use. Up, Down, Page Up, and Page Down move; Enter chooses; Escape closes. The composer keeps its draft underneath, and typing never reaches it while the overlay is open.
+    - `/model`: every model the configured providers offer, asked all at once with a time limit each, with the catalog's window, tool support, and price as far as they are known. A provider that cannot be asked is named with why.
+    - `/resume`: this project's sessions, latest first.
+    - `/help` and `?` on an empty composer: the commands and the keys.
+    - `/config`: each setting with the file it comes from, through the same code as `jamcli config list`.
+    - `/theme`: dark, light, high-contrast, or monochrome, applied at once and saved as `ui.theme` in the user configuration.
+    - `NO_COLOR` keeps the interface monochrome, in which every color is the terminal's own.
+  - The runtime gained `listModels`, and the configuration gained the `ui` block (`theme`, `screen_reader`, `reduced_motion`) with its JSON schema.
+  - Tests: 2 on listing models (four providers' worth with one unreachable, and one that never answers), 1 on the `ui` block, and 6 through the interface: the model picker switching, the session picker opening, help from `?`, the settings list starting a `/config set`, a theme changing the colors and saving, and monochrome drawing every state in one color.
+  - 18 mutation probes, each turning a test red. Two survived at first and got tests: the list not opening on the choice in use, and a theme test that compared the colors against the table it was meant to check.
 - [ ] 6.9 Keybindings file, themes, `NO_COLOR`, screen reader mode, and reduced motion.
 - [ ] 6.10 Onboarding on first run.
 - [ ] 6.11 Status indicator styles ported: built-in and custom styles keep working.
