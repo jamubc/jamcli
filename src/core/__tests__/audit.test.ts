@@ -3,7 +3,7 @@ import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../tools/registry.js';
-import { startFakeProvider } from '../../testing/fakeProvider.js';
+import { startFakeProvider, type FakeProviderServer } from '../../testing/fakeProvider.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { OllamaProvider } from '../providers/ollama.js';
 import { OpenAICompatProvider } from '../providers/openai-compat.js';
@@ -15,6 +15,7 @@ import type { ToolDispatcher } from '../tools/dispatch.js';
 import { SessionLog, TranscriptRecorder } from '../transcript/index.js';
 import { buildClassifierPrompt } from '../trust/index.js';
 import { runHeadless } from '../../cli/run.js';
+import { createAcpSession } from '../../acp/session.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -47,9 +48,50 @@ const withProject = async (run: (root: string) => Promise<void>) => {
   }
 };
 
+/** A project configured to use the fake server, for checks that drive a real surface. */
+const withConfiguredProject = (
+  run: (root: string, server: FakeProviderServer) => Promise<void>,
+  registry?: (server: FakeProviderServer) => Record<string, unknown>,
+  profile: Record<string, unknown> = { preferred_model: 'fake-model' }
+) =>
+  withProject(async (root) => {
+    const server = startFakeProvider();
+    try {
+      const apiRegistry = registry ? registry(server) : { ollama: { endpoint: server.ollamaBaseUrl } };
+      await fs.outputJson(path.join(root, '.jamcli', 'config.json'), { api_registry: apiRegistry });
+      await fs.outputJson(path.join(root, '.jamcli', 'profiles', 'default.json'), { name: 'Default', ...profile });
+      await run(root, server);
+    } finally {
+      server.close();
+    }
+  });
+
+/** One prompt through headless and one through an ACP session, returning each request. */
+const bothSurfaces = async (root: string, server: FakeProviderServer, prompt: string) => {
+  server.enqueue({ text: 'ok' }, { text: 'ok' });
+  await runHeadless({ prompt, projectRoot: root, runtime: { mcp: false } });
+  const headless = server.completions().at(-1)!.body;
+  const acp = await createAcpSession({ projectRoot: root, cwd: root, runtime: { mcp: false } });
+  await acp.run(prompt, () => {});
+  await acp.close?.();
+  return { headless, acp: server.completions().at(-1)!.body };
+};
+
 test.todo('F1: the interface offers the full tool set with Ollama and any wording (2.11, 6.4)', pending);
-test.todo('F2: headless and ACP offer write and execute tools from the registry (2.12, 2.13)', pending);
-test.todo('F3: headless and ACP advertise real tool schemas (2.12, 2.13)', pending);
+test('F2: headless and ACP offer write and execute tools from the registry (2.12, 2.13)', () =>
+  withConfiguredProject(async (root, server) => {
+    for (const request of Object.values(await bothSurfaces(root, server, 'hi'))) {
+      const names = request.tools.map((tool: any) => tool.function.name);
+      for (const name of ['write_file', 'edit', 'apply_patch', 'run_command']) expect(names).toContain(name);
+    }
+  }));
+test('F3: headless and ACP advertise real tool schemas (2.12, 2.13)', () =>
+  withConfiguredProject(async (root, server) => {
+    for (const request of Object.values(await bothSurfaces(root, server, 'hi'))) {
+      const readFile = request.tools.find((tool: any) => tool.function.name === 'read_file');
+      expect(readFile.function.parameters.required).toEqual(['path']);
+    }
+  }));
 
 test('F4: write_file creates a file under the project root (2.2)', () =>
   withProject(async (root) => {
@@ -70,7 +112,16 @@ test('F5: edit replacements keep $$, $&, $` and $\' literally (2.3)', () =>
     expect(await fs.readFile(path.join(root, 'run.sh'), 'utf-8')).toBe(`${replacement}\n`);
   }));
 
-test.todo('F6: an ACP session sends earlier turns with the second prompt (2.13)', pending);
+test('F6: an ACP session sends earlier turns with the second prompt (2.13)', () =>
+  withConfiguredProject(async (root, server) => {
+    const acp = await createAcpSession({ projectRoot: root, cwd: root, runtime: { mcp: false } });
+    server.enqueue({ text: 'first answer' }, { text: 'second answer' });
+    await acp.run('first question', () => {});
+    await acp.run('second question', () => {});
+    await acp.close?.();
+    const contents = server.completions().at(-1)!.body.messages.map((m: any) => m.content);
+    expect(contents.slice(1)).toEqual(['first question', 'first answer', 'second question']);
+  }));
 test('F7: tool steps stream, keep text beside calls, and send the system prompt first (2.9)', async () => {
   const provider = createScriptedProvider([{ text: 'Looking.', toolCalls: [{ name: 'read_a', arguments: {} }] }, { text: 'Done.' }]);
   const texts: string[] = [];
@@ -150,7 +201,18 @@ test('F12: grep finds a match past the 400th file and honors .gitignore (2.6)', 
       expect(result.output).not.toContain('secret.txt');
     }
   }));
-test.todo('F13: ACP uses the configured provider (2.13)', pending);
+test('F13: ACP uses the configured provider (2.13)', () =>
+  withConfiguredProject(
+    async (root, server) => {
+      const acp = await createAcpSession({ projectRoot: root, cwd: root, runtime: { mcp: false } });
+      server.enqueue({ text: 'ok' });
+      await acp.run('hi', () => {});
+      await acp.close?.();
+      expect(server.completions().at(-1)!.dialect).toBe('anthropic');
+    },
+    (server) => ({ anthropic: { base_url: server.anthropicBaseUrl } }),
+    { preferred_provider: 'anthropic', preferred_model: 'fake-model' }
+  ));
 test('F14: reasoning is not replayed to another provider family (2.8)', async () => {
   const server = startFakeProvider();
   try {
@@ -230,8 +292,14 @@ test('F22: a symbolic link out of the project is refused (2.4)', () =>
     }
   }));
 
-test.todo('F23: MCP servers do not receive provider keys and run on every surface (2.13, 3.5)', pending);
-test.todo('F24: @ references expand on every surface (2.12, 2.13)', pending);
+test.todo('F23: MCP servers do not receive provider keys (3.5)', pending);
+test('F24: @ references expand on every surface (2.12, 2.13)', () =>
+  withConfiguredProject(async (root, server) => {
+    await fs.writeFile(path.join(root, 'notes.txt'), 'the notes say hello\n');
+    for (const request of Object.values(await bothSurfaces(root, server, 'read @notes.txt'))) {
+      expect(request.messages.find((m: any) => m.role === 'user').content).toContain('the notes say hello');
+    }
+  }));
 test('F25: a failing hook is a notice, not assistant text (2.9)', async () => {
   const hooks = createHookBus();
   hooks.on('turn_start', () => {

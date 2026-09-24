@@ -26,7 +26,7 @@ const approvableController = (): AcpSessionController => ({
     if (!approved) {
       return { status: 'refused', sessionId: 'session-1', response: '', turns: 1, usage };
     }
-    onEvent({ type: 'tool_result', result: { tool: 'write_file', success: true, output: 'ok', durationMs: 1 } });
+    onEvent({ type: 'tool_result', result: { tool: 'write_file', callId: 'call-1', success: true, output: 'ok', durationMs: 1 } });
     onEvent({ type: 'text', delta: 'world' });
     return { status: 'ok', sessionId: 'session-1', response: 'hello world', turns: 1, usage };
   },
@@ -201,4 +201,23 @@ test('an unknown session is reported as a JSON-RPC error', async () => {
 
   const error = messages.find((message) => message.id === 5);
   expect(error.error.code).toBe(-32001);
+});
+
+test('sessions are closed when the client disconnects', async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const messages = collect(output);
+  let closed = 0;
+  const server = new AcpServer({
+    input,
+    output,
+    projectRoot: '/tmp/project',
+    createSession: async () => ({ ...approvableController(), close: async () => void (closed += 1) }),
+  });
+  const done = server.start();
+  input.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'session/new', params: { cwd: '/tmp/project', mcpServers: [] } })}\n`);
+  await waitFor(() => messages.some((message) => message.id === 1));
+  input.end();
+  await done;
+  expect(closed).toBe(1);
 });

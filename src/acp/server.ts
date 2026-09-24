@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { AgentEvent } from '../core/types.js';
 import {
   ACP_PROTOCOL_VERSION,
@@ -21,7 +20,8 @@ import {
   type PermissionOutcome,
   type SessionUpdate,
 } from './protocol.js';
-import { createAcpSession, type AcpSessionController } from './session.js';
+import { createAcpSession, type AcpSessionController, type CreateAcpSessionOptions } from './session.js';
+import { JAMCLI_VERSION } from '../core/version.js';
 
 export interface AcpNewSessionRequest {
   cwd: string;
@@ -36,6 +36,8 @@ export interface AcpServerOptions {
   agentInfo?: { name: string; version: string };
   /** Overridable so tests can drive the protocol without a provider. */
   createSession?: (request: AcpNewSessionRequest) => Promise<AcpSessionController>;
+  /** Passed to every session the server creates, for tests. */
+  sessionOptions?: Partial<CreateAcpSessionOptions>;
 }
 
 interface PendingPermission {
@@ -65,7 +67,6 @@ export class AcpServer {
   private readonly options: AcpServerOptions;
   private readonly sessions = new Map<string, AcpSessionController>();
   private readonly pending = new Map<JsonRpcId, PendingPermission>();
-  private readonly toolCallIds = new Map<string, Map<string, string>>();
   private nextId = 1000;
   private buffer = '';
 
@@ -81,6 +82,9 @@ export class AcpServer {
       for (const line of lines) this.processLine(line);
     }
     if (this.buffer.trim()) this.processLine(this.buffer);
+    // The client has gone: stop every session's servers and background work.
+    await Promise.allSettled([...this.sessions.values()].map((session) => session.close?.()));
+    this.sessions.clear();
   }
 
   private processLine(line: string): void {
@@ -139,7 +143,7 @@ export class AcpServer {
         loadSession: false,
         promptCapabilities: { image: false, audio: false, embeddedContext: false },
       },
-      agentInfo: this.options.agentInfo ?? { name: 'jamcli', version: '1.0.0' },
+      agentInfo: this.options.agentInfo ?? { name: 'jamcli', version: JAMCLI_VERSION },
       authMethods: [],
     };
   }
@@ -163,7 +167,7 @@ export class AcpServer {
     return createAcpSession({
       projectRoot: this.options.projectRoot,
       cwd: request.cwd,
-      sessionId: randomUUID(),
+      ...this.options.sessionOptions,
     });
   }
 
@@ -190,17 +194,14 @@ export class AcpServer {
         this.notifyUpdate(session.id, thoughtChunk(event.delta));
         return;
       case 'tool_call':
-        this.recordToolCall(session.id, event.call.name, event.call.id);
         this.notifyUpdate(session.id, toolCallUpdate(event.call));
         return;
-      case 'tool_result': {
-        const toolCallId = this.resolveToolCallId(session.id, event.result.tool);
+      case 'tool_result':
         this.notifyUpdate(
           session.id,
-          toolCallStatusUpdate(toolCallId, event.result.success ? 'completed' : 'failed')
+          toolCallStatusUpdate(event.result.callId ?? event.result.tool, event.result.success ? 'completed' : 'failed')
         );
         return;
-      }
       case 'notice':
         this.notifyUpdate(session.id, messageChunk(`${event.message}\n`));
         return;
@@ -262,19 +263,6 @@ export class AcpServer {
       this.pending.delete(requestId);
       pending.resolve({ jsonrpc: '2.0', id: requestId, error: { code: -32000, message: 'cancelled' } });
     }
-  }
-
-  private recordToolCall(sessionId: string, tool: string, toolCallId: string): void {
-    let map = this.toolCallIds.get(sessionId);
-    if (!map) {
-      map = new Map();
-      this.toolCallIds.set(sessionId, map);
-    }
-    map.set(tool, toolCallId);
-  }
-
-  private resolveToolCallId(sessionId: string, tool: string): string {
-    return this.toolCallIds.get(sessionId)?.get(tool) ?? tool;
   }
 
   private respond(id: JsonRpcId, result: unknown): void {
