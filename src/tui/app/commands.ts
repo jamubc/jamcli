@@ -22,6 +22,7 @@ import { style } from './style.js';
 import { rewind, undo } from './rewind.js';
 import { diff } from './review.js';
 import { commit } from './commit.js';
+import { pr } from './pr.js';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
@@ -606,6 +607,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   rewind,
   diff,
   commit,
+  pr,
   tools,
   mcp,
   config,
