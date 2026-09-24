@@ -219,11 +219,33 @@ cover headless, ACP, and delegation.
 
 ## Stage 3: Permission modes and sandbox
 
-- [ ] 3.1 The rule engine (D6). Files: `src/core/permissions/` (new), tests.
+- [x] 3.1 The rule engine (D6). Files: `src/core/permissions/` (new), tests.
   - Pattern parsing and matching for path, command, domain, and MCP rules.
   - Compound command splitting, where substitution always asks.
   - Scopes and precedence, and provenance on every decision.
   - Legacy `mcp.json` mapping.
+  - **Verification**: `src/core/permissions/` holds the engine and its parts:
+    - `glob.ts`: standard globs, where `*` stays in a segment.
+    - `command.ts`: splits commands on every operator and finds hidden code and redirections.
+    - `rules.ts`: parses and matches rules.
+    - `subjects.ts`: works out the paths, command parts, and domains a call touches.
+    - `modes.ts`: the mode table and its preconditions.
+    - `engine.ts`: decides.
+    - `config.ts`: loads rules from every scope, with sources.
+  - The precedence and the other details it settles are recorded under D6.
+  - The todo list is now class `state` and starting or cancelling a task is `delegate`, per D5. Nothing uses the classes until 3.2 wires the engine in.
+  - 18 tests cover:
+    - precedence across scopes;
+    - path rules with links and case;
+    - prefixes and compound commands;
+    - substitution and redirections;
+    - every mode and its preconditions;
+    - offering tools;
+    - MCP wildcards, aliases, and patches;
+    - unknown tools;
+    - the loader across scopes with the legacy mapping and mode precedence;
+    - flag lists.
+  - 21 mutation probes each turn a test red. One, a flag outranked by the environment, first slipped through and got its own case.
 - [ ] 3.2 Modes. Files: `src/core/permissions/modes.ts`, runtime wiring, tests. `plan`, `default`, `accept-edits`, `auto` (refused without a sandbox), and `bypass` (flag or confirmation, recorded).
 - [ ] 3.3 Grants. Files: runtime, `src/core/permissions/grants.ts`. Session grants and project grants written to `.jamcli/config.local.json`, with suggested patterns derived from the call.
 - [ ] 3.4 The sandbox adapters (D7). Files: `src/core/sandbox/` (new).

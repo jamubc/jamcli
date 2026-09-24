@@ -1,0 +1,180 @@
+import path from 'path';
+import os from 'os';
+import type { ApprovalBy, PolicyClass, ToolCall } from '../types.js';
+import { MODE_DEFAULTS, modeRefusal, type ModeDefault, type PermissionMode } from './modes.js';
+import { parseRule, patternMatches, toolMatches, type Decision, type Rule, type RuleScope, type Subject } from './rules.js';
+import { subjectsOf } from './subjects.js';
+
+export interface Verdict {
+  decision: Decision;
+  /** Who decided: a flag or configured rule, a person's grant, or the mode. */
+  by: ApprovalBy;
+  /** The rule that decided, as written. */
+  rule?: string;
+  scope?: RuleScope;
+  /** Where that rule came from. */
+  source?: string;
+  reason: string;
+}
+
+export interface PermissionEngineOptions {
+  projectRoot: string;
+  rules?: Rule[];
+  mode?: PermissionMode;
+  /** Whether commands run inside a sandbox, which `auto` requires. */
+  sandboxed?: boolean;
+  classOf: (tool: string) => PolicyClass | 'unknown';
+  /** Every name a tool answers to: its canonical name first, then its aliases. */
+  namesOf: (tool: string) => string[];
+}
+
+/** A person's choices for this run outrank configuration, except a deny, which nothing outranks. */
+const PERSONAL: RuleScope[] = ['flag', 'session'];
+
+const byOf = (scope: RuleScope): ApprovalBy => (scope === 'flag' ? 'flag' : scope === 'session' ? 'user' : 'policy');
+
+const fromRule = (rule: Rule, reason: string): Verdict => ({
+  decision: rule.decision,
+  by: byOf(rule.scope),
+  rule: rule.text,
+  scope: rule.scope,
+  source: rule.source,
+  reason,
+});
+
+/** The strongest rule for one subject: any deny, then a person's ask or allow, then configuration's. */
+const strongest = (rules: Rule[]): Rule | undefined => {
+  const deny = rules.find((rule) => rule.decision === 'deny');
+  if (deny) return deny;
+  const pick = (list: Rule[]) => list.find((rule) => rule.decision === 'ask') ?? list.find((rule) => rule.decision === 'allow');
+  return pick(rules.filter((rule) => PERSONAL.includes(rule.scope))) ?? pick(rules.filter((rule) => !PERSONAL.includes(rule.scope)));
+};
+
+const SAFE_REDIRECTS = new Set(['/dev/null', '/dev/stdout', '/dev/stderr', '/dev/tty']);
+
+/**
+ * Decides every tool call from rules and the mode. A deny from any scope wins; plan mode
+ * denies changes; bypass allows the rest; code a rule cannot see always asks; then a
+ * person's rules, then configured rules, then the mode's default for the tool's class.
+ * Every verdict names the rule, scope, and source that produced it.
+ */
+export class PermissionEngine {
+  private rules: Rule[];
+  private currentMode: PermissionMode;
+  readonly sandboxed: boolean;
+
+  constructor(private readonly options: PermissionEngineOptions) {
+    this.rules = [...(options.rules ?? [])];
+    this.currentMode = options.mode ?? 'default';
+    this.sandboxed = Boolean(options.sandboxed);
+  }
+
+  get mode(): PermissionMode {
+    return this.currentMode;
+  }
+
+  /** Switch modes. Returns why not, and changes nothing, when the mode's precondition fails. */
+  setMode(mode: PermissionMode, options: { bypassConfirmed?: boolean } = {}): string | undefined {
+    const refusal = modeRefusal(mode, { sandboxed: this.sandboxed, bypassConfirmed: options.bypassConfirmed });
+    if (!refusal) this.currentMode = mode;
+    return refusal;
+  }
+
+  list(): Rule[] {
+    return [...this.rules];
+  }
+
+  /** Add a rule for the rest of the session, such as a grant made at an approval prompt. */
+  add(rule: Rule): void {
+    this.rules.push(rule);
+  }
+
+  /** Grant a pattern for this session. Returns an error when the text is not a rule. */
+  grant(text: string, source = 'granted at an approval prompt'): string | undefined {
+    const parsed = parseRule(text, 'allow', 'session', source);
+    if ('error' in parsed) return parsed.error;
+    this.add(parsed.rule);
+    return undefined;
+  }
+
+  /** Rules that name no tool this session has, for reporting. */
+  unmatched(toolNames: string[]): Rule[] {
+    return this.rules.filter((rule) => rule.scope !== 'builtin' && !toolNames.some((name) => toolMatches(rule, this.options.namesOf(name))));
+  }
+
+  /** Whether a tool is offered at all: not when a rule or the mode denies it outright. */
+  offers(tool: string): boolean {
+    const names = this.options.namesOf(tool);
+    if (this.rules.some((rule) => rule.decision === 'deny' && !rule.pattern && toolMatches(rule, names))) return false;
+    return MODE_DEFAULTS[this.currentMode][this.options.classOf(tool)] !== 'deny';
+  }
+
+  decide(call: ToolCall): Verdict {
+    const names = this.options.namesOf(call.name);
+    const toolClass = this.options.classOf(call.name);
+    const applicable = this.rules.filter((rule) => toolMatches(rule, names));
+    const { subjects, command } = subjectsOf(call, names[0], this.options.projectRoot);
+    const targets: (Subject | undefined)[] = subjects.length ? subjects : [undefined];
+    const decided = targets.map((subject) => strongest(applicable.filter((rule) => patternMatches(rule, subject))));
+
+    const denied = decided.find((rule) => rule?.decision === 'deny');
+    if (denied) return fromRule(denied, `${denied.text} denies it (${denied.source})`);
+
+    const byMode = MODE_DEFAULTS[this.currentMode][toolClass];
+    if (this.currentMode === 'plan' && byMode === 'deny') {
+      return { decision: 'deny', by: 'mode', reason: 'plan mode is on, so this session only reads and plans' };
+    }
+    if (this.currentMode === 'bypass') return { decision: 'allow', by: 'mode', reason: 'bypass mode allows everything no rule denies' };
+
+    if (command?.hidden.length) {
+      return { decision: 'ask', by: 'policy', reason: `${command.hidden[0]} can run code no rule can see, so it always asks` };
+    }
+    const outside = command?.redirects.find((redirect) => redirect.dynamic || !this.insideProject(redirect.target, call));
+    if (outside) {
+      return {
+        decision: 'ask',
+        by: 'policy',
+        reason: outside.dynamic ? `the redirection to ${outside.target || 'an expansion'} cannot be checked, so it asks` : `it writes or reads ${outside.target}, outside the project`,
+      };
+    }
+
+    const asked = decided.find((rule) => rule?.decision === 'ask');
+    if (asked) return fromRule(asked, `${asked.text} asks first (${asked.source})`);
+    if (decided.every((rule) => rule?.decision === 'allow')) {
+      const allowed = decided[0]!;
+      return fromRule(allowed, `${allowed.text} allows it (${allowed.source})`);
+    }
+    return this.modeDefault(byMode, toolClass, subjects);
+  }
+
+  private modeDefault(byMode: ModeDefault, toolClass: string, subjects: Subject[]): Verdict {
+    const mode = this.currentMode;
+    switch (byMode) {
+      case 'allow':
+        return { decision: 'allow', by: 'mode', reason: `${mode} mode allows ${toolClass} tools` };
+      case 'deny':
+        return { decision: 'deny', by: 'mode', reason: `${mode} mode does not allow ${toolClass} tools` };
+      case 'inside': {
+        const inside = subjects.every((subject) => subject.kind !== 'path' || subject.relative !== undefined);
+        return inside
+          ? { decision: 'allow', by: 'mode', reason: `${mode} mode allows changes inside the project` }
+          : { decision: 'ask', by: 'mode', reason: `${mode} mode asks before changes outside the project` };
+      }
+      case 'sandboxed':
+        return this.sandboxed
+          ? { decision: 'allow', by: 'mode', reason: `${mode} mode allows commands inside the sandbox` }
+          : { decision: 'ask', by: 'mode', reason: `${mode} mode asks before commands when there is no sandbox` };
+      default:
+        return { decision: 'ask', by: 'mode', reason: toolClass === 'read' ? 'reads ask in this mode' : 'tools that change state ask first' };
+    }
+  }
+
+  private insideProject(target: string, call: ToolCall): boolean {
+    if (SAFE_REDIRECTS.has(target)) return true;
+    const root = path.resolve(this.options.projectRoot);
+    const cwd = typeof call.arguments?.cwd === 'string' ? path.resolve(root, call.arguments.cwd) : root;
+    const expanded = target === '~' ? os.homedir() : target.startsWith('~/') ? path.join(os.homedir(), target.slice(2)) : target;
+    const relative = path.relative(root, path.resolve(cwd, expanded));
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  }
+}

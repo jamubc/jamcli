@@ -29,6 +29,13 @@ export const jamcliPaths: JamCliPaths = {
   projectLocal: (projectRoot: string) => path.join(projectRoot, '.jamcli'),
 };
 
+/** The user configuration directory, `~/.config/jamcli` on every platform. JAMCLI_CONFIG_DIR overrides it. */
+export function userConfigDir(): string {
+  if (process.env.JAMCLI_CONFIG_DIR) return process.env.JAMCLI_CONFIG_DIR;
+  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(base, 'jamcli');
+}
+
 // Helper to get platform-specific state directory. JAMCLI_STATE_DIR overrides it.
 export function getStateDir(): string {
   if (process.env.JAMCLI_STATE_DIR) {

@@ -337,6 +337,32 @@ Rules come in `deny`, `ask`, and `allow` lists. They are collected from several 
 **Deny wins over ask, and ask wins over allow, across all scopes.** A flag can allow a tool
 that configuration asks about, but it can never allow a tool that any scope denies.
 
+As built (3.1), that sentence is made exact: a deny from any scope wins; then a person's
+own choices for this run, the flag and session scopes, decide with ask before allow; then
+the configured scopes (built-in, user, project, project-local) decide with ask before
+allow; then the mode. So `--allow-tool run_command` beats a configured ask (F10), a
+session grant stops the prompts it was made for, and a project file cannot quietly widen
+a user's ask.
+
+Details settled in 3.1:
+
+- In a command pattern, `*` matches any characters, and a trailing ` *` also matches the
+  bare command, so `npm test *` covers `npm test` and `npm test --watch`.
+- Splitting also covers `&`, subshells, `if`/`then` and loop keywords, comments, and
+  here-documents, whose bodies are data unless an unquoted one substitutes.
+- Besides substitution, `eval`, `source`, a shell run with `-c`, `xargs`, and `find -exec`
+  always ask, because their real command is an argument no rule can see. Bypass mode
+  allows even these; nothing else does.
+- A path is judged by its project-relative form, its absolute form, and its real path, so
+  a symbolic link cannot carry a call past a rule about where it points. Path rules
+  ignore case on macOS and Windows.
+- The built-in scope allows `cd` and `pwd`, so a granted command still runs after a
+  change of directory.
+- Legacy entries that only restate the defaults JamCLI wrote into `mcp.json` are not
+  rules; otherwise every project's default `run_command` entry would outrank grants.
+- The `state` class (the todo list) is allowed in every mode, and a tool with no class is
+  treated as `execute`. `task_status` and `task_result` are `read`.
+
 Every decision returns the rule and scope that produced it. That provenance is shown in
 the approval prompt and recorded in the transcript.
 
