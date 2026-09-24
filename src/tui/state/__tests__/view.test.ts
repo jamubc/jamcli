@@ -95,6 +95,8 @@ test('notices, compactions, and a turn cut short are shown, and nothing open sur
     event({ type: 'text', delta: 'partial' }),
     event({ type: 'notice', level: 'warn', message: 'The model declined this request.' }),
     event({ type: 'compaction', beforeTokens: 9000, afterTokens: 2000, strategy: 'summary', replaced: 10, summary: 's', trigger: 'auto' }),
+    // What headless and ACP print for the compaction; the row above already says it.
+    event({ type: 'notice', level: 'info', code: 'compacted', message: 'The earlier conversation was summarized to fit the context window: 9,000 to 2,000 tokens.' }),
     event({ type: 'tool_call', call: call('c4') }),
     event({ type: 'approval_request', call: call('c4'), decide: () => undefined }),
     event({ type: 'turn_end', status: 'cancelled' }),

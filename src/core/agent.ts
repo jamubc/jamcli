@@ -385,6 +385,7 @@ export class CoreAgent implements Agent {
         ? {
             type: 'notice',
             level: 'info',
+            code: 'compacted',
             message: `The earlier conversation was summarized${trigger === 'auto' ? ' to fit the context window' : ''}: ${counts}.`,
           }
         : {

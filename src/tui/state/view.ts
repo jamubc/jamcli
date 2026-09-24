@@ -298,6 +298,8 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
     }
 
     case 'notice': {
+      // The compaction's own row says what this notice says, for surfaces that print text.
+      if (event.code === 'compacted') return state;
       const row: Row = { kind: 'notice', id: state.nextId, level: event.level ?? 'info', text: event.message };
       return { ...state, rows: [...closeStreaming(state.rows), row], nextId: state.nextId + 1 };
     }
