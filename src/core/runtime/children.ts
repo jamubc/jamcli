@@ -22,7 +22,7 @@ export interface ParentSession {
 export interface ChildLauncherOptions {
   projectRoot: string;
   config: Config;
-  configService: ConfigService;
+  configService?: ConfigService;
   parent: () => ParentSession;
   mcp?: McpSource;
   env?: Record<string, string | undefined>;
@@ -72,7 +72,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         signal: request.signal,
         mcp: options.mcp ? borrowed(options.mcp) : false,
         env: options.env,
-        configService: options.configService,
+        ...(options.configService ? { configService: options.configService } : {}),
         sandbox: options.sandbox,
         parent: options.parent(),
         observer: options.observer?.(),

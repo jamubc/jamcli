@@ -1,8 +1,11 @@
-import { ConfigService } from '../../services/ConfigService.js';
+import { loadConfig } from '../config/load.js';
 import type { ToolContext } from '../../types/tools.js';
 
 /** Patterns used when no project configuration can be read. */
 export const FALLBACK_IGNORE = ['node_modules/**', 'dist/**'];
+
+/** Patterns used when `mcp.json` names none, as the legacy configuration service gave. */
+export const DEFAULT_IGNORE = ['node_modules/**', 'dist/**', '*.lock'];
 
 const ignoreCache = new Map<string, string[]>();
 
@@ -18,9 +21,7 @@ export async function resolveIgnorePatterns(ctx: ToolContext): Promise<string[]>
 
   let patterns: string[];
   try {
-    const configService = new ConfigService(ctx.projectRoot);
-    const mcpConfig = await configService.getMcpConfig();
-    patterns = mcpConfig.ignore_patterns || FALLBACK_IGNORE;
+    patterns = loadConfig({ projectRoot: ctx.projectRoot }).mcp.ignore_patterns ?? DEFAULT_IGNORE;
   } catch {
     patterns = FALLBACK_IGNORE;
   }
