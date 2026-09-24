@@ -176,14 +176,10 @@ export function createChatProvider(name: string, registry: ApiRegistry = {}): Ch
 export function listConfiguredProviders(registry: ApiRegistry = {}): string[] {
   const ids: string[] = [];
   if (registry.ollama) ids.push('ollama');
-  if (registry.openrouter && (resolveApiKey(registry.openrouter, FALLBACK_ENV.openrouter, 'openrouter') || registry.openrouter.base_url)) {
-    ids.push('openrouter');
-  }
-  if (registry.openai && (resolveApiKey(registry.openai, FALLBACK_ENV.openai, 'openai') || registry.openai.base_url)) {
-    ids.push('openai');
-  }
-  if (registry.anthropic && (resolveApiKey(registry.anthropic, FALLBACK_ENV.anthropic, 'anthropic') || registry.anthropic.base_url)) {
-    ids.push('anthropic');
+  // A key in the provider's own variable or the credential store is enough; the
+  // registry entry is needed only to change where the key or the server is.
+  for (const name of ['openrouter', 'openai', 'anthropic'] as const) {
+    if (resolveApiKey(registry[name], FALLBACK_ENV[name], name) || registry[name]?.base_url) ids.push(name);
   }
   for (const endpoint of registry.endpoints || []) {
     if (endpoint.base_url) ids.push(endpoint.id);

@@ -96,10 +96,23 @@ test('ollama lists models through the native tags route', async () => {
 });
 
 test('only configured providers are enumerated for discovery', () => {
-  expect(listConfiguredProviders({})).toEqual([]);
-  process.env.JAMCLI_OR_KEY = 'x';
-  expect(listConfiguredProviders({ openrouter: { key_env_var: 'JAMCLI_OR_KEY' }, ollama: {} })).toEqual([
-    'ollama',
-    'openrouter',
-  ]);
+  const saved = { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY };
+  for (const name of Object.keys(saved)) delete process.env[name];
+  try {
+    expect(listConfiguredProviders({})).toEqual([]);
+    process.env.JAMCLI_OR_KEY = 'x';
+    expect(listConfiguredProviders({ openrouter: { key_env_var: 'JAMCLI_OR_KEY' }, ollama: {} })).toEqual([
+      'ollama',
+      'openrouter',
+    ]);
+    // A key in the provider's own variable is enough, with no registry entry.
+    process.env.ANTHROPIC_API_KEY = 'x';
+    expect(listConfiguredProviders({ ollama: {} })).toEqual(['ollama', 'anthropic']);
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    delete process.env.JAMCLI_OR_KEY;
+  }
 });
