@@ -464,7 +464,19 @@ cover headless, ACP, and delegation.
   - F18 is live: in a git repository, starting a session writes nothing, the first stored file creates `.jamcli/` ignoring itself, `git status` stays clean, and a directory an earlier version created without the file gets it. The todo tool, `jamcli mcp`, and the legacy writers each have a test that fails without the change.
   - 35 mutation probes, each turning a test red, across the validator, the loader, the writers, the runtime wiring, and the command.
   - Found along the way: a reply dated in the millisecond of a prefix change lost its signed thinking, which failed a stage 4 test about one run in ten. Fixed, with a test that fails without the fix, as recorded under D8.
-- [ ] 5.2 Credentials (D12). Files: `src/core/config/credentials.ts`, `src/cli/auth.ts`, tests. Keychain adapters, a `0600` file fallback, `jamcli auth`, and OpenRouter PKCE login tested against a fake authorization server.
+- [x] 5.2 Credentials (D12). Files: `src/core/config/credentials.ts`, `src/cli/auth.ts`, tests. Keychain adapters, a `0600` file fallback, `jamcli auth`, and OpenRouter PKCE login tested against a fake authorization server.
+  - **Verification**: built as recorded under D12.
+  - Tests:
+    - the file store's modes, and the keychain and Secret Service adapters run through fake `security` and `secret-tool` executables, with no key ever in an argument;
+    - a keyring that cannot be reached is reported, not taken for an empty one;
+    - which store each platform gets, and the variable that chooses one;
+    - the order of the four sources, and a key stored while a session runs;
+    - through the runtime, a stored key authenticates the request and is redacted from a tool result;
+    - `jamcli auth`: set, masked get, `--reveal`, remove, list, the warning when another source wins, and refused keys;
+    - the sign-in against a fake authorization server: the challenge checked against the verifier, the key stored, `--no-browser`, a callback at any other path turned away, a refused exchange, and a timeout.
+  - 16 mutation probes, each turning a test red, across the stores, the order, redaction, and the sign-in.
+  - Found along the way: a key not found was remembered as absent for the life of the process. Fixed, with a test.
+  - Owed: a sign-in against OpenRouter itself, which this environment cannot reach.
 - [ ] 5.3 Logs and traces (D13). Files: `src/core/observe/` (new), `src/cli.ts`. Structured logs, `-v` and `-vv`, `--log-file`, and `--trace-file`.
 - [ ] 5.4 The OpenTelemetry exporter. Files: `src/core/observe/otlp.ts`, tests with an in-memory collector. GenAI attributes, content excluded by default, off by default.
 - [ ] 5.5 `jamcli doctor`. Files: `src/cli/doctor.ts`. Checks provider reachability, models, ripgrep, sandbox kind, git, `gh`, MCP servers, language servers, keychain, and configuration errors, each with a fix.

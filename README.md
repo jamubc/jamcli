@@ -28,7 +28,7 @@ X Git integration
 ## Features
 
 - **Three surfaces, one core**: the terminal interface, a one-shot command line, and an Agent Client Protocol server all drive the same agent loop.
-- **Provider agnostic**: Ollama with no account, any OpenAI-compatible endpoint, and a translated Anthropic-shaped endpoint. Keys come from `key_env_var` wherever the provider allows it.
+- **Provider agnostic**: Ollama with no account, any OpenAI-compatible endpoint, and a translated Anthropic-shaped endpoint. Keys come from the environment or the system keychain, never from the project by default.
 - **Tool registry**: a tool declares its name, description, JSON Schema, policy class, and runner. Built-ins cover files, search, glob, edit, a todo list, read-only git, and delegation; MCP tools join the same list.
 - **Human in the loop**: state-changing tools ask before running, a deny always wins, and a headless run never prompts, it refuses and names the flag that would allow it.
 - **Trust gate**: tool output is screened for relevance and prompt injection before it enters context, and every removal is named with its reason.
@@ -143,6 +143,20 @@ jamcli config unset agent_loop.max_steps --scope user
 Values are read as JSON where they parse, so `30`, `true`, and `["read_file"]` keep their types. `jamcli config` never prints a key, a header, or an environment value. Editors can complete configuration files from [`docs/config.schema.json`](docs/config.schema.json).
 
 JamCLI writes nothing into a project until it has something to keep there: a session's history, a permission granted at a prompt, a todo list, or a `jamcli config set`. It then creates `.jamcli/` with a `.gitignore` that ignores the whole directory, so history and keys never reach a repository by accident. To share a file with a team, add an exception to `.jamcli/.gitignore`, such as `!config.json`.
+
+### Keys
+
+A provider's key is taken from, in order: the variable named in its `key_env_var`, an `api_key` in configuration, its usual variable (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), and then the key stored with `jamcli auth`:
+
+```bash
+jamcli auth set anthropic          # type the key at a prompt that does not echo it, or pipe it in
+jamcli auth login openrouter       # sign in to OpenRouter in the browser; it issues a key you control
+jamcli auth list                   # where each provider's key comes from
+jamcli auth get openrouter         # the stored key, masked; --reveal prints it
+jamcli auth remove openrouter
+```
+
+Stored keys go to the macOS keychain, to the Secret Service keyring on Linux, or, where neither exists, to `~/.config/jamcli/credentials.json`, readable only by you. `JAMCLI_CREDENTIAL_STORE=keychain|secret-service|file` chooses. A key is never taken as a command-line argument, and a stored key a session uses is redacted from tool output like any other. `jamcli audit` reports a key written into a project file.
 
 **Upgrading.** Existing `.jamcli/` files are read as they are. An existing `.jamcli/` gets its `.gitignore` the next time JamCLI stores something there. A new project no longer starts on a `gpt-4o` profile it never asked for: choose a model with `jamcli config set model <provider>:<model>` or `--model`. To turn the old per-tool settings in `mcp.json` into permission rules, run `jamcli config migrate` (add `--dry-run` to see the change first); it keeps `.bak` copies and never runs on its own.
 

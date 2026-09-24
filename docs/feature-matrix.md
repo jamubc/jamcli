@@ -50,6 +50,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | The rule behind every decision shown and logged | ✗ | ✓ | n.v. | n.v. | n.v. | n.v. | exceeds |
 | OS sandbox for commands | ✗ | ✓ Linux (bubblewrap), macOS (Seatbelt); ✗ Windows | ✓ [1] | ✓ workspace write, network off [2] | n.v. | n.v. | parity, with a gap on Windows: no supported sandbox primitive yet, and it is shown as unsandboxed |
 | Credentials withheld from subprocesses | ✗ (F11, F23) | ✓ | n.v. | n.v. | n.v. | n.v. | exceeds |
+| Keys in the system keychain, browser sign-in | ✗ keys in the project file | ✓ keychain, Secret Service, or an owner-only file; OpenRouter PKCE sign-in | n.v. | n.v. | n.v. | n.v. | parity |
 | Tool output screened for prompt injection | ◐ headless only | ✓ every surface | ◐ classifier for permissions [1] | n.v. | n.v. | n.v. | exceeds |
 | Checkpoints, undo, rewind | ✗ | ✓ without touching the user's git state | ✓ [1] | n.v. | n.v. | n.v. | parity (Gemini CLI also checkpoints [7]) |
 

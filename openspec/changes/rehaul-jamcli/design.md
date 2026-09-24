@@ -819,6 +819,43 @@ runs OpenRouter's PKCE flow:
 No vendor subscription is driven through a third-party flow. The README warning from the
 previous unit stands.
 
+As built (5.2):
+
+- **Order.** The endpoint's `key_env_var`, then a key in configuration, then the
+  provider's usual variable, then the store. D12 does not place the key in
+  configuration; it stays where it was, ahead of the usual variable, because a key
+  written for this project is more specific than one in the environment.
+- **Stores.** The macOS keychain through `security`, which is given the key through
+  `security -i` on standard input; the Secret Service through `secret-tool`, used when
+  it is on the path and a session bus is set, and also given the key on standard input;
+  otherwise `credentials.json` in the user configuration directory, mode `0600` in a
+  `0700` directory, written whole through a temporary file. Windows gets the file, since
+  D12 names no adapter for it. `JAMCLI_CREDENTIAL_STORE` chooses a store by name. A
+  keychain that refuses a write is reported, with that variable as the way out; JamCLI
+  never falls back to the file on its own.
+- **Lookups.** A key found is remembered for the process; a key not found is asked for
+  again, so a session left open sees a key stored meanwhile.
+- **Redaction.** Every stored key a session uses is redacted like any other credential,
+  including one first read after a switch of model: the redactor asks for them at each
+  call.
+- **The command.** `jamcli auth set|get|remove|list|login`. `set` reads the key at a
+  prompt that does not echo it, or from a pipe, never from an argument. `get` masks a
+  stored key unless `--reveal` is given, and says which source is used. Storing a key
+  behind an environment variable or a key in configuration warns that the other wins.
+- **OpenRouter sign-in.** OpenRouter's documentation is blocked from this environment,
+  as its API is. Search results summarizing that page, and two independent
+  implementations read on 2026-09-24, agree on `/auth` with `callback_url`,
+  `code_challenge`, and `code_challenge_method=S256`, on a POST to `/api/v1/auth/keys`
+  answered with `key`, and on a callback at a random local port. The POST body's field
+  names, `code`, `code_verifier`, and `code_challenge_method`, are as OpenRouter's
+  documented example gives them, recalled rather than read today. The callback is
+  `http://localhost:<random port>/callback/<random path>`, listened for on `127.0.0.1`
+  and `::1`, so nothing else on the machine can guess it. It is tested against a fake
+  authorization server; a live sign-in is owed, as 3.7 and 12.7 are.
+- **Findings.** `jamcli audit` reports a key in `.jamcli/config.local.json` as well as
+  in `.jamcli/config.json`, and an unconfigured provider's message names `jamcli auth`.
+  `jamcli doctor` (5.5) reports the store.
+
 ### D13. Observability
 
 - **Logs.** Structured JSON lines go to `~/.local/state/jamcli/logs/`. `-v` adds info,
