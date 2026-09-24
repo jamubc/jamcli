@@ -1018,6 +1018,19 @@ differ from the Ink interface:
   scope is named. That file is the one a prompt's project grant uses, and it stays out
   of the repository.
 
+As built (6.9), keys come from `keybindings.json` in the user configuration directory,
+an object from action to one key or a list of keys, laid over the defaults. Something in
+the file that does not fit (an unknown action, a key that names nothing, one key on two
+actions) is named in the transcript, and the default stands for that action. A plain
+character such as `?` matches what was typed, so it works whatever the keyboard needs to
+make it. Screen reader mode (`--screen-reader` or `ui.screen_reader`) draws each row as
+a labeled line (`You:`, `JamCLI:`, `Tool done:`, `Permission needed:`), with no boxes,
+marks, spinner, or scroll bar, and a diff as its own text. `NO_COLOR` wins over any
+configured theme. Reduced motion (`ui.reduced_motion`) reaches the interface as a
+context; the spinner that honors it comes with 6.11. Focus moves to or from the
+composer as an overlay opens or closes, not at the next render, so a key typed right
+after choosing is not lost.
+
 **Tests.** Frame-text snapshots of key states through the OpenTUI test renderer, with
 mock keys driving flows. Snapshots compare text, not escape codes. This amends the
 testing strategy in `project.md`, per the owner's decision.
