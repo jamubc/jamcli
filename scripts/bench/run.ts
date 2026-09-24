@@ -104,16 +104,51 @@ async function grep(): Promise<number[] | { skipped: string }> {
   }
 }
 
+/**
+ * The interface in a pseudo-terminal, through `pty-latency.py`: the first frame, the
+ * resident memory once the 1,000-message session is drawn, and the p95 keystroke to
+ * frame, each run's figure kept so the medians are taken like the others.
+ */
+async function interfaceRuns(): Promise<Record<'first-frame' | 'keystroke' | 'idle-memory', number[]> | { skipped: string }> {
+  if (process.platform !== 'linux') return { skipped: 'measured on Linux, where the pseudo-terminal and /proc are' };
+  const out = { 'first-frame': [] as number[], keystroke: [] as number[], 'idle-memory': [] as number[] };
+  const json = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-bench-pty-')), 'run.json');
+  try {
+    for (let index = 0; index < RUNS; index += 1) {
+      const child = Bun.spawnSync(['python3', path.join(repo, 'scripts', 'bench', 'pty-latency.py'), '--json', json], {
+        env: { ...process.env, JAMCLI_INTERFACE: 'opentui' },
+        stdout: 'ignore',
+        stderr: 'pipe',
+      });
+      if (child.exitCode !== 0) throw new Error(`the interface run failed: ${child.stderr.toString().trim().split('\n').at(-1)}`);
+      const result = JSON.parse(fs.readFileSync(json, 'utf8'));
+      if (result.first_frame_ms == null || result.latency_p95_ms == null || result.idle_resident_mb == null) throw new Error('the interface run measured nothing');
+      out['first-frame'].push(result.first_frame_ms);
+      out.keystroke.push(result.latency_p95_ms);
+      out['idle-memory'].push(result.idle_resident_mb);
+    }
+    return out;
+  } finally {
+    fs.rmSync(path.dirname(json), { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (!fs.existsSync(entry)) throw new Error('Run bun run build first; the budgets are for the built command.');
-  const runs = { version: await version(), headless: await headless(), grep: await grep() };
+  const shown = await interfaceRuns();
+  const runs = {
+    version: await version(),
+    headless: await headless(),
+    grep: await grep(),
+    ...('skipped' in shown ? { 'first-frame': shown, keystroke: shown, 'idle-memory': shown } : shown),
+  };
   const results = judge(runs);
   process.stdout.write(`${report(results)}\n`);
   const jsonAt = args.indexOf('--json');
   if (jsonAt >= 0 && args[jsonAt + 1]) {
     const record = results.map((result) => ({ id: result.budget.id, verdict: result.verdict, value: result.value, runs: result.runs, limit: result.budget.limit, unit: result.budget.unit, enforced: result.budget.enforced, note: result.note }));
-    fs.writeFileSync(args[jsonAt + 1], `${JSON.stringify({ node: process.versions.node, platform: process.platform, cpus: os.cpus().length, results: record }, null, 2)}\n`);
+    fs.writeFileSync(args[jsonAt + 1], `${JSON.stringify({ bun: process.versions.bun, platform: process.platform, cpus: os.cpus().length, results: record }, null, 2)}\n`);
   }
   if (args.includes('--enforce') && failed(results)) {
     process.stderr.write(`An enforced budget was missed: ${results.filter((result) => result.verdict === 'over').map((result) => result.budget.id).join(', ')}.\n`);

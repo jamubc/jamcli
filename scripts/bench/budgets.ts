@@ -1,7 +1,6 @@
 /**
  * The performance budgets of D24 and how a set of runs is judged against them. A budget
- * that cannot be met before the interface moves to OpenTUI in stage 6 is recorded here
- * but not enforced.
+ * that is not enforced is recorded, with the reason in its note.
  */
 
 export interface Budget {
@@ -20,9 +19,9 @@ export const BUDGETS: Budget[] = [
   { id: 'version', measure: 'jamcli --version', limit: 60, unit: 'ms', enforced: true },
   { id: 'headless', measure: 'headless overhead before the first chat request, fake provider, no MCP', limit: 150, unit: 'ms', enforced: true },
   { id: 'grep', measure: 'grep across 20,000 files with ripgrep present', limit: 500, unit: 'ms', enforced: true },
-  { id: 'first-frame', measure: 'interface first frame', limit: 250, unit: 'ms', enforced: false, note: 'measured once the interface moves to OpenTUI in stage 6' },
-  { id: 'keystroke', measure: 'keystroke to frame, p95, 1,000-message transcript', limit: 16, unit: 'ms', enforced: false, note: 'measured once the interface moves to OpenTUI in stage 6' },
-  { id: 'idle-memory', measure: 'idle interface resident memory', limit: 150, unit: 'MB', enforced: false, note: 'measured once the interface moves to OpenTUI in stage 6' },
+  { id: 'first-frame', measure: 'interface first frame', limit: 250, unit: 'ms', enforced: true },
+  { id: 'keystroke', measure: 'keystroke to frame, p95, 1,000-message transcript', limit: 16, unit: 'ms', enforced: true },
+  { id: 'idle-memory', measure: 'idle interface resident memory, 1,000-message transcript drawn', limit: 150, unit: 'MB', enforced: true },
 ];
 
 export const median = (values: number[]): number => {
@@ -42,8 +41,8 @@ export interface Result {
 }
 
 /** Judge each budget: a measured median within or over it, or why there is none. */
-export function judge(runs: Record<string, number[] | { skipped: string }>): Result[] {
-  return BUDGETS.map((budget) => {
+export function judge(runs: Record<string, number[] | { skipped: string }>, budgets: Budget[] = BUDGETS): Result[] {
+  return budgets.map((budget) => {
     const measured = runs[budget.id];
     if (!measured) return { budget, verdict: 'not measured', note: budget.note };
     if (!Array.isArray(measured)) return { budget, verdict: 'not measured', note: measured.skipped };

@@ -12,11 +12,16 @@ test('an enforced budget missed fails the job; an unenforced one is only recorde
   const verdict = Object.fromEntries(results.map((result) => [result.budget.id, [result.verdict, result.value]]));
   expect(verdict.version).toEqual(['over', 65]);
   expect(verdict.headless).toEqual(['over', 200]);
-  expect(verdict['first-frame']).toEqual(['recorded', 400]);
+  expect(verdict['first-frame']).toEqual(['over', 400]);
+  // A budget not enforced is only recorded when missed.
+  const loose = { id: 'loose', measure: 'a measure', limit: 10, unit: 'ms' as const, enforced: false, note: 'why' };
+  const [recorded] = judge({ loose: [20] }, [loose]);
+  expect([recorded.verdict, recorded.note]).toEqual(['recorded', 'why']);
+  expect(failed([recorded])).toBe(false);
   expect(verdict.grep).toEqual(['not measured', undefined]);
   expect(verdict['idle-memory']).toEqual(['not measured', undefined]);
   expect(failed(results)).toBe(true);
-  expect(failed(judge({ version: [10], headless: [100], grep: [10], 'first-frame': [400] }))).toBe(false);
+  expect(failed(judge({ version: [10], headless: [100], grep: [10], 'first-frame': [200], keystroke: [8], 'idle-memory': [140] }))).toBe(false);
   expect(report(results)).toContain('over               65 ms  budget   60 ms  jamcli --version');
   // The budgets are D24's.
   expect(BUDGETS.map((budget) => [budget.id, budget.limit])).toEqual([
