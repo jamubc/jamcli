@@ -72,7 +72,8 @@ export function Picker(props: { title: string; items: PickItem[] | undefined; no
           </text>
         );
       })}
-      {props.note ? <text fg={theme.warn}>{fit(props.note)}</text> : null}
+      {/* A note can carry the fix, so it wraps rather than being cut. */}
+      {props.note ? <text fg={theme.warn} wrapMode="word">{props.note}</text> : null}
       <text fg={theme.dim}>{fit(`${shown && shown.length > PICKER_ROWS ? `${props.selected + 1} of ${shown.length} · ` : ''}${props.hint ?? 'Enter chooses'} · Up and Down move · Escape closes`)}</text>
     </box>
   );

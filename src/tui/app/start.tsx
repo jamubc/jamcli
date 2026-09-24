@@ -5,6 +5,7 @@ import { App } from './App.js';
 import type { SessionChoice } from './commands.js';
 import { resolveTheme } from './theme.js';
 import { loadConfig } from '../../core/config/load.js';
+import { isFirstRun } from '../../core/onboarding/index.js';
 
 /**
  * Start the OpenTUI interface. OpenTUI draws through native code that Bun loads; on Node
@@ -37,7 +38,8 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
   };
   process.once('SIGTERM', () => void exit(143));
   process.once('SIGHUP', () => void exit(129));
-  const ui = loadConfig({ projectRoot }).config.ui ?? {};
+  const settings = loadConfig({ projectRoot });
+  const ui = settings.config.ui ?? {};
   createRoot(renderer).render(
     <App
       runtime={current}
@@ -47,6 +49,7 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
       theme={resolveTheme(ui.theme, process.env)}
       screenReader={options.screenReader === true || ui.screen_reader === true}
       reducedMotion={ui.reduced_motion === true}
+      firstRun={isFirstRun(settings)}
     />
   );
 }

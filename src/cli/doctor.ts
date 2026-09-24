@@ -126,7 +126,7 @@ async function modelCheck(ref: string, role: string, settings: LoadedConfig, tim
   const choice = resolveModel(ref, { name: 'doctor', preferred_provider: 'ollama' }, config.api_registry);
   const name = `model (${role})`;
   if (!choice.model) {
-    return { name, status: 'fail', detail: `no model is chosen for ${choice.provider}.`, fix: `Run jamcli config set model ${choice.provider}:<model>.` };
+    return { name, status: 'fail', detail: `no model is chosen for ${choice.provider}.`, fix: `Run jamcli config set model ${choice.provider}:<model> --scope user, or /setup in the interface.` };
   }
   const label = `${choice.provider}:${choice.model}`;
   let provider;

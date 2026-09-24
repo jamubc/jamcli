@@ -36,6 +36,8 @@ export interface AppProps {
   reducedMotion?: boolean;
   /** The keys, with what was wrong in the keybindings file. Read from the user's file when absent. */
   keys?: { bindings: Keybindings; problems: string[] };
+  /** No user configuration and no model: open setup at the start. */
+  firstRun?: boolean;
 }
 
 const TODO_WORDS: Record<TodoView['status'], string> = { pending: 'to do', in_progress: 'doing', completed: 'done' };
@@ -223,6 +225,10 @@ export function App(props: AppProps) {
       say('error', `/${command.name} failed: ${error?.message ?? error}`);
     }
   };
+  // A first run opens setup, once, on the session it started with.
+  useEffect(() => {
+    if (props.firstRun) void runCommand('/setup', { quiet: true });
+  }, []);
 
   /**
    * The palette, while a command is being named: what was typed, which match is chosen,

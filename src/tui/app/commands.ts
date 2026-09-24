@@ -16,6 +16,7 @@ import { contextReport, costReport, modelDetail, modelReport, permissionsReport,
 import type { PickItem, PickRequest } from './Picker.js';
 import { THEME_NAMES, THEMES, noColor, type Theme } from './theme.js';
 import { keysHelp, type Keybindings } from './keys.js';
+import { setup } from './setup.js';
 import type { ThemeName } from '../../types/config.js';
 
 /** Where a command comes from. Custom commands arrive with stage 8 and show their source in the palette. */
@@ -573,6 +574,7 @@ const exit: SlashCommand = {
 /** The built-in commands, in the order help lists them. */
 export const BUILTIN_COMMANDS: SlashCommand[] = [
   help,
+  setup,
   model,
   mode,
   permissions,

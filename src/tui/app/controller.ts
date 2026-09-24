@@ -52,11 +52,13 @@ export class SessionController {
   status(): Partial<StatusData> {
     const usage = this.runtime.contextUsage();
     const spend = this.runtime.spend();
+    // With no model chosen there is no window to measure against, so neither is shown.
+    const chosen = Boolean(this.runtime.model.model);
     return {
       mode: this.runtime.permissionMode,
-      model: `${this.runtime.model.provider}:${this.runtime.model.model}`,
+      model: chosen ? `${this.runtime.model.provider}:${this.runtime.model.model}` : '',
       sandbox: this.runtime.sandbox.kind,
-      contextPercent: usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined,
+      contextPercent: chosen && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined,
       costUsd: spend.requests > 0 && spend.unpriced === spend.requests ? null : spend.requests ? spend.cost : null,
       unpriced: spend.unpriced,
       mcpServers: new Set(this.runtime.tools.filter((tool) => tool.source === 'mcp').map((tool) => tool.server)).size,
