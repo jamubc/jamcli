@@ -26,6 +26,7 @@ import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type Mo
 import { expandReferences } from './references.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, type SpendSummary } from '../catalog/cost.js';
+import { TokenCounter, contextBudget } from '../context/index.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
 
@@ -66,6 +67,22 @@ export interface RuntimeOptions {
   parent?: ParentSession;
 }
 
+export interface ContextUsage {
+  /** Estimated tokens of the next request, corrected by what the provider has reported. */
+  used: number;
+  /** The model's context window. */
+  window: number;
+  /** What a request may use: the window, less the output reserve and a margin. */
+  budget: number;
+  /** Where compaction starts. */
+  trigger: number;
+  /** The factor learned from the provider's counts; 1 until it has reported one. */
+  correction: number;
+  autoCompact: boolean;
+  /** False when the window is a guess, which is compacted against only when the provider refuses a request. */
+  windowKnown: boolean;
+}
+
 /** A call a dry run did not make: what it would have done. */
 export interface DryRunEntry {
   callId: string;
@@ -82,6 +99,13 @@ export interface Runtime {
   readonly modelInfo: ModelInfo;
   /** What the session has cost so far, by model, with requests that had no known price counted apart. */
   spend(): SpendSummary;
+  /** How full the context is: the next request's estimate against the model's budget. */
+  contextUsage(): ContextUsage;
+  /**
+   * Summarize the older part of the conversation now, giving particular attention to
+   * `focus`, as `/compact` does. Resolves false when there is nothing to compact.
+   */
+  compact(focus?: string, onEvent?: (event: AgentEvent) => void): Promise<boolean>;
   /** What the model is offered, with schemas. */
   readonly tools: ToolSummary[];
   /** The conversation so far, as the next request will carry it. */
@@ -245,6 +269,12 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let trustInfo: ModelInfo | undefined = trust.choice ? catalog.lookup(trust.choice.provider, trust.choice.model, trust.provider?.family) : undefined;
 
   const loop = config.agent_loop;
+  /** Learns how the provider counts this session's requests, across model switches. */
+  const counter = new TokenCounter();
+  const autoCompact = config.context?.auto_compact !== false;
+  const budgetFor = () => contextBudget(modelInfo.contextWindow, requestedOutputTokens(modelInfo, loop?.max_output_tokens));
+  /** A guessed window is not compacted ahead of; Ollama's window is the one JamCLI asks for, so it is always known. */
+  const windowKnown = () => modelInfo.sources.contextWindow !== 'default' || modelInfo.provider === 'ollama';
   const buildAgent = () =>
     new CoreAgent({
       provider,
@@ -252,6 +282,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       temperature: profile.temperature,
       modelUsageKey: `${choice.provider}:${choice.model}`,
       maxOutputTokens: requestedOutputTokens(modelInfo, loop?.max_output_tokens),
+      context: { budget: budgetFor(), counter, auto: autoCompact, proactive: windowKnown() },
       // Only Ollama sizes its window per request; the others ignore it.
       contextLength: modelInfo.contextWindow,
       dispatcher: toolSet.dispatcher,
@@ -315,7 +346,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       agent = buildAgent();
       if (info.sources.contextWindow === 'default' && info.provider !== 'ollama') {
         const notice =
-          `JamCLI does not know the context window of ${info.provider}:${info.model}, so it assumes ${info.contextWindow.toLocaleString('en-US')} tokens. ` +
+          `JamCLI does not know the context window of ${info.provider}:${info.model}, so it compacts the conversation only when the provider refuses it as too long. ` +
           `Set models["${info.provider}:${info.model}"].context_window in .jamcli/config.json.`;
         notices.push(notice);
         pending.push(notice);
@@ -348,6 +379,40 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     spend() {
       return ledger.summary();
+    },
+    contextUsage() {
+      const budget = budgetFor();
+      return {
+        used: counter.count({ system: systemPrompt, tools: toolSet.definitions, messages: session.messages }),
+        window: budget.window,
+        budget: budget.budget,
+        trigger: budget.trigger,
+        correction: counter.correction,
+        autoCompact,
+        windowKnown: windowKnown(),
+      };
+    },
+
+    async compact(focus, onEvent) {
+      if (running) throw new Error('A turn is running in this session; compact after it ends.');
+      running = true;
+      const emit = (event: AgentEvent) => {
+        account(event);
+        recorder.handle(event);
+        onEvent?.(event);
+      };
+      emitting = emit;
+      try {
+        await Promise.all([modelReady, trustReady]);
+        turnAgent = agent;
+        const result = await turnAgent.compact(session, emit, { focus });
+        session = result.session;
+        return result.compacted;
+      } finally {
+        running = false;
+        emitting = undefined;
+        turnAgent = undefined;
+      }
     },
     get tools() {
       return toolSet.summaries;

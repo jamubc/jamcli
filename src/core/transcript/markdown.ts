@@ -97,7 +97,7 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
         break;
       case 'compaction':
         out.push(
-          `> **Compaction**: ${event.replaced} messages summarized, ${event.before} to ${event.after} tokens.`,
+          `> **Compaction**${event.trigger === 'manual' ? ' (requested)' : ''}: ${event.replaced} messages ${event.strategy === 'drop' ? 'left out' : 'summarized'}, ${event.before} to ${event.after} tokens.`,
           fenced(event.summary, 'text')
         );
         break;

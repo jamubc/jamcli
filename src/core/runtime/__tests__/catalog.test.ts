@@ -102,7 +102,7 @@ test('a model whose window no source knows is named, with the setting that fixes
   await runtime.run('hi', onEvent);
   await runtime.run('again', onEvent);
   expect(notices).toEqual([
-    'JamCLI does not know the context window of openai:mystery, so it assumes 8,192 tokens. Set models["openai:mystery"].context_window in .jamcli/config.json.',
+    'JamCLI does not know the context window of openai:mystery, so it compacts the conversation only when the provider refuses it as too long. Set models["openai:mystery"].context_window in .jamcli/config.json.',
   ]);
   expect(runtime.notices).toEqual(notices);
   // Its output limit is unknown too, so the server's own default applies.

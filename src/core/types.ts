@@ -139,7 +139,19 @@ export type AgentEvent =
       delegatedSession?: string;
     }
   | { type: 'retry'; attempt: number; delayMs: number; reason: string }
-  | { type: 'compaction'; beforeTokens: number; afterTokens: number; strategy: string }
+  | {
+      type: 'compaction';
+      /** Estimated tokens of the next request before and after. */
+      beforeTokens: number;
+      afterTokens: number;
+      /** `summary` when the model summarized; `drop` when it could not and the messages were left out. */
+      strategy: 'summary' | 'drop';
+      /** How many messages, from the start, the summary replaced. */
+      replaced: number;
+      summary: string;
+      /** `auto` when the context passed its threshold; `manual` for `/compact`. */
+      trigger: 'auto' | 'manual';
+    }
   | { type: 'notice'; message: string; level?: 'info' | 'warn' | 'error'; code?: string }
   | {
       type: 'approval_request';

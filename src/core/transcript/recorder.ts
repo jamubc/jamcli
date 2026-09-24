@@ -63,6 +63,17 @@ export class TranscriptRecorder {
       case 'notice':
         this.write({ type: 'notice', level: event.level ?? 'info', message: event.message, ...(event.code ? { code: event.code } : {}) });
         return;
+      case 'compaction':
+        this.write({
+          type: 'compaction',
+          summary: event.summary,
+          replaced: event.replaced,
+          before: event.beforeTokens,
+          after: event.afterTokens,
+          strategy: event.strategy,
+          trigger: event.trigger,
+        });
+        return;
       case 'turn_end':
         this.write({ type: 'end', status: event.status });
         if (this.started) this.guard(() => this.log.updateIndex());

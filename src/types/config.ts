@@ -120,6 +120,13 @@ export interface Config {
   trust?: TrustConfig;
   /** Facts about models for the model catalog, keyed `provider:model`. */
   models?: Record<string, ModelSettings>;
+  /** Context management for every surface. `context_management` configures only the legacy interface. */
+  context?: ContextSettings;
+}
+
+export interface ContextSettings {
+  /** Summarize older turns on its own when a request nears the model's window. Defaults to true. */
+  auto_compact?: boolean;
 }
 
 export type StatusTextStyleId = 'rainbow' | 'subtle' | 'minimal' | 'aurora' | 'mono' | `custom:${string}`;

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import type { ChatMessage } from '../types.js';
 import { parseTranscriptLine, type TranscriptEvent } from './events.js';
+import { summaryMessage } from '../context/compact.js';
 
 /** Read every event in a session file, in either format. A missing file has none. */
 export function readTranscript(file: string): TranscriptEvent[] {
@@ -19,12 +20,7 @@ export function projectMessages(events: TranscriptEvent[]): ChatMessage[] {
     if (event.type === 'message') {
       messages.push(event.message);
     } else if (event.type === 'compaction') {
-      const summary: ChatMessage = {
-        role: 'user',
-        content: `Summary of the earlier conversation:\n${event.summary}`,
-        timestamp: event.ts,
-      };
-      messages = [summary, ...messages.slice(event.replaced)];
+      messages = [summaryMessage(event.summary, event.ts), ...messages.slice(event.replaced)];
     }
   }
   return messages;

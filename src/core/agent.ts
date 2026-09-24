@@ -6,6 +6,7 @@ import { HeadTailBuffer } from './tools/command.js';
 import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
 import { requestCost } from './catalog/cost.js';
 import type { ModelPrice } from './catalog/types.js';
+import { KEEP_SHARE, compact, estimateRequest, isContextOverflow, type ContextBudget, type TokenCounter } from './context/index.js';
 import { emitHookEvent, type HookBus } from './hooks/index.js';
 import type { AgentLoopConfig } from '../types/config.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
@@ -41,6 +42,21 @@ export interface AgentOptions {
   contextLength?: number;
   /** What the session's model costs per million tokens. Without it, requests are unpriced. */
   price?: ModelPrice;
+  /**
+   * Context management: the budget every request must fit, and the counter that estimates
+   * requests and learns from what the provider reports. Without it, nothing is compacted.
+   */
+  context?: {
+    budget: ContextBudget;
+    counter: TokenCounter;
+    /** Compact on its own: ahead of a request, or when the provider refuses one as too long. Defaults to true. */
+    auto?: boolean;
+    /**
+     * Compact ahead of a request that would pass the trigger. Off when the window is a guess,
+     * so an unknown model compacts only when its provider says the conversation is too long.
+     */
+    proactive?: boolean;
+  };
   /** Replaces credentials in tool output. Defaults to the credentials in the environment. */
   redact?: Redactor;
 }
@@ -77,6 +93,21 @@ export class CoreAgent implements Agent {
       options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn;
     this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars;
     this.redact = options.redact ?? createRedactor();
+  }
+
+  /**
+   * Compact a session now, as `/compact` asks: the older part of the conversation becomes a
+   * summary that gives particular attention to `focus`. Returns the session unchanged when
+   * there is nothing to compact.
+   */
+  async compact(
+    session: JamSession,
+    onEvent: (e: AgentEvent) => void,
+    options: { focus?: string; signal?: AbortSignal } = {}
+  ): Promise<{ session: JamSession; compacted: boolean }> {
+    const signal = options.signal ?? this.options.signal ?? new AbortController().signal;
+    const result = await this.compactNow(session, onEvent, signal, 'manual', options.focus);
+    return { session: result.session, compacted: result.compacted };
   }
 
   /** Abort the running turn of a session, if there is one. */
@@ -135,6 +166,8 @@ export class CoreAgent implements Agent {
     const turnPrompt = prompt || [...working.messages].reverse().find((m) => m.role === 'user')?.content || '';
     let usedCalls = 0;
     let steps = 0;
+    const context = this.options.context;
+    let compactable = context?.auto !== false && context?.proactive !== false;
 
     for (;;) {
       if (signal.aborted) return finish('cancelled', '', steps);
@@ -144,21 +177,62 @@ export class CoreAgent implements Agent {
       steps += 1;
       emit({ type: 'step_start', step: steps });
 
-      let step: StepOutput;
-      try {
-        step = await this.streamStep(provider, this.project(working.messages), tools, signal, emit);
-      } catch (error: any) {
-        const partial: string = error?.partialText ?? '';
-        if (partial) record(this.assistantMessage(partial, '', [], undefined));
-        if (signal.aborted || error?.name === 'AbortError') return finish('cancelled', partial, steps);
-        const message = error?.message ?? String(error);
-        emit({ type: 'notice', level: 'error', message });
-        return finish('error', partial, steps, message);
+      if (context && compactable && this.countContext(working.messages) > context.budget.trigger) {
+        try {
+          const fitted = await this.compactNow(working, emit, signal, 'auto');
+          working = fitted.session;
+          // What compaction cannot bring under the threshold, it will not bring under by trying again this turn.
+          if (!fitted.compacted || this.countContext(working.messages) > context.budget.trigger) {
+            compactable = false;
+            emit({
+              type: 'notice',
+              level: 'warn',
+              message:
+                `The conversation is still above the compaction threshold (${this.countContext(working.messages).toLocaleString('en-US')} of ` +
+                `${context.budget.trigger.toLocaleString('en-US')} tokens), and nothing more can be summarized this turn. The provider may refuse the request.`,
+            });
+          }
+        } catch (error: any) {
+          if (signal.aborted || error?.name === 'AbortError') return finish('cancelled', '', steps);
+          throw error;
+        }
+      }
+      let step: StepOutput | undefined;
+      let estimated = 0;
+      let retried = false;
+      while (!step) {
+        // Uncorrected, so the provider's count can correct it.
+        estimated = context ? estimateRequest({ system: this.options.systemPrompt, tools, messages: working.messages }) : 0;
+        try {
+          step = await this.streamStep(provider, this.project(working.messages), tools, signal, emit);
+        } catch (error: any) {
+          const partial: string = error?.partialText ?? '';
+          if (partial) record(this.assistantMessage(partial, '', [], undefined));
+          if (signal.aborted || error?.name === 'AbortError') return finish('cancelled', partial, steps);
+          // Refused as too long: compact, keeping a share of what was sent, and try once more.
+          if (!retried && !partial && context && context.auto !== false && isContextOverflow(error)) {
+            retried = true;
+            const keepTokens = Math.floor(Math.min(context.budget.budget, this.countContext(working.messages)) * KEEP_SHARE);
+            const fitted = await this.compactNow(working, emit, signal, 'auto', undefined, keepTokens).catch((compactError) => {
+              if (signal.aborted) throw compactError;
+              return { session: working, compacted: false };
+            });
+            if (fitted.compacted) {
+              working = fitted.session;
+              continue;
+            }
+          }
+          const message = error?.message ?? String(error);
+          emit({ type: 'notice', level: 'error', message });
+          return finish('error', partial, steps, message);
+        }
       }
 
       const usage = step.done?.usage;
       if (usage) {
         working = this.account(working, usage, this.options.modelUsageKey, this.options.price, emit);
+        // Ollama can leave a cached prefix out of its count, so its counts do not correct the estimate.
+        if (context && provider.family !== 'ollama') context.counter.observe(estimated, usage.prompt_tokens);
       }
 
       const { calls, unusable } = normalizeCalls(step.done?.toolCalls, steps);
@@ -226,6 +300,73 @@ export class CoreAgent implements Agent {
         return finish('limit', `Stopped: the limit of ${cap} tool calls per turn was reached.`, steps);
       }
     }
+  }
+
+  /** The tool definitions a request carries. */
+  private requestTools(): ToolDefinition[] | undefined {
+    return this.options.dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
+  }
+
+  /** The corrected estimate of a request carrying these messages, with the system prompt and tools. */
+  private countContext(messages: ChatMessage[]): number {
+    return this.options.context!.counter.count({ system: this.options.systemPrompt, tools: this.requestTools(), messages });
+  }
+
+  /**
+   * Replace the older part of the conversation with a summary, report it, and account for
+   * the summary request. Returns the session unchanged when nothing can be compacted.
+   */
+  private async compactNow(
+    working: JamSession,
+    emit: (e: AgentEvent) => void,
+    signal: AbortSignal,
+    trigger: 'auto' | 'manual',
+    focus?: string,
+    keepTokens?: number
+  ): Promise<{ session: JamSession; compacted: boolean }> {
+    const context = this.options.context;
+    const provider = this.options.provider;
+    if (!context || !provider) return { session: working, compacted: false };
+    const before = this.countContext(working.messages);
+    const result = await compact({
+      messages: working.messages,
+      provider,
+      model: this.options.model,
+      keepTokens: keepTokens ?? Math.floor(context.budget.budget * KEEP_SHARE),
+      focus,
+      signal,
+      maxOutputTokens: this.options.maxOutputTokens,
+      contextLength: this.options.contextLength,
+    });
+    if (!result) return { session: working, compacted: false };
+    let next: JamSession = { ...working, messages: result.messages, updatedAt: Date.now() };
+    if (result.usage) next = this.account(next, result.usage, this.options.modelUsageKey, this.options.price, emit);
+    const after = this.countContext(next.messages);
+    emit({
+      type: 'compaction',
+      beforeTokens: before,
+      afterTokens: after,
+      strategy: result.strategy,
+      replaced: result.replaced,
+      summary: result.summary,
+      trigger,
+    });
+    await emitHookEvent(this.options.hooks, 'compaction', { session: next, beforeTokens: before, afterTokens: after, strategy: result.strategy }, emit);
+    const counts = `${before.toLocaleString('en-US')} to ${after.toLocaleString('en-US')} tokens`;
+    emit(
+      result.strategy === 'summary'
+        ? {
+            type: 'notice',
+            level: 'info',
+            message: `The earlier conversation was summarized${trigger === 'auto' ? ' to fit the context window' : ''}: ${counts}.`,
+          }
+        : {
+            type: 'notice',
+            level: 'warn',
+            message: `The earlier conversation could not be summarized (${result.error}), so ${result.replaced} messages were left out to fit the context window: ${counts}.`,
+          }
+    );
+    return { session: next, compacted: true };
   }
 
   /** Add a request's usage to the session and report it, priced when the price is known. */

@@ -51,7 +51,18 @@ export type TranscriptEvent =
   | { v: 2; type: 'notice'; ts: number; level: 'info' | 'warn' | 'error'; message: string; code?: string }
   | { v: 2; type: 'model'; ts: number; from?: string; to: string }
   | { v: 2; type: 'permission_mode'; ts: number; from: string; to: string }
-  | { v: 2; type: 'compaction'; ts: number; summary: string; replaced: number; before: number; after: number }
+  | {
+      v: 2;
+      type: 'compaction';
+      ts: number;
+      summary: string;
+      replaced: number;
+      before: number;
+      after: number;
+      /** Absent in logs written before 4.3, which only summarized. */
+      strategy?: 'summary' | 'drop';
+      trigger?: 'auto' | 'manual';
+    }
   | { v: 2; type: 'checkpoint'; ts: number; ref: string; files?: string[] }
   | { v: 2; type: 'end'; ts: number; status: RunStatus };
 
