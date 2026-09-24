@@ -146,3 +146,19 @@ test('reducing never changes the state it was given', () => {
   run([event({ type: 'text', delta: 'b' }), event({ type: 'tool_result', result: { tool: 'read_file', success: true, output: 'x', durationMs: 1, callId: 'c6' } }), { type: 'toggle', id: 2 }], before);
   expect(JSON.stringify(before)).toBe(frozen);
 });
+
+test('an edit keeps its proposed diff, then the one it made, shown open, with the file it names', () => {
+  const edit = call('e1', 'edit', { path: 'src/a.ts', find_string: 'x', replace_string: 'y' });
+  let state = run([
+    event({ type: 'tool_call', call: edit }),
+    event({ type: 'approval_request', call: edit, decide: () => undefined, request: { id: 'e1', call: edit, policyClass: 'write', summary: 'edit src/a.ts', preview: { kind: 'diff', text: 'proposed' }, reason: 'r', suggestions: [] } }),
+  ]);
+  expect(tool(state, 'e1')).toMatchObject({ diff: 'proposed', path: 'src/a.ts', collapsed: true });
+  state = reduceView(state, event({ type: 'tool_result', result: { tool: 'edit', success: true, output: 'Replaced 1 occurrence.', durationMs: 2, callId: 'e1', status: 'ok', metadata: { diff: 'made' } } }));
+  expect(tool(state, 'e1')).toMatchObject({ diff: 'made', collapsed: false, output: 'Replaced 1 occurrence.' });
+  // A call with no diff stays closed.
+  state = reduceView(state, event({ type: 'tool_call', call: call('r1') }));
+  state = reduceView(state, event({ type: 'tool_result', result: { tool: 'read_file', success: true, output: 'x', durationMs: 1, callId: 'r1', metadata: {} } }));
+  expect(tool(state, 'r1')).toMatchObject({ collapsed: true });
+  expect(tool(state, 'r1').diff).toBeUndefined();
+});

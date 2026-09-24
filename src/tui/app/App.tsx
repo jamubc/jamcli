@@ -2,11 +2,12 @@
 import path from 'path';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useKeyboard, useRenderer } from '@opentui/react';
-import type { TextareaRenderable } from '@opentui/core';
+import type { SyntaxStyle, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { initialView, reduceView, type PendingApproval, type Row, type ViewState } from '../state/view.js';
 import { SessionController, gitBranch } from './controller.js';
 import { compactionLine, noticeLine, statusParts, toolLine } from './format.js';
+import { createSyntaxStyle, filetypeOf } from './syntax.js';
 
 /** Colors by role. Every state also has a word, so none of these carries meaning alone. */
 export const THEME = {
@@ -25,7 +26,12 @@ export interface AppProps {
   onExit: () => void;
 }
 
-function RowView({ row }: { row: Row }) {
+/** A unified diff, highlighted as the file it changes. */
+function DiffView({ diff, file, syntax }: { diff: string; file?: string; syntax: SyntaxStyle }) {
+  return <diff diff={diff} view="unified" filetype={filetypeOf(file)} syntaxStyle={syntax} showLineNumbers wrapMode="word" />;
+}
+
+function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
   switch (row.kind) {
     case 'user':
       return (
@@ -37,14 +43,15 @@ function RowView({ row }: { row: Row }) {
       return (
         <box flexDirection="column">
           {row.reasoning ? <text fg={THEME.dim}>{`thinking: ${row.streaming && !row.text ? row.reasoning.slice(-200) : row.reasoning.split('\n')[0].slice(0, 120)}`}</text> : null}
-          {row.text ? <text>{row.text}</text> : null}
+          {row.text ? <markdown content={row.text} syntaxStyle={syntax} streaming={row.streaming} conceal /> : null}
         </box>
       );
     case 'tool':
       return (
         <box flexDirection="column">
           <text fg={row.phase === 'error' || row.phase === 'timeout' ? THEME.error : row.phase === 'denied' ? THEME.warn : THEME.accent}>{toolLine(row)}</text>
-          {!row.collapsed && row.output ? <text fg={THEME.dim}>{row.output}</text> : null}
+          {!row.collapsed && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}
+          {!row.collapsed && !row.diff && row.output ? <text fg={THEME.dim}>{row.output}</text> : null}
         </box>
       );
     case 'notice':
@@ -54,12 +61,13 @@ function RowView({ row }: { row: Row }) {
   }
 }
 
-function PermissionPrompt({ approval, queued }: { approval: PendingApproval; queued: number }) {
-  const preview = approval.preview?.text.split('\n').slice(0, 12).join('\n');
+function PermissionPrompt({ approval, queued, syntax, file }: { approval: PendingApproval; queued: number; syntax: SyntaxStyle; file?: string }) {
+  const preview = approval.preview?.kind === 'diff' ? undefined : approval.preview?.text.split('\n').slice(0, 12).join('\n');
   return (
     <box border borderColor={THEME.warn} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
       <text fg={THEME.warn}>{`Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued})` : ''}`}</text>
       <text fg={THEME.dim}>{`Asked because ${approval.reason}.`}</text>
+      {approval.preview?.kind === 'diff' ? <DiffView diff={approval.preview.text} file={file} syntax={syntax} /> : null}
       {preview ? <text>{preview}</text> : null}
       <text>1 allow once · 4 or Escape deny</text>
     </box>
@@ -73,6 +81,8 @@ export function App({ runtime, projectRoot, onExit }: AppProps) {
   const composer = useRef<TextareaRenderable | null>(null);
   const [exitArmed, setExitArmed] = useState(false);
   const branch = useMemo(() => gitBranch(projectRoot), [projectRoot]);
+  const syntax = useMemo(() => createSyntaxStyle(), []);
+  useEffect(() => () => syntax.destroy(), [syntax]);
 
   useEffect(() => {
     controller.refresh();
@@ -134,11 +144,16 @@ export function App({ runtime, projectRoot, onExit }: AppProps) {
       </box>
       <scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
         {state.rows.map((row) => (
-          <RowView key={row.id} row={row} />
+          <RowView key={row.id} row={row} syntax={syntax} />
         ))}
       </scrollbox>
       {approval ? (
-        <PermissionPrompt approval={approval} queued={state.approvals.length} />
+        <PermissionPrompt
+          approval={approval}
+          queued={state.approvals.length}
+          syntax={syntax}
+          file={(state.rows.find((row) => row.kind === 'tool' && row.callId === approval.callId) as { path?: string } | undefined)?.path}
+        />
       ) : (
         <box border borderColor={THEME.border} flexShrink={0} height={5}>
           <textarea

@@ -27,6 +27,10 @@ export type Row =
       output: string;
       /** A diff or command shown when the call asked for approval. */
       preview?: ApprovalPreview;
+      /** The change an edit made, or proposed, as a unified diff. Shown open. */
+      diff?: string;
+      /** The file the call names, for highlighting its diff. */
+      path?: string;
       /** How an approval request for it was answered. */
       decision?: { allow: boolean; by: string; scope: ApprovalScope; rule?: string };
       collapsed: boolean;
@@ -166,6 +170,7 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
     case 'tool_call': {
       const rows = closeStreaming(state.rows);
       if (rows.some(isTool(event.call.id))) return { ...state, rows };
+      const target = event.call.arguments?.path;
       const row: Row = {
         kind: 'tool',
         id: state.nextId,
@@ -174,6 +179,7 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         summary: describeCall(event.call),
         phase: 'pending',
         output: '',
+        ...(typeof target === 'string' ? { path: target } : {}),
         collapsed: true,
       };
       return { ...state, rows: [...rows, row], nextId: state.nextId + 1, status: { ...status, phase: 'tool', retry: undefined } };
@@ -188,11 +194,14 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
     case 'tool_result': {
       const result = event.result;
       const phase: ToolPhase = result.status ?? (result.success ? 'ok' : 'error');
+      const madeDiff = typeof result.metadata?.diff === 'string' && result.metadata.diff ? (result.metadata.diff as string) : undefined;
       const rows = updateRow(state.rows, isTool(result.callId ?? ''), (row) => ({
         ...row,
         phase,
         durationMs: result.durationMs,
         output: tail(result.output ?? ''),
+        // The change made replaces the one proposed, and a change is shown open.
+        ...(madeDiff ? { diff: madeDiff, collapsed: false } : {}),
       }));
       return { ...state, rows, approvals: state.approvals.filter((approval) => approval.callId !== result.callId) };
     }
@@ -208,11 +217,25 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         suggestions: request?.suggestions ?? [],
       };
       const known = state.rows.some(isTool(event.call.id));
+      const proposed = approval.preview?.kind === 'diff' ? { diff: approval.preview.text } : {};
+      const target = event.call.arguments?.path;
       const rows = known
-        ? updateRow(state.rows, isTool(event.call.id), (row) => ({ ...row, phase: 'waiting', preview: approval.preview }))
+        ? updateRow(state.rows, isTool(event.call.id), (row) => ({ ...row, phase: 'waiting', preview: approval.preview, ...proposed }))
         : [
             ...closeStreaming(state.rows),
-            { kind: 'tool', id: state.nextId, callId: event.call.id, tool: event.call.name, summary: approval.summary, phase: 'waiting', output: '', preview: approval.preview, collapsed: true } as Row,
+            {
+              kind: 'tool',
+              id: state.nextId,
+              callId: event.call.id,
+              tool: event.call.name,
+              summary: approval.summary,
+              phase: 'waiting',
+              output: '',
+              preview: approval.preview,
+              ...proposed,
+              ...(typeof target === 'string' ? { path: target } : {}),
+              collapsed: true,
+            } as Row,
           ];
       return {
         ...state,

@@ -131,3 +131,33 @@ test('1 allows a call once; Shift+Tab changes the mode; Ctrl+C twice asks to lea
     await runtime.close();
   }
 }, 20_000);
+
+test('replies render as Markdown, and an edit shows its diff in the prompt and in its block', async () => {
+  fs.writeFileSync(path.join(root, 'a.txt'), 'one\ntwo\nthree\n');
+  const runtime = await createRuntime({ projectRoot: root, surface: 'tui', mcp: false, env: {} });
+  const setup = await mount(runtime);
+  try {
+    server.enqueue({ text: '**Bold words** and a list:\n\n- first item\n- second item\n\n```ts\nconst answer = 42\n```' });
+    await setup.mockInput.typeText('format something');
+    setup.mockInput.pressEnter();
+    const reply = await frameWith(setup, (value) => value.includes('const answer = 42') && value.includes('second item'));
+    // The Markdown markers are hidden; the words stay.
+    expect(reply).toContain('Bold words');
+    expect(reply).not.toContain('**Bold words**');
+
+    server.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'two', replace_string: 'TWO' } }] }, { text: 'Changed it.' });
+    await setup.mockInput.typeText('change two');
+    setup.mockInput.pressEnter();
+    const prompt = await frameWith(setup, (value) => value.includes('Allow edit a.txt?'));
+    expect(prompt).toMatch(/-\s*two/);
+    expect(prompt).toMatch(/\+\s*TWO/);
+    setup.mockInput.pressKey('1');
+    const after = await frameWith(setup, (value) => value.includes('Changed it.'));
+    expect(after).toContain('done: edit a.txt, 1 line added and 1 removed');
+    expect(after).toMatch(/\+\s*TWO/);
+    expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('one\nTWO\nthree\n');
+  } finally {
+    setup.renderer.destroy();
+    await runtime.close();
+  }
+}, 20_000);

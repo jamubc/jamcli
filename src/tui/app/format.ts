@@ -35,12 +35,26 @@ export const formatDuration = (ms: number | undefined): string =>
 export const formatTokens = (count: number): string =>
   count < 1000 ? String(count) : count < 1_000_000 ? `${(count / 1000).toFixed(count < 10_000 ? 1 : 0)}k` : `${(count / 1_000_000).toFixed(1)}M`;
 
+/** Lines a unified diff adds and removes, not counting its file headers. */
+export function diffStat(diff: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) added += 1;
+    else if (line.startsWith('-')) removed += 1;
+  }
+  return { added, removed };
+}
+
 /** The one line a tool block shows when collapsed. */
 export function toolLine(row: Extract<Row, { kind: 'tool' }>, marks = true): string {
   const phase = TOOL_PHASES[row.phase];
   const duration = formatDuration(row.durationMs);
+  const stat = row.diff ? diffStat(row.diff) : undefined;
+  const lines = stat ? `, ${stat.added} line${stat.added === 1 ? '' : 's'} added and ${stat.removed} removed` : '';
   const decided = row.decision?.by === 'user' ? ` (${row.decision.allow ? 'allowed' : 'denied'} by you)` : '';
-  return `${marks ? `${phase.mark} ` : ''}${phase.word}: ${row.summary}${duration ? `, ${duration}` : ''}${decided}`;
+  return `${marks ? `${phase.mark} ` : ''}${phase.word}: ${row.summary}${lines}${duration ? `, ${duration}` : ''}${decided}`;
 }
 
 export function noticeLine(row: Extract<Row, { kind: 'notice' }>, marks = true): string {
