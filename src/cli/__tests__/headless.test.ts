@@ -224,3 +224,36 @@ test('--dangerously-bypass-permissions runs changes without asking, and a bad mo
   expect(bogus.permission_mode).toBe('default');
   expect(bogus.notices.map((notice: any) => notice.message)).toContain('--permission-mode "yolo" is not a mode; use plan, default, accept-edits, auto, or bypass.');
 });
+
+test('the result and the stream report what the session cost, with an unknown price as null', async () => {
+  server.enqueue({ text: 'ok', usage: { prompt: 100, completion: 10 } });
+  const local = lastLine((await jam(['-p', 'hi', '--output-format', 'json'])).out);
+  expect(local).toMatchObject({
+    total_cost_usd: 0,
+    unpriced_requests: 0,
+    model_usage: { 'ollama:fake-model': { requests: 1, cost_usd: 0, unpriced_requests: 0, prompt_tokens: 100, completion_tokens: 10 } },
+  });
+  expect(local.delegated).toBeUndefined();
+
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({
+      api_registry: { ollama: { endpoint: server.ollamaBaseUrl }, openai: { base_url: server.openaiBaseUrl, api_key: 'sk-test-0123456789abcdef' } },
+      active_profile: 'default',
+      models: { 'openai:priced': { context_window: 100_000, price: { input: 2, output: 8 } } },
+    })
+  );
+  server.enqueue({ text: 'ok', usage: { prompt: 1_000, completion: 100, cacheRead: 400 } });
+  const streamed = (await jam(['-p', 'hi', '--model', 'openai:priced', '--output-format', 'stream-json'])).out.trim().split('\n').map((line) => JSON.parse(line));
+  // No cache price is configured, so the cached reads are charged as input.
+  const expected = (1_000 * 2 + 100 * 8) / 1e6;
+  const usage = streamed.find((event) => event.type === 'usage');
+  expect(usage).toMatchObject({ model: 'openai:priced', usage: { prompt_tokens: 1_000, cached_tokens: 400 } });
+  expect(usage.cost_usd).toBeCloseTo(expected, 12);
+  expect(streamed.at(-1).total_cost_usd).toBeCloseTo(expected, 12);
+  expect(streamed.at(-1).model_usage['openai:priced']).toMatchObject({ cached_tokens: 400, cache_write_tokens: 0 });
+
+  server.enqueue({ text: 'ok', usage: { prompt: 100, completion: 10 } });
+  const unknown = lastLine((await jam(['-p', 'hi', '--model', 'openai:mystery', '--output-format', 'json'])).out);
+  expect(unknown).toMatchObject({ total_cost_usd: null, unpriced_requests: 1, model_usage: { 'openai:mystery': { cost_usd: null, unpriced_requests: 1 } } });
+});

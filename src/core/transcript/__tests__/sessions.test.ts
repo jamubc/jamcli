@@ -207,3 +207,18 @@ test('jamcli sessions show, fork, and export work from the command line', () => 
   expect(missing.code).toBe(1);
   expect(missing.err).toContain('No session named missing');
 });
+
+test('an export says what the session cost, whose requests they were, and which had no price', () => {
+  const log = record(root, 'Price this', 'Priced.');
+  const usage = { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110 };
+  log.append({ type: 'usage', model: 'anthropic:claude-x', usage, cost: 0.002 });
+  log.append({ type: 'usage', model: 'anthropic:claude-y', usage, cost: 0.001, delegated: 'child-1' });
+  log.append({ type: 'usage', model: 'openai:mystery', usage });
+  const markdown = transcriptToMarkdown(log.events());
+  expect(markdown).toContain('- Cost: $0.0030 over 3 requests, $0.0010 of it by delegated tasks, and 1 unpriced request');
+  expect(markdown).toContain('*Usage (anthropic:claude-x): 100 prompt and 10 completion tokens, $0.0020*');
+  expect(markdown).toContain('*Usage (anthropic:claude-y, delegated session `child-1`): 100 prompt and 10 completion tokens, $0.0010*');
+  expect(markdown).toContain('*Usage (openai:mystery): 100 prompt and 10 completion tokens, unpriced*');
+  // A session that made no request has no cost line.
+  expect(transcriptToMarkdown(record(root, 'Nothing yet').events())).not.toContain('- Cost:');
+});

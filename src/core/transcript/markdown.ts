@@ -1,6 +1,7 @@
 import path from 'path';
 import type { ChatMessage } from '../types.js';
 import type { TranscriptEvent } from './events.js';
+import { CostLedger, describeSpend, formatUsd } from '../catalog/cost.js';
 
 /** A fence longer than any run of backticks in the text, so the text cannot close it. */
 export const fenced = (text: string, language = ''): string => {
@@ -61,6 +62,8 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
     if (header.permissionMode) facts.push(`- Permission mode: ${header.permissionMode}`);
   }
   facts.push(`- Messages: ${messages}`, `- Tokens: ${tokens}`);
+  const spend = CostLedger.fromEvents(events).summary();
+  if (spend.requests) facts.push(`- Cost: ${describeSpend(spend)}`);
   out.push(facts.join('\n'), '---');
 
   const toolNames = new Map<string, string>();
@@ -81,8 +84,9 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
         break;
       case 'usage': {
         const { prompt_tokens: prompt, completion_tokens: completion } = event.usage;
-        const cost = event.cost === undefined ? '' : `, $${event.cost.toFixed(4)}`;
-        out.push(`*Usage${event.model ? ` (${event.model})` : ''}: ${prompt} prompt and ${completion} completion tokens${cost}*`);
+        const cost = event.cost === undefined ? ', unpriced' : `, ${formatUsd(event.cost)}`;
+        const by = [event.model, event.delegated ? `delegated session \`${event.delegated}\`` : undefined].filter(Boolean).join(', ');
+        out.push(`*Usage${by ? ` (${by})` : ''}: ${prompt} prompt and ${completion} completion tokens${cost}*`);
         break;
       }
       case 'model':

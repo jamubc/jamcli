@@ -13,6 +13,7 @@ import {
 import { resolveJamcliProjectRoot } from './utils/projectRoot.js';
 import type { AgentEvent } from './core/types.js';
 import { JAMCLI_VERSION } from './core/version.js';
+import type { SpendSummary } from './core/catalog/cost.js';
 
 const SESSIONS_ACTIONS = ['list', 'search', 'show', 'export', 'fork'] as const;
 type SessionsAction = (typeof SESSIONS_ACTIONS)[number];
@@ -205,6 +206,38 @@ export const USAGE = `Usage: jamcli [options]
 const serializeUsage = (usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) =>
   usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
+/** Dollars where some request had a price, and null where none did, so unknown never reads as free. */
+const pricedOrNull = (cost: number, requests: number, unpriced: number) => (requests > 0 && unpriced === requests ? null : cost);
+
+/** The session's spend in JSON. While `unpriced_requests` is above zero, a cost is a lower bound. */
+const serializeSpend = (spend: SpendSummary): Record<string, unknown> => ({
+  total_cost_usd: pricedOrNull(spend.cost, spend.requests, spend.unpriced),
+  unpriced_requests: spend.unpriced,
+  model_usage: Object.fromEntries(
+    spend.models.map((model) => [
+      model.model,
+      {
+        requests: model.requests,
+        cost_usd: pricedOrNull(model.cost, model.requests, model.unpriced),
+        unpriced_requests: model.unpriced,
+        prompt_tokens: model.usage.prompt_tokens,
+        completion_tokens: model.usage.completion_tokens,
+        cached_tokens: model.usage.cached_tokens ?? 0,
+        cache_write_tokens: model.usage.cache_write_tokens ?? 0,
+      },
+    ])
+  ),
+  ...(spend.delegated.requests
+    ? {
+        delegated: {
+          requests: spend.delegated.requests,
+          cost_usd: pricedOrNull(spend.delegated.cost, spend.delegated.requests, spend.delegated.unpriced),
+          unpriced_requests: spend.delegated.unpriced,
+        },
+      }
+    : {}),
+});
+
 export const runCli = async (argv: string[]): Promise<number> => {
   const parsed = parseArgs(argv);
 
@@ -332,6 +365,7 @@ const resultToJson = (outcome: HeadlessResult, durationMs: number): Record<strin
   duration_ms: durationMs,
   turns: outcome.result.turns,
   usage: serializeUsage(outcome.result.usage),
+  ...serializeSpend(outcome.spend),
   permission_mode: outcome.permissionMode,
   sandbox: outcome.sandbox,
   ...(outcome.dryRun
@@ -398,7 +432,13 @@ const eventToJson = (event: AgentEvent): Record<string, unknown> | null => {
         ...(event.feedback ? { feedback: event.feedback } : {}),
       };
     case 'usage':
-      return { type: 'usage', usage: event.usage };
+      return {
+        type: 'usage',
+        usage: event.usage,
+        ...(event.model ? { model: event.model } : {}),
+        cost_usd: event.cost ?? null,
+        ...(event.delegatedSession ? { delegated_session: event.delegatedSession } : {}),
+      };
     case 'retry':
       return { type: 'retry', attempt: event.attempt, delay_ms: event.delayMs, reason: event.reason };
     case 'notice':

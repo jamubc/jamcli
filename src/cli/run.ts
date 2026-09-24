@@ -1,5 +1,6 @@
 import { createRuntime, type DryRunEntry, type RuntimeOptions } from '../core/runtime/index.js';
 import type { AgentEvent, RunResult } from '../core/types.js';
+import type { SpendSummary } from '../core/catalog/cost.js';
 
 export interface HeadlessOptions {
   prompt: string;
@@ -39,6 +40,8 @@ export interface HeadlessResult {
   sandbox: string;
   /** In a dry run, each call that would have changed something. */
   dryRun?: DryRunEntry[];
+  /** What the session has cost, by model. */
+  spend: SpendSummary;
 }
 
 /**
@@ -88,6 +91,7 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
       permissionMode: runtime.permissionMode,
       sandbox: runtime.sandbox.kind,
       ...(options.dryRun ? { dryRun: runtime.dryRunReport } : {}),
+      spend: runtime.spend(),
     };
   } finally {
     await runtime.close();
