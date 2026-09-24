@@ -7,6 +7,8 @@ import { toolNaming } from './tools.js';
 
 export interface SessionPermissionOptions {
   projectRoot: string;
+  /** Where paths in calls are judged from, when the session works in a worktree. */
+  workRoot?: string;
   registry: ToolRegistry;
   /** The configuration's layers, as resolved; read from their files when not given. */
   layers?: PermissionLayer[];
@@ -43,7 +45,7 @@ export function sessionPermissions(options: SessionPermissionOptions): { engine:
   }
   const { classOf, namesOf, alwaysAsks } = toolNaming(options.registry);
   const engine = new PermissionEngine({
-    projectRoot: options.projectRoot,
+    projectRoot: options.workRoot ?? options.projectRoot,
     rules: loaded.rules,
     mode,
     sandboxed: options.sandboxed,

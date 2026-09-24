@@ -13,6 +13,9 @@ interface BackgroundTask {
   resolvedModel?: string;
   childSessionId?: string;
   reason?: string;
+  /** Where an isolated task's changes are. */
+  worktree?: string;
+  isolation?: 'worktree';
   startedAt: number;
   controller: AbortController;
 }
@@ -28,6 +31,11 @@ const taskSchema: JsonSchema = {
     prompt: { type: 'string', description: 'The task for the child agent.' },
     background: { type: 'boolean', description: 'Start the child and return immediately with its id.' },
     max_turns: { type: 'integer', minimum: 1, description: 'Optional bound on child turns.' },
+    isolation: {
+      type: 'string',
+      enum: ['none', 'worktree'],
+      description: 'worktree: the child works in a git worktree of its own on a jamcli/ branch, and its changes are reported with that location.',
+    },
   },
   required: ['category', 'prompt'],
   additionalProperties: false,
@@ -64,9 +72,10 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
   const category = String(args.category ?? '');
   const prompt = String(args.prompt ?? '');
   const maxTurns = childTurns(config, typeof args.max_turns === 'number' ? args.max_turns : undefined);
+  const isolation = args.isolation === 'worktree' ? ({ isolation: 'worktree' } as const) : {};
 
   if (args.background) {
-    const task = startBackground(ctx, { category, prompt, maxTurns });
+    const task = startBackground(ctx, { category, prompt, maxTurns, ...isolation });
     return {
       output: [
         `Started background task ${task.id} on category "${category}" (max ${maxTurns} turns).`,
@@ -80,6 +89,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
     category,
     prompt,
     maxTurns,
+    ...isolation,
     background: false,
     signal: ctx.signal,
     onText: ctx.onProgress,
@@ -89,13 +99,18 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
     return { output: `Delegation refused: ${outcome.reason ?? 'no model in the chain can serve it'}`, status: 'error' };
   }
   return {
-    output: [lineFor(outcome), '', outcome.response || outcome.reason || '(no output)'].join('\n'),
+    output: [lineFor(outcome), '', outcome.response || outcome.reason || '(no output)', ...(outcome.worktree ? ['', outcome.worktree.summary] : [])].join('\n'),
     status: statusOf(outcome),
-    metadata: { category, resolvedModel: outcome.resolvedModel, childSessionId: outcome.childSessionId },
+    metadata: {
+      category,
+      resolvedModel: outcome.resolvedModel,
+      childSessionId: outcome.childSessionId,
+      ...(outcome.worktree ? { worktree: outcome.worktree.path, branch: outcome.worktree.branch } : {}),
+    },
   };
 }
 
-function startBackground(ctx: ToolContext, options: { category: string; prompt: string; maxTurns: number }): BackgroundTask {
+function startBackground(ctx: ToolContext, options: { category: string; prompt: string; maxTurns: number; isolation?: 'worktree' }): BackgroundTask {
   const task: BackgroundTask = {
     id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     ...options,
@@ -120,6 +135,7 @@ function startBackground(ctx: ToolContext, options: { category: string; prompt: 
       task.resolvedModel = outcome.resolvedModel;
       task.childSessionId = outcome.childSessionId;
       task.reason = outcome.reason;
+      task.worktree = outcome.worktree?.summary;
     })
     .catch((error: any) => {
       task.status = 'error';
@@ -158,7 +174,7 @@ export async function taskResultRunner(args: Record<string, any>): Promise<ToolR
     status: task.status,
   });
   return {
-    output: [line, '', task.output || task.reason || '(no output)'].join('\n'),
+    output: [line, '', task.output || task.reason || '(no output)', ...(task.worktree ? ['', task.worktree] : [])].join('\n'),
     metadata: { status: task.status, childSessionId: task.childSessionId },
   };
 }

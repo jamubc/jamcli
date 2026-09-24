@@ -1,3 +1,4 @@
+import path from 'path';
 import { runHeadless, type HeadlessResult } from './cli/run.js';
 import { runAuditCli } from './cli/audit.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from './cli/config.js';
@@ -25,6 +26,8 @@ export interface ParsedArgs {
   prompt?: string;
   outputFormat: 'text' | 'json' | 'stream-json';
   cwd?: string;
+  /** `--worktree <name>`: work in the git worktree of that name. */
+  worktree?: string;
   maxTurns?: number;
   model?: string;
   resume?: string;
@@ -88,6 +91,11 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (token === '--cwd') {
       parsed.cwd = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (token === '--worktree') {
+      parsed.worktree = argv[i + 1] ?? '';
       i += 1;
       continue;
     }
@@ -231,6 +239,7 @@ export const USAGE = `Usage: jamcli [options]
   -p, --prompt <text>          Run one prompt without the interface
       --output-format <fmt>    text (default), json, or stream-json
       --cwd <path>             Run in this directory
+      --worktree <name>        Work in a git worktree on the branch jamcli/<name>, made if new
       --screen-reader          Draw the interface as plain labeled lines, with no boxes or animation
       --max-turns <n>          Bound the number of turns
       --model <id>             Run this turn on a specific model
@@ -362,6 +371,19 @@ export const runCli = async (argv: string[]): Promise<number> => {
     return 0;
   }
 
+  let workTree: string | undefined;
+  if (parsed.worktree !== undefined) {
+    try {
+      const { openWorktree } = await import('./core/git/worktrees.js');
+      const tree = await openWorktree(projectRoot, parsed.worktree);
+      workTree = tree.dir;
+      process.stderr.write(`${tree.created ? 'Made' : 'Working in'} the worktree ${path.relative(projectRoot, tree.root)}, on branch ${tree.branch}.\n`);
+    } catch (error: any) {
+      process.stderr.write(`${error?.message ?? error}\n`);
+      return 1;
+    }
+  }
+
   let sessionId = parsed.resume;
   if (!sessionId && parsed.continueLast) {
     sessionId = (await latestSessionId(projectRoot)) ?? undefined;
@@ -385,7 +407,8 @@ export const runCli = async (argv: string[]): Promise<number> => {
     outcome = await runHeadless({
       prompt: parsed.prompt,
       projectRoot,
-      cwd: process.cwd(),
+      ...(workTree ? { workTree } : {}),
+      cwd: workTree ?? process.cwd(),
       maxTurns: parsed.maxTurns,
       model: parsed.model,
       sessionId,

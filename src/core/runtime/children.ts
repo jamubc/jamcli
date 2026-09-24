@@ -8,6 +8,7 @@ import type { PermissionEngine } from '../permissions/engine.js';
 import type { Runtime, RuntimeOptions } from './index.js';
 import type { Sandbox } from '../sandbox/types.js';
 import type { AgentEvent } from '../types.js';
+import { describeWorktree, openWorktree, removeWorktree, worktreeChanges, type Worktree } from '../git/worktrees.js';
 
 export type UsageEvent = Extract<AgentEvent, { type: 'usage' }>;
 
@@ -62,10 +63,20 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
     if (!route) return refuse(`No category named "${request.category}". The categories are ${Object.keys(categories).join(', ')}.`);
     if (!route.model) return refuse(route.notes.join(' '));
 
+    let tree: Worktree | undefined;
+    if (request.isolation === 'worktree') {
+      try {
+        tree = await openWorktree(options.projectRoot, `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`);
+      } catch (error: any) {
+        return refuse(`The task could not have a worktree: ${error?.message ?? error}`);
+      }
+    }
+
     let child: Runtime;
     try {
       child = await options.create({
         projectRoot: options.projectRoot,
+        ...(tree ? { workTree: tree.dir } : {}),
         surface: 'child',
         model: route.model,
         maxSteps: request.maxTurns,
@@ -78,6 +89,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         observer: options.observer?.(),
       });
     } catch (error: any) {
+      if (tree) await removeWorktree(tree, { branch: true }).catch(() => undefined);
       return { status: 'error', response: '', category: request.category, resolvedModel: route.model, reason: error?.message ?? String(error) };
     }
 
@@ -102,9 +114,27 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         resolvedModel: route.model,
         childSessionId: child.sessionId,
         ...(result.error ? { reason: result.error } : {}),
+        ...(tree ? await settleWorktree(tree, options.projectRoot) : {}),
       };
     } finally {
       await child.close();
     }
   };
+}
+
+/**
+ * An isolated child's worktree once it is done: kept, and reported, when it holds
+ * anything; taken away with its branch when the child changed nothing.
+ */
+async function settleWorktree(tree: Worktree, projectRoot: string): Promise<Pick<DelegationOutcome, 'worktree'>> {
+  try {
+    const changes = await worktreeChanges(tree);
+    if (!changes.commits && !changes.uncommitted.length) {
+      await removeWorktree(tree, { branch: true });
+      return {};
+    }
+    return { worktree: { path: tree.root, branch: tree.branch, summary: describeWorktree(tree, changes, projectRoot) } };
+  } catch (error: any) {
+    return { worktree: { path: tree.root, branch: tree.branch, summary: `The worktree ${tree.root}, on branch ${tree.branch}, could not be read: ${error?.message ?? error}` } };
+  }
 }

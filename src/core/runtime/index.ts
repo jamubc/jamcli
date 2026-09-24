@@ -52,7 +52,13 @@ export type Surface = 'tui' | 'headless' | 'acp' | 'workflow' | 'child';
 
 export interface RuntimeOptions {
   projectRoot: string;
-  /** Where `@` references resolve. Defaults to the project root. */
+  /**
+   * Where the work happens when it is not the project root: the git worktree a
+   * `--worktree` session or an isolated task runs in. Tools, rules, `@` references, and
+   * checkpoints use it; configuration, grants, and the session log stay with the project.
+   */
+  workTree?: string;
+  /** Where `@` references resolve. Defaults to the work tree. */
   cwd?: string;
   surface: Surface;
   /** Continue this session. It must exist. */
@@ -114,6 +120,8 @@ export interface DryRunEntry {
 
 export interface Runtime {
   readonly sessionId: string;
+  /** Where the tools work: the project root, or the worktree the session runs in. */
+  readonly workRoot: string;
   /** The provider and model turns run on. */
   readonly model: ModelChoice;
   /** What the catalog knows about that model: its limits, capabilities, and prices, and where each came from. */
@@ -212,7 +220,8 @@ function modelsLabel(settings: LoadedConfig): string {
  */
 export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const projectRoot = path.resolve(options.projectRoot);
-  const cwd = path.resolve(options.cwd ?? projectRoot);
+  const workRoot = path.resolve(options.workTree ?? projectRoot);
+  const cwd = path.resolve(options.cwd ?? workRoot);
   const env = options.env ?? process.env;
   const notices: string[] = [];
 
@@ -284,6 +293,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   } else {
     const assembled = sessionPermissions({
       projectRoot,
+      workRoot,
       registry,
       layers: permissionLayers(settings),
       legacyTools: mcpConfig.tools,
@@ -314,7 +324,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const taskTool = registry.get('task');
   const dryRunReport: DryRunEntry[] = [];
   const recordDryRun = (call: ToolCall) => {
-    const preview = previewCall(call, projectRoot);
+    const preview = previewCall(call, workRoot);
     dryRunReport.push({ callId: call.id, tool: call.name, summary: describeCall(call), ...(preview ? { preview } : {}) });
   };
   /** A project grant applies at once and is written for later sessions. */
@@ -343,7 +353,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }
         : undefined,
       context: () => ({
-        projectRoot,
+        projectRoot: workRoot,
         ignorePatterns: mcpConfig.ignore_patterns,
         commandTimeoutMs: config.agent_loop?.command_timeout_ms ?? DEFAULT_AGENT_LOOP_CONFIG.command_timeout_ms,
         env: commandEnv,
@@ -355,7 +365,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     });
   let toolSet = buildTools();
 
-  const rules = applyRules(loadRules(projectRoot, cwd), undefined);
+  const rules = applyRules(loadRules(workRoot, cwd), undefined);
   const hooks: HookBus = createHookBus({ onRun: (run) => observation?.hookRun(run) });
   /** A provider whose requests are timed and logged under the current turn. */
   const observed = (target: ChatProvider, name: string, purpose?: string) =>
@@ -364,7 +374,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   if (trust.note) notices.push(trust.note);
   if (trust.provider && trust.choice) trust.provider = observed(trust.provider, trust.choice.provider, 'trust');
   const buildPrompt = () =>
-    buildRuntimePrompt({ profile, rulesText: rulesPromptText(rules), tools: toolSet.summaries, projectRoot, cwd, mode: permissions.mode });
+    buildRuntimePrompt({ profile, rulesText: rulesPromptText(rules), tools: toolSet.summaries, projectRoot: workRoot, cwd, mode: permissions.mode });
   let systemPrompt = buildPrompt();
 
   let choice = resolveModel(options.model ?? config.model, profile, config.api_registry);
@@ -463,7 +473,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     model: `${choice.provider}:${choice.model}`,
     onError: (error) => emitting?.({ type: 'notice', level: 'error', message: `The session log could not be written: ${error.message}` }),
   });
-  const checkpointStore = new CheckpointStore(projectRoot, log.id);
+  const checkpointStore = new CheckpointStore(workRoot, log.id);
   let checkpointsFailed = false;
   /** The step's checkpoint, taken before its first change and recorded once the step is done. */
   let stepCheckpoint: { taken: Checkpoint; label: string } | undefined;
@@ -477,7 +487,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     if (checkpointsFailed) return;
     const label = describeCall(call);
     try {
-      const taken = await checkpointStore.take(label, filesOfCall(call, projectRoot));
+      const taken = await checkpointStore.take(label, filesOfCall(call, workRoot));
       stepCheckpoint = taken ? { taken, label } : undefined;
     } catch (error: any) {
       checkpointsOff(error);
@@ -601,6 +611,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     get sessionId() {
       return log.id;
     },
+    workRoot,
     get model() {
       return { ...choice };
     },
@@ -810,7 +821,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     withCheckpoint,
 
     async draftCommitMessage(paths = [], signal) {
-      const plan = planCommit(projectRoot, paths);
+      const plan = planCommit(workRoot, paths);
       if (!plan.files.length) throw new Error('Nothing would be committed, so there is nothing to describe.');
       const message = cleanDraft(await completeOnce(draftPrompt(plan), { maxOutputTokens: 400, ...(signal ? { signal } : {}) }));
       if (!message) throw new Error('The model sent back an empty message.');

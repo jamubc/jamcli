@@ -13,6 +13,8 @@ export interface DelegationRequest {
   /** The child's reply as it streams. */
   onText?: (delta: string) => void;
   requestApproval?: NestedApproval;
+  /** `worktree`: the child works in a git worktree of its own, apart from the parent's files. */
+  isolation?: 'worktree';
 }
 
 export interface DelegationOutcome {
@@ -22,6 +24,8 @@ export interface DelegationOutcome {
   resolvedModel?: string;
   childSessionId?: string;
   reason?: string;
+  /** Where an isolated child's changes are, when it made any; its worktree is removed when it made none. */
+  worktree?: { path: string; branch: string; summary: string };
 }
 
 /** Runs one child for the task tool. The runtime supplies it. */

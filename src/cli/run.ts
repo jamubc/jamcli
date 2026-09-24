@@ -5,6 +5,8 @@ import type { SpendSummary } from '../core/catalog/cost.js';
 export interface HeadlessOptions {
   prompt: string;
   projectRoot: string;
+  /** `--worktree`: the worktree's project directory, where the tools work. */
+  workTree?: string;
   cwd?: string;
   maxTurns?: number;
   model?: string;
@@ -54,6 +56,7 @@ export interface HeadlessResult {
 export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessResult> => {
   const runtime = await createRuntime({
     projectRoot: options.projectRoot,
+    ...(options.workTree ? { workTree: options.workTree } : {}),
     cwd: options.cwd,
     surface: 'headless',
     sessionId: options.sessionId,
