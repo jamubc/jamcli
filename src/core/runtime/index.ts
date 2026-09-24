@@ -173,6 +173,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     sandbox,
     parent: () => ({ sessionId: log.id, depth: depth + 1, permissions }),
     create: createRuntime,
+    // While a turn runs, a child's request reaches this session's surface too; a background
+    // child that outlives the turn is still counted and recorded.
+    onUsage: (event) => (emitting ? emitting(event) : (account(event), recorder.handle(event))),
   });
   const taskTool = registry.get('task');
   const dryRunReport: DryRunEntry[] = [];
@@ -281,6 +284,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let session = options.sessionId ? log.toSession() : createSession(projectRoot, log.id);
   /** A continued session keeps what it cost before, as each request was priced then. */
   const ledger = options.sessionId ? CostLedger.fromEvents(log.events()) : new CostLedger();
+  const account = (event: AgentEvent) => {
+    if (event.type === 'usage') ledger.record({ model: event.model, usage: event.usage, cost: event.cost, delegated: Boolean(event.delegatedSession) });
+  };
   let emitting: ((event: AgentEvent) => void) | undefined;
   const recorder = new TranscriptRecorder(log, {
     surface: options.surface,
@@ -372,7 +378,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       if (running) throw new Error('A turn is already running in this session.');
       running = true;
       const emit = (event: AgentEvent) => {
-        if (event.type === 'usage') ledger.record({ model: event.model, usage: event.usage, cost: event.cost, delegated: Boolean(event.delegatedSession) });
+        account(event);
         recorder.handle(event);
         onEvent?.(event);
       };

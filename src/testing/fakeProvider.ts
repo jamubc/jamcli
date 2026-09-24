@@ -41,6 +41,11 @@ export interface ScriptedTurn {
   cutAfterEvents?: number;
   /** The stop reason to report in the dialect's own field, such as `max_tokens` or `length`. */
   stopReason?: string;
+  /**
+   * Serve this turn only to a request for this model, so sessions running at once on
+   * different models each get their own turns whatever order they ask in.
+   */
+  forModel?: string;
 }
 
 export interface CapturedRequest {
@@ -375,16 +380,16 @@ export function startFakeProvider(options: FakeProviderOptions = {}): FakeProvid
       headers: { 'content-type': 'application/json', ...(turn.headers ?? {}) },
     });
 
-  const nextTurn = (): ScriptedTurn => {
-    const turn = queue.shift();
-    if (!turn) {
+  const nextTurn = (model: string): ScriptedTurn => {
+    const index = queue.findIndex((turn) => !turn.forModel || turn.forModel === model);
+    if (index < 0) {
       return { status: 500, errorBody: { error: { message: 'fake provider: no scripted turn left' } } };
     }
-    return turn;
+    return queue.splice(index, 1)[0];
   };
 
   const complete = async (dialect: Dialect, body: any): Promise<Response> => {
-    const turn = nextTurn();
+    const turn = nextTurn(String(body?.model ?? ''));
     if (turn.delayMs) await sleep(turn.delayMs);
     if (turn.status && turn.status !== 200) return errorResponse(turn);
     const model = String(body?.model ?? 'fake-model');

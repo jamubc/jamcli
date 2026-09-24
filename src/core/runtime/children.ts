@@ -7,6 +7,9 @@ import type { McpSource } from './tools.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { Runtime, RuntimeOptions } from './index.js';
 import type { Sandbox } from '../sandbox/types.js';
+import type { AgentEvent } from '../types.js';
+
+export type UsageEvent = Extract<AgentEvent, { type: 'usage' }>;
 
 /** What a child inherits from the session that delegates to it. */
 export interface ParentSession {
@@ -26,6 +29,8 @@ export interface ChildLauncherOptions {
   /** The parent's sandbox, which the child's commands run in too. */
   sandbox?: Sandbox;
   create: (options: RuntimeOptions) => Promise<Runtime>;
+  /** Each request a child makes, marked with the session that made it, so the parent can count it. */
+  onUsage?: (event: UsageEvent) => void;
 }
 
 /** The categories in effect: the configured ones, or the documented defaults. */
@@ -76,6 +81,8 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
     try {
       const result = await child.run(request.prompt, (event) => {
         if (event.type === 'text') request.onText?.(event.delta);
+        // A grandchild's request keeps the session that made it.
+        if (event.type === 'usage') options.onUsage?.({ ...event, delegatedSession: event.delegatedSession ?? child.sessionId });
         if (event.type !== 'approval_request') return;
         if (request.background || !request.requestApproval) {
           event.decide({ allow: false, by: 'mode', feedback: 'a background task cannot ask for approval, so this call was not made.' });

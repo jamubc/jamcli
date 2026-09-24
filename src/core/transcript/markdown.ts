@@ -50,7 +50,7 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
   const header = events.find((event) => event.type === 'session');
   const id = options.id ?? header?.id ?? 'session';
   const messages = events.filter((event) => event.type === 'message').length;
-  const tokens = events.reduce((sum, event) => sum + (event.type === 'usage' ? event.usage.total_tokens || 0 : 0), 0);
+  const tokens = events.reduce((sum, event) => sum + (event.type === 'usage' && !event.delegated ? event.usage.total_tokens || 0 : 0), 0);
   const out: string[] = [`# ${options.title ?? `Session ${id}`}`];
 
   const facts = [`- Session: \`${id}\``];

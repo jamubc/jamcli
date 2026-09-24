@@ -45,12 +45,15 @@ test('the index takes the creation time from the file, keeps the title, and coun
   await Bun.sleep(5);
   say(log, 'user', 'and the tests');
   log.append({ type: 'usage', usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 } });
+  // A delegated session's tokens belong to that session's own entry.
+  log.append({ type: 'usage', usage: { prompt_tokens: 50, completion_tokens: 50, total_tokens: 100 }, delegated: 'child-session' });
   log.updateIndex();
   const entries = readSessionIndex();
   expect(entries).toHaveLength(1);
   expect(entries[0].created).toBe(first.created);
   expect(entries[0].updated > first.updated).toBe(true);
   expect(entries[0]).toMatchObject({ messageCount: 3, totalTokens: 7 });
+  expect(transcriptToMarkdown(log.events())).toContain('- Tokens: 7');
 });
 
 test('a version 1 session is dated by its first turn, not by the last update', () => {

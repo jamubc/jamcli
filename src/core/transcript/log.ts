@@ -146,7 +146,8 @@ export class SessionLog {
     const session = createSession(this.projectRoot, this.id);
     session.messages = projectMessages(events);
     for (const event of events) {
-      if (event.type !== 'usage') continue;
+      // A delegated session's requests are its own conversation's; they count toward cost, not this context.
+      if (event.type !== 'usage' || event.delegated) continue;
       session.usage = addTo(session.usage, event.usage);
       if (event.model) {
         const current = session.modelUsage[event.model] ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };

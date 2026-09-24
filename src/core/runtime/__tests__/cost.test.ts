@@ -148,3 +148,92 @@ test("the trust gate's requests are counted under its own model", async () => {
     ['ollama:fake-model', 1],
   ]);
 });
+
+const delegate = (id: string, prompt: string, background = false) => ({
+  id,
+  name: 'task',
+  arguments: { category: 'quick', prompt, ...(background ? { background: true } : {}) },
+});
+
+test('what a delegated session spends is counted by the session that delegated, apart from its context', async () => {
+  configure({ categories: { quick: [{ model: 'anthropic:claude-x' }] } });
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue(
+    { toolCalls: [delegate('t1', 'look around')], usage: { prompt: 1_000, completion: 20 } },
+    { text: 'child done', usage: { prompt: 500, completion: 50 } },
+    { text: 'parent done', usage: { prompt: 1_200, completion: 10 } }
+  );
+  const made: string[] = [];
+  const result = await parent.run('delegate', (event) => {
+    if (event.type === 'usage') made.push(event.delegatedSession ? 'child' : 'own');
+  });
+  expect(result.response).toBe('parent done');
+  expect(made).toEqual(['own', 'child', 'own']);
+
+  const spend = parent.spend();
+  expect(spend.requests).toBe(3);
+  expect(spend.delegated.requests).toBe(1);
+  expect(spend.delegated.cost).toBeCloseTo((500 * 3 + 50 * 15) / 1e6, 12);
+  // The conversation's own usage leaves the child's out.
+  expect(result.usage.prompt_tokens).toBe(2_200);
+
+  // The parent's log names the session that made the request, and a continued session agrees.
+  const logged = SessionLog.open(root, parent.sessionId).events().flatMap((event) => (event.type === 'usage' ? [event.delegated ?? 'own'] : []));
+  expect(logged[0]).toBe('own');
+  expect(logged[1]).not.toBe('own');
+  expect(SessionLog.exists(root, logged[1])).toBe(true);
+  const resumed = await start({ sessionId: parent.sessionId });
+  expect(resumed.spend().delegated).toEqual(spend.delegated);
+  expect(resumed.session.usage.prompt_tokens).toBe(2_200);
+});
+
+test('a background child that finishes after the turn is still counted and recorded', async () => {
+  configure({
+    categories: { quick: [{ model: 'anthropic:claude-y' }] },
+    models: { 'anthropic:claude-x': { price: PRICE }, 'anthropic:claude-y': { price: PRICE } },
+  });
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue(
+    { toolCalls: [delegate('t1', 'take your time', true)], usage: { prompt: 1_000, completion: 20 }, forModel: 'claude-x' },
+    { text: 'parent done', usage: { prompt: 1_100, completion: 10 }, forModel: 'claude-x' },
+    // The child answers well after the parent's turn is over.
+    { text: 'child done', usage: { prompt: 400, completion: 40 }, delayMs: 500, forModel: 'claude-y' }
+  );
+  const result = await parent.run('start it in the background');
+  expect(result.response).toBe('parent done');
+  expect(parent.spend().delegated.requests).toBe(0);
+
+  for (let waited = 0; parent.spend().delegated.requests === 0 && waited < 3_000; waited += 25) await Bun.sleep(25);
+  expect(parent.spend().delegated.requests).toBe(1);
+  const delegated = SessionLog.open(root, parent.sessionId).events().filter((event) => event.type === 'usage' && event.delegated);
+  expect(delegated).toMatchObject([{ model: 'anthropic:claude-y', usage: { prompt_tokens: 400 } }]);
+});
+
+test("a grandchild's request is attributed to the grandchild, all the way up", async () => {
+  configure({
+    categories: { quick: [{ model: 'anthropic:claude-y' }] },
+    models: { 'anthropic:claude-x': { price: PRICE }, 'anthropic:claude-y': { price: PRICE } },
+  });
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue(
+    { toolCalls: [delegate('t1', 'delegate further')], usage: { prompt: 100, completion: 1 }, forModel: 'claude-x' },
+    { toolCalls: [delegate('t2', 'do the work')], usage: { prompt: 200, completion: 2 }, forModel: 'claude-y' },
+    { text: 'grandchild done', usage: { prompt: 300, completion: 3 }, forModel: 'claude-y' },
+    { text: 'child done', usage: { prompt: 400, completion: 4 }, forModel: 'claude-y' },
+    { text: 'parent done', usage: { prompt: 500, completion: 5 }, forModel: 'claude-x' }
+  );
+  const result = await parent.run('go');
+  expect(result.response).toBe('parent done');
+  const byPrompt = new Map(
+    SessionLog.open(root, parent.sessionId)
+      .events()
+      .flatMap((event) => (event.type === 'usage' ? [[event.usage.prompt_tokens, event.delegated ?? 'own'] as const] : []))
+  );
+  const child = byPrompt.get(200)!;
+  const grandchild = byPrompt.get(300)!;
+  expect([byPrompt.get(100), byPrompt.get(500)]).toEqual(['own', 'own']);
+  expect(byPrompt.get(400)).toBe(child);
+  expect(grandchild).not.toBe(child);
+  expect(SessionLog.open(root, grandchild).events()[0]).toMatchObject({ delegatedBy: child });
+  expect(parent.spend().delegated.requests).toBe(3);
+});

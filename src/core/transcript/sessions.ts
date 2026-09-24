@@ -61,7 +61,7 @@ export function recordSessionSummary(projectRoot: string, id: string, events: Tr
   const messages = events.flatMap((event) => (event.type === 'message' ? [event] : []));
   if (!messages.length) return;
   const firstUser = messages.find((event) => event.message.role === 'user')?.message.content ?? '';
-  const tokens = events.reduce((sum, event) => sum + (event.type === 'usage' ? event.usage.total_tokens || 0 : 0), 0);
+  const tokens = events.reduce((sum, event) => sum + (event.type === 'usage' && !event.delegated ? event.usage.total_tokens || 0 : 0), 0);
   const model = [...messages].reverse().find((event) => event.message.model)?.message.model;
   const started = events.find((event) => event.ts > 0)?.ts;
   const existing = readSessionIndex();
