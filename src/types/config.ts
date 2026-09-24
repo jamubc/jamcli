@@ -1,4 +1,6 @@
 import type { McpServerConfig } from './mcp.js';
+import type { PermissionSettings } from '../core/permissions/config.js';
+import type { SandboxSettings } from '../core/sandbox/types.js';
 
 export interface ApiRegistry {
   /** `num_ctx` sets the context window Ollama allocates for every request. */
@@ -108,6 +110,8 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
 };
 
 export interface Config {
+  /** The model sessions start on, as `provider:model` or a model on the profile's provider. */
+  model?: string;
   api_registry: ApiRegistry;
   active_profile: string;
   telemetry: boolean;
@@ -122,6 +126,8 @@ export interface Config {
   models?: Record<string, ModelSettings>;
   /** Context management for every surface. `context_management` configures only the legacy interface. */
   context?: ContextSettings;
+  permissions?: PermissionSettings;
+  sandbox?: SandboxSettings;
 }
 
 export interface ContextSettings {
