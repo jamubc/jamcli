@@ -229,3 +229,16 @@ test('tool output is redacted with the configured credentials, not only the envi
   expect(tool.content).toContain('OPENAI=[redacted:config:openai]');
   expect(fs.readFileSync(SessionLog.open(root, runtime.sessionId).file, 'utf8')).not.toContain('sk-config-secret-999');
 });
+
+test('cancel stops the running turn even after a switch rebuilt the agent', async () => {
+  const runtime = await start();
+  server.enqueue({ text: 'slow', delayMs: 3_000 });
+  const started = Date.now();
+  const turn = runtime.run('take your time');
+  await Bun.sleep(100);
+  runtime.setPermissionMode('accept-edits');
+  runtime.cancel();
+  const result = await turn;
+  expect(result.status).toBe('cancelled');
+  expect(Date.now() - started).toBeLessThan(2_000);
+});

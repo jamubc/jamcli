@@ -272,6 +272,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const pending = [...notices];
   let running = false;
   let turns = 0;
+  /** The agent running the current turn. A switch during the turn builds a new agent for later turns. */
+  let turnAgent: CoreAgent | undefined;
 
   return {
     get sessionId() {
@@ -323,17 +325,19 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         const expanded = await expandReferences(input, cwd, redact);
         for (const message of expanded.notices) emit({ type: 'notice', level: 'warn', message });
         turns += 1;
-        const result = await agent.run(session, expanded.prompt, emit);
+        turnAgent = agent;
+        const result = await turnAgent.run(session, expanded.prompt, emit);
         if (result.session) session = result.session;
         return result;
       } finally {
         running = false;
         emitting = undefined;
+        turnAgent = undefined;
       }
     },
 
     cancel() {
-      agent.cancel(session.id);
+      (turnAgent ?? agent).cancel(session.id);
     },
 
     setModel(ref) {
