@@ -976,6 +976,16 @@ reduces them into view state with a pure reducer that is unit tested, and forwar
 
 `jamcli doctor` runs the same checks non-interactively.
 
+As built (6.10), a first run is one with no user configuration file and no model
+chosen in any layer, so a project that names its model is never interrupted. Setup is a
+slash command, `/setup`, opened at the start of a first run and at any time after. The
+model to suggest is the largest of a short list of tool-calling coding models that
+leaves a third of the machine's memory free. This departs from "chosen at runtime
+rather than hardcoded": Ollama's library has no API to ask, so the list is fixed in the
+source and checked at each release, and only the choice among it is made on the
+machine. Setup writes one value, `model`, to the user configuration, and nothing to the
+project.
+
 As built (5.5), ahead of the interface, `jamcli doctor` checks without changing
 anything: the configuration files read and each value that did not fit; keys in project
 files; the key store, and a credentials file others can read; every model a session may
