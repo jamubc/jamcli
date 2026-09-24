@@ -3,7 +3,7 @@ import { ACP_TOOLS } from './acp.js';
 import { ALIAS_TOOLS } from './aliases.js';
 import { COMMAND_TOOLS } from './command.js';
 import { EDIT_TOOL } from './edit.js';
-import { GIT_TOOLS } from './git.js';
+import { GIT_COMMIT_TOOL, GIT_TOOLS } from './git.js';
 import { GLOB_TOOL } from './glob.js';
 import { GREP_TOOL } from './grep.js';
 import { APPLY_PATCH_TOOL } from './patch.js';
@@ -23,6 +23,7 @@ export const BUILTIN_TOOLS: RegisteredTool[] = [
   ...COMMAND_TOOLS,
   ...TODO_TOOLS,
   ...GIT_TOOLS,
+  GIT_COMMIT_TOOL,
   ...TASK_TOOLS,
   ...ACP_TOOLS,
   ...ALIAS_TOOLS,

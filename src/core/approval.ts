@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { planCommit } from './git/commit.js';
 import { createTwoFilesPatch } from 'diff';
 import type { ApprovalPreview, ApprovalRequest, PolicyClass, ToolCall } from './types.js';
 import { replaceLiteral } from './tools/textEdit.js';
@@ -47,6 +48,8 @@ const isWord = (token: string | undefined) => !!token && /^[A-Za-z0-9._:-]+$/.te
  * command always asks and a grant could not change that.
  */
 export function suggestPatterns(call: ToolCall): string[] {
+  // A commit is asked for every time, so no grant is offered for one.
+  if (call.name === 'git_commit') return [];
   const command = argString(call, 'command');
   if (call.name === 'run_command' && command) {
     const analysis = analyzeCommand(command);
@@ -90,6 +93,13 @@ const readIfExists = (file: string): string | undefined => {
 export function previewCall(call: ToolCall, projectRoot: string): ApprovalPreview | undefined {
   const target = argString(call, 'path');
   try {
+    if (call.name === 'git_commit') {
+      const paths = Array.isArray(call.arguments.paths) ? call.arguments.paths.filter((entry: unknown): entry is string => typeof entry === 'string') : [];
+      const plan = planCommit(projectRoot, paths);
+      const files = plan.files.map((file) => `${file.status} ${file.path}`).join('\n');
+      const message = argString(call, 'message') ?? '';
+      return { kind: 'text', text: clip(`${message.trim()}\n\n${files || 'Nothing is staged.'}\n\n${plan.stat}`, MAX_PREVIEW_CHARS) };
+    }
     if (call.name === 'run_command') {
       const command = argString(call, 'command') ?? '';
       const cwd = argString(call, 'cwd');

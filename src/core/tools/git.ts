@@ -3,6 +3,8 @@ import path from 'path';
 import { promisify } from 'util';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { resolveProjectPath } from './paths.js';
+import { commitChanges } from '../git/commit.js';
+import { loadConfig } from '../config/load.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -110,3 +112,40 @@ export const GIT_TOOLS: RegisteredTool[] = [
     runner: gitLogRunner,
   },
 ];
+
+/**
+ * Commit what is staged, with `paths` staged first. The call always asks, showing the
+ * message, the files, and the diffstat, and runs `git commit` so the repository's hooks
+ * run. The commit carries the person's git identity, and a trailer only when
+ * `git.attribution` names one.
+ */
+export async function gitCommitRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  if (typeof args.message !== 'string' || !args.message.trim()) throw new Error('git_commit needs a "message".');
+  const paths = Array.isArray(args.paths) ? args.paths.filter((entry: unknown): entry is string => typeof entry === 'string') : [];
+  for (const entry of paths) resolveProjectPath(ctx.projectRoot, entry, { additionalRoots: ctx.additionalRoots });
+  const attribution = loadConfig({ projectRoot: ctx.projectRoot }).config.git?.attribution;
+  const committed = await commitChanges(ctx.projectRoot, args.message, { paths, attribution });
+  return {
+    output: `Committed ${committed.sha.slice(0, 12)}: ${committed.subject}${committed.output ? `\n${committed.output}` : ''}`,
+    metadata: { sha: committed.sha },
+  };
+}
+
+const gitCommitSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    message: { type: 'string', description: 'The commit message: a conventional-commits subject, then a blank line and a body that says why.' },
+    paths: { type: 'array', items: { type: 'string' }, description: 'Files to stage before committing. Omit to commit what is already staged.' },
+  },
+  required: ['message'],
+  additionalProperties: false,
+};
+
+export const GIT_COMMIT_TOOL: RegisteredTool = {
+  name: 'git_commit',
+  description: 'Commit staged changes, staging the paths given first. The person approves every commit, seeing the message, the files, and the diffstat.',
+  inputSchema: gitCommitSchema,
+  policy: 'execute',
+  alwaysAsks: true,
+  runner: gitCommitRunner,
+};

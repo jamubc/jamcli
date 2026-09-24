@@ -3,6 +3,7 @@ import { CoreAgent } from '../agent.js';
 import type { AgentEvent, ApprovalPreview, JamSession, RunResult, ToolCall } from '../types.js';
 import { describeCall, previewCall } from '../approval.js';
 import { CheckpointStore, filesOfCall, type Checkpoint, type RestorePreview } from '../git/checkpoints.js';
+import { cleanDraft, draftPrompt, planCommit } from '../git/commit.js';
 import { createSession } from '../state.js';
 import { createChatProvider, listConfiguredProviders } from '../providers/factory.js';
 import { isListableProvider, prefixSetNow, type ChatProvider } from '../providers/types.js';
@@ -26,7 +27,7 @@ import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
-import { CostLedger, type SpendSummary } from '../catalog/cost.js';
+import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
 import { displayPath, loadConfig, localConfigFile, permissionLayers, projectConfigFile, userConfigFile, type LoadedConfig } from '../config/load.js';
 import { revealedKeys } from '../config/credentials.js';
@@ -179,6 +180,8 @@ export interface Runtime {
    * so /rewind can take it back. Refused while a turn runs.
    */
   withCheckpoint<T>(label: string, change: () => Promise<T>, files?: string[]): Promise<T>;
+  /** Ask this session's model for a conventional commit message for what would be committed. */
+  draftCommitMessage(paths?: string[], signal?: AbortSignal): Promise<string>;
   close(): Promise<void>;
 }
 
@@ -283,6 +286,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       bypass: options.bypassPermissions,
       sandboxed: sandbox.kind !== 'none',
       env,
+      commitInBypass: config.git?.allow_commit_in_bypass === true,
     });
     permissions = assembled.engine;
     notices.push(...assembled.notices);
@@ -781,6 +785,28 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
 
     withCheckpoint,
+
+    async draftCommitMessage(paths = [], signal) {
+      if (!provider) throw new Error(providerError ?? 'No model provider is configured for this session.');
+      const plan = planCommit(projectRoot, paths);
+      if (!plan.files.length) throw new Error('Nothing would be committed, so there is nothing to describe.');
+      const result = await provider.complete([{ role: 'user', content: draftPrompt(plan), timestamp: Date.now() }], {
+        model: choice.model,
+        maxOutputTokens: 400,
+        contextLength: modelInfo.contextWindow,
+        ...(signal ? { signal } : {}),
+      });
+      // The request is the session's like any other, so it is counted and priced.
+      if (result.usage) {
+        const cost = requestCost(result.usage, modelInfo.price);
+        const event: AgentEvent = { type: 'usage', usage: result.usage, model: `${choice.provider}:${choice.model}`, ...(cost !== undefined ? { cost } : {}) };
+        account(event);
+        recorder.handle(event);
+      }
+      const message = cleanDraft(result.content ?? '');
+      if (!message) throw new Error('The model sent back an empty message.');
+      return message;
+    },
 
     async close() {
       await emitHookEvent(hooks, 'session_end', { session, status: 'closed', turns });
