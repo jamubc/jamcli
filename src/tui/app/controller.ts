@@ -112,6 +112,18 @@ export class SessionController {
     this.runtime.cancel();
   }
 
+  /**
+   * Switch to a mode, saying why when it is not available here. Bypass needs the person's
+   * confirmation, which the caller has asked for.
+   */
+  setMode(mode: PermissionMode, options: { bypassConfirmed?: boolean } = {}): boolean {
+    const refusal = this.runtime.setPermissionMode(mode, options);
+    if (refusal) this.dispatch({ type: 'notice', level: 'warn', text: `Not switched to ${mode} mode: ${refusal}` });
+    else if (mode === 'bypass') this.dispatch({ type: 'notice', level: 'warn', text: 'Bypass mode is on: nothing asks before it runs, and only deny rules stop a call.' });
+    this.refresh();
+    return refusal === undefined;
+  }
+
   /** Move to the next mode that is available here, and say why one was skipped. */
   cycleMode(): void {
     const start = Math.max(0, MODE_CYCLE.indexOf(this.runtime.permissionMode as PermissionMode));

@@ -68,7 +68,7 @@ export function compactionLine(row: Extract<Row, { kind: 'compaction' }>): strin
 
 /** The status line's parts, left to right. */
 export function statusParts(status: StatusData): string[] {
-  const parts = [`${status.mode} mode`, status.model || 'no model'];
+  const parts = [status.mode === 'bypass' ? 'BYPASS mode' : `${status.mode} mode`, status.model || 'no model'];
   if (status.contextPercent !== undefined) parts.push(`context ${Math.round(status.contextPercent)}%`);
   if (status.costUsd !== null) parts.push(`${formatUsd(status.costUsd)}${status.unpriced ? '+' : ''}`);
   else if (status.inputTokens || status.outputTokens) parts.push('cost unknown');
