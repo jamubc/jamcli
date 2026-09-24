@@ -9,8 +9,7 @@ import { storedKey } from '../../core/config/credentials.js';
 import { DEFAULT_CATEGORIES, describeChain, listCategories } from '../../core/routing/categories.js';
 import { readSessionIndex, readTranscript, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from '../../cli/config.js';
-import { runMcpCommand, type McpCommandRequest } from '../../cli/mcp.js';
-import { renderChecks, runChecks } from '../../cli/doctor.js';
+import type { McpCommandRequest } from '../../cli/mcp.js';
 import type { ViewAction } from '../state/view.js';
 import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from './reports.js';
 import type { PickItem, PickRequest } from './Picker.js';
@@ -403,6 +402,8 @@ const mcp: SlashCommand = {
     if (!MCP_ACTIONS.includes(action)) return ctx.notice('warn', 'Usage: /mcp [list | add <id> --command <cmd> | add <id> --url <url> | remove <id> | test [id]]');
     const changes = action === 'add' || action === 'remove';
     if (changes && waitForTurn(ctx, 'change MCP servers')) return;
+    // The MCP SDK loads only when /mcp runs, so the interface draws without it.
+    const { runMcpCommand } = await import('../../cli/mcp.js');
     const code = await throughCli(ctx, (io) => runMcpCommand({ action, args: rest }, ctx.projectRoot, io), 'mcp', 'mcp');
     if (changes && code === 0) await reopen(ctx);
   },
@@ -544,6 +545,7 @@ const doctor: SlashCommand = {
   source: 'built-in',
   async run(ctx) {
     ctx.notice('info', 'Checking…');
+    const { renderChecks, runChecks } = await import('../../cli/doctor.js');
     const checks = await runChecks({ projectRoot: ctx.projectRoot });
     ctx.show(renderChecks(checks, ctx.projectRoot));
   },
