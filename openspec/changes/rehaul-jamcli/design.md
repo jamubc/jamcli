@@ -1100,6 +1100,16 @@ JamCLI never handles GitHub tokens itself.
 **Worktrees.** `--worktree <name>` and `task(isolation: "worktree")` run in
 `git worktree add` directories, on `jamcli/<name>` branches.
 
+As built (7.6), the directories are `.jamcli/worktrees/<name>`, which the project's
+`.jamcli/.gitignore` keeps out of the person's status and checkpoints. A session in a
+worktree keeps the project as its home: configuration, grants, and the session log are
+the project's, since `.jamcli/` is never committed and so is never in a worktree, while
+tools, rules, references, checkpoints, and permission paths are the worktree's. An
+isolated task's worktree is kept and reported when it holds changes, and removed with
+its branch when it holds none. Git's own records of a worktree live in the main
+repository's `.git`, so a sandboxed command that commits in a worktree needs that
+directory writable, which it is when the project is the repository's top.
+
 **Why.** Authorized by the owner, and designed as the approval design `SEQUENCE.md` asked
 for: commits and pushes are always explicit, and undo does not depend on the user's own
 git state.
