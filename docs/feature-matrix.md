@@ -104,6 +104,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | Diffs and tool blocks in the transcript | ◐ approval modal only | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
+| Permission prompt with pattern grants and feedback | ◐ allow or deny, once | ✓ once, a chosen pattern for the session or the project, or deny with feedback for the model | n.v. | n.v. | n.v. | n.v. | parity |
 | Configurable keybindings | ✗ | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | Vim editing mode | ✗ | ✗ | ✓ [1] | n.v. | n.v. | n.v. | gap: deferred until the composer is stable on OpenTUI; tracked for a later unit |
 | Screen reader mode | ✗ | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |

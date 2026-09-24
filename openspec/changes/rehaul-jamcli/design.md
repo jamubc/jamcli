@@ -989,6 +989,23 @@ seconds each at most, so an offline machine gets its answer at once. `--json` gi
 same list, and the exit code is 1 when anything failed. Pulling a model and writing user
 configuration stay with the interface's onboarding in stage 6.
 
+As built (6.2 to 6.6), the view state is React's own `useReducer` over the pure
+`reduceView`, not Zustand: one component reads it, so a store would add a dependency
+and nothing else. A `SessionController` stands between the runtime and the view. It
+sends what the person types, folds every event into the view, holds each approval's
+answer until the person gives it, and reads the status line's facts (mode, model,
+context, cost, sandbox, MCP servers) from the runtime after each turn. Until 6.15 the
+interface is chosen with `JAMCLI_INTERFACE=opentui`. It asks for Bun, since OpenTUI's
+native renderer needs Bun (or Node 26.4 with an experimental flag).
+
+The permission prompt's selection, meaning the pattern chosen and whether feedback is
+being typed, belongs to the call it was made on. An earlier version reset it with an
+effect when a new prompt appeared. The effect ran a few milliseconds after the prompt was
+drawn, so a key pressed in that window was undone, and the tests caught it only under
+load. Keys now read the selection through a ref that changes at once. Up and then 2,
+arriving together, grant the pattern Up chose, not the one last drawn. That matters for
+a grant.
+
 **Tests.** Frame-text snapshots of key states through the OpenTUI test renderer, with
 mock keys driving flows. Snapshots compare text, not escape codes. This amends the
 testing strategy in `project.md`, per the owner's decision.
