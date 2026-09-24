@@ -339,7 +339,24 @@ cover headless, ACP, and delegation.
     - MCP servers, agents, or commands getting everything;
     - not withholding the configured key variables.
   - F23 is live.
-- [ ] 3.6 Sandbox escape tests. Files: `src/core/sandbox/__tests__/escape.test.ts`. Under bubblewrap, reading `~/.ssh`, writing outside the project, network access, and reading a provider key all fail. Skipped with a stated reason when bubblewrap is absent.
+- [x] 3.6 Sandbox escape tests. Files: `src/core/sandbox/__tests__/escape.test.ts`. Under bubblewrap, reading `~/.ssh`, writing outside the project, network access, and reading a provider key all fail. Skipped with a stated reason when bubblewrap is absent.
+  - **Verification**: a hostile command plants credentials in a fake home, serves a TCP port on the host loopback, and listens on Unix sockets outside `/tmp`. It then tries to:
+    - read `~/.ssh`, `~/.aws`, and `~/.netrc`;
+    - write to the home directory, `/var/tmp`, and `/etc`;
+    - reach the loopback port;
+    - read a key from the parent environment;
+    - reach an SSH agent and a hidden daemon socket.
+  - All five fail under bubblewrap here, and the project stays writable. Without bubblewrap the suite is one skipped test whose name gives the reason.
+  - The suite found that Unix sockets were reachable through the read-only root. The fix is recorded under D7, and the PID namespace is now asserted in the adapter test.
+  - The first socket probe misread a connection the server reset as blocked, so it passed even without the fix. It now counts a connection or a reset as reached.
+  - Mutation probes, each turning a test red:
+    - visible credentials;
+    - a writable root;
+    - the network on;
+    - an unscrubbed environment;
+    - a reachable agent socket;
+    - a shared process tree;
+    - `/run` left in place.
 - [ ] 3.7 Seatbelt live check on macOS. Stays unchecked until run on a Mac: run the escape suite there and record the output here.
 - [ ] 3.8 Headless flags. Files: `src/cli.ts`. Add `--permission-mode`, `--allowed-tools`, `--disallowed-tools`, `--dangerously-bypass-permissions`, and `--dry-run` (plan mode plus a report of what would have changed).
 
