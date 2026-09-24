@@ -18,8 +18,19 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
     process.exit(1);
   }
   const [{ createCliRenderer }, { createRoot }] = await Promise.all([import('@opentui/core'), import('@opentui/react')]);
-  // The session on screen, which /clear, /resume, /fork, and /profile replace.
-  let current = await createRuntime({ projectRoot, surface: 'tui' });
+  // The session on screen, which /clear, /resume, /fork, and /profile replace. It opens
+  // while the terminal is set up, and the style is read meanwhile, so neither waits.
+  const settings = loadConfig({ projectRoot });
+  const ui = settings.config.ui ?? {};
+  // JamCLI answers Ctrl+C itself: the first stops a turn, and two in a row leave.
+  const setUp = createCliRenderer({ exitOnCtrlC: false });
+  const [opened, statusStyle] = await Promise.all([createRuntime({ projectRoot, surface: 'tui' }), statusStyleFor(ui)]).catch(async (error) => {
+    // A session that cannot open leaves the terminal as it found it.
+    (await setUp).destroy();
+    throw error;
+  });
+  const renderer = await setUp;
+  let current = opened;
   const openSession = async (choice: SessionChoice) =>
     (current = await createRuntime({
       projectRoot,
@@ -27,8 +38,6 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
       ...(choice.sessionId ? { sessionId: choice.sessionId } : {}),
       ...(choice.profile ? { env: { ...process.env, JAMCLI_PROFILE: choice.profile } } : {}),
     }));
-  // JamCLI answers Ctrl+C itself: the first stops a turn, and two in a row leave.
-  const renderer = await createCliRenderer({ exitOnCtrlC: false });
   let closing = false;
   const exit = async (code = 0) => {
     if (closing) return;
@@ -39,9 +48,6 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
   };
   process.once('SIGTERM', () => void exit(143));
   process.once('SIGHUP', () => void exit(129));
-  const settings = loadConfig({ projectRoot });
-  const ui = settings.config.ui ?? {};
-  const statusStyle = await statusStyleFor(ui);
   createRoot(renderer).render(
     <App
       runtime={current}
