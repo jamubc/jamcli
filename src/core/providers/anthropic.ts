@@ -165,7 +165,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
       max_tokens: options.maxOutputTokens ?? this.maxTokens,
       messages: translated,
       stream,
-      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.temperature !== undefined && acceptsTemperature(options) ? { temperature: options.temperature } : {}),
       ...(options.extraParams || {}),
     };
     if (system.length) body.system = system.join('\n\n');
@@ -383,6 +383,17 @@ function mapUsage(usage: any): TokenUsage | undefined {
   };
 }
 
+
+/**
+ * Whether a request may carry a temperature. Claude models from Opus 4.7 and Sonnet 5 on
+ * refuse any temperature but the default on every request, and earlier ones refuse it
+ * while thinking. Only a model that takes a thinking budget, with thinking off, is sure
+ * to accept one; for any other, leaving it out costs a little control, where sending it
+ * would fail every request.
+ */
+export function acceptsTemperature(options: ProviderRequestOptions): boolean {
+  return options.thinkingStyle === 'budget' && options.reasoning !== 'on';
+}
 
 /**
  * The facts in a Models API entry. A limit of zero or null means the API does not say.

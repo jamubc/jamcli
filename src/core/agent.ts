@@ -42,6 +42,9 @@ export interface AgentOptions {
   contextLength?: number;
   /** What the session's model costs per million tokens. Without it, requests are unpriced. */
   price?: ModelPrice;
+  /** How the model thinks, from the catalog, for providers that configure thinking per model. */
+  thinkingStyle?: ProviderRequestOptions['thinkingStyle'];
+  alwaysThinks?: boolean;
   /**
    * Context management: the budget every request must fit, and the counter that estimates
    * requests and learns from what the provider reports. Without it, nothing is compacted.
@@ -409,6 +412,8 @@ export class CoreAgent implements Agent {
         reasoning: this.options.reasoning ?? 'auto',
         maxOutputTokens: this.options.maxOutputTokens,
         contextLength: this.options.contextLength,
+        thinkingStyle: this.options.thinkingStyle,
+        alwaysThinks: this.options.alwaysThinks,
         onRetry: (info) => emit({ type: 'retry', attempt: info.attempt, delayMs: info.delayMs, reason: info.reason }),
       })) {
         if (chunk.content) {

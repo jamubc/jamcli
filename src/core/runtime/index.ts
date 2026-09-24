@@ -297,6 +297,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       trustUsageKey: trustKey,
       trustPrice: trustInfo?.price,
       price: modelInfo.price,
+      thinkingStyle: modelInfo.thinking,
+      alwaysThinks: modelInfo.alwaysThinks,
       trustThreshold: config.trust?.threshold,
       trustOffNote: true,
       redact,

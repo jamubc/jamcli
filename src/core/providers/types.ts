@@ -1,6 +1,6 @@
 import type { ChatMessage, ProviderToolCall, ReasoningBlock, TokenUsage } from '../types.js';
 import type { RetryInfo } from './http.js';
-import type { ModelFacts } from '../catalog/types.js';
+import type { ModelFacts, ThinkingStyle } from '../catalog/types.js';
 
 export interface StreamChunk {
   content: string;
@@ -52,6 +52,10 @@ export interface ProviderRequestOptions {
   maxOutputTokens?: number;
   /** Context window to request, for providers that size it per request (Ollama). */
   contextLength?: number;
+  /** How the model thinks, from the catalog: `adaptive`, `budget`, or unknown. */
+  thinkingStyle?: ThinkingStyle;
+  /** The model thinks whatever the request says, so thinking cannot be turned off. */
+  alwaysThinks?: boolean;
 }
 
 /** The wire family a provider speaks. Signed reasoning is replayed only within a family. */
