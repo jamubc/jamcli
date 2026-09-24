@@ -3,7 +3,7 @@ import type { JsonSchema, RegisteredTool, ToolContext } from '../../types/tools.
 import type { McpServerConfig, McpToolDescriptor } from '../../types/mcp.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
 import type { ToolDefinition } from '../providers/types.js';
-import type { PolicyClass } from '../types.js';
+import type { PolicyClass, ToolCall } from '../types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import { suggestPatterns } from '../approval.js';
 
@@ -104,6 +104,11 @@ export interface ToolSetOptions {
   context: () => ToolContext;
   /** Write a pattern the user granted for the project. */
   grantProject?: (pattern: string) => void;
+  /**
+   * A dry run: a call that would change anything is not made, and is passed here for the
+   * report instead. Reads and the agent's own plan still run.
+   */
+  dryRun?: (call: ToolCall) => void;
 }
 
 export interface ToolSet {
@@ -146,6 +151,11 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
     policyClass: classOf,
     decide: (call) => {
       const verdict = permissions.decide(call);
+      const changes = !['read', 'state'].includes(classOf(call.name));
+      if (options.dryRun && changes && verdict.decision !== 'deny') {
+        options.dryRun(call);
+        return { decision: 'deny', by: 'mode', reason: 'this is a dry run, so nothing that changes the project is made; the call is in the report' };
+      }
       return { decision: verdict.decision, by: verdict.by, ...(verdict.rule ? { rule: verdict.rule } : {}), reason: verdict.reason };
     },
     grant: (call, scope, pattern) => {

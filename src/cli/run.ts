@@ -1,4 +1,4 @@
-import { createRuntime, type RuntimeOptions } from '../core/runtime/index.js';
+import { createRuntime, type DryRunEntry, type RuntimeOptions } from '../core/runtime/index.js';
 import type { AgentEvent, RunResult } from '../core/types.js';
 
 export interface HeadlessOptions {
@@ -10,6 +10,10 @@ export interface HeadlessOptions {
   sessionId?: string;
   allowTools?: string[];
   denyTools?: string[];
+  /** `--allowed-tools`, `--disallowed-tools`, and `--permission-mode`. */
+  permissions?: RuntimeOptions['permissions'];
+  bypassPermissions?: boolean;
+  dryRun?: boolean;
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent) => void;
   /** Assembly overrides, for tests. */
@@ -31,6 +35,10 @@ export interface HeadlessResult {
   model: string;
   permissionDenials: PermissionDenial[];
   notices: { level: 'info' | 'warn' | 'error'; message: string }[];
+  permissionMode: string;
+  sandbox: string;
+  /** In a dry run, each call that would have changed something. */
+  dryRun?: DryRunEntry[];
 }
 
 /**
@@ -47,6 +55,9 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
     model: options.model,
     allowTools: options.allowTools,
     denyTools: options.denyTools,
+    permissions: options.permissions,
+    bypassPermissions: options.bypassPermissions,
+    dryRun: options.dryRun,
     maxSteps: options.maxTurns,
     signal: options.signal,
     ...options.runtime,
@@ -68,7 +79,16 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
       }
       options.onEvent?.(event);
     });
-    return { result, sessionId: runtime.sessionId, ...runtime.model, permissionDenials, notices };
+    return {
+      result,
+      sessionId: runtime.sessionId,
+      ...runtime.model,
+      permissionDenials,
+      notices,
+      permissionMode: runtime.permissionMode,
+      sandbox: runtime.sandbox.kind,
+      ...(options.dryRun ? { dryRun: runtime.dryRunReport } : {}),
+    };
   } finally {
     await runtime.close();
   }

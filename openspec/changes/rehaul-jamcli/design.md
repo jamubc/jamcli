@@ -405,6 +405,11 @@ and redirection to paths outside the project always ask, regardless of rules.
 `--deny-tool X` becomes a deny rule. `--allowed-tools` and `--disallowed-tools` take the
 pattern syntax, and `--permission-mode` selects a mode.
 
+`--dry-run` is not plan mode, because plan mode hides the tools that change things, so
+there would be nothing to report. A dry run offers every tool the mode offers and runs
+the reads, and each call that would change anything is answered as not made and listed
+in the report with the diff or command the approval prompt would have shown (3.8).
+
 **Why.** F10, plus parity with Claude Code, Codex, and OpenCode, which all ship modes and
 pattern rules. Precedence rules that let a single flag widen access past a deny are how
 agents end up with credentials they should not have.

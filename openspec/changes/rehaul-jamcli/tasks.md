@@ -358,7 +358,20 @@ cover headless, ACP, and delegation.
     - a shared process tree;
     - `/run` left in place.
 - [ ] 3.7 Seatbelt live check on macOS. Stays unchecked until run on a Mac: run the escape suite there and record the output here.
-- [ ] 3.8 Headless flags. Files: `src/cli.ts`. Add `--permission-mode`, `--allowed-tools`, `--disallowed-tools`, `--dangerously-bypass-permissions`, and `--dry-run` (plan mode plus a report of what would have changed).
+- [x] 3.8 Headless flags. Files: `src/cli.ts`. Add `--permission-mode`, `--allowed-tools`, `--disallowed-tools`, `--dangerously-bypass-permissions`, and `--dry-run` (plan mode plus a report of what would have changed).
+  - **Verification**: the flags reach the runtime. `--dry-run` works as recorded under D6: each call that would change something is answered as not made and reported with its preview, after the answer in text, or under `dry_run` in JSON.
+  - The JSON result adds `permission_mode` and `sandbox`, and the entry point treats every new flag as a command-line intent. The README describes the flags, modes, dry runs, the sandbox, and the scrubbed environment.
+  - 4 end-to-end tests:
+    - a dry run leaves the file and the file system untouched, still runs the read, and reports the edit's diff and the command;
+    - a dry run in text prints its report;
+    - plan mode hides `edit`, and a disallowed rule denies inside an allowed one;
+    - bypass edits without asking, and an unknown mode is reported with the valid ones.
+  - Mutation probes, each turning a test red:
+    - ignoring `--dry-run`;
+    - a dry run that stops reads;
+    - no preview;
+    - no text report;
+    - dropping the mode, the disallowed rules, or the bypass flag.
 
 ## Stage 4: Models, cost, and context
 

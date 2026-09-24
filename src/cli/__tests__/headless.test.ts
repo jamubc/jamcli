@@ -158,3 +158,69 @@ test('an interrupt cancels the turn, reports it, and exits with 130', async () =
   expect(code).toBe(130);
   expect(lastLine(out).status).toBe('cancelled');
 });
+
+test('--dry-run makes no change and reports each call that would have made one', async () => {
+  server.enqueue(
+    {
+      toolCalls: [
+        { id: 'r1', name: 'read_file', arguments: { path: 'a.txt' } },
+        { id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } },
+        { id: 'c1', name: 'run_command', arguments: { command: 'touch made.txt' } },
+      ],
+    },
+    { text: 'That is the plan.' }
+  );
+  const { out, code } = await jam(['-p', 'fix it', '--dry-run', '--output-format', 'json']);
+  expect(code).toBe(0);
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('old\n');
+  expect(fs.existsSync(path.join(root, 'made.txt'))).toBe(false);
+  const result = lastLine(out);
+  expect(result.dry_run.map((entry: any) => [entry.tool, entry.call_id, entry.summary])).toEqual([
+    ['edit', 'e1', 'edit a.txt'],
+    ['run_command', 'c1', 'run_command touch made.txt'],
+  ]);
+  expect(result.dry_run[0].preview.kind).toBe('diff');
+  expect(result.dry_run[0].preview.text).toContain('+new');
+  expect(result.permission_denials).toEqual([]);
+  const results = server.completions().at(-1)!.body.messages.filter((message: any) => message.role === 'tool');
+  expect(results[0].content).toContain('old');
+  expect(results[1].content).toContain('this is a dry run');
+});
+
+test('--dry-run in text prints the report after the answer', async () => {
+  server.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] }, { text: 'Planned.' });
+  const { out } = await jam(['-p', 'fix it', '--dry-run']);
+  expect(out).toStartWith('Planned.\n\nDry run: 1 call was not made.\n- edit a.txt\n');
+  expect(out).toContain('    +new');
+});
+
+test('--permission-mode, --allowed-tools, and --disallowed-tools shape what runs', async () => {
+  server.enqueue({ text: 'planning' });
+  const plan = lastLine((await jam(['-p', 'plan it', '--permission-mode', 'plan', '--output-format', 'json'])).out);
+  expect(plan.permission_mode).toBe('plan');
+  expect(server.completions().at(-1)!.body.tools.map((tool: any) => tool.function.name)).not.toContain('edit');
+
+  server.enqueue(
+    { toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }, { id: 'c2', name: 'run_command', arguments: { command: 'echo secret' } }] },
+    { text: 'ok' }
+  );
+  const shaped = lastLine(
+    (await jam(['-p', 'run', '--allowed-tools', 'run_command(echo *)', '--disallowed-tools', 'run_command(echo secret*)', '--output-format', 'json'])).out
+  );
+  expect(shaped.permission_denials).toEqual([]);
+  const results = server.completions().at(-1)!.body.messages.filter((message: any) => message.role === 'tool');
+  expect(results[0].content).toContain('hi');
+  expect(results[1].content).toContain('Not run: run_command(echo secret*) denies it (--disallowed-tools run_command(echo secret*))');
+});
+
+test('--dangerously-bypass-permissions runs changes without asking, and a bad mode is reported', async () => {
+  server.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] }, { text: 'done' });
+  const bypass = lastLine((await jam(['-p', 'fix', '--dangerously-bypass-permissions', '--output-format', 'json'])).out);
+  expect(bypass.permission_mode).toBe('bypass');
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
+
+  server.enqueue({ text: 'ok' });
+  const bogus = lastLine((await jam(['-p', 'hi', '--permission-mode', 'yolo', '--output-format', 'json'])).out);
+  expect(bogus.permission_mode).toBe('default');
+  expect(bogus.notices.map((notice: any) => notice.message)).toContain('--permission-mode "yolo" is not a mode; use plan, default, accept-edits, auto, or bypass.');
+});

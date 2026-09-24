@@ -1,6 +1,7 @@
 import path from 'path';
 import { CoreAgent } from '../agent.js';
-import type { AgentEvent, JamSession, RunResult } from '../types.js';
+import type { AgentEvent, ApprovalPreview, JamSession, RunResult, ToolCall } from '../types.js';
+import { describeCall, previewCall } from '../approval.js';
 import { createSession } from '../state.js';
 import { createChatProvider } from '../providers/factory.js';
 import type { ChatProvider } from '../providers/types.js';
@@ -46,6 +47,8 @@ export interface RuntimeOptions {
   permissions?: Omit<PermissionFlags, 'allowTools' | 'denyTools'>;
   /** `--dangerously-bypass-permissions`: start in bypass mode. */
   bypassPermissions?: boolean;
+  /** `--dry-run`: make no change, and report each call that would have made one. */
+  dryRun?: boolean;
   /** The sandbox commands run in. Detected from the platform and `sandbox` settings when not given. */
   sandbox?: Sandbox;
   maxSteps?: number;
@@ -61,6 +64,14 @@ export interface RuntimeOptions {
   parent?: ParentSession;
 }
 
+/** A call a dry run did not make: what it would have done. */
+export interface DryRunEntry {
+  callId: string;
+  tool: string;
+  summary: string;
+  preview?: ApprovalPreview;
+}
+
 export interface Runtime {
   readonly sessionId: string;
   /** The provider and model turns run on. */
@@ -74,6 +85,8 @@ export interface Runtime {
   readonly permissionMode: PermissionMode;
   /** Where commands run: `bwrap`, `seatbelt`, or `none`, with the reason. */
   readonly sandbox: { kind: SandboxKind; reason: string };
+  /** In a dry run, every call that would have changed something, with its preview. */
+  readonly dryRunReport: DryRunEntry[];
   /** Switch permission modes for later calls. Returns why not, changing nothing, when the mode is unavailable. */
   setPermissionMode(mode: PermissionMode, options?: { bypassConfirmed?: boolean }): string | undefined;
   run(input: string, onEvent?: (event: AgentEvent) => void): Promise<RunResult>;
@@ -154,6 +167,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     create: createRuntime,
   });
   const taskTool = registry.get('task');
+  const dryRunReport: DryRunEntry[] = [];
+  const recordDryRun = (call: ToolCall) => {
+    const preview = previewCall(call, projectRoot);
+    dryRunReport.push({ callId: call.id, tool: call.name, summary: describeCall(call), ...(preview ? { preview } : {}) });
+  };
   /** A project grant applies at once and is written for later sessions. */
   const grantProject = (text: string) => {
     const { rules, errors } = grantedRules(text, 'local', `${LOCAL_CONFIG} permissions.allow (granted at a prompt)`);
@@ -175,6 +193,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       mcpServers,
       permissions,
       grantProject,
+      ...(options.dryRun ? { dryRun: recordDryRun } : {}),
       descriptions: taskTool
         ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }
         : undefined,
@@ -272,6 +291,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return permissions.mode;
     },
     sandbox: { kind: sandbox.kind, reason: sandbox.reason },
+    dryRunReport,
 
     setPermissionMode(mode, modeOptions) {
       const from = permissions.mode;

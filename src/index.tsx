@@ -20,6 +20,11 @@ const HEADLESS_INTENTS = new Set([
   '--resume',
   '--allow-tool',
   '--deny-tool',
+  '--allowed-tools',
+  '--disallowed-tools',
+  '--permission-mode',
+  '--dangerously-bypass-permissions',
+  '--dry-run',
 ]);
 
 const startInterface = async () => {

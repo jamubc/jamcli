@@ -29,6 +29,11 @@ export interface ParsedArgs {
   continueLast: boolean;
   allowTools: string[];
   denyTools: string[];
+  allowedTools: string[];
+  disallowedTools: string[];
+  permissionMode?: string;
+  bypassPermissions: boolean;
+  dryRun: boolean;
   sessionsCommand?: { action: SessionsAction; query?: string };
   mcpCommand?: { action: McpAction; args: string[] };
   audit: boolean;
@@ -44,6 +49,10 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     continueLast: false,
     allowTools: [],
     denyTools: [],
+    allowedTools: [],
+    disallowedTools: [],
+    bypassPermissions: false,
+    dryRun: false,
     help: false,
     version: false,
     audit: false,
@@ -92,6 +101,29 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     if (token === '--allow-tool') {
       parsed.allowTools.push(argv[i + 1] ?? '');
       i += 1;
+      continue;
+    }
+    if (token === '--allowed-tools') {
+      parsed.allowedTools.push(argv[i + 1] ?? '');
+      i += 1;
+      continue;
+    }
+    if (token === '--disallowed-tools') {
+      parsed.disallowedTools.push(argv[i + 1] ?? '');
+      i += 1;
+      continue;
+    }
+    if (token === '--permission-mode') {
+      parsed.permissionMode = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (token === '--dangerously-bypass-permissions') {
+      parsed.bypassPermissions = true;
+      continue;
+    }
+    if (token === '--dry-run') {
+      parsed.dryRun = true;
       continue;
     }
     if (token === '--deny-tool') {
@@ -156,6 +188,11 @@ export const USAGE = `Usage: jamcli [options]
       --continue               Continue the most recent session
       --allow-tool <name>      Allow a tool for this run (repeatable)
       --deny-tool <name>       Deny a tool for this run (repeatable)
+      --allowed-tools <rules>  Allow rules such as "edit(src/**),run_command(npm test *)"
+      --disallowed-tools <rules>  Deny rules in the same syntax; a deny always wins
+      --permission-mode <mode> plan, default, accept-edits, auto, or bypass
+      --dangerously-bypass-permissions  Run in bypass mode: nothing asks, only denies stop
+      --dry-run                Make no change; report each call that would have made one
 
   jamcli sessions list|search <query>|show <id>|export <id>|fork <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
@@ -242,6 +279,13 @@ export const runCli = async (argv: string[]): Promise<number> => {
       sessionId,
       allowTools: parsed.allowTools,
       denyTools: parsed.denyTools,
+      permissions: {
+        allowedTools: parsed.allowedTools,
+        disallowedTools: parsed.disallowedTools,
+        ...(parsed.permissionMode ? { mode: parsed.permissionMode } : {}),
+      },
+      bypassPermissions: parsed.bypassPermissions,
+      dryRun: parsed.dryRun,
       signal: controller.signal,
       onEvent: streaming
         ? (event: AgentEvent) => {
@@ -267,6 +311,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
       process.stderr.write(`${result.error}\n`);
     }
     if (result.response) process.stdout.write(`${result.response}\n`);
+    if (outcome.dryRun) process.stdout.write(dryRunText(outcome.dryRun));
   } else {
     process.stdout.write(`${JSON.stringify(resultToJson(outcome, Date.now() - startedAt))}\n`);
   }
@@ -287,6 +332,18 @@ const resultToJson = (outcome: HeadlessResult, durationMs: number): Record<strin
   duration_ms: durationMs,
   turns: outcome.result.turns,
   usage: serializeUsage(outcome.result.usage),
+  permission_mode: outcome.permissionMode,
+  sandbox: outcome.sandbox,
+  ...(outcome.dryRun
+    ? {
+        dry_run: outcome.dryRun.map((entry) => ({
+          tool: entry.tool,
+          call_id: entry.callId,
+          summary: entry.summary,
+          ...(entry.preview ? { preview: entry.preview } : {}),
+        })),
+      }
+    : {}),
   permission_denials: outcome.permissionDenials.map((denial) => ({
     tool: denial.tool,
     call_id: denial.callId,
@@ -295,6 +352,17 @@ const resultToJson = (outcome: HeadlessResult, durationMs: number): Record<strin
   })),
   notices: outcome.notices,
 });
+
+/** The dry run's report in text: each call not made, with its diff or command. */
+const dryRunText = (entries: NonNullable<HeadlessResult['dryRun']>): string => {
+  if (!entries.length) return '\nDry run: nothing would have changed.\n';
+  const lines = [`\nDry run: ${entries.length} call${entries.length === 1 ? ' was' : 's were'} not made.`];
+  for (const entry of entries) {
+    lines.push(`- ${entry.summary}`);
+    if (entry.preview?.text) lines.push(...entry.preview.text.split('\n').map((line) => `    ${line}`));
+  }
+  return `${lines.join('\n')}\n`;
+};
 
 /** One `stream-json` line per event worth reporting; the rest are left out. */
 const eventToJson = (event: AgentEvent): Record<string, unknown> | null => {
