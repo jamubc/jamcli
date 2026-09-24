@@ -1387,6 +1387,12 @@ command line, for three reasons: dependencies stay external (`packages: 'externa
 lazily loaded parts go to chunks (`splitting`), and the shebang is written onto the
 entry alone, since Bun's `banner` option repeats it on every chunk.
 
+The entry's shebang is `#!/usr/bin/env -S bun --no-env-file --config=/dev/null`: Bun
+otherwise reads a `.env` and a `bunfig.toml` from the working directory, and a bunfig can
+preload code, so opening JamCLI in a hostile repository would run that repository's code
+first. The compiled binaries take `--no-compile-autoload-dotenv` and
+`--no-compile-autoload-bunfig` for the same reason.
+
 **Startup.** `src/index.tsx` imports nothing heavy. It dispatches on the arguments first
 and dynamically imports the interface, the ACP server, or the headless runner.
 

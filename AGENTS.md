@@ -68,8 +68,8 @@ description. `bun test` must pass, and the tests must be capable of failing.
 ## Where things live
 
 - `src/core/` is the harness: the agent loop, tools, providers, routing, context,
-  policy, hooks, sessions, rules. It imports neither Ink nor React.
-- `src/tui/` is the Ink interface, and it only renders and forwards input.
+  policy, hooks, sessions, rules. It imports neither OpenTUI nor React.
+- `src/tui/` is the OpenTUI interface, and it only renders and forwards input.
 - `src/cli/` is the dispatcher and the non-interactive surfaces.
 - `src/services/` holds the pre-core services that have not moved yet.
 - `openspec/specs/jamcli/spec.md` is current truth. `openspec/changes/` is what should
@@ -80,4 +80,4 @@ description. `bun test` must pass, and the tests must be capable of failing.
 The open unit is `rehaul-jamcli`. Its `audit.md` records the measured state of the tree
 when it opened, including the defects the previous unit's tests did not catch. Its
 `tasks.md` is the checklist, and the last checked task is where work stopped. The type
-baseline for the unit is 22 errors.
+baseline for the unit was 22 errors; it reached 0 when Ink was removed (6.15), and stays 0.

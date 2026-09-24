@@ -6,7 +6,7 @@ jobs:
   gates:
     runs-on: ubuntu-latest
     env:
-      TYPE_ERRORS_BASELINE: "22"
+      TYPE_ERRORS_BASELINE: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
