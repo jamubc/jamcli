@@ -1,12 +1,9 @@
 /** @jsxImportSource @opentui/react */
-import { RGBA, type SyntaxStyle } from '@opentui/core';
+import type { SyntaxStyle } from '@opentui/core';
 import type { Row } from '../state/view.js';
 import { compactionLine, noticeLine, toolLine } from './format.js';
 import { filetypeOf } from './syntax.js';
 import { usePlain, useTheme } from './theme.js';
-
-/** A theme color, where `default` is the terminal's own. */
-const color = (value: string) => (value === 'default' ? RGBA.defaultForeground() : value);
 
 /**
  * A unified diff, highlighted as the file it changes. In screen reader mode it is the
@@ -14,7 +11,7 @@ const color = (value: string) => (value === 'default' ? RGBA.defaultForeground()
  */
 export function DiffView({ diff, file, syntax }: { diff: string; file?: string; syntax: SyntaxStyle }) {
   const theme = useTheme();
-  if (usePlain()) return <text>{`Diff:\n${diff}`}</text>;
+  if (usePlain()) return <text fg={theme.text}>{`Diff:\n${diff}`}</text>;
   return (
     <diff
       diff={diff}
@@ -23,10 +20,12 @@ export function DiffView({ diff, file, syntax }: { diff: string; file?: string; 
       syntaxStyle={syntax}
       showLineNumbers
       wrapMode="word"
+      fg={theme.text}
+      lineNumberFg={theme.dim}
       addedBg={theme.diff.addedBg}
       removedBg={theme.diff.removedBg}
-      addedSignColor={color(theme.diff.addedSign)}
-      removedSignColor={color(theme.diff.removedSign)}
+      addedSignColor={theme.diff.addedSign}
+      removedSignColor={theme.diff.removedSign}
     />
   );
 }
@@ -35,32 +34,33 @@ const NOTICE_LABELS = { info: 'Note', warn: 'Warning', error: 'Error' } as const
 
 /** A row as plain labeled lines, for screen reader mode: who or what, then the words. */
 function PlainRow({ row }: { row: Row }) {
+  const theme = useTheme();
   switch (row.kind) {
     case 'user':
-      return <text>{`You: ${row.text}`}</text>;
+      return <text fg={theme.text}>{`You: ${row.text}`}</text>;
     case 'assistant':
       return (
         <box flexDirection="column">
-          {row.reasoning && !row.text ? <text>{`Thinking: ${row.reasoning.slice(-200)}`}</text> : null}
-          {row.text ? <text>{`JamCLI: ${row.text}`}</text> : null}
+          {row.reasoning && !row.text ? <text fg={theme.text}>{`Thinking: ${row.reasoning.slice(-200)}`}</text> : null}
+          {row.text ? <text fg={theme.text}>{`JamCLI: ${row.text}`}</text> : null}
         </box>
       );
     case 'tool':
       return (
         <box flexDirection="column">
-          <text>{`Tool ${toolLine(row, false)}`}</text>
-          {!row.collapsed && row.diff ? <text>{`Diff:\n${row.diff}`}</text> : null}
-          {!row.collapsed && !row.diff && row.output ? <text>{`Output:\n${row.output}`}</text> : null}
+          <text fg={theme.text}>{`Tool ${toolLine(row, false)}`}</text>
+          {!row.collapsed && row.diff ? <text fg={theme.text}>{`Diff:\n${row.diff}`}</text> : null}
+          {!row.collapsed && !row.diff && row.output ? <text fg={theme.text}>{`Output:\n${row.output}`}</text> : null}
         </box>
       );
     case 'notice':
-      return <text>{`${NOTICE_LABELS[row.level]}: ${row.text}`}</text>;
+      return <text fg={theme.text}>{`${NOTICE_LABELS[row.level]}: ${row.text}`}</text>;
     case 'compaction':
-      return <text>{`Note: ${compactionLine(row)}`}</text>;
+      return <text fg={theme.text}>{`Note: ${compactionLine(row)}`}</text>;
     case 'command':
-      return <text>{`Command: ${row.text}`}</text>;
+      return <text fg={theme.text}>{`Command: ${row.text}`}</text>;
     case 'output':
-      return <text>{`Result: ${row.text}`}</text>;
+      return <text fg={theme.text}>{`Result: ${row.text}`}</text>;
   }
 }
 
@@ -100,6 +100,6 @@ export function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
         </box>
       );
     case 'output':
-      return <text>{row.text}</text>;
+      return <text fg={theme.text}>{row.text}</text>;
   }
 }

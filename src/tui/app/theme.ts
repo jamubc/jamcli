@@ -1,5 +1,15 @@
+import { RGBA } from '@opentui/core';
 import { createContext, useContext } from 'react';
 import type { ThemeName } from '../../types/config.js';
+
+export type Color = string | RGBA;
+
+/**
+ * The terminal's own foreground. OpenTUI draws text with no color in plain white, which
+ * vanishes on a light background, so every color the interface leaves to the terminal is
+ * this one.
+ */
+export const TERMINAL: RGBA = RGBA.defaultForeground();
 
 /**
  * The interface's colors, by role. Every state also has a word, so no color carries
@@ -7,14 +17,16 @@ import type { ThemeName } from '../../types/config.js';
  */
 export interface Theme {
   name: ThemeName;
-  dim?: string;
-  user?: string;
-  accent?: string;
-  warn?: string;
-  error?: string;
-  border?: string;
-  /** Diff lines: backgrounds and the + and - signs. `default` is the terminal's own color. */
-  diff: { addedBg: string; removedBg: string; addedSign: string; removedSign: string };
+  /** Text with no role of its own: the terminal's foreground in every theme. */
+  text: Color;
+  dim: Color;
+  user: Color;
+  accent: Color;
+  warn: Color;
+  error: Color;
+  border: Color;
+  /** Diff lines: backgrounds and the + and - signs. */
+  diff: { addedBg: string; removedBg: string; addedSign: Color; removedSign: Color };
   /** Token colors for Markdown, code, and diffs. Monochrome keeps only bold, italic, and underline. */
   tokens: {
     heading?: string;
@@ -35,6 +47,7 @@ export interface Theme {
 export const THEMES: Record<ThemeName, Theme> = {
   dark: {
     name: 'dark',
+    text: TERMINAL,
     dim: '#7a7f8c',
     user: '#9ece6a',
     accent: '#7aa2f7',
@@ -59,6 +72,7 @@ export const THEMES: Record<ThemeName, Theme> = {
   },
   light: {
     name: 'light',
+    text: TERMINAL,
     dim: '#5c5f77',
     user: '#40a02b',
     accent: '#1e66f5',
@@ -83,6 +97,7 @@ export const THEMES: Record<ThemeName, Theme> = {
   },
   'high-contrast': {
     name: 'high-contrast',
+    text: TERMINAL,
     dim: '#d0d0d0',
     user: '#00ff5f',
     accent: '#00d7ff',
@@ -105,7 +120,18 @@ export const THEMES: Record<ThemeName, Theme> = {
       operator: '#ffffff',
     },
   },
-  monochrome: { name: 'monochrome', diff: { addedBg: 'transparent', removedBg: 'transparent', addedSign: 'default', removedSign: 'default' }, tokens: {} },
+  monochrome: {
+    name: 'monochrome',
+    text: TERMINAL,
+    dim: TERMINAL,
+    user: TERMINAL,
+    accent: TERMINAL,
+    warn: TERMINAL,
+    error: TERMINAL,
+    border: TERMINAL,
+    diff: { addedBg: 'transparent', removedBg: 'transparent', addedSign: TERMINAL, removedSign: TERMINAL },
+    tokens: {},
+  },
 };
 
 export const THEME_NAMES = Object.keys(THEMES) as ThemeName[];
@@ -133,8 +159,8 @@ export const usePlain = (): boolean => useContext(PlainContext);
  * A box's border in a color, or none in screen reader mode. OpenTUI draws a border
  * whenever a border color is given, so plain mode gives neither.
  */
-export const framed = (plain: boolean, color: string | undefined): { border?: true; borderColor?: string; paddingLeft: number; paddingRight: number } =>
-  plain ? { paddingLeft: 0, paddingRight: 0 } : { border: true, ...(color ? { borderColor: color } : {}), paddingLeft: 1, paddingRight: 1 };
+export const framed = (plain: boolean, color: Color): { border?: true; borderColor?: Color; paddingLeft: number; paddingRight: number } =>
+  plain ? { paddingLeft: 0, paddingRight: 0 } : { border: true, borderColor: color, paddingLeft: 1, paddingRight: 1 };
 
 /** Reduced motion: no spinner and no shimmer. */
 export const MotionContext = createContext(false);

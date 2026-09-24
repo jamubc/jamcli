@@ -67,7 +67,7 @@ export function Picker(props: { title: string; items: PickItem[] | undefined; no
         // A label longer than the column keeps two spaces before its detail.
         const label = text.length >= width ? `${text}  ` : text.padEnd(width + 2);
         return (
-          <text key={item.key} fg={chosen ? theme.accent : undefined}>
+          <text key={item.key} fg={chosen ? theme.accent : theme.text}>
             {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${label}${item.detail ?? ''}`)}
           </text>
         );

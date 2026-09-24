@@ -116,7 +116,7 @@ test('/theme changes the colors at once and saves the choice for every project',
   try {
     await frameWith(setup, (frame) => frame.includes('default mode'));
     const before = colorOf(setup, 'default mode');
-    expect(before).toBe(THEMES.dark.dim);
+    expect(before).toBe(THEMES.dark.dim as string);
     await send(setup, '/theme');
     const listed = await frameWith(setup, (frame) => frame.includes('Themes'));
     expect(listed).toMatch(/> dark \(in use\)\s+light text on a dark background/);
@@ -124,7 +124,7 @@ test('/theme changes the colors at once and saves the choice for every project',
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('Theme: light. It is saved in your user configuration.'));
     const after = colorOf(setup, 'default mode');
-    expect(after).toBe(THEMES.light.dim);
+    expect(after).toBe(THEMES.light.dim as string);
     expect(after).not.toBe(before);
     expect(readJson(userConfig()).ui).toEqual({ theme: 'light' });
     // The list opens on the theme in use.

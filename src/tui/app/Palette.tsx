@@ -22,7 +22,7 @@ export function Palette({ matches, selected }: { matches: SlashCommand[]; select
   const width = Math.min(28, Math.max(...shown.map((command) => command.name.length + (command.args ? command.args.length + 1 : 0))));
   return (
     <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
-      {plain ? <text>{`Commands matching: ${matches.length}`}</text> : null}
+      {plain ? <text fg={colors.text}>{`Commands matching: ${matches.length}`}</text> : null}
       {matches.length === 0 ? (
         <text fg={colors.dim}>No command starts with that. /help lists them.</text>
       ) : (
@@ -32,7 +32,7 @@ export function Palette({ matches, selected }: { matches: SlashCommand[]; select
           const head = name.length >= width ? `${name} ` : name.padEnd(width + 1);
           const from = command.source === 'built-in' ? '' : ` (${command.source})`;
           return (
-            <text key={command.name} fg={chosen ? colors.accent : undefined}>
+            <text key={command.name} fg={chosen ? colors.accent : colors.text}>
               {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head} ${command.summary}${from}`)}
             </text>
           );

@@ -32,18 +32,18 @@ export function PermissionPrompt(props: {
       <text fg={theme.warn}>{`${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued} waiting)` : ''}`}</text>
       <text fg={theme.dim}>{`Asked because ${approval.reason}.`}</text>
       {approval.preview?.kind === 'diff' ? <DiffView diff={approval.preview.text} file={file} syntax={syntax} /> : null}
-      {preview ? <text>{preview}</text> : null}
+      {preview ? <text fg={theme.text}>{preview}</text> : null}
       {feedback ? (
         <box flexDirection="column">
-          <text>Tell the model what to do instead, or press Enter to just deny:</text>
+          <text fg={theme.text}>Tell the model what to do instead, or press Enter to just deny:</text>
           <input focused placeholder="feedback for the model" onSubmit={(value: unknown) => props.onFeedback(submitted(value))} />
         </box>
       ) : (
         <box flexDirection="column">
-          <text>1 allow once</text>
-          {pattern ? <text>{`2 allow ${pattern} for this session${others}`}</text> : null}
-          {pattern ? <text>{`3 allow ${pattern} for this project, saved in .jamcli/config.local.json`}</text> : null}
-          <text>4 deny, and say why · Escape denies</text>
+          <text fg={theme.text}>1 allow once</text>
+          {pattern ? <text fg={theme.text}>{`2 allow ${pattern} for this session${others}`}</text> : null}
+          {pattern ? <text fg={theme.text}>{`3 allow ${pattern} for this project, saved in .jamcli/config.local.json`}</text> : null}
+          <text fg={theme.text}>4 deny, and say why · Escape denies</text>
         </box>
       )}
     </box>
@@ -57,8 +57,8 @@ export function BypassConfirm({ onAnswer }: { onAnswer: (text: string) => void }
   return (
     <box {...framed(plain, theme.error)} flexDirection="column" flexShrink={0}>
       <text fg={theme.error}>{`${plain ? 'Confirm: ' : ''}Turn on bypass mode?`}</text>
-      <text>Nothing will ask before it runs: every edit and every command goes ahead, and only deny rules stop a call.</text>
-      <text>Type yes and press Enter to turn it on. Anything else, or Escape, leaves the mode as it is.</text>
+      <text fg={theme.text}>Nothing will ask before it runs: every edit and every command goes ahead, and only deny rules stop a call.</text>
+      <text fg={theme.text}>Type yes and press Enter to turn it on. Anything else, or Escape, leaves the mode as it is.</text>
       <input focused placeholder="yes" onSubmit={(value: unknown) => onAnswer(submitted(value))} />
     </box>
   );

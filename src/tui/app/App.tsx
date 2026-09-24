@@ -55,7 +55,7 @@ function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; pl
       <text fg={colors.accent}>Todo list</text>
       {todos?.length ? (
         todos.map((todo, index) => (
-          <text key={index} fg={todo.status === 'completed' ? colors.dim : undefined}>
+          <text key={index} fg={todo.status === 'completed' ? colors.dim : colors.text}>
             {`${TODO_WORDS[todo.status]}: ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}`}
           </text>
         ))
@@ -432,6 +432,10 @@ export function App(props: AppProps) {
                   <textarea
                     ref={composer}
                     focused={!overlay.current}
+                    textColor={theme.text}
+                    focusedTextColor={theme.text}
+                    placeholderColor={theme.dim}
+                    cursorColor={theme.text}
                     placeholder={`${plain ? 'Message: ' : ''}Message JamCLI. ${keysFor(keys.bindings, 'send')} sends, ${keysFor(keys.bindings, 'newline')} adds a line, / lists commands.`}
                     keyBindings={[...chords('send', 'submit'), ...chords('newline', 'newline')]}
                     onSubmit={submit}

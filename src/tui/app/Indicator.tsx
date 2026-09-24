@@ -19,14 +19,14 @@ export function Indicator({ style, words }: { style: StatusStyleDefinition; word
   // Monochrome, or NO_COLOR, keeps the motion and drops the colors.
   const colored = theme.name !== 'monochrome';
   const frame = frameRow(style.spinnerFrames[tick % style.spinnerFrames.length]);
-  const spinner = colored ? style.spinnerColors[tick % style.spinnerColors.length] : undefined;
+  const spinner = colored ? style.spinnerColors[tick % style.spinnerColors.length] : theme.text;
   const palette = style.shimmerColors;
   return (
-    <text>
+    <text fg={theme.text}>
       <span fg={spinner}>{frame}</span>
       {' '}
       {[...words].map((char, index) => (
-        <span key={index} fg={colored ? palette[style.shimmer ? (index + tick) % palette.length : 0] : undefined}>
+        <span key={index} fg={colored ? palette[style.shimmer ? (index + tick) % palette.length : 0] : theme.text}>
           {char}
         </span>
       ))}
