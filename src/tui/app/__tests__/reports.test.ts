@@ -22,7 +22,7 @@ test('a typed prefix lists names that start with it first, then names that conta
   expect(findCommand(BUILTIN_COMMANDS, 'quit')?.name).toBe('exit');
   expect(findCommand(BUILTIN_COMMANDS, 'new')?.name).toBe('clear');
   expect(findCommand(BUILTIN_COMMANDS, 'undo')?.name).toBe('undo');
-  expect(findCommand(BUILTIN_COMMANDS, 'diff')).toBeUndefined();
+  expect(findCommand(BUILTIN_COMMANDS, 'commit')).toBeUndefined();
 });
 
 test('the palette reaches every command the interface has today', () => {

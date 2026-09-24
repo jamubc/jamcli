@@ -20,6 +20,7 @@ import { keysHelp, type Keybindings } from './keys.js';
 import { setup } from './setup.js';
 import { style } from './style.js';
 import { rewind, undo } from './rewind.js';
+import { diff } from './review.js';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
@@ -594,6 +595,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   style,
   undo,
   rewind,
+  diff,
   mode,
   permissions,
   context,

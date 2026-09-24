@@ -121,7 +121,8 @@ test('a session through every command, as a person meets it', async () => {
   expect(fs.readFileSync(path.join(base, 'project', 'a.txt'), 'utf8')).toBe('old\n');
   // Only the model's change went back; the file /export wrote since is still there.
   expect(fs.existsSync(path.join(base, 'project', 'notes.md'))).toBe(true);
-  await command('/diff', '/diff is not available yet.');
+  // What is left is the file /export wrote, which git does not track yet.
+  expect(await command('/diff', 'Changes, by hunk', true)).toContain('Untracked: notes.md');
 
   // /compact summarizes through the model, or says the conversation is too short.
   server.enqueue({ text: 'Summary: said hello, ran one command, refused another.' });
