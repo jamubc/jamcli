@@ -48,6 +48,8 @@ export interface ParsedArgs {
   /** `jamcli auth`, likewise. */
   authCommand?: { action?: AuthAction; args: string[] };
   audit: boolean;
+  /** `jamcli doctor`, with its own arguments. */
+  doctor?: string[];
   acp: boolean;
   help: boolean;
   version: boolean;
@@ -171,6 +173,10 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       parsed.audit = true;
       continue;
     }
+    if (token === 'doctor') {
+      parsed.doctor = argv.slice(i + 1);
+      return parsed;
+    }
     if (token === 'sessions') {
       const action = argv[i + 1];
       if (SESSIONS_ACTIONS.includes(action as SessionsAction)) {
@@ -243,6 +249,7 @@ export const USAGE = `Usage: jamcli [options]
 
   jamcli sessions list|search <query>|show <id>|export <id>|fork <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
+  jamcli doctor [--json] [--no-mcp]   Check providers, models, tools, the sandbox, and configuration
   jamcli config list|get|set|unset|migrate   Read and change configuration, layer by layer
   jamcli auth set|get|remove|list|login   Store provider keys in the keychain, or sign in to OpenRouter
   jamcli mcp add|list|test|remove   Manage MCP servers in .jamcli/mcp.json
@@ -311,6 +318,11 @@ export const runCli = async (argv: string[]): Promise<number> => {
 
   if (parsed.audit) {
     return runAuditCli();
+  }
+
+  if (parsed.doctor) {
+    const { runDoctorCommand } = await import('./cli/doctor.js');
+    return runDoctorCommand(parsed.doctor, projectRoot);
   }
 
   if (parsed.mcpCommand) {

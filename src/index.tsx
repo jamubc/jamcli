@@ -11,6 +11,7 @@ const HEADLESS_INTENTS = new Set([
   '--prompt',
   'sessions',
   'audit',
+  'doctor',
   'mcp',
   'config',
   'auth',
