@@ -35,8 +35,12 @@ export class TranscriptRecorder {
     this.written = events.filter((event) => event.type !== 'session').length;
   }
 
-  /** Record a checkpoint taken during the current turn, with where that turn began. */
+  /**
+   * Record a checkpoint, with where the current turn began. A checkpoint is worth a session
+   * file on its own, such as for a change the person made before saying anything.
+   */
   recordCheckpoint(checkpoint: { ref: string; files?: string[]; after?: string; label: string }): void {
+    this.started = true;
     this.write({
       type: 'checkpoint',
       ref: checkpoint.ref,

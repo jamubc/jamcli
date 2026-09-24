@@ -174,6 +174,11 @@ export interface Runtime {
    * it is now, so the restore can itself be undone. Refused while a turn runs.
    */
   restoreCheckpoint(n: number): Promise<string[]>;
+  /**
+   * Run a change the person asked for, such as reverting a hunk, between two checkpoints,
+   * so /rewind can take it back. Refused while a turn runs.
+   */
+  withCheckpoint<T>(label: string, change: () => Promise<T>, files?: string[]): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -497,6 +502,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         ts: event.ts,
         ...(event.turn !== undefined ? { turn: event.turn } : {}),
       }));
+  /** A change the person asked for, between two checkpoints, recorded like a step's. */
+  async function withCheckpoint<T>(label: string, change: () => Promise<T>, files: string[] = []): Promise<T> {
+    if (running) throw new Error('A turn is running; wait for it to end.');
+    const before = await checkpointStore.take(label, files);
+    const result = await change();
+    const after = before ? await checkpointStore.settle(before, label) : undefined;
+    if (before && (before.kind === 'files' || after)) recorder.recordCheckpoint({ ref: before.ref, ...(before.files ? { files: before.files } : {}), ...(after ? { after } : {}), label });
+    return result;
+  }
   const checkpointNumbered = (n: number): CheckpointInfo => {
     const found = checkpointList().find((entry) => entry.n === n);
     if (!found) throw new Error(`This session has no checkpoint ${n}.`);
@@ -761,16 +775,12 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
 
     async restoreCheckpoint(n) {
-      if (running) throw new Error('A turn is running; restore when it ends.');
       const target = checkpointNumbered(n);
-      const label = `before restoring checkpoint ${n}`;
-      const now = await checkpointStore.take(label, target.files ?? []);
-      const restored = await checkpointStore.restore(target);
-      // What the restore replaced is checkpointed like a step's change, so it can be undone too.
-      const after = now ? await checkpointStore.settle(now, label) : undefined;
-      if (now && (now.kind === 'files' || after)) recorder.recordCheckpoint({ ref: now.ref, ...(now.files ? { files: now.files } : {}), ...(after ? { after } : {}), label });
-      return restored;
+      // What the restore replaces is checkpointed like a step's change, so it can be undone too.
+      return withCheckpoint(`before restoring checkpoint ${n}`, () => checkpointStore.restore(target), target.files ?? []);
     },
+
+    withCheckpoint,
 
     async close() {
       await emitHookEvent(hooks, 'session_end', { session, status: 'closed', turns });

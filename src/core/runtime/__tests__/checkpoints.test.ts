@@ -88,3 +88,22 @@ test('outside a repository, the file an edit is about to change is backed up and
   expect(read()).toBe('old\n');
   await runtime.close();
 });
+
+test("a change the person asks for is checkpointed too, even before the session's first message", async () => {
+  git('init', '-q', '-b', 'main');
+  git('add', 'a.txt');
+  git('commit', '-q', '-m', 'first');
+  const runtime = await start();
+  const result = await runtime.withCheckpoint('revert a.txt', async () => {
+    fs.writeFileSync(path.join(root, 'a.txt'), 'reverted\n');
+    return 'done';
+  });
+  expect(result).toBe('done');
+  expect(runtime.checkpoints()).toMatchObject([{ n: 1, label: 'revert a.txt', kind: 'git' }]);
+  await runtime.restoreCheckpoint(1);
+  expect(read()).toBe('old\n');
+  // A change that changes nothing leaves no checkpoint.
+  await runtime.withCheckpoint('nothing', async () => undefined);
+  expect(runtime.checkpoints().map((entry) => entry.label)).toEqual(['revert a.txt', 'before restoring checkpoint 1']);
+  await runtime.close();
+});
