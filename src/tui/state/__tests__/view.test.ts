@@ -165,3 +165,19 @@ test('an edit keeps its proposed diff, then the one it made, shown open, with th
   expect(tool(state, 'r1')).toMatchObject({ collapsed: true });
   expect(tool(state, 'r1').diff).toBeUndefined();
 });
+
+test('a command and what it reports are rows of their own, and another session starts its token count over', () => {
+  let state = run([
+    event({ type: 'text', delta: 'streaming' }),
+    { type: 'command', text: '/cost' },
+    { type: 'output', text: 'No requests yet.' },
+    event({ type: 'usage', usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 } }),
+  ]);
+  expect(kinds(state)).toEqual(['assistant', 'command', 'output']);
+  expect(state.rows[0]).toMatchObject({ streaming: false });
+  expect(state.rows.slice(1)).toMatchObject([{ text: '/cost' }, { text: 'No requests yet.' }]);
+  expect(state.running).toBe(false);
+  state = reduceView(state, { type: 'load', messages: [] });
+  expect(state.rows).toEqual([]);
+  expect(state.status).toMatchObject({ inputTokens: 0, outputTokens: 0, phase: 'idle' });
+});

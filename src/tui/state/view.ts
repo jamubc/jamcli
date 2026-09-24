@@ -36,6 +36,10 @@ export type Row =
       collapsed: boolean;
     }
   | { kind: 'notice'; id: number; level: 'info' | 'warn' | 'error'; text: string }
+  /** A slash command as the person typed it. */
+  | { kind: 'command'; id: number; text: string }
+  /** What a command reports: a table, a list, or a few lines. */
+  | { kind: 'output'; id: number; text: string }
   | { kind: 'compaction'; id: number; trigger: 'auto' | 'manual'; strategy: 'summary' | 'drop'; beforeTokens: number; afterTokens: number };
 
 /** A call waiting for the person, as the permission prompt shows it. */
@@ -87,6 +91,9 @@ export type ViewAction =
   | { type: 'load'; messages: ChatMessage[] }
   | { type: 'status'; patch: Partial<StatusData> }
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; text: string }
+  /** The person ran a slash command, which never reaches the model. */
+  | { type: 'command'; text: string }
+  | { type: 'output'; text: string }
   | { type: 'toggle'; id: number }
   | { type: 'clear' };
 
@@ -340,13 +347,19 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     }
     case 'load': {
       const { rows, nextId } = rowsFrom(action.messages, state.nextId);
-      return { ...state, rows, nextId, approvals: [], running: false, status: { ...state.status, phase: 'idle' } };
+      // Tokens are counted from events, so another session's count starts over.
+      return { ...state, rows, nextId, approvals: [], running: false, status: { ...state.status, phase: 'idle', retry: undefined, inputTokens: 0, outputTokens: 0 } };
     }
     case 'status':
       return { ...state, status: { ...state.status, ...action.patch } };
     case 'notice': {
       const row: Row = { kind: 'notice', id: state.nextId, level: action.level, text: action.text };
       return { ...state, rows: [...state.rows, row], nextId: state.nextId + 1 };
+    }
+    case 'command':
+    case 'output': {
+      const row: Row = { kind: action.type, id: state.nextId, text: action.text };
+      return { ...state, rows: [...closeStreaming(state.rows), row], nextId: state.nextId + 1 };
     }
     case 'toggle':
       return { ...state, rows: updateRow(state.rows, (row) => row.id === action.id && row.kind === 'tool', (row) => ({ ...row, collapsed: !row.collapsed })) };

@@ -2,6 +2,7 @@
 import { createRuntime } from '../../core/runtime/index.js';
 import { resolveJamcliProjectRoot } from '../../utils/projectRoot.js';
 import { App } from './App.js';
+import type { SessionChoice } from './commands.js';
 
 /**
  * Start the OpenTUI interface. OpenTUI draws through native code that Bun loads; on Node
@@ -13,7 +14,15 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
     process.exit(1);
   }
   const [{ createCliRenderer }, { createRoot }] = await Promise.all([import('@opentui/core'), import('@opentui/react')]);
-  const runtime = await createRuntime({ projectRoot, surface: 'tui' });
+  // The session on screen, which /clear, /resume, /fork, and /profile replace.
+  let current = await createRuntime({ projectRoot, surface: 'tui' });
+  const openSession = async (choice: SessionChoice) =>
+    (current = await createRuntime({
+      projectRoot,
+      surface: 'tui',
+      ...(choice.sessionId ? { sessionId: choice.sessionId } : {}),
+      ...(choice.profile ? { env: { ...process.env, JAMCLI_PROFILE: choice.profile } } : {}),
+    }));
   // JamCLI answers Ctrl+C itself: the first stops a turn, and two in a row leave.
   const renderer = await createCliRenderer({ exitOnCtrlC: false });
   let closing = false;
@@ -21,10 +30,10 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
     if (closing) return;
     closing = true;
     renderer.destroy();
-    await runtime.close().catch(() => undefined);
+    await current.close().catch(() => undefined);
     process.exit(code);
   };
   process.once('SIGTERM', () => void exit(143));
   process.once('SIGHUP', () => void exit(129));
-  createRoot(renderer).render(<App runtime={runtime} projectRoot={projectRoot} onExit={() => void exit()} />);
+  createRoot(renderer).render(<App runtime={current} projectRoot={projectRoot} onExit={() => void exit()} openSession={openSession} />);
 }

@@ -6,9 +6,10 @@ import type { SyntaxStyle, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { initialView, reduceView, type PendingApproval, type Row, type ViewState } from '../state/view.js';
 import { SessionController, gitBranch } from './controller.js';
-import { isPermissionMode } from '../../core/permissions/modes.js';
 import { compactionLine, noticeLine, statusParts, toolLine } from './format.js';
 import { createSyntaxStyle, filetypeOf } from './syntax.js';
+import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
+import { Palette } from './Palette.js';
 
 /** Colors by role. Every state also has a word, so none of these carries meaning alone. */
 export const THEME = {
@@ -21,10 +22,15 @@ export const THEME = {
 };
 
 export interface AppProps {
+  /** The session the interface opens on. */
   runtime: Runtime;
   projectRoot: string;
   /** Called when the person asks to leave. */
   onExit: () => void;
+  /** Open a session in place of the current one: a new one, or `sessionId`, with the chosen profile. */
+  openSession: (choice: SessionChoice) => Promise<Runtime>;
+  /** Commands beyond the built-in ones, such as custom commands. */
+  commands?: SlashCommand[];
 }
 
 /** A unified diff, highlighted as the file it changes. */
@@ -59,6 +65,14 @@ function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
       return <text fg={row.level === 'error' ? THEME.error : row.level === 'warn' ? THEME.warn : THEME.dim}>{noticeLine(row)}</text>;
     case 'compaction':
       return <text fg={THEME.dim}>{compactionLine(row)}</text>;
+    case 'command':
+      return (
+        <box marginTop={1}>
+          <text fg={THEME.accent}>{`> ${row.text}`}</text>
+        </box>
+      );
+    case 'output':
+      return <text>{row.text}</text>;
   }
 }
 
@@ -125,10 +139,18 @@ function BypassConfirm({ onAnswer }: { onAnswer: (text: string) => void }) {
   );
 }
 
-export function App({ runtime, projectRoot, onExit }: AppProps) {
+/** A composer line that starts with a slash and has no space yet is a command being named. */
+const naming = (draft: string) => draft.startsWith('/') && !/\s/.test(draft);
+
+/** Commands the design names that arrive with later work. Typing one says so rather than calling it unknown. */
+const LATER = new Set(['rewind', 'undo', 'diff', 'commit', 'pr', 'skills', 'hooks', 'plugins', 'workflows', 'theme']);
+
+export function App({ runtime: first, projectRoot, onExit, openSession: open, commands: extra = [] }: AppProps) {
   const renderer = useRenderer();
   const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState => initialView());
+  const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch), [runtime]);
+  const commands = useMemo(() => [...BUILTIN_COMMANDS, ...extra], [extra]);
   const composer = useRef<TextareaRenderable | null>(null);
   const [exitArmed, setExitArmed] = useState(false);
   const branch = useMemo(() => gitBranch(projectRoot), [projectRoot]);
@@ -166,26 +188,87 @@ export function App({ runtime, projectRoot, onExit }: AppProps) {
     [approval, controller]
   );
 
-  const submit = useCallback(() => {
-    const text = composer.current?.plainText.trim() ?? '';
+  /** The profile chosen with /profile, kept for every session opened after it. */
+  const profile = useRef<string | undefined>(undefined);
+  const switchSession = useCallback(
+    async (choice: SessionChoice): Promise<string | undefined> => {
+      if (controller.running) return 'A turn is running.';
+      let next: Runtime;
+      try {
+        next = await open({ ...choice, profile: choice.profile ?? profile.current });
+      } catch (error: any) {
+        return error?.message ?? String(error);
+      }
+      if (choice.profile) profile.current = choice.profile;
+      setRuntime(next);
+      dispatch({ type: 'load', messages: next.session.messages });
+      await runtime.close().catch(() => undefined);
+      return undefined;
+    },
+    [controller, open, runtime]
+  );
+
+  const say = (level: 'info' | 'warn' | 'error', text: string) => dispatch({ type: 'notice', level, text });
+  const context = (): CommandContext => ({
+    runtime,
+    projectRoot,
+    running: controller.running,
+    ...(profile.current ? { profile: profile.current } : {}),
+    show: (text) => dispatch({ type: 'output', text }),
+    notice: say,
+    dispatch,
+    refresh: () => controller.refresh(),
+    openSession: switchSession,
+    setMode: (mode) => void controller.setMode(mode),
+    confirmBypass: () => setConfirmBypass(true),
+    copy: (text) => renderer.copyToClipboardOSC52(text),
+    exit: onExit,
+    commands: () => commands,
+  });
+
+  const runCommand = async (line: string) => {
+    const parsed = parseCommand(line);
+    if (!parsed) return;
+    dispatch({ type: 'command', text: line });
+    const command = findCommand(commands, parsed.name);
+    if (!command) return say('warn', LATER.has(parsed.name) ? `/${parsed.name} is not available yet.` : `/${parsed.name} is not a command. /help lists them.`);
+    try {
+      await command.run(context(), parsed.args);
+    } catch (error: any) {
+      say('error', `/${command.name} failed: ${error?.message ?? error}`);
+    }
+  };
+
+  /**
+   * The palette, while a command is being named: what was typed, which match is chosen,
+   * and whether Escape closed it for this text. Keys read the ref, which changes at once.
+   */
+  const palette = useRef<{ draft: string; index: number; closed?: string }>({ draft: '', index: 0 });
+  const [, setPaletteView] = useState(palette.current);
+  const setPalette = (next: typeof palette.current) => {
+    palette.current = next;
+    setPaletteView(next);
+  };
+  const matchesFor = (draft: string) => (naming(draft) && palette.current.closed !== draft ? matchCommands(commands, draft) : undefined);
+  const onDraft = () => {
+    const draft = composer.current?.plainText ?? '';
+    if (draft !== palette.current.draft) setPalette({ draft, index: 0, closed: palette.current.closed === draft ? draft : undefined });
+  };
+  const matches = matchesFor(palette.current.draft);
+
+  const submit = () => {
+    const typed = composer.current?.plainText ?? '';
+    const text = typed.trim();
     if (!text) return;
+    // Enter on a name still being typed runs the chosen match.
+    const listed = matchesFor(typed);
+    const chosen = listed?.[palette.current.index];
+    const line = listed && chosen && !findCommand(commands, parseCommand(text)?.name ?? '') ? `/${chosen.name}` : text;
     composer.current?.setText('');
-    if (text === '/exit' || text === '/quit') return onExit();
-    if (text === '/clear') return dispatch({ type: 'clear' });
-    if (text === '/mode' || text.startsWith('/mode ')) {
-      const mode = text.slice('/mode'.length).trim();
-      if (!mode) return dispatch({ type: 'notice', level: 'info', text: `The mode is ${runtime.permissionMode}. Choose one with /mode plan, default, accept-edits, auto, or bypass.` });
-      if (!isPermissionMode(mode)) return dispatch({ type: 'notice', level: 'warn', text: `${mode} is not a mode; choose plan, default, accept-edits, auto, or bypass.` });
-      if (mode === 'bypass') return setConfirmBypass(true);
-      controller.setMode(mode);
-      return;
-    }
-    if (text.startsWith('/')) {
-      dispatch({ type: 'notice', level: 'warn', text: `${text.split(/\s/)[0]} is not available in this interface yet.` });
-      return;
-    }
+    setPalette({ draft: '', index: 0 });
+    if (line.startsWith('/')) return void runCommand(line);
     void controller.submit(text);
-  }, [controller, onExit, runtime]);
+  };
 
   useKeyboard((key) => {
     if (key.ctrl && key.name === 'c') {
@@ -218,6 +301,29 @@ export function App({ runtime, projectRoot, onExit }: AppProps) {
       else if (key.name === 'down') choose((from) => ({ selected: Math.min(from.selected + 1, Math.max(0, approval.suggestions.length - 1)) }));
       else if (key.name === 'up') choose((from) => ({ selected: Math.max(0, from.selected - 1) }));
       return;
+    }
+    const draft = composer.current?.plainText ?? '';
+    const listed = matchesFor(draft);
+    if (listed) {
+      const moves = key.name === 'down' ? 1 : key.name === 'up' ? -1 : 0;
+      if (moves) {
+        key.preventDefault();
+        const index = Math.min(Math.max(0, palette.current.index + moves), Math.max(0, listed.length - 1));
+        return setPalette({ ...palette.current, draft, index });
+      }
+      if (key.name === 'tab' && !key.shift) {
+        key.preventDefault();
+        const chosen = listed[palette.current.index];
+        if (chosen) {
+          composer.current?.setText(`/${chosen.name} `);
+          composer.current?.gotoBufferEnd();
+        }
+        return;
+      }
+      if (key.name === 'escape') {
+        key.preventDefault();
+        return setPalette({ draft, index: 0, closed: draft });
+      }
     }
     if (key.name === 'escape' && controller.running) {
       controller.cancel();
@@ -264,17 +370,21 @@ export function App({ runtime, projectRoot, onExit }: AppProps) {
           }}
         />
       ) : (
-        <box border borderColor={THEME.border} flexShrink={0} height={5}>
-          <textarea
-            ref={composer}
-            focused
-            placeholder="Message JamCLI. Enter sends, Shift+Enter adds a line."
-            keyBindings={[
-              { name: 'return', action: 'submit' },
-              { name: 'return', shift: true, action: 'newline' },
-            ]}
-            onSubmit={submit}
-          />
+        <box flexDirection="column" flexShrink={0}>
+          {matches ? <Palette matches={matches} selected={palette.current.index} colors={THEME} /> : null}
+          <box border borderColor={THEME.border} flexShrink={0} height={5}>
+            <textarea
+              ref={composer}
+              focused
+              placeholder="Message JamCLI. Enter sends, Shift+Enter adds a line, / lists commands."
+              keyBindings={[
+                { name: 'return', action: 'submit' },
+                { name: 'return', shift: true, action: 'newline' },
+              ]}
+              onSubmit={submit}
+              onContentChange={onDraft}
+            />
+          </box>
         </box>
       )}
       <box height={1} flexShrink={0}>

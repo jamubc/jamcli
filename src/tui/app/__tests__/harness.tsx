@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import { testRender } from '@opentui/react/test-utils';
 import { App } from '../App.js';
+import type { SessionChoice } from '../commands.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from '../../../core/runtime/index.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 
@@ -34,6 +35,7 @@ export async function frameWith(setup: Setup, match: (frame: string) => boolean,
 export function interfaceHarness() {
   const context = { server: undefined as unknown as FakeProviderServer, root: '' };
   const shared = process.env.JAMCLI_CONFIG_DIR;
+  const sharedState = process.env.JAMCLI_STATE_DIR;
   beforeEach(() => {
     context.server = startFakeProvider();
     const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-app-')));
@@ -41,6 +43,7 @@ export function interfaceHarness() {
     fs.mkdirSync(context.root);
     process.env.JAMCLI_CONFIG_DIR = path.join(base, 'user');
     fs.mkdirSync(process.env.JAMCLI_CONFIG_DIR);
+    process.env.JAMCLI_STATE_DIR = path.join(base, 'state');
     fs.writeFileSync(
       path.join(process.env.JAMCLI_CONFIG_DIR, 'config.json'),
       JSON.stringify({ api_registry: { ollama: { endpoint: context.server.ollamaBaseUrl } }, model: 'ollama:fake-model', sandbox: { enabled: false } })
@@ -49,18 +52,33 @@ export function interfaceHarness() {
   afterEach(() => {
     context.server.close();
     process.env.JAMCLI_CONFIG_DIR = shared;
+    if (sharedState === undefined) delete process.env.JAMCLI_STATE_DIR;
+    else process.env.JAMCLI_STATE_DIR = sharedState;
     fs.rmSync(path.dirname(context.root), { recursive: true, force: true });
   });
-  const open = async (options: Partial<RuntimeOptions> = {}, onExit = () => undefined): Promise<{ runtime: Runtime; setup: Setup; close: () => Promise<void> }> => {
-    const runtime = await createRuntime({ projectRoot: context.root, surface: 'tui', mcp: false, env: {}, ...options });
-    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} />, { width: 100, height: 30, exitOnCtrlC: false });
+  const open = async (options: Partial<RuntimeOptions> = {}, onExit = () => undefined, size = { width: 100, height: 30 }) => {
+    const base: RuntimeOptions = { projectRoot: context.root, surface: 'tui', mcp: false, env: {}, ...options };
+    const opened: Runtime[] = [];
+    const make = async (choice: SessionChoice = {}) => {
+      const made = await createRuntime({
+        ...base,
+        ...(choice.sessionId ? { sessionId: choice.sessionId } : {}),
+        ...(choice.profile ? { env: { ...base.env, JAMCLI_PROFILE: choice.profile } } : {}),
+      });
+      opened.push(made);
+      return made;
+    };
+    const runtime = await make();
+    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} openSession={make} />, { ...size, exitOnCtrlC: false });
     await setup.renderOnce();
     return {
       runtime,
+      /** The session on screen: the last one opened. */
+      current: () => opened.at(-1)!,
       setup,
       close: async () => {
         setup.renderer.destroy();
-        await runtime.close();
+        for (const made of opened) await made.close().catch(() => undefined);
       },
     };
   };
