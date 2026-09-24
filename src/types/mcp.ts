@@ -11,6 +11,8 @@ export interface McpServerConfig {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  /** Variables passed from JamCLI's environment by name, such as a key the server needs. */
+  env_passthrough?: string[];
   cwd?: string;
   transport?: McpTransport;
   /** Endpoint for the streamable HTTP transport. */

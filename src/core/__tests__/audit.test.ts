@@ -16,6 +16,7 @@ import { SessionLog, TranscriptRecorder } from '../transcript/index.js';
 import { buildClassifierPrompt } from '../trust/index.js';
 import { runHeadless } from '../../cli/run.js';
 import { createAcpSession } from '../../acp/session.js';
+import { McpManager } from '../../services/McpManager.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -292,7 +293,20 @@ test('F22: a symbolic link out of the project is refused (2.4)', () =>
     }
   }));
 
-test.todo('F23: MCP servers do not receive provider keys (3.5)', pending);
+test('F23: MCP servers do not receive provider keys (3.5)', async () => {
+  const previous = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'sk-audit-parent';
+  const server = { id: 'envcheck', command: process.execPath, args: [path.join(import.meta.dir, '../../testing/envMcpServer.ts')] };
+  const manager = new McpManager({ configService: { listMcpServers: async () => [server] } as any });
+  try {
+    const [tool] = await manager.listServerTools(server);
+    expect(JSON.parse((await manager.callServerTool(tool, {})).output)).not.toContain('OPENAI_API_KEY');
+  } finally {
+    await manager.close();
+    if (previous === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previous;
+  }
+});
 test('F24: @ references expand on every surface (2.12, 2.13)', () =>
   withConfiguredProject(async (root, server) => {
     await fs.writeFile(path.join(root, 'notes.txt'), 'the notes say hello\n');

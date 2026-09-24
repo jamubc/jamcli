@@ -459,6 +459,16 @@ language servers JamCLI starts, each with its own declared permissions (D17, D18
 Provider keys are never passed unless named explicitly. This applies inside and outside
 the sandbox, which fixes F11's and F23's leak.
 
+As built (3.5), that list is the `minimal` policy, and the default is `scrubbed`: every
+variable passes except those whose names look like credentials (`KEY`, `SECRET`, `TOKEN`,
+`PASSWORD`, `PASSWD`, `CREDENTIAL`, or a `_PAT` suffix) and each provider's configured
+`key_env_var`. The minimal list strips `JAVA_HOME`, `GOPATH`, `SSH_AUTH_SOCK`, proxies,
+and virtual environments, which real builds and pushes need, while credentials are what
+the rule exists to stop; Codex makes the same choice. `sandbox.env: "minimal"` restores
+the list. `sandbox.env_passthrough` names variables every process gets, and an MCP
+server or external agent entry's `env_passthrough` names the ones it gets, so a key
+never has to be written into a project file.
+
 **Why.** "Trust on a machine that holds real credentials" needs more than prompts.
 Codex's default workspace-write sandbox with network off, and Claude Code's sandbox, show
 that sandboxing is what makes allowing commands reasonable.

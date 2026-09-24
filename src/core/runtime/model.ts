@@ -66,3 +66,9 @@ export function configuredSecrets(registry: ApiRegistry | undefined, env: Record
   }
   return secrets;
 }
+
+/** The variables configuration names as holding provider keys, which no subprocess gets. */
+export function keyVariables(registry: ApiRegistry | undefined): string[] {
+  const entries = [registry?.openrouter, registry?.openai, registry?.anthropic, ...(registry?.endpoints ?? [])];
+  return [...new Set(entries.flatMap((entry) => (entry?.key_env_var ? [entry.key_env_var] : [])))];
+}

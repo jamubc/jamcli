@@ -30,6 +30,8 @@ const handle = (line: string): void => {
           agentInfo: { name: 'fake-agent', version: '0.0.1' },
           agentCapabilities: {},
           authMethods: [],
+          // For tests: the environment variable names this agent was started with.
+          _meta: { envNames: Object.keys(process.env) },
         },
       });
       return;

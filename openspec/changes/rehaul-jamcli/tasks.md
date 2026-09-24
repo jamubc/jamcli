@@ -318,7 +318,27 @@ cover headless, ACP, and delegation.
     - no note on failure;
     - the engine never sandboxed.
   - The first mount-order probe was built wrong and slipped through; it was redone as a real swap.
-- [ ] 3.5 The minimal environment for every subprocess (commands, hooks, MCP servers, language servers). Files: `src/core/sandbox/env.ts`, `src/services/McpManager.ts`. Verify a provider key in the parent environment is absent in a spawned command and an MCP server.
+- [x] 3.5 The minimal environment for every subprocess (commands, hooks, MCP servers, language servers). Files: `src/core/sandbox/env.ts`, `src/services/McpManager.ts`. Verify a provider key in the parent environment is absent in a spawned command and an MCP server.
+  - **Verification**: `subprocessEnv` in `src/core/sandbox/env.ts` builds the environment for:
+    - the runtime's commands;
+    - MCP stdio servers, with their entry's `env` and `env_passthrough`;
+    - external ACP agents, with the same two fields.
+  - Hooks and language servers do not start processes yet; stages 8 and 9 use the same function. The default policy and its reason are recorded under D7.
+  - Inside bubblewrap, commands get `TMPDIR=/tmp`, since the sandbox's `/tmp` is its own.
+  - 5 tests:
+    - the default and minimal policies;
+    - named and declared variables;
+    - a real stdio MCP server that sees no provider key unless its entry names it;
+    - a command run through the runtime that sees no key, even one named by a custom `key_env_var`, but keeps `JAVA_HOME` and a passthrough.
+  - An external agent is checked the same way through the fake agent.
+  - Mutation probes, each turning a test red:
+    - passing credentials;
+    - ignoring withheld names;
+    - ignoring passthrough;
+    - dropping declared values;
+    - MCP servers, agents, or commands getting everything;
+    - not withholding the configured key variables.
+  - F23 is live.
 - [ ] 3.6 Sandbox escape tests. Files: `src/core/sandbox/__tests__/escape.test.ts`. Under bubblewrap, reading `~/.ssh`, writing outside the project, network access, and reading a provider key all fail. Skipped with a stated reason when bubblewrap is absent.
 - [ ] 3.7 Seatbelt live check on macOS. Stays unchecked until run on a Mac: run the escape suite there and record the output here.
 - [ ] 3.8 Headless flags. Files: `src/cli.ts`. Add `--permission-mode`, `--allowed-tools`, `--disallowed-tools`, `--dangerously-bypass-permissions`, and `--dry-run` (plan mode plus a report of what would have changed).

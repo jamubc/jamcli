@@ -19,9 +19,9 @@ import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { PermissionMode } from '../permissions/modes.js';
 import { LOCAL_CONFIG, grantedRules, writeProjectGrant } from '../permissions/grants.js';
-import { detectSandbox, type Sandbox, type SandboxKind, type SandboxSettings } from '../sandbox/index.js';
+import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type SandboxSettings } from '../sandbox/index.js';
 import { buildRuntimePrompt } from './prompt.js';
-import { configuredSecrets, resolveModel, trustClassifier, type ModelChoice } from './model.js';
+import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
@@ -103,12 +103,28 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const mcpConfig = await configService.getMcpConfig();
   const redact = createRedactor(env, configuredSecrets(config.api_registry, env));
 
+  const sandboxSettings = (config as { sandbox?: SandboxSettings }).sandbox ?? {};
+  const withheld = keyVariables(config.api_registry);
+  /** Every process the session starts inherits this, with no credential unless one is named. */
+  const envFor = (passthrough: string[] = [], values?: Record<string, string>) =>
+    subprocessEnv(env, {
+      policy: sandboxSettings.env,
+      passthrough: [...(sandboxSettings.env_passthrough ?? []), ...passthrough],
+      withheld,
+      extra: values,
+    });
+
   const registry = createBuiltinRegistry();
-  const mcp = options.mcp === false ? undefined : (options.mcp ?? new McpManager({ configService }));
+  const mcp =
+    options.mcp === false
+      ? undefined
+      : (options.mcp ?? new McpManager({ configService, envFor: (server) => envFor(server.env_passthrough, server.env) }));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
   const depth = options.parent ? options.parent.depth : 0;
 
-  const sandbox = options.sandbox ?? detectSandbox({ projectRoot, settings: (config as { sandbox?: SandboxSettings }).sandbox });
+  const sandbox = options.sandbox ?? detectSandbox({ projectRoot, settings: sandboxSettings });
+  // Inside bubblewrap, /tmp is the sandbox's own, so a temporary directory elsewhere would not exist.
+  const commandEnv = { ...envFor(), ...(sandbox.kind === 'bwrap' ? { TMPDIR: '/tmp' } : {}) };
 
   let permissions: PermissionEngine;
   if (options.parent) {
@@ -166,6 +182,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         projectRoot,
         ignorePatterns: mcpConfig.ignore_patterns,
         commandTimeoutMs: config.agent_loop?.command_timeout_ms ?? DEFAULT_AGENT_LOOP_CONFIG.command_timeout_ms,
+        env: commandEnv,
         ...(sandbox.kind === 'none' ? {} : { wrapCommand: sandbox.wrap, sandboxNote: sandbox.note }),
         delegate: delegateChild,
         delegationDepth: depth,

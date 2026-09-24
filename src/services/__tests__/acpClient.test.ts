@@ -75,3 +75,21 @@ test('normalizeAgentsFile accepts an agents array', () => {
   const agents = normalizeAgentsFile({ agents: [{ id: 'a', command: 'agent-a' }] });
   expect(agents).toEqual([{ id: 'a', command: 'agent-a' }]);
 });
+
+test('an external agent gets no provider key unless its entry names one', async () => {
+  const previous = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-in-the-parent';
+  try {
+    const plain = new AcpClient({ command: process.execPath, args: [fixture] });
+    const names = ((await plain.start()) as any)._meta.envNames as string[];
+    await plain.stop();
+    expect(names).toContain('PATH');
+    expect(names).not.toContain('ANTHROPIC_API_KEY');
+    const named = new AcpClient({ command: process.execPath, args: [fixture], env_passthrough: ['ANTHROPIC_API_KEY'] });
+    expect(((await named.start()) as any)._meta.envNames).toContain('ANTHROPIC_API_KEY');
+    await named.stop();
+  } finally {
+    if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = previous;
+  }
+});

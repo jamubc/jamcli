@@ -1,3 +1,5 @@
+import type { EnvPolicy } from './env.js';
+
 export type SandboxKind = 'none' | 'bwrap' | 'seatbelt';
 
 /** The `sandbox` block of configuration. */
@@ -10,6 +12,10 @@ export interface SandboxSettings {
   writable?: string[];
   /** Paths hidden in addition to the defaults. */
   hidden?: string[];
+  /** How much of JamCLI's environment commands and servers inherit. */
+  env?: EnvPolicy;
+  /** Variables passed to every process by name, even when they look like credentials. */
+  env_passthrough?: string[];
 }
 
 export interface Sandbox {

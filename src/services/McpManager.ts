@@ -1,6 +1,7 @@
 import { ConfigService } from './ConfigService.js';
 import type { McpServerConfig, McpToolDescriptor } from '../types/mcp.js';
 import { listVisibleTools } from '../core/tools/index.js';
+import { subprocessEnv } from '../core/sandbox/env.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -8,6 +9,8 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 type McpManagerOptions = {
   configService?: ConfigService;
+  /** The environment a stdio server starts with. Defaults to JamCLI's, without credentials. */
+  envFor?: (server: McpServerConfig) => Record<string, string>;
 };
 
 /** The shape cached per connected server. */
@@ -34,13 +37,9 @@ export const resolveTransportKind = (server: McpServerConfig): 'stdio' | 'http' 
   return 'stdio';
 };
 
-const buildStdioEnv = (extra?: Record<string, string>): Record<string, string> => {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === 'string') env[key] = value;
-  }
-  return { ...env, ...(extra || {}) };
-};
+/** A server gets JamCLI's environment without credentials, plus what its entry declares. */
+export const serverEnv = (server: McpServerConfig): Record<string, string> =>
+  subprocessEnv(process.env, { passthrough: server.env_passthrough, extra: server.env });
 
 /**
  * Build the SDK transport for a server entry. Exported so the transport choice
@@ -48,7 +47,8 @@ const buildStdioEnv = (extra?: Record<string, string>): Record<string, string> =
  */
 export const createClientTransport = (
   server: McpServerConfig,
-  overrides: McpTransportOverrides = {}
+  overrides: McpTransportOverrides = {},
+  env: Record<string, string> = serverEnv(server)
 ): Transport => {
   const kind = resolveTransportKind(server);
   if (kind === 'http') {
@@ -64,7 +64,7 @@ export const createClientTransport = (
   return new StdioClientTransport({
     command: server.command,
     args: server.args || [],
-    env: buildStdioEnv(server.env),
+    env,
     cwd: server.cwd || process.cwd(),
   });
 };
@@ -74,8 +74,11 @@ export class McpManager {
   private connections: Map<string, McpConnection> = new Map();
   private toolIndex: Map<string, McpToolDescriptor> = new Map();
 
+  private envFor: (server: McpServerConfig) => Record<string, string>;
+
   constructor(options: McpManagerOptions = {}) {
     this.configService = options.configService || new ConfigService();
+    this.envFor = options.envFor ?? serverEnv;
   }
 
   async listServers(): Promise<McpServerConfig[]> {
@@ -255,7 +258,7 @@ export class McpManager {
     const existing = this.connections.get(server.id);
     if (existing) return existing;
 
-    const transport = createClientTransport(server);
+    const transport = createClientTransport(server, {}, this.envFor(server));
 
     const client = new Client(
       {

@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'node:path';
+import { subprocessEnv } from '../core/sandbox/env.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   ACP_PROTOCOL_VERSION,
@@ -23,6 +24,8 @@ export interface AcpAgentConfig {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  /** Variables passed from JamCLI's environment by name, such as the agent's own key. */
+  env_passthrough?: string[];
   cwd?: string;
 }
 
@@ -92,7 +95,7 @@ export class AcpClient {
     if (this.child) throw new Error('ACP client is already running');
     const child = spawn(this.config.command, this.config.args ?? [], {
       cwd: this.config.cwd,
-      env: { ...process.env, ...(this.config.env || {}) },
+      env: subprocessEnv(process.env, { passthrough: this.config.env_passthrough, extra: this.config.env }),
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as ChildProcessWithoutNullStreams;
 
