@@ -81,6 +81,10 @@ export interface ToolSetOptions extends Pick<ToolPolicyOptions, 'permissions' | 
   registry?: ToolRegistry;
   /** Tool names that came from MCP servers, mapped to their server. */
   mcpServers?: Map<string, string>;
+  /** Decide with this policy instead of building one, as a delegated run does with its parent's. */
+  policy?: ToolPolicy;
+  /** Descriptions to offer instead of a tool's own, such as `task` listing the categories. */
+  descriptions?: Record<string, string>;
   /** The context every call runs with, less what each call supplies. */
   context: () => ToolContext;
 }
@@ -110,14 +114,16 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
   };
   const classOf = (name: string): PolicyClass | 'unknown' => registry.get(name)?.policy ?? 'unknown';
 
-  const policy = createToolPolicy({
-    permissions: options.permissions,
-    allowTools: options.allowTools,
-    denyTools: options.denyTools,
-    classOf,
-    namesOf,
-    known: (name) => Boolean(registry.get(name)),
-  });
+  const policy =
+    options.policy ??
+    createToolPolicy({
+      permissions: options.permissions,
+      allowTools: options.allowTools,
+      denyTools: options.denyTools,
+      classOf,
+      namesOf,
+      known: (name) => Boolean(registry.get(name)),
+    });
 
   const offered = registry.visible().filter((tool) => policy.decide(tool.name).decision !== 'deny');
   const offeredNames = new Set(offered.map((tool) => tool.name));
@@ -125,7 +131,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
     const server = options.mcpServers?.get(tool.name);
     return {
       name: tool.name,
-      description: tool.description,
+      description: options.descriptions?.[tool.name] ?? tool.description,
       parameters: tool.inputSchema,
       policyClass: tool.policy,
       source: server ? 'mcp' : 'builtin',
@@ -161,6 +167,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
         ...options.context(),
         signal: context?.signal,
         onProgress: context?.onProgress,
+        requestApproval: context?.requestApproval,
       });
       return {
         tool: call.name,

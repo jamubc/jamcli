@@ -1,15 +1,15 @@
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { canDelegate, childTurns, delegationTranscriptLine } from '../delegation/bounds.js';
-import { delegate } from '../delegation/route.js';
-import type { DelegationConfig } from '../../types/config.js';
+import type { DelegationOutcome } from '../delegation/types.js';
 import { DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
 
 interface BackgroundTask {
   id: string;
   category: string;
   prompt: string;
-  status: 'running' | 'ok' | 'error' | 'cancelled' | 'refused';
-  response?: string;
+  status: 'running' | DelegationOutcome['status'];
+  /** The child's reply so far, then its final response. */
+  output: string;
   resolvedModel?: string;
   childSessionId?: string;
   reason?: string;
@@ -18,16 +18,8 @@ interface BackgroundTask {
 }
 
 const background = new Map<string, BackgroundTask>();
-const backgroundOutput = new Map<string, string[]>();
 
-const DEPTH_KEY = 'jamcli.delegation.depth';
-
-const depthOf = (ctx: ToolContext): number => {
-  const value = (ctx as unknown as Record<string, unknown>)[DEPTH_KEY];
-  return typeof value === 'number' ? value : 0;
-};
-
-const sameRoot = () => process.cwd();
+const running = () => [...background.values()].filter((task) => task.status === 'running').length;
 
 const taskSchema: JsonSchema = {
   type: 'object',
@@ -41,37 +33,40 @@ const taskSchema: JsonSchema = {
   additionalProperties: false,
 };
 
-const statusSchema: JsonSchema = {
+const idSchema: JsonSchema = {
   type: 'object',
   properties: { id: { type: 'string', description: 'Identifier returned by task.' } },
   required: ['id'],
   additionalProperties: false,
 };
 
-const cancelSchema: JsonSchema = {
-  type: 'object',
-  properties: { id: { type: 'string', description: 'Identifier returned by task.' } },
-  required: ['id'],
-  additionalProperties: false,
-};
+const statusOf = (outcome: DelegationOutcome): ToolRunPayload['status'] =>
+  outcome.status === 'ok' ? 'ok' : outcome.status === 'cancelled' ? 'cancelled' : 'error';
 
-export async function taskRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
-  const runtime = runtimeFor(ctx);
-  const decision = canDelegate({
-    depth: depthOf(ctx),
-    running: background.size,
-    config: runtime.delegation ?? DEFAULT_DELEGATION_CONFIG,
+const lineFor = (outcome: DelegationOutcome) =>
+  delegationTranscriptLine({
+    category: outcome.category,
+    resolvedModel: outcome.resolvedModel ?? 'unresolved',
+    childSessionId: outcome.childSessionId ?? 'none',
+    status: outcome.status,
   });
-  if (!decision.allowed) {
-    return { output: `Delegation refused: ${decision.reason}` };
-  }
+
+/**
+ * Delegate to a child run. The runtime supplies `ctx.delegate`, which runs the child in
+ * this process on a model from the category, under this session's policy.
+ */
+export async function taskRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  if (!ctx.delegate) return { output: 'Delegation is not available in this session.', status: 'error' };
+  const config = ctx.delegationConfig ?? DEFAULT_DELEGATION_CONFIG;
+  const decision = canDelegate({ depth: ctx.delegationDepth ?? 0, running: running(), config });
+  if (!decision.allowed) return { output: `Delegation refused: ${decision.reason}`, status: 'error' };
 
   const category = String(args.category ?? '');
   const prompt = String(args.prompt ?? '');
-  const maxTurns = childTurns(runtime.delegation, typeof args.max_turns === 'number' ? args.max_turns : undefined);
+  const maxTurns = childTurns(config, typeof args.max_turns === 'number' ? args.max_turns : undefined);
 
   if (args.background) {
-    const task = startBackground({ category, prompt, maxTurns, ctx });
+    const task = startBackground(ctx, { category, prompt, maxTurns });
     return {
       output: [
         `Started background task ${task.id} on category "${category}" (max ${maxTurns} turns).`,
@@ -81,41 +76,61 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
     };
   }
 
-  const outcome = await delegate({
-    command: runtime.command,
-    args: [...runtime.args, '--max-turns', String(maxTurns)],
+  const outcome = await ctx.delegate({
     category,
     prompt,
-    cwd: ctx.projectRoot,
-    registry: runtime.registry,
-    categories: runtime.categories,
-    config: runtime.delegation,
-    depth: depthOf(ctx),
-    running: 0,
+    maxTurns,
+    background: false,
     signal: ctx.signal,
+    onText: ctx.onProgress,
+    requestApproval: ctx.requestApproval,
   });
-
-  if (outcome.status === 'refused') {
-    return { output: `Delegation refused: ${outcome.reason ?? 'no servable entry in the chain'}` };
+  if (outcome.status === 'refused' && !outcome.childSessionId) {
+    return { output: `Delegation refused: ${outcome.reason ?? 'no model in the chain can serve it'}`, status: 'error' };
   }
-
   return {
-    output: [
-      outcome.transcriptLine ?? `Delegated "${category}"`,
-      '',
-      outcome.response || outcome.reason || '(no output)',
-    ].join('\n'),
-    metadata: {
-      category: outcome.category,
-      resolvedModel: outcome.resolvedModel,
-      childSessionId: outcome.childSessionId,
-    },
+    output: [lineFor(outcome), '', outcome.response || outcome.reason || '(no output)'].join('\n'),
+    status: statusOf(outcome),
+    metadata: { category, resolvedModel: outcome.resolvedModel, childSessionId: outcome.childSessionId },
   };
+}
+
+function startBackground(ctx: ToolContext, options: { category: string; prompt: string; maxTurns: number }): BackgroundTask {
+  const task: BackgroundTask = {
+    id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    ...options,
+    status: 'running',
+    output: '',
+    startedAt: Date.now(),
+    controller: new AbortController(),
+  };
+  background.set(task.id, task);
+  ctx
+    .delegate!({
+      ...options,
+      background: true,
+      signal: task.controller.signal,
+      onText: (delta) => {
+        task.output += delta;
+      },
+    })
+    .then((outcome) => {
+      if (task.status === 'running') task.status = outcome.status;
+      task.output = outcome.response || task.output;
+      task.resolvedModel = outcome.resolvedModel;
+      task.childSessionId = outcome.childSessionId;
+      task.reason = outcome.reason;
+    })
+    .catch((error: any) => {
+      task.status = 'error';
+      task.reason = error?.message ?? String(error);
+    });
+  return task;
 }
 
 export async function taskStatusRunner(args: Record<string, any>): Promise<ToolRunPayload> {
   const task = background.get(String(args.id ?? ''));
-  if (!task) return { output: `No background task ${String(args.id ?? '')}.` };
+  if (!task) return { output: `No background task ${String(args.id ?? '')}.`, status: 'error' };
   return {
     output: [
       `${task.id}: ${task.status}`,
@@ -131,112 +146,31 @@ export async function taskStatusRunner(args: Record<string, any>): Promise<ToolR
 
 export async function taskResultRunner(args: Record<string, any>): Promise<ToolRunPayload> {
   const task = background.get(String(args.id ?? ''));
-  if (!task) return { output: `No background task ${String(args.id ?? '')}.` };
+  if (!task) return { output: `No background task ${String(args.id ?? '')}.`, status: 'error' };
   if (task.status === 'running') {
     return { output: `Task ${task.id} is still running. Poll task_status.` };
   }
-  const collected = backgroundOutput.get(task.id) ?? [];
   background.delete(task.id);
-  backgroundOutput.delete(task.id);
+  const line = delegationTranscriptLine({
+    category: task.category,
+    resolvedModel: task.resolvedModel ?? 'unresolved',
+    childSessionId: task.childSessionId ?? 'none',
+    status: task.status,
+  });
   return {
-    output: collected.length ? collected.join('\n') : task.response || '(no output)',
+    output: [line, '', task.output || task.reason || '(no output)'].join('\n'),
     metadata: { status: task.status, childSessionId: task.childSessionId },
   };
 }
 
+/** Stop a background task and report what it had written so far. */
 export async function taskCancelRunner(args: Record<string, any>): Promise<ToolRunPayload> {
   const task = background.get(String(args.id ?? ''));
-  if (!task) return { output: `No background task ${String(args.id ?? '')}.` };
+  if (!task) return { output: `No background task ${String(args.id ?? '')}.`, status: 'error' };
   task.controller.abort();
   task.status = 'cancelled';
-  return { output: `Cancelled ${task.id}.` };
+  return { output: `Cancelled ${task.id}.${task.output ? ` Partial output:\n${task.output}` : ''}` };
 }
-
-function startBackground(options: {
-  category: string;
-  prompt: string;
-  maxTurns: number;
-  ctx: ToolContext;
-}): BackgroundTask {
-  const runtime = runtimeFor(options.ctx);
-  const id = `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  const controller = new AbortController();
-  const task: BackgroundTask = {
-    id,
-    category: options.category,
-    prompt: options.prompt,
-    status: 'running',
-    startedAt: Date.now(),
-    controller,
-  };
-  background.set(id, task);
-  backgroundOutput.set(id, []);
-
-  void delegate({
-    command: runtime.command,
-    args: [...runtime.args, '--max-turns', String(options.maxTurns)],
-    category: options.category,
-    prompt: options.prompt,
-    cwd: options.ctx.projectRoot,
-    registry: runtime.registry,
-    categories: runtime.categories,
-    config: runtime.delegation,
-    depth: depthOf(options.ctx),
-    running: background.size - 1,
-    signal: controller.signal,
-    onEvent: (event) => {
-      if (event.type === 'text' && event.delta) {
-        const lines = backgroundOutput.get(id) ?? [];
-        lines.push(event.delta);
-        backgroundOutput.set(id, lines);
-      }
-    },
-  })
-    .then((outcome) => {
-      task.status = outcome.status === 'ok' ? 'ok' : outcome.status;
-      task.response = outcome.response;
-      task.resolvedModel = outcome.resolvedModel;
-      task.childSessionId = outcome.childSessionId;
-      task.reason = outcome.reason;
-      const lines = backgroundOutput.get(id) ?? [];
-      lines.push(delegationTranscriptLine({
-        category: outcome.category,
-        resolvedModel: outcome.resolvedModel ?? 'unresolved',
-        childSessionId: outcome.childSessionId ?? 'unknown',
-        status: outcome.status,
-      }));
-      backgroundOutput.set(id, lines);
-    })
-    .catch((error: any) => {
-      task.status = 'error';
-      task.reason = error?.message ?? String(error);
-    });
-
-  return task;
-}
-
-export interface DelegationRuntime {
-  command: string;
-  args: string[];
-  registry: any;
-  categories: any;
-  delegation?: DelegationConfig;
-}
-
-const runtimeCache = new Map<string, DelegationRuntime>();
-
-export const configureDelegationRuntime = (runtime: DelegationRuntime) => {
-  runtimeCache.set('current', runtime);
-};
-
-const runtimeFor = (_ctx: ToolContext): DelegationRuntime =>
-  runtimeCache.get('current') ?? {
-    command: process.execPath,
-    args: [process.argv[1] ?? 'jamcli'],
-    registry: undefined,
-    categories: undefined,
-    delegation: undefined,
-  };
 
 export const TASK_TOOLS: RegisteredTool[] = [
   {
@@ -250,21 +184,21 @@ export const TASK_TOOLS: RegisteredTool[] = [
   {
     name: 'task_status',
     description: 'Report the status of a background delegated task.',
-    inputSchema: statusSchema,
+    inputSchema: idSchema,
     policy: 'read',
     runner: taskStatusRunner,
   },
   {
     name: 'task_result',
     description: 'Collect the output of a finished background delegated task.',
-    inputSchema: statusSchema,
+    inputSchema: idSchema,
     policy: 'read',
     runner: taskResultRunner,
   },
   {
     name: 'task_cancel',
     description: 'Cancel a running background delegated task.',
-    inputSchema: cancelSchema,
+    inputSchema: idSchema,
     policy: 'write',
     runner: taskCancelRunner,
   },

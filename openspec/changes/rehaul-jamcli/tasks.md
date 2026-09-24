@@ -167,7 +167,31 @@ Line references describe the tree when the change opened.
     - 3 tests drive the real server with runtime sessions against the fake server: two prompts with the first exchange in the second request and the session recorded as `acp`; write tools offered, an edit approved in the editor and recorded as the user's, `@a.txt` expanded, and each concurrent call keeping its own id; and a configured OpenAI-compatible provider used instead of Ollama. One more checks that sessions are closed on disconnect.
     - Mutation probes: inventing a session id, matching results by tool name, not closing sessions, forcing Ollama, a fresh session per prompt, and approving without asking the editor each turn a test red.
     - F2, F3, F6, F13, and F24 are live, each driving the headless and ACP surfaces in process. F23 now waits only on 3.5, since MCP tools reach every surface through the runtime.
-- [ ] 2.14 Move delegation children onto the runtime. Files: `src/core/tools/task.ts`, `src/core/delegation/`. Verify a child can edit under the delegated policy and cannot widen it.
+- [x] 2.14 Move delegation children onto the runtime. Files: `src/core/tools/task.ts`, `src/core/delegation/`. Verify a child can edit under the delegated policy and cannot widen it.
+  - **Verification**: children are runtimes in the same process (`src/core/runtime/children.ts`), launched through `ToolContext.delegate`. The behavior is recorded under D2.
+    - They replace subprocess children, which had three defects: their depth was never passed down, so nesting was unbounded; the category table was never given to them; and since 2.12 they could not edit, because a headless child cannot ask.
+    - A nested approval travels through `ToolContext.requestApproval` to the parent's surface, scoped under the parent call's id.
+    - The task tool counts only running background tasks against the concurrency limit, where finished ones used to count until collected. It keeps streamed text whole instead of joining fragments with newlines, and reports partial output on cancel. The `task` description lists the categories in effect.
+    - 7 tests against the fake server:
+      - A child edits under an inherited `--allow-tool edit` on its own model and session, recorded as `child` and naming its parent.
+      - A child's edit that the parent would ask about reaches the parent's surface as `t1/e1`.
+      - A child cannot widen an inherited deny or ask.
+      - Depth is bounded, and an unknown category names the real ones.
+      - Cancelling the parent cancels the child.
+      - Background tasks report status, results, and partial output on cancel.
+      - Finished tasks free their slot.
+    - Mutation probes, each turning a test red:
+      - ignoring the parent's policy;
+      - never asking the parent;
+      - unscoped nested ids;
+      - not incrementing depth;
+      - counting finished tasks;
+      - hiding partial output;
+      - inheriting the parent's model;
+      - not passing the signal;
+      - not recording the parent;
+      - not describing categories;
+      - an unknown category that names nothing.
 - [ ] 2.15 Lazy entry point. Files: `src/index.tsx`. Dispatch on arguments before importing the interface. Verify `--version` median at or under 120 ms here (the 60 ms budget is enforced after stage 6's build change).
 - [ ] 2.16 The conformance test for one runtime. Files: `src/core/runtime/__tests__/surfaces.test.ts`. Drive the same scripted session through the headless and ACP assemblies and the interface's runtime factory call, and assert identical tool lists, provider requests, and transcripts.
 

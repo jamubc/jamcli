@@ -45,6 +45,7 @@ interface CreateOptions {
   cwd?: string;
   surface: string;
   parent?: { session: string; event: number };
+  delegatedBy?: string;
 }
 
 /**
@@ -77,6 +78,7 @@ export class SessionLog {
       surface: options.surface,
       jamcli: JAMCLI_VERSION,
       ...(options.parent ? { parent: options.parent } : {}),
+      ...(options.delegatedBy ? { delegatedBy: options.delegatedBy } : {}),
     });
   }
 

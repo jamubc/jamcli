@@ -17,6 +17,8 @@ export type TranscriptEvent =
       jamcli: string;
       /** Set on a fork: the session and event index it was copied from. */
       parent?: { session: string; event: number };
+      /** Set on a delegated run: the session whose task call started it. */
+      delegatedBy?: string;
     }
   | { v: 2; type: 'message'; ts: number; message: ChatMessage }
   | {

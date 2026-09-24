@@ -2,6 +2,7 @@ import type {
   AgentEvent,
   ApprovalBy,
   ApprovalDecision,
+  ApprovalRequest,
   ApprovalScope,
   JamSession,
   PolicyClass,
@@ -12,6 +13,7 @@ import type {
 import { readDecision } from '../types.js';
 import { buildApprovalRequest } from '../approval.js';
 import { emitHookEvent, type HookBus } from '../hooks/index.js';
+import type { NestedApproval } from '../delegation/types.js';
 
 export interface DispatchableTool {
   name: string;
@@ -23,6 +25,8 @@ export interface DispatchContext {
   signal?: AbortSignal;
   /** Streams partial output, such as a running command's, to the surface. */
   onProgress?: (chunk: string) => void;
+  /** Asks the surface about a call nested inside this one, such as a child run's. */
+  requestApproval?: NestedApproval;
 }
 
 export interface ToolDispatcher {
@@ -104,6 +108,11 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       result = await ctx.dispatcher.execute(call, {
         signal: ctx.signal,
         onProgress: (chunk) => ctx.emit({ type: 'tool_progress', callId: call.id, tool: call.name, chunk: redact(chunk) }),
+        requestApproval: ({ call: nested, request }) => {
+          // A nested call is shown under the call it came from, so its id cannot collide.
+          const scoped: ToolCall = { ...nested, id: `${call.id}/${nested.id}` };
+          return waitForDecision(scoped, request && { ...request, id: scoped.id, call: scoped });
+        },
       });
     } catch (error: any) {
       const cancelled = ctx.signal.aborted || error?.name === 'AbortError';
@@ -129,16 +138,18 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
   const readOnly = (call: ToolCall) =>
     Boolean(ctx.dispatcher.isReadOnly?.(call.name)) && !ctx.dispatcher.requiresApproval(call.name, call);
 
-  const waitForDecision = (call: ToolCall): Promise<ApprovalDecision | 'cancelled'> =>
+  const waitForDecision = (call: ToolCall, prebuilt?: ApprovalRequest): Promise<ApprovalDecision | 'cancelled'> =>
     new Promise((resolve) => {
       if (ctx.signal.aborted) return resolve('cancelled');
       const onAbort = () => resolve('cancelled');
       ctx.signal.addEventListener('abort', onAbort, { once: true });
-      const request = buildApprovalRequest(call, {
-        projectRoot: ctx.projectRoot,
-        policyClass: ctx.dispatcher.policyClass?.(call.name),
-        reason: ctx.dispatcher.approvalReason?.(call),
-      });
+      const request =
+        prebuilt ??
+        buildApprovalRequest(call, {
+          projectRoot: ctx.projectRoot,
+          policyClass: ctx.dispatcher.policyClass?.(call.name),
+          reason: ctx.dispatcher.approvalReason?.(call),
+        });
       ctx.emit({
         type: 'approval_request',
         call,

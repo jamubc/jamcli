@@ -11,8 +11,9 @@ import { SessionLog, TranscriptRecorder } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
 import { ConfigService } from '../../services/ConfigService.js';
 import { McpManager } from '../../services/McpManager.js';
-import { DEFAULT_AGENT_LOOP_CONFIG } from '../../types/config.js';
+import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
 import { createToolSet, registerMcpTools, type McpSource, type ToolSummary } from './tools.js';
+import { categoriesOf, childLauncher, type ParentSession } from './children.js';
 import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
@@ -44,6 +45,8 @@ export interface RuntimeOptions {
   /** The environment credentials are redacted from. Defaults to the process environment. */
   env?: Record<string, string | undefined>;
   configService?: ConfigService;
+  /** Set on a delegated run: the session that started it, whose policy it decides with. */
+  parent?: ParentSession;
 }
 
 export interface Runtime {
@@ -86,16 +89,34 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const registry = createBuiltinRegistry();
   const mcp = options.mcp === false ? undefined : (options.mcp ?? new McpManager({ configService }));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
+  const depth = options.parent ? options.parent.depth : 0;
+  const delegateChild = childLauncher({
+    projectRoot,
+    config,
+    configService,
+    mcp,
+    env: options.env,
+    parent: () => ({ sessionId: log.id, depth: depth + 1, policy: toolSet.policy }),
+    create: createRuntime,
+  });
+  const taskTool = registry.get('task');
   const toolSet = createToolSet({
     registry,
     mcpServers,
     permissions: mcpConfig.tools,
     allowTools: options.allowTools,
     denyTools: options.denyTools,
+    policy: options.parent?.policy,
+    descriptions: taskTool
+      ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }
+      : undefined,
     context: () => ({
       projectRoot,
       ignorePatterns: mcpConfig.ignore_patterns,
       commandTimeoutMs: config.agent_loop?.command_timeout_ms ?? DEFAULT_AGENT_LOOP_CONFIG.command_timeout_ms,
+      delegate: delegateChild,
+      delegationDepth: depth,
+      delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
     }),
   });
   for (const name of toolSet.policy.unknownFlags) notices.push(`No tool is named ${name}, so the flag naming it has no effect.`);
@@ -142,7 +163,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   const log = options.sessionId
     ? SessionLog.open(projectRoot, options.sessionId)
-    : SessionLog.create(projectRoot, { cwd, surface: options.surface });
+    : SessionLog.create(projectRoot, { cwd, surface: options.surface, delegatedBy: options.parent?.sessionId });
   let session = options.sessionId ? log.toSession() : createSession(projectRoot, log.id);
   let emitting: ((event: AgentEvent) => void) | undefined;
   const recorder = new TranscriptRecorder(log, {

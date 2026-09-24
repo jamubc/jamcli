@@ -124,6 +124,15 @@ MCP servers that did not connect). `setPermissionMode` arrives with the permissi
 is not wired into the runtime: it can separate a tool call from its result (F20), and
 wiring it into more surfaces before 4.3 makes it pair-safe would spread that defect.
 
+A delegated run is a runtime too, with surface `child`, in the same process as its
+parent. It decides with its parent's policy object, so neither its configuration nor any
+flag can widen what the parent allows. A call the parent would ask about is asked of the
+parent's surface, shown under the parent's `task` call as `<task id>/<child call id>`. A
+background child cannot ask anyone, so such a call is not made and the child is told.
+Its model comes from its category chain, its depth from its parent, and its session header
+names the session that delegated to it. The earlier subprocess children are removed: they
+could not ask, never learned their depth, and were never given the category table.
+
 Surfaces differ in two ways only: how they render events, and how an `approval_request`
 is answered. The interface asks the user. Headless answers from flags and policy. ACP
 forwards the request to the editor. Workflows answer from the step's policy or pause.

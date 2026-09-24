@@ -1,3 +1,6 @@
+import type { Delegate, NestedApproval } from '../core/delegation/types.js';
+import type { DelegationConfig } from './config.js';
+
 /**
  * The five tool names of the original interface. Kept only for the legacy per-tool
  * permission file and the Ink interface; the registry is the source of truth for tools.
@@ -121,6 +124,13 @@ export interface ToolContext {
   additionalRoots?: string[];
   /** Force a search backend; `auto` uses ripgrep when it is on PATH. */
   searchBackend?: 'auto' | 'ripgrep' | 'builtin';
+  /** Starts a child run for the task tool. Supplied by the runtime. */
+  delegate?: Delegate;
+  /** How many delegations deep this session is; 0 at the top. */
+  delegationDepth?: number;
+  delegationConfig?: DelegationConfig;
+  /** Ask whoever answers this call's approvals about a nested call, such as a child run's. */
+  requestApproval?: NestedApproval;
 }
 
 export type ToolRunner = (args: Record<string, any>, ctx: ToolContext) => Promise<ToolRunPayload>;
