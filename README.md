@@ -35,6 +35,7 @@ X Git integration
 - **Project rules**: instruction files are collected from the project root to the working directory and injected outermost first, with glob-conditional sections.
 - **Hooks**: session start, turn start, pre-tool, post-tool, compaction, and session end, with a throwing hook reported rather than fatal.
 - **Category routing**: a category names an ordered chain of models, so delegated work resolves its own model instead of inheriting the session's.
+- **Layered configuration**: defaults, your own settings, the project's, local overrides, the environment, and flags, with `jamcli config list --show-origin` naming where each value came from.
 - **Configuration profiles**: switch between different behavior profiles via `.jamcli/profiles`.
 
 ## Prerequisites
@@ -119,11 +120,35 @@ jamcli -p "read package.json and report the version" --output-format stream-json
 
 ## Configuration
 
-The CLI uses a `.jamcli` directory in your project root.
+Configuration comes from layers, each overriding the ones before it:
+
+1. built-in defaults, which include Ollama on `http://localhost:11434`;
+2. your own `~/.config/jamcli/config.json` (or `$XDG_CONFIG_HOME/jamcli`, or `$JAMCLI_CONFIG_DIR`), for every project;
+3. the project's `.jamcli/config.json`, with the older `.jamcli/mcp.json` and `.jamcli/profiles/`;
+4. the project's `.jamcli/config.local.json`;
+5. `JAMCLI_MODEL`, `JAMCLI_PROFILE`, and `JAMCLI_PERMISSION_MODE`;
+6. flags such as `--model` and `--permission-mode`.
+
+Sections merge key by key, and permission rules from every layer apply, so a deny in your own file holds in every project. A value that does not fit its setting is reported by file, key, and expected shape, and the layer below it applies instead.
+
+```bash
+jamcli config set model ollama:qwen2.5-coder:7b              # into .jamcli/config.json
+jamcli config set agent_loop.max_steps 30 --scope user       # into your own config.json
+jamcli config set 'models["ollama:qwen2.5-coder:7b"].context_window' 32768 --scope local
+jamcli config list --show-origin                             # every value, and where it came from
+jamcli config get model
+jamcli config unset agent_loop.max_steps --scope user
+```
+
+Values are read as JSON where they parse, so `30`, `true`, and `["read_file"]` keep their types. `jamcli config` never prints a key, a header, or an environment value. Editors can complete configuration files from [`docs/config.schema.json`](docs/config.schema.json).
+
+JamCLI writes nothing into a project until it has something to keep there: a session's history, a permission granted at a prompt, a todo list, or a `jamcli config set`. It then creates `.jamcli/` with a `.gitignore` that ignores the whole directory, so history and keys never reach a repository by accident. To share a file with a team, add an exception to `.jamcli/.gitignore`, such as `!config.json`.
+
+**Upgrading.** Existing `.jamcli/` files are read as they are. An existing `.jamcli/` gets its `.gitignore` the next time JamCLI stores something there. A new project no longer starts on a `gpt-4o` profile it never asked for: choose a model with `jamcli config set model <provider>:<model>` or `--model`. To turn the old per-tool settings in `mcp.json` into permission rules, run `jamcli config migrate` (add `--dry-run` to see the change first); it keeps `.bak` copies and never runs on its own.
 
 ### Project Root Detection
 
-JamCLI automatically detects the project root by walking up the directory tree from your current working directory until it finds a `.jamcli` folder. This ensures that:
+JamCLI detects the project root by walking up the directory tree from your current working directory until it finds a `.jamcli` folder, and uses the working directory when there is none. Once a project has one, this ensures that:
 
 - You can run `jamcli` from any subdirectory.
 - The same configuration and MCP servers are used across the project.
@@ -131,7 +156,7 @@ JamCLI automatically detects the project root by walking up the directory tree f
 
 ### Configuration Files
 
-- `config.json`: General settings, including `agent_loop` bounds, `categories` for routed work, `delegation` limits, and `trust`.
+- `config.json`: General settings, including `model`, `permissions`, `sandbox`, `agent_loop` bounds, `categories` for routed work, `delegation` limits, and `trust`. `config.local.json` takes the same settings and overrides it.
 - `mcp.json`: Tool permissions, context limits, ignore patterns, and MCP servers over stdio or streamable HTTP.
 - `profiles/`: AI behavior profiles.
 - `AGENTS.md`, `CLAUDE.md`, and `.jamcli/rules/*.md`: project rules, collected from the project root toward the working directory. A section headed `# when: <glob>` applies only to matching work.

@@ -563,6 +563,10 @@ As built (4.4), checked against Anthropic's documentation of 2026-09-24 and the
   compaction, including one in the middle of a turn. Dropping the oldest blocks is what
   the API allows.
   - A continued session starts afresh, because it cannot know its prefix is unchanged.
+  - The cutoff is dated one millisecond after the change, so nothing made before it
+    counts. A turn, and a compaction within one, wait for the clock to reach it before
+    making anything, so a reply is never dated in that millisecond and dropped. This was
+    found in 5.1, where it failed a test about one run in ten.
   - Mid-conversation system messages would keep the prefix across a mode switch on the
     models that take them. That is left for later, because Sonnet 5 does not.
 - **Refusals.** A reply that stops with `refusal` is reported rather than read as a
@@ -747,6 +751,49 @@ fixes F18.
 **Migration.** Existing `.jamcli/config.json`, `mcp.json`, and profile files are read
 as-is. `jamcli config migrate` is optional. It moves the legacy permission block into
 `permissions` rules, keeping a backup, and never runs implicitly.
+
+As built (5.1), `loadConfig` resolves the layers and writes nothing, and every surface
+assembles from it: the runtime, and the legacy interface through its config service.
+
+- **Layers.** Defaults; the user's `config.json`; the project's `.jamcli/config.json`,
+  with the legacy `mcp.json` read as `mcp` and the active profile read from the user's
+  and the project's `profiles/<name>.json`, project over user; `.jamcli/config.local.json`;
+  then `JAMCLI_MODEL`, `JAMCLI_PROFILE`, and `JAMCLI_PERMISSION_MODE`. Flags sit above
+  them and are applied by the runtime: `--model` and the permission flags.
+- **A `model` setting.** `JAMCLI_MODEL` needed a key to set, so the files have one too. It
+  sits under `--model` and above the profile's preferred model.
+- **Merging and origins.** Objects merge key by key, the permission lists add up, and
+  other lists replace. Every value records its layer, and each item of a permission list
+  records its own. The permission engine reads the same resolved layers, so a file that
+  cannot be parsed is reported once.
+- **Errors.** A value the schema rejects is taken out of its layer and named by file,
+  key, and expected shape, never by its value, and the layer below shows through. A key
+  the schema does not know is reported and ignored. The legacy `mcp.json` keeps keys it
+  does not know.
+- **Nothing written at startup.** The legacy writers now change only what they change,
+  in the project file alone. The removed startup write had also put a profile naming
+  `gpt-4o` and "You are a helpful AI assistant." into every new project. A project
+  without a profile now uses JamCLI's own instructions and asks for a model to be chosen;
+  a project that has one keeps it.
+- **The `.gitignore`.** It holds `*`, as written above. That sits uneasily with D16 and
+  D19, which put shared commands, skills, and workflows under `.jamcli/`, and with the
+  split between project and local files: `.jamcli/config.json` is not committed either.
+  It stays as written, because history, grants, and the legacy files that hold keys
+  must stay out of every repository by default. A team that shares a file adds an
+  exception such as `!config.json` to `.jamcli/.gitignore`. Stages 8 and 11 should
+  revisit this. A directory an earlier version created without the file gets it the
+  next time something is stored there.
+- **The command.** `jamcli config list [--show-origin] [--json]`, `get <key>`,
+  `set <key> <value> [--scope user|project|local]` with the project as the default, and
+  `unset`, added because a value that can be set should be removable without editing
+  by hand. `set` refuses a value the schema rejects and writes nothing, and a problem
+  already in the file does not block an unrelated change. Keys, headers, and environment
+  values print as `(hidden)`.
+- **Migration.** `jamcli config migrate [--dry-run]` turns only the entries that differ
+  from the defaults into rules; the entries the old startup write put there are dropped
+  and counted. Backups are `.bak`, then `.bak.2`.
+- **Schema file.** `bun run config-schema` regenerates `docs/config.schema.json`, and a
+  test fails when it is out of date. A file may name it in `$schema`.
 
 ### D12. Credentials
 

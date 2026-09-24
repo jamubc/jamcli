@@ -66,6 +66,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | OpenTelemetry | ✗ | ✓ opt-in, content excluded by default | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | Structured logs and a local trace | ✗ | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | Environment diagnostics | ✗ | ✓ `jamcli doctor` | n.v. | n.v. | n.v. | n.v. | parity |
+| Layered configuration, each value's origin shown | ◐ one project file, written at startup and never ignored (F18) | ✓ user, project, local, environment, and flags; `jamcli config list --show-origin`; a generated JSON schema | n.v. | n.v. | n.v. | n.v. | parity |
 
 ## Git
 

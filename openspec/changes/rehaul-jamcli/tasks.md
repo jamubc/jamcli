@@ -450,7 +450,20 @@ cover headless, ACP, and delegation.
 
 ## Stage 5: Configuration, credentials, observability, command line
 
-- [ ] 5.1 Layered configuration (D11). Files: `src/core/config/` (new), `src/services/ConfigService.ts`, tests. Layers and provenance; Zod schemas with generated `docs/config.schema.json`; lazy `.jamcli/` creation with a self-ignoring `.gitignore` (F18); `jamcli config get|set|list|migrate`.
+- [x] 5.1 Layered configuration (D11). Files: `src/core/config/` (new), `src/services/ConfigService.ts`, tests. Layers and provenance; Zod schemas with generated `docs/config.schema.json`; lazy `.jamcli/` creation with a self-ignoring `.gitignore` (F18); `jamcli config get|set|list|migrate`.
+  - **Verification**: built as recorded under D11.
+  - Tests:
+    - the checked-in JSON schema matches the one generated, and a configuration using every section is accepted as written;
+    - a value that does not fit is named by file, key, and shape, never by its value, and the rest of the file still applies;
+    - each layer overrides the ones below with its origin recorded, objects merge, the permission lists add up, and other lists replace;
+    - the permission engine reads the same layers, and a deny in the user's configuration holds in every project;
+    - profiles merge across the user's and the project's files, and a missing one is named;
+    - loading writes nothing, and neither does starting a session;
+    - through the runtime, the user's configuration serves a project with none, and `--model` beats `JAMCLI_MODEL`, which beats the files;
+    - `jamcli config`: scopes, JSON values, refusals that change nothing, the precedence warning, hidden keys, unset, a file that cannot be parsed never overwritten, and a migration whose rules decide every call as the legacy block did.
+  - F18 is live: in a git repository, starting a session writes nothing, the first stored file creates `.jamcli/` ignoring itself, `git status` stays clean, and a directory an earlier version created without the file gets it. The todo tool, `jamcli mcp`, and the legacy writers each have a test that fails without the change.
+  - 35 mutation probes, each turning a test red, across the validator, the loader, the writers, the runtime wiring, and the command.
+  - Found along the way: a reply dated in the millisecond of a prefix change lost its signed thinking, which failed a stage 4 test about one run in ten. Fixed, with a test that fails without the fix, as recorded under D8.
 - [ ] 5.2 Credentials (D12). Files: `src/core/config/credentials.ts`, `src/cli/auth.ts`, tests. Keychain adapters, a `0600` file fallback, `jamcli auth`, and OpenRouter PKCE login tested against a fake authorization server.
 - [ ] 5.3 Logs and traces (D13). Files: `src/core/observe/` (new), `src/cli.ts`. Structured logs, `-v` and `-vv`, `--log-file`, and `--trace-file`.
 - [ ] 5.4 The OpenTelemetry exporter. Files: `src/core/observe/otlp.ts`, tests with an in-memory collector. GenAI attributes, content excluded by default, off by default.
