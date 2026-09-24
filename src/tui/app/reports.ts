@@ -125,16 +125,29 @@ const when = (iso: string, now: number) => {
   return `${plural(Math.round(minutes / (60 * 24)), 'day')} ago`;
 };
 
-/** A project's sessions, latest first, for /resume. */
+/** One session in a list: its title, how long it is, and how old. */
+export const sessionDetail = (session: SessionSummary, now = Date.now()): string =>
+  `${session.title || session.firstUserMessage?.slice(0, 60) || 'untitled'}, ${plural(session.messageCount, 'message')}, ${when(session.updated, now)}`;
+
+/** A project's sessions, latest first, for /resume list. */
 export function sessionsReport(sessions: SessionSummary[], current: string, now = Date.now()): string {
   if (sessions.length === 0) return 'No earlier sessions in this project.';
   const lines = ['Sessions in this project, latest first:'];
-  for (const session of sessions) {
-    const title = session.title || session.firstUserMessage?.slice(0, 60) || 'untitled';
-    lines.push(`- ${session.id}${session.id === current ? ' (this one)' : ''}: ${title}, ${plural(session.messageCount, 'message')}, ${when(session.updated, now)}`);
-  }
+  for (const session of sessions) lines.push(`- ${session.id}${session.id === current ? ' (this one)' : ''}: ${sessionDetail(session, now)}`);
   lines.push('', 'Open one with /resume <id>.');
   return lines.join('\n');
+}
+
+/** One model in the picker: its window, what it takes, and its price, as far as they are known. */
+export function modelDetail(info: ModelInfo): string {
+  const window = info.sources.contextWindow === 'default' ? 'window unknown' : `${formatTokens(info.contextWindow)} window`;
+  const tools = info.tools === true ? 'tools' : info.tools === false ? 'no tools' : '';
+  const price = info.price
+    ? info.price.input === 0 && info.price.output === 0
+      ? 'free'
+      : `${formatUsd(info.price.input)} in, ${formatUsd(info.price.output)} out per million`
+    : 'price unknown';
+  return [window, tools, price].filter(Boolean).join(' · ');
 }
 
 

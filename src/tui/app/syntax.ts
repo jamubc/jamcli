@@ -1,27 +1,29 @@
 import { RGBA, SyntaxStyle, pathToFiletype } from '@opentui/core';
+import type { Theme } from './theme.js';
 
-/** Token colors for Markdown, code, and diffs. The colors decorate; nothing depends on them. */
-export function createSyntaxStyle(): SyntaxStyle {
-  const hex = (value: string) => RGBA.fromHex(value);
+/** Token styles for Markdown, code, and diffs, in the theme's colors. The colors decorate; nothing depends on them. */
+export function createSyntaxStyle(theme: Theme): SyntaxStyle {
+  const fg = (value: string | undefined) => (value ? { fg: RGBA.fromHex(value) } : {});
+  const { tokens } = theme;
   return SyntaxStyle.fromStyles({
     default: { fg: RGBA.defaultForeground() },
-    'markup.heading': { fg: hex('#7aa2f7'), bold: true },
+    'markup.heading': { ...fg(tokens.heading), bold: true },
     'markup.strong': { bold: true },
     'markup.italic': { italic: true },
-    'markup.list': { fg: hex('#e0af68') },
-    'markup.raw': { fg: hex('#9ece6a') },
-    'markup.link': { fg: hex('#7dcfff'), underline: true },
-    keyword: { fg: hex('#bb9af7'), bold: true },
-    string: { fg: hex('#9ece6a') },
-    comment: { fg: hex('#7a7f8c'), italic: true },
-    number: { fg: hex('#ff9e64') },
-    boolean: { fg: hex('#ff9e64') },
-    constant: { fg: hex('#ff9e64') },
-    function: { fg: hex('#7aa2f7') },
-    'function.call': { fg: hex('#7aa2f7') },
-    type: { fg: hex('#2ac3de') },
-    property: { fg: hex('#73daca') },
-    operator: { fg: hex('#89ddff') },
+    'markup.list': fg(tokens.list),
+    'markup.raw': fg(tokens.raw),
+    'markup.link': { ...fg(tokens.link), underline: true },
+    keyword: { ...fg(tokens.keyword), bold: true },
+    string: fg(tokens.string),
+    comment: { ...fg(tokens.comment), italic: true },
+    number: fg(tokens.number),
+    boolean: fg(tokens.number),
+    constant: fg(tokens.number),
+    function: fg(tokens.func),
+    'function.call': fg(tokens.func),
+    type: fg(tokens.type),
+    property: fg(tokens.property),
+    operator: fg(tokens.operator),
   });
 }
 

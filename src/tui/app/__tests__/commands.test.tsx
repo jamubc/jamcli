@@ -41,9 +41,12 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
     // The name is completed with a space after it, which closes the palette.
     await frameWith(setup, (frame) => /│\/help /.test(frame) && !frame.includes('Up and Down choose'));
     setup.mockInput.pressEnter();
-    const help = await frameWith(setup, (frame) => frame.includes('Type / to see the commands as you type'));
+    // Help is an overlay: the commands, and the keys.
+    const help = await frameWith(setup, (frame) => frame.includes('Keys: Enter sends'));
     expect(help).toContain('/permissions');
-    expect(help).toContain('Leave JamCLI');
+    expect(help).toContain('Filter:');
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => !frame.includes('Keys: Enter sends'));
 
     // Up and Down belong to the palette while it is open: the cursor stays where it was.
     await setup.mockInput.typeText('/cop');
@@ -81,7 +84,7 @@ test('/cost, /context, and /model report on the session, and /model switches lat
     expect(cost).toContain('- ollama:fake-model: $0.00, 1 request, 120 in, 8 out');
     await send(setup, '/context');
     expect(await frameWith(setup, (frame) => frame.includes('> /context') && frame.includes('Compaction starts at'))).toMatch(/Context: [\d,]+ of [\d,]+ tokens a request may use \(\d+%\), over \d+ messages\./);
-    await send(setup, '/model');
+    await send(setup, '/model info');
     const model = await frameWith(setup, (frame) => frame.includes('Model: ollama:fake-model'));
     expect(model).toMatch(/Context window: [\d,]+ tokens/);
     expect(model).toContain('Switch with /model provider:model');
@@ -135,7 +138,7 @@ test('/clear starts a new session, /resume lists and reopens the last, and /fork
     expect(cleared).toContain(`session ${second}`);
     expect(cleared).not.toContain('First answer.');
 
-    await send(setup, '/resume');
+    await send(setup, '/resume list');
     const listed = await frameWith(setup, (frame) => frame.includes('Sessions in this project, latest first:'));
     expect(listed).toContain(`- ${first}: First question, 2 messages, just now`);
     await send(setup, `/resume ${first}`);

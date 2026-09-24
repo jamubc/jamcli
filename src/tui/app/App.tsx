@@ -10,16 +10,8 @@ import { compactionLine, noticeLine, statusParts, toolLine } from './format.js';
 import { createSyntaxStyle, filetypeOf } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
 import { Palette } from './Palette.js';
-
-/** Colors by role. Every state also has a word, so none of these carries meaning alone. */
-export const THEME = {
-  dim: '#7a7f8c',
-  user: '#9ece6a',
-  accent: '#7aa2f7',
-  warn: '#e0af68',
-  error: '#f7768e',
-  border: '#3b4261',
-};
+import { Picker, filterItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
+import { THEMES, ThemeContext, useTheme, type Theme } from './theme.js';
 
 export interface AppProps {
   /** The session the interface opens on. */
@@ -31,6 +23,8 @@ export interface AppProps {
   openSession: (choice: SessionChoice) => Promise<Runtime>;
   /** Commands beyond the built-in ones, such as custom commands. */
   commands?: SlashCommand[];
+  /** The theme to start with, resolved from `ui.theme` and NO_COLOR. Defaults to dark. */
+  theme?: Theme;
 }
 
 /** A unified diff, highlighted as the file it changes. */
@@ -39,36 +33,37 @@ function DiffView({ diff, file, syntax }: { diff: string; file?: string; syntax:
 }
 
 function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
+  const theme = useTheme();
   switch (row.kind) {
     case 'user':
       return (
         <box marginTop={1}>
-          <text fg={THEME.user}>{`> ${row.text}`}</text>
+          <text fg={theme.user}>{`> ${row.text}`}</text>
         </box>
       );
     case 'assistant':
       return (
         <box flexDirection="column">
-          {row.reasoning ? <text fg={THEME.dim}>{`thinking: ${row.streaming && !row.text ? row.reasoning.slice(-200) : row.reasoning.split('\n')[0].slice(0, 120)}`}</text> : null}
+          {row.reasoning ? <text fg={theme.dim}>{`thinking: ${row.streaming && !row.text ? row.reasoning.slice(-200) : row.reasoning.split('\n')[0].slice(0, 120)}`}</text> : null}
           {row.text ? <markdown content={row.text} syntaxStyle={syntax} streaming={row.streaming} conceal /> : null}
         </box>
       );
     case 'tool':
       return (
         <box flexDirection="column">
-          <text fg={row.phase === 'error' || row.phase === 'timeout' ? THEME.error : row.phase === 'denied' ? THEME.warn : THEME.accent}>{toolLine(row)}</text>
+          <text fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent}>{toolLine(row)}</text>
           {!row.collapsed && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}
-          {!row.collapsed && !row.diff && row.output ? <text fg={THEME.dim}>{row.output}</text> : null}
+          {!row.collapsed && !row.diff && row.output ? <text fg={theme.dim}>{row.output}</text> : null}
         </box>
       );
     case 'notice':
-      return <text fg={row.level === 'error' ? THEME.error : row.level === 'warn' ? THEME.warn : THEME.dim}>{noticeLine(row)}</text>;
+      return <text fg={row.level === 'error' ? theme.error : row.level === 'warn' ? theme.warn : theme.dim}>{noticeLine(row)}</text>;
     case 'compaction':
-      return <text fg={THEME.dim}>{compactionLine(row)}</text>;
+      return <text fg={theme.dim}>{compactionLine(row)}</text>;
     case 'command':
       return (
         <box marginTop={1}>
-          <text fg={THEME.accent}>{`> ${row.text}`}</text>
+          <text fg={theme.accent}>{`> ${row.text}`}</text>
         </box>
       );
     case 'output':
@@ -101,13 +96,14 @@ function PermissionPrompt(props: {
   onFeedback: (text: string) => void;
 }) {
   const { approval, queued, syntax, file, selected, feedback } = props;
+  const theme = useTheme();
   const preview = approval.preview?.kind === 'diff' ? undefined : approval.preview?.text.split('\n').slice(0, 12).join('\n');
   const pattern = approval.suggestions[selected];
   const others = approval.suggestions.length > 1 ? ` (${selected + 1} of ${approval.suggestions.length}; Up and Down choose)` : '';
   return (
-    <box border borderColor={THEME.warn} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
-      <text fg={THEME.warn}>{`Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued} waiting)` : ''}`}</text>
-      <text fg={THEME.dim}>{`Asked because ${approval.reason}.`}</text>
+    <box border borderColor={theme.warn} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
+      <text fg={theme.warn}>{`Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued} waiting)` : ''}`}</text>
+      <text fg={theme.dim}>{`Asked because ${approval.reason}.`}</text>
       {approval.preview?.kind === 'diff' ? <DiffView diff={approval.preview.text} file={file} syntax={syntax} /> : null}
       {preview ? <text>{preview}</text> : null}
       {feedback ? (
@@ -129,9 +125,10 @@ function PermissionPrompt(props: {
 
 /** Asks the person to type yes before bypass mode turns on. */
 function BypassConfirm({ onAnswer }: { onAnswer: (text: string) => void }) {
+  const theme = useTheme();
   return (
-    <box border borderColor={THEME.error} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
-      <text fg={THEME.error}>Turn on bypass mode?</text>
+    <box border borderColor={theme.error} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
+      <text fg={theme.error}>Turn on bypass mode?</text>
       <text>Nothing will ask before it runs: every edit and every command goes ahead, and only deny rules stop a call.</text>
       <text>Type yes and press Enter to turn it on. Anything else, or Escape, leaves the mode as it is.</text>
       <input focused placeholder="yes" onSubmit={(value: unknown) => onAnswer(submitted(value))} />
@@ -143,9 +140,9 @@ function BypassConfirm({ onAnswer }: { onAnswer: (text: string) => void }) {
 const naming = (draft: string) => draft.startsWith('/') && !/\s/.test(draft);
 
 /** Commands the design names that arrive with later work. Typing one says so rather than calling it unknown. */
-const LATER = new Set(['rewind', 'undo', 'diff', 'commit', 'pr', 'skills', 'hooks', 'plugins', 'workflows', 'theme']);
+const LATER = new Set(['rewind', 'undo', 'diff', 'commit', 'pr', 'skills', 'hooks', 'plugins', 'workflows']);
 
-export function App({ runtime: first, projectRoot, onExit, openSession: open, commands: extra = [] }: AppProps) {
+export function App({ runtime: first, projectRoot, onExit, openSession: open, commands: extra = [], theme: startTheme = THEMES.dark }: AppProps) {
   const renderer = useRenderer();
   const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState => initialView());
   const [runtime, setRuntime] = useState(first);
@@ -154,7 +151,8 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
   const composer = useRef<TextareaRenderable | null>(null);
   const [exitArmed, setExitArmed] = useState(false);
   const branch = useMemo(() => gitBranch(projectRoot), [projectRoot]);
-  const syntax = useMemo(() => createSyntaxStyle(), []);
+  const [theme, setTheme] = useState<Theme>(startTheme);
+  const syntax = useMemo(() => createSyntaxStyle(theme), [theme]);
   useEffect(() => () => syntax.destroy(), [syntax]);
 
   useEffect(() => {
@@ -208,6 +206,31 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
     [controller, open, runtime]
   );
 
+  /**
+   * The overlay open over the composer: the request, its choices once they arrive, the
+   * filter typed so far, and the chosen row. Keys read the ref, which changes at once.
+   */
+  type Open = { request: PickRequest; items?: PickItem[]; note?: string; filter: string; index: number };
+  const overlay = useRef<Open | undefined>(undefined);
+  const [, setOverlayView] = useState(0);
+  const setOverlay = (next: Open | undefined) => {
+    overlay.current = next;
+    setOverlayView((count) => count + 1);
+  };
+  /** The row of the choice in use, so the list opens on it. */
+  const startAt = (items: PickItem[]) => Math.max(0, items.findIndex((item) => item.current));
+  const pick = (request: PickRequest) => {
+    const items = Array.isArray(request.items) ? request.items : undefined;
+    setOverlay({ request, filter: '', index: items ? startAt(items) : 0, ...(items ? { items } : {}) });
+    if (items) return;
+    const pending = request.items as Promise<{ items: PickItem[]; note?: string }>;
+    const still = () => overlay.current?.request === request;
+    pending.then(
+      (arrived) => still() && setOverlay({ ...overlay.current!, items: arrived.items, index: startAt(arrived.items), ...(arrived.note ? { note: arrived.note } : {}) }),
+      (error) => still() && setOverlay({ ...overlay.current!, items: [], note: error?.message ?? String(error) })
+    );
+  };
+
   const say = (level: 'info' | 'warn' | 'error', text: string) => dispatch({ type: 'notice', level, text });
   const context = (): CommandContext => ({
     runtime,
@@ -224,12 +247,19 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
     copy: (text) => renderer.copyToClipboardOSC52(text),
     exit: onExit,
     commands: () => commands,
+    pick,
+    theme,
+    setTheme,
+    prefill: (text) => {
+      composer.current?.setText(text);
+      composer.current?.gotoBufferEnd();
+    },
   });
 
-  const runCommand = async (line: string) => {
+  const runCommand = async (line: string, options: { quiet?: boolean } = {}) => {
     const parsed = parseCommand(line);
     if (!parsed) return;
-    dispatch({ type: 'command', text: line });
+    if (!options.quiet) dispatch({ type: 'command', text: line });
     const command = findCommand(commands, parsed.name);
     if (!command) return say('warn', LATER.has(parsed.name) ? `/${parsed.name} is not available yet.` : `/${parsed.name} is not a command. /help lists them.`);
     try {
@@ -302,7 +332,28 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
       else if (key.name === 'up') choose((from) => ({ selected: Math.max(0, from.selected - 1) }));
       return;
     }
+    const open = overlay.current;
+    if (open) {
+      const shown = open.items ? filterItems(open.items, open.filter) : [];
+      const last = Math.max(0, shown.length - 1);
+      const step = { down: 1, up: -1, pagedown: PICKER_ROWS, pageup: -PICKER_ROWS }[key.name as 'down'];
+      if (key.name === 'escape') setOverlay(undefined);
+      else if (step) setOverlay({ ...open, index: Math.min(Math.max(0, open.index + step), last) });
+      else if (key.name === 'return') {
+        const item = shown[open.index];
+        if (!item) return;
+        setOverlay(undefined);
+        Promise.resolve(open.request.choose(item)).catch((error: any) => say('error', error?.message ?? String(error)));
+      } else if (key.name === 'backspace') setOverlay({ ...open, filter: open.filter.slice(0, -1), index: 0 });
+      else if (!key.ctrl && !key.meta && key.sequence && key.sequence.length === 1 && key.sequence >= ' ') setOverlay({ ...open, filter: open.filter + key.sequence, index: 0 });
+      return;
+    }
     const draft = composer.current?.plainText ?? '';
+    // ? on an empty composer lists the commands and keys.
+    if (key.sequence === '?' && draft === '') {
+      key.preventDefault();
+      return void runCommand('/help', { quiet: true });
+    }
     const listed = matchesFor(draft);
     if (listed) {
       const moves = key.name === 'down' ? 1 : key.name === 'up' ? -1 : 0;
@@ -342,54 +393,68 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
   });
 
   return (
-    <box flexDirection="column" width="100%" height="100%">
-      <box height={1} flexShrink={0}>
-        <text fg={THEME.dim}>{`jamcli · ${path.basename(projectRoot)}${branch ? ` · ${branch}` : ''} · session ${runtime.sessionId}`}</text>
-      </box>
-      <scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
-        {state.rows.map((row) => (
-          <RowView key={row.id} row={row} syntax={syntax} />
-        ))}
-      </scrollbox>
-      {approval ? (
-        <PermissionPrompt
-          approval={approval}
-          queued={state.approvals.length}
-          syntax={syntax}
-          file={(state.rows.find((row) => row.kind === 'tool' && row.callId === approval.callId) as { path?: string } | undefined)?.path}
-          selected={selected}
-          feedback={feedback}
-          onFeedback={(text) => answer({ allow: false, ...(text.trim() ? { feedback: text.trim() } : {}) })}
-        />
-      ) : confirmBypass ? (
-        <BypassConfirm
-          onAnswer={(text) => {
-            setConfirmBypass(false);
-            if (text.trim().toLowerCase() === 'yes') controller.setMode('bypass', { bypassConfirmed: true });
-            else dispatch({ type: 'notice', level: 'info', text: 'Bypass mode was not turned on.' });
-          }}
-        />
-      ) : (
-        <box flexDirection="column" flexShrink={0}>
-          {matches ? <Palette matches={matches} selected={palette.current.index} colors={THEME} /> : null}
-          <box border borderColor={THEME.border} flexShrink={0} height={5}>
-            <textarea
-              ref={composer}
-              focused
-              placeholder="Message JamCLI. Enter sends, Shift+Enter adds a line, / lists commands."
-              keyBindings={[
-                { name: 'return', action: 'submit' },
-                { name: 'return', shift: true, action: 'newline' },
-              ]}
-              onSubmit={submit}
-              onContentChange={onDraft}
-            />
-          </box>
+    <ThemeContext.Provider value={theme}>
+      <box flexDirection="column" width="100%" height="100%">
+        <box height={1} flexShrink={0}>
+          <text fg={theme.dim}>{`jamcli · ${path.basename(projectRoot)}${branch ? ` · ${branch}` : ''} · session ${runtime.sessionId}`}</text>
         </box>
-      )}
-      <box height={1} flexShrink={0}>
-        <text fg={state.status.mode === 'bypass' ? THEME.error : THEME.dim}>{statusParts(state.status).join(' · ')}</text>
+        <scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
+          {state.rows.map((row) => (
+            <RowView key={row.id} row={row} syntax={syntax} />
+          ))}
+        </scrollbox>
+        {approval ? (
+          <PermissionPrompt
+            approval={approval}
+            queued={state.approvals.length}
+            syntax={syntax}
+            file={(state.rows.find((row) => row.kind === 'tool' && row.callId === approval.callId) as { path?: string } | undefined)?.path}
+            selected={selected}
+            feedback={feedback}
+            onFeedback={(text) => answer({ allow: false, ...(text.trim() ? { feedback: text.trim() } : {}) })}
+          />
+        ) : confirmBypass ? (
+          <BypassConfirm
+            onAnswer={(text) => {
+              setConfirmBypass(false);
+              if (text.trim().toLowerCase() === 'yes') controller.setMode('bypass', { bypassConfirmed: true });
+              else dispatch({ type: 'notice', level: 'info', text: 'Bypass mode was not turned on.' });
+            }}
+          />
+        ) : (
+          <box flexDirection="column" flexShrink={0}>
+            {overlay.current ? (
+              <Picker
+                title={overlay.current.request.title}
+                items={overlay.current.items}
+                note={overlay.current.note ?? overlay.current.request.note}
+                empty={overlay.current.request.empty}
+                hint={overlay.current.request.hint}
+                filter={overlay.current.filter}
+                selected={overlay.current.index}
+              />
+            ) : matches ? (
+              <Palette matches={matches} selected={palette.current.index} />
+            ) : null}
+            <box border borderColor={theme.border} flexShrink={0} height={5}>
+              <textarea
+                ref={composer}
+                focused={!overlay.current}
+                placeholder="Message JamCLI. Enter sends, Shift+Enter adds a line, / lists commands."
+                keyBindings={[
+                  { name: 'return', action: 'submit' },
+                  { name: 'return', shift: true, action: 'newline' },
+                ]}
+                onSubmit={submit}
+                onContentChange={onDraft}
+              />
+            </box>
+          </box>
+        )}
+        <box height={1} flexShrink={0}>
+          <text fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{statusParts(state.status).join(' · ')}</text>
+        </box>
       </box>
-    </box>
+    </ThemeContext.Provider>
   );
 }

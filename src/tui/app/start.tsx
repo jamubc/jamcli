@@ -3,6 +3,8 @@ import { createRuntime } from '../../core/runtime/index.js';
 import { resolveJamcliProjectRoot } from '../../utils/projectRoot.js';
 import { App } from './App.js';
 import type { SessionChoice } from './commands.js';
+import { resolveTheme } from './theme.js';
+import { loadConfig } from '../../core/config/load.js';
 
 /**
  * Start the OpenTUI interface. OpenTUI draws through native code that Bun loads; on Node
@@ -35,5 +37,6 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
   };
   process.once('SIGTERM', () => void exit(143));
   process.once('SIGHUP', () => void exit(129));
-  createRoot(renderer).render(<App runtime={current} projectRoot={projectRoot} onExit={() => void exit()} openSession={openSession} />);
+  const theme = resolveTheme(loadConfig({ projectRoot }).config.ui?.theme, process.env);
+  createRoot(renderer).render(<App runtime={current} projectRoot={projectRoot} onExit={() => void exit()} openSession={openSession} theme={theme} />);
 }

@@ -12,7 +12,10 @@ import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } fro
 import { runMcpCommand, type McpCommandRequest } from '../../cli/mcp.js';
 import { renderChecks, runChecks } from '../../cli/doctor.js';
 import type { ViewAction } from '../state/view.js';
-import { contextReport, costReport, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionsReport, toolsReport } from './reports.js';
+import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from './reports.js';
+import type { PickItem, PickRequest } from './Picker.js';
+import { THEME_NAMES, THEMES, noColor, type Theme } from './theme.js';
+import type { ThemeName } from '../../types/config.js';
 
 /** Where a command comes from. Custom commands arrive with stage 8 and show their source in the palette. */
 export type CommandSource = 'built-in' | 'user' | 'project';
@@ -50,6 +53,12 @@ export interface CommandContext {
   exit(): void;
   /** Every command, for /help. */
   commands(): SlashCommand[];
+  /** Open an overlay to choose from. */
+  pick(request: PickRequest): void;
+  readonly theme: Theme;
+  setTheme(theme: Theme): void;
+  /** Put text in the composer for the person to finish. */
+  prefill(text: string): void;
 }
 
 export interface SlashCommand {
@@ -158,38 +167,58 @@ const help: SlashCommand = {
       const usage = command.name === 'permissions' ? `\n\n${PERMISSIONS_USAGE}` : command.name === 'config' ? `\n\n${CONFIG_USAGE.split('jamcli config').join('/config')}` : '';
       return ctx.show(`/${command.name}${command.args ? ` ${command.args}` : ''}: ${command.summary}.${command.aliases?.length ? ` Also /${command.aliases.join(', /')}.` : ''}${usage}`);
     }
-    const width = Math.max(...commands.map((command) => command.name.length + (command.args ? command.args.length + 1 : 0)));
-    const lines = commands.map((command) => {
-      const head = `/${command.name}${command.args ? ` ${command.args}` : ''}`;
-      return `${head.padEnd(width + 2)} ${command.summary}${command.source === 'built-in' ? '' : ` (${command.source})`}`;
+    ctx.pick({
+      title: 'Commands',
+      items: commands.map((command) => ({
+        key: command.name,
+        label: `/${command.name}${command.args ? ` ${command.args}` : ''}`,
+        detail: `${command.summary}${command.source === 'built-in' ? '' : ` (${command.source})`}`,
+      })),
+      empty: 'No commands.',
+      note: KEYS_HELP,
+      hint: 'Enter puts the command in the composer',
+      choose: (item) => ctx.prefill(`/${item.key} `),
     });
-    ctx.show(
-      [
-        'Commands:',
-        ...lines,
-        '',
-        'Keys: Enter sends, Shift+Enter adds a line, Escape stops a turn, Shift+Tab changes the mode, Ctrl+O opens the last tool block, Ctrl+C twice leaves.',
-        'Type / to see the commands as you type; Up and Down choose, Tab completes, Enter runs.',
-      ].join('\n')
-    );
   },
 };
 
+/** The keys, for the help overlay. */
+export const KEYS_HELP =
+  'Keys: Enter sends · Shift+Enter adds a line · / lists commands · ? this list · Escape stops a turn · Shift+Tab changes the mode · Ctrl+O opens the last tool block · Ctrl+C twice leaves';
+
 const model: SlashCommand = {
   name: 'model',
-  args: '[provider:model]',
-  summary: 'Show the model and what is known about it, or switch to another',
+  args: '[provider:model|info]',
+  summary: 'Choose the model from what the providers offer, or name one',
   source: 'built-in',
   run(ctx, args) {
-    if (!args) return ctx.show(modelReport(ctx.runtime.modelInfo));
-    if (waitForTurn(ctx, 'switch models')) return;
-    try {
-      ctx.runtime.setModel(args);
-      ctx.refresh();
-      ctx.notice('info', `Later turns use ${ctx.runtime.model.provider}:${ctx.runtime.model.model}.`);
-    } catch (error: any) {
-      ctx.notice('warn', `Not switched: ${error?.message ?? error}`);
-    }
+    if (args === 'info') return ctx.show(modelReport(ctx.runtime.modelInfo));
+    const switchTo = (ref: string) => {
+      if (waitForTurn(ctx, 'switch models')) return;
+      try {
+        ctx.runtime.setModel(ref);
+        ctx.refresh();
+        ctx.notice('info', `Later turns use ${ctx.runtime.model.provider}:${ctx.runtime.model.model}.`);
+      } catch (error: any) {
+        ctx.notice('warn', `Not switched: ${error?.message ?? error}`);
+      }
+    };
+    if (args) return switchTo(args);
+    const inUse = `${ctx.runtime.model.provider}:${ctx.runtime.model.model}`;
+    ctx.pick({
+      title: 'Models the configured providers offer',
+      items: ctx.runtime.listModels().then(({ models, problems }) => {
+        const items: PickItem[] = models.map((info) => {
+          const ref = `${info.provider}:${info.model}`;
+          return { key: ref, label: ref, detail: modelDetail(info), ...(ref === inUse ? { current: true } : {}) };
+        });
+        if (!items.some((item) => item.current)) items.unshift({ key: inUse, label: inUse, detail: modelDetail(ctx.runtime.modelInfo), current: true });
+        return { items, ...(problems.length ? { note: `Not listed: ${problems.join('; ')}` } : {}) };
+      }),
+      empty: 'No provider listed a model. /config provider shows how each is set up.',
+      hint: 'Enter switches later turns to it · /model info tells what is known about the one in use',
+      choose: (item) => switchTo(item.key),
+    });
   },
 };
 
@@ -298,23 +327,32 @@ const clear: SlashCommand = {
 
 const resume: SlashCommand = {
   name: 'resume',
-  args: '[id]',
-  summary: "List this project's sessions, or open one",
+  args: '[id|list]',
+  summary: "Choose one of this project's sessions to open",
   source: 'built-in',
   async run(ctx, args) {
-    if (!args) {
-      const sessions = readSessionIndex()
+    const sessions = () =>
+      readSessionIndex()
         .filter((session) => path.resolve(session.projectRoot) === path.resolve(ctx.projectRoot))
-        .sort((a, b) => b.updated.localeCompare(a.updated))
-        .slice(0, 15);
-      return ctx.show(sessionsReport(sessions, ctx.runtime.sessionId));
-    }
-    if (args === ctx.runtime.sessionId) return ctx.notice('info', 'That is this session.');
-    if (!fs.existsSync(sessionFileFor(ctx.projectRoot, args))) return ctx.notice('warn', `No session ${args} in this project. /resume lists them.`);
-    if (waitForTurn(ctx, 'open another session')) return;
-    const error = await ctx.openSession({ sessionId: args });
-    if (error) return ctx.notice('error', `Not opened: ${error}`);
-    ctx.notice('info', `Resumed ${args}.`);
+        .sort((a, b) => b.updated.localeCompare(a.updated));
+    if (args === 'list') return ctx.show(sessionsReport(sessions().slice(0, 15), ctx.runtime.sessionId));
+    const open = async (id: string) => {
+      if (id === ctx.runtime.sessionId) return ctx.notice('info', 'That is this session.');
+      if (!fs.existsSync(sessionFileFor(ctx.projectRoot, id))) return ctx.notice('warn', `No session ${id} in this project. /resume lists them.`);
+      if (waitForTurn(ctx, 'open another session')) return;
+      const error = await ctx.openSession({ sessionId: id });
+      if (error) return ctx.notice('error', `Not opened: ${error}`);
+      ctx.notice('info', `Resumed ${id}.`);
+    };
+    if (args) return open(args);
+    const now = Date.now();
+    ctx.pick({
+      title: 'Sessions in this project, latest first',
+      items: sessions().map((session) => ({ key: session.id, label: session.id, detail: sessionDetail(session, now), ...(session.id === ctx.runtime.sessionId ? { current: true } : {}) })),
+      empty: 'No earlier sessions in this project.',
+      hint: 'Enter opens it · /resume list prints them',
+      choose: (item) => open(item.key),
+    });
   },
 };
 
@@ -364,6 +402,22 @@ const mcp: SlashCommand = {
   },
 };
 
+/** Every value set, with the file it comes from; choosing one starts a /config set for it. */
+async function pickSetting(ctx: CommandContext): Promise<void> {
+  const lines: string[] = [];
+  const problems: string[] = [];
+  await runConfigCommand({ action: 'list', args: ['--json'] }, ctx.projectRoot, { out: (line) => lines.push(line), err: (line) => problems.push(line) });
+  const entries = JSON.parse(lines.join('\n') || '[]') as { key: string; origin: string; value: unknown }[];
+  ctx.pick({
+    title: 'Settings, each with the file it comes from',
+    items: entries.map((entry) => ({ key: entry.key, label: `${entry.key} = ${JSON.stringify(entry.value)}`, detail: entry.origin })),
+    empty: 'Nothing is set beyond the defaults.',
+    ...(problems.length ? { note: problems.join('; ') } : {}),
+    hint: 'Enter starts /config set for it · /config provider shows the providers',
+    choose: (item) => ctx.prefill(`/config set ${item.key} `),
+  });
+}
+
 const config: SlashCommand = {
   name: 'config',
   args: '[list|get|set|unset|provider]',
@@ -371,7 +425,8 @@ const config: SlashCommand = {
   source: 'built-in',
   async run(ctx, args) {
     const [first, ...rest] = splitWords(args);
-    const action = (first ?? 'list').toLowerCase();
+    if (!first) return pickSetting(ctx);
+    const action = first.toLowerCase();
     if (action === 'provider' || action === 'providers') {
       const loaded = loadConfig({ projectRoot: ctx.projectRoot });
       return ctx.show(providersReport(loaded.config.api_registry ?? {}, process.env, (account) => Boolean(storedKey(account))));
@@ -425,6 +480,41 @@ const profile: SlashCommand = {
     const error = await ctx.openSession({ ...thisSession(ctx), profile: args });
     if (error) return ctx.notice('error', `Not switched: ${error}`);
     ctx.notice('info', `This session now uses the ${args} profile. Nothing was written; the next start uses the configured one.`);
+  },
+};
+
+const THEME_WORDS: Record<ThemeName, string> = {
+  dark: 'light text on a dark background',
+  light: 'dark text on a light background',
+  'high-contrast': 'the brightest colors, for low vision or bright rooms',
+  monochrome: 'no color at all; every state is still a word',
+};
+
+const theme: SlashCommand = {
+  name: 'theme',
+  args: '[dark|light|high-contrast|monochrome]',
+  summary: 'Choose the colors, saved for every project',
+  source: 'built-in',
+  async run(ctx, args) {
+    const apply = async (name: ThemeName) => {
+      const forced = noColor(process.env);
+      ctx.setTheme(forced ? THEMES.monochrome : THEMES[name]);
+      const out: string[] = [];
+      const code = await runConfigCommand({ action: 'set', args: ['ui.theme', name, '--scope', 'user'] }, ctx.projectRoot, { out: (line) => out.push(line), err: (line) => out.push(line) });
+      const saved = code === 0 ? ' It is saved in your user configuration.' : ` It could not be saved: ${out.join(' ')}`;
+      ctx.notice(code === 0 ? 'info' : 'warn', `Theme: ${name}.${saved}${forced ? ' NO_COLOR is set, so colors stay off until it is unset.' : ''}`);
+    };
+    if (args) {
+      if (!THEME_NAMES.includes(args as ThemeName)) return ctx.notice('warn', `${args} is not a theme; choose ${THEME_NAMES.join(', ')}.`);
+      return apply(args as ThemeName);
+    }
+    ctx.pick({
+      title: 'Themes',
+      items: THEME_NAMES.map((name) => ({ key: name, label: name, detail: THEME_WORDS[name], ...(ctx.theme.name === name ? { current: true } : {}) })),
+      empty: 'No themes.',
+      hint: 'Enter uses it and saves it',
+      choose: (item) => apply(item.key as ThemeName),
+    });
   },
 };
 
@@ -497,6 +587,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   config,
   copy,
   profile,
+  theme,
   categories,
   doctor,
   exportCommand,

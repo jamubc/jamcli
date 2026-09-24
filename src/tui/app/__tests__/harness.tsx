@@ -6,8 +6,9 @@ import path from 'path';
 import { testRender } from '@opentui/react/test-utils';
 import { App } from '../App.js';
 import type { SessionChoice } from '../commands.js';
+import type { Theme } from '../theme.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from '../../../core/runtime/index.js';
-import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
+import { startFakeProvider, type FakeProviderOptions, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 
 export type Setup = Awaited<ReturnType<typeof testRender>>;
 
@@ -32,12 +33,12 @@ export async function frameWith(setup: Setup, match: (frame: string) => boolean,
  * A project with a user configuration pointing at a fake Ollama, fresh for each test,
  * and a way to open the interface on a runtime in it.
  */
-export function interfaceHarness() {
+export function interfaceHarness(provider: FakeProviderOptions = {}) {
   const context = { server: undefined as unknown as FakeProviderServer, root: '' };
   const shared = process.env.JAMCLI_CONFIG_DIR;
   const sharedState = process.env.JAMCLI_STATE_DIR;
   beforeEach(() => {
-    context.server = startFakeProvider();
+    context.server = startFakeProvider(provider);
     const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-app-')));
     context.root = path.join(base, 'project');
     fs.mkdirSync(context.root);
@@ -56,7 +57,7 @@ export function interfaceHarness() {
     else process.env.JAMCLI_STATE_DIR = sharedState;
     fs.rmSync(path.dirname(context.root), { recursive: true, force: true });
   });
-  const open = async (options: Partial<RuntimeOptions> = {}, onExit = () => undefined, size = { width: 100, height: 30 }) => {
+  const open = async (options: Partial<RuntimeOptions> = {}, onExit = () => undefined, size = { width: 100, height: 30 }, theme?: Theme) => {
     const base: RuntimeOptions = { projectRoot: context.root, surface: 'tui', mcp: false, env: {}, ...options };
     const opened: Runtime[] = [];
     const make = async (choice: SessionChoice = {}) => {
@@ -69,7 +70,7 @@ export function interfaceHarness() {
       return made;
     };
     const runtime = await make();
-    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} openSession={make} />, { ...size, exitOnCtrlC: false });
+    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} openSession={make} {...(theme ? { theme } : {})} />, { ...size, exitOnCtrlC: false });
     await setup.renderOnce();
     return {
       runtime,

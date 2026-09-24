@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from '@opentui/react';
 import type { SlashCommand } from './commands.js';
+import { useTheme } from './theme.js';
 
 /** How many matches the palette shows at once. */
 export const PALETTE_ROWS = 8;
@@ -9,7 +10,8 @@ export const PALETTE_ROWS = 8;
  * The commands a typed `/name` could mean, shown above the composer. The chosen one is
  * marked with a word as well as a color. A custom command names where it comes from.
  */
-export function Palette({ matches, selected, colors }: { matches: SlashCommand[]; selected: number; colors: { accent: string; dim: string; border: string } }) {
+export function Palette({ matches, selected }: { matches: SlashCommand[]; selected: number }) {
+  const colors = useTheme();
   const { width: columns } = useTerminalDimensions();
   // Inside the border and padding; a line longer than that is cut, not wrapped.
   const room = Math.max(20, columns - 4);
@@ -24,7 +26,8 @@ export function Palette({ matches, selected, colors }: { matches: SlashCommand[]
       ) : (
         shown.map((command, index) => {
           const chosen = start + index === selected;
-          const head = `/${command.name}${command.args ? ` ${command.args}` : ''}`.padEnd(width + 2);
+          const name = `/${command.name}${command.args ? ` ${command.args}` : ''}`;
+          const head = name.length >= width ? `${name} ` : name.padEnd(width + 1);
           const from = command.source === 'built-in' ? '' : ` (${command.source})`;
           return (
             <text key={command.name} fg={chosen ? colors.accent : undefined}>
