@@ -1463,6 +1463,15 @@ As built (5.6), `bun run bench` measures the built command, as medians of five r
   installs ripgrep, builds, runs the bench with `--enforce`, and keeps the measurements
   as an artifact.
 
+As built (6.14), all six budgets are measured by `bun run bench` and enforced. The
+interface's three come from the pseudo-terminal harness: the first frame is the time
+until the status line reads `ready`, the keystroke figure is the p95 of 30 keys over a
+resumed 1,000-message session, and memory is the resident size of the process and its
+children once that session is drawn. Meeting the memory budget took a decision: a
+session is drawn from its latest 200 rows, and Page Up at the top draws 200 more. A
+person can still reach every row, and memory follows what is read rather than how long
+the session is.
+
 ## Risks / Trade-offs
 
 - **Scope.** Twelve stages in one unit, and the project has stalled before. The stages are

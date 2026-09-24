@@ -579,7 +579,26 @@ cover headless, ACP, and delegation.
   - **Verification**: `bun run build` runs `scripts/build.ts`, which bundles JamCLI's code into `dist/index.js` and 17 chunks with dependencies left in `node_modules`. Each lazily loaded part is a chunk of its own, so the entry still reads its arguments before loading anything. The entry alone starts with `#!/usr/bin/env bun`: Bun's own banner option put it on every chunk, where it is a syntax error. Both interfaces boot from `dist/` in a pseudo-terminal, and `doctor` and `--version` run from it. `tsup` and its configuration are removed in a commit of their own.
   - Tests: 1 building into a scratch directory and checking the shebang, the chunks, the entry's lazy loading, dependencies left external, and `--version` from the result.
   - The headless overhead fell from about 240 ms to about 135 ms against its 150 ms budget, which is now enforced as D24 planned. The margin is narrow; a slower CI runner could miss it, and that would show in the performance job.
-- [ ] 6.14 Benchmark after. Run the same harness on OpenTUI and record the numbers here next to 6.1's.
+- [x] 6.14 Benchmark after. Run the same harness on OpenTUI and record the numbers here next to 6.1's.
+  - **Verification**: the same harness, `scripts/bench/pty-latency.py`, on the built command at 120 by 40, medians of five runs, 2026-09-24. It now also records the first frame (until the status line reads `ready`) and the resident memory. "Resume" includes the harness's one second of quiet, as it did for 6.1.
+
+    | Interface | First output | First frame | Resume | Echo median | Echo p95 | Bytes per key | Idle memory |
+    |---|---|---|---|---|---|---|---|
+    | Ink on Node 22 (6.1), latest 5 of 1,001 | 636 ms | not measured | 1,082 ms | 15.5 ms | 23.1 ms | 16,564 | not measured |
+    | Ink on Node 22 (6.1), full history | 630 ms | not measured | 1,097 ms | 14.0 ms | 19.7 ms | 6,810 | not measured |
+    | OpenTUI on Bun, 1,000 messages | 192 ms | 237 ms | 1,304 ms | 2.3 ms | 6.8 ms | 63 | 143 MB |
+    | OpenTUI on Bun, empty session | 192 ms | 240 ms | none | 3.2 ms | 6.1 ms | 53 | 78 MB |
+
+    Keystroke p95 went from 23.1 ms to 6.8 ms against a 16 ms budget, and each key writes 63 bytes rather than 16,564.
+  - The first measurement missed two budgets: the first frame at 320 ms (250) and memory at 187 MB (150). What was changed to meet them, each measured:
+    - `/mcp` and `/doctor` loaded the MCP SDK into every start; they now load it when they run.
+    - fs-extra, about 30 ms to load, is replaced by Node's own fs; fs-extra and the unused fast-glob are removed.
+    - The legacy configuration service is off the start path.
+    - The session opens while the terminal is set up.
+    - A long session draws its latest 200 rows, and Page Up at the top draws more. The transcript had no keyboard scrolling at all; Page Up and Page Down now scroll it.
+  - `bun run bench` now runs the harness and enforces all six D24 budgets. The last run: `--version` 20.5 ms (60), headless 120.9 ms (150), grep 40.9 ms (500), first frame 245.3 ms (250), keystroke p95 6.1 ms (16), memory 145 MB (150).
+  - Risk: the first frame's margin is 2 to 5 ms, and memory's about 5 MB. About 90 ms of the frame is OpenTUI's own loading, which JamCLI cannot shorten. A slower CI runner could miss either budget, and the performance job would say so.
+  - Tests: the transcript window (the latest rows, paging to the top, the earlier rows drawn in place, Page Down, another session at the bottom), the ignore patterns, the fs helpers, and the budget judge. 14 mutation probes, each turning a test red. The first run of the window test found that `/resume` while scrolled up opened the new session at the old position; it now opens at the bottom.
 - [ ] 6.15 Remove Ink. Delete the Ink interface, `ink`, `ink-text-input`, `src/services/LLMProvider.ts`, the sensor's tool gate, and every remaining legacy path. Record the type error count, which is expected to reach 0.
 - [ ] 6.16 Boot and exercise. Run the interface in a pseudo-terminal, exercise every slash command, one approval, one rejection, `/resume`, `/compact`, `/undo` after stage 7, and a mode switch, and record the result.
 
