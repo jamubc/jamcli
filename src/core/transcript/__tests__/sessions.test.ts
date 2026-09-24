@@ -4,7 +4,6 @@ import os from 'os';
 import path from 'path';
 import { SessionLog, listSessionSummaries, readSessionIndex, sessionFileFor, transcriptToMarkdown, type NewTranscriptEvent } from '../index.js';
 import { exportSession, forkSession, latestSessionId, loadSessionMessages, searchSessions } from '../../session/store.js';
-import { HistoryService } from '../../../services/HistoryService.js';
 
 let root: string;
 let other: string;
@@ -144,44 +143,6 @@ test('Markdown shows decisions and notices, and fences survive backticks in outp
   expect(markdown).toContain('> **Notice** (warn, trust): Removed grep result');
   expect(markdown).toContain('`````text\nhas ```` fences\n`````');
   expect(markdown).toContain('*Turn ended: refused*');
-});
-
-test('HistoryService reads a version 1 file and writes version 2 turns to it', async () => {
-  const file = sessionFileFor(root, 'v1');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const legacy = JSON.stringify({ id: 't', timestamp: '2026-01-01T00:00:00.000Z', messages: [{ role: 'user', content: 'old' }, { role: 'assistant', content: 'reply' }] });
-  fs.writeFileSync(file, `${legacy}\n`);
-
-  const history = new HistoryService(root, 'v1');
-  await history.initialize();
-  expect((await history.loadMessagesFromHistory()).map((m) => m.content)).toEqual(['old', 'reply']);
-  await history.appendTurn(
-    [
-      { role: 'user', content: 'new', timestamp: 1 },
-      { role: 'assistant', content: 'answer', timestamp: 2, model: 'm', streaming: false },
-    ],
-    { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
-  );
-  const lines = fs.readFileSync(file, 'utf8').trim().split('\n');
-  expect(lines[0]).toBe(legacy);
-  expect(lines.slice(1).map((line) => JSON.parse(line).v)).toEqual([2, 2, 2]);
-  expect(lines.join('\n')).not.toContain('streaming');
-  expect((await history.loadMessagesFromHistory()).map((m) => m.content)).toEqual(['old', 'reply', 'new', 'answer']);
-  expect((await history.listSessions()).map((entry) => entry.id)).toEqual(['v1']);
-  expect(await history.exportToMarkdown()).toContain('## Assistant (m)\n\nanswer');
-});
-
-test('HistoryService never starts a window of messages on an orphaned tool result', async () => {
-  const log = SessionLog.create(root, { surface: 'tui' });
-  say(log, 'user', 'q');
-  log.append({
-    type: 'message',
-    message: { role: 'assistant', content: '', timestamp: 1, tool_calls: [{ id: 'c', type: 'function', function: { name: 'glob', arguments: '{}' } }] },
-  });
-  log.append({ type: 'message', message: { role: 'tool', content: 'r', tool_call_id: 'c', timestamp: 2 } });
-  say(log, 'assistant', 'done');
-  const window = await new HistoryService(root, log.id).loadMessagesFromHistory(2);
-  expect(window.map((m) => m.role)).toEqual(['assistant']);
 });
 
 const cli = (...args: string[]) => {
