@@ -46,6 +46,21 @@ export const resolveApiKey = (config: KeyConfig | undefined, fallbackEnv?: strin
   return account ? storedKey(account) : undefined;
 };
 
+/** Where a provider's key would come from now, in words, without the key itself. */
+export function keySource(name: string, registry: ApiRegistry = {}): { from: 'env' | 'config' | 'store' | 'none'; detail: string } {
+  const entry: KeyConfig | undefined =
+    name === 'openrouter' || name === 'openai' || name === 'anthropic' ? registry[name] : registry.endpoints?.find((endpoint) => endpoint.id === name);
+  const fallback = FALLBACK_ENV[name] ?? `${name.toUpperCase()}_API_KEY`;
+  if (entry?.key_env_var && readEnv(entry.key_env_var)) return { from: 'env', detail: `the ${entry.key_env_var} environment variable` };
+  if (entry?.api_key?.trim()) {
+    const where = FALLBACK_ENV[name] ? `api_registry.${name}.api_key` : `the api_key of endpoint ${name}`;
+    return { from: 'config', detail: `${where} in configuration` };
+  }
+  if (readEnv(fallback)) return { from: 'env', detail: `the ${fallback} environment variable` };
+  if (storedKey(name)) return { from: 'store', detail: 'the credential store' };
+  return { from: 'none', detail: 'nowhere' };
+}
+
 const unconfigured = (name: string): Error => {
   if (name === 'openrouter') {
     return new Error(

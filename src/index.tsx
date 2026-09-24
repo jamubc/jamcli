@@ -13,6 +13,7 @@ const HEADLESS_INTENTS = new Set([
   'audit',
   'mcp',
   'config',
+  'auth',
   'acp',
   '--help',
   '-h',
