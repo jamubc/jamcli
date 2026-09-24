@@ -111,6 +111,6 @@ export const isListableProvider = (provider: ChatProvider): provider is ChatProv
 export const requireModel = (provider: string, model: string | undefined): string => {
   if (model && model.trim()) return model;
   throw new Error(
-    `No model is configured for ${provider}. Choose one with /model, pass --model ${provider}:<model>, or set preferred_model in the active profile.`
+    `No model is configured for ${provider}. Choose one with /model, pass --model ${provider}:<model>, or run jamcli config set model ${provider}:<model>.`
   );
 };

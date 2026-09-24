@@ -1,6 +1,7 @@
 import { runHeadless, type HeadlessResult } from './cli/run.js';
 import { runAuditCli } from './cli/audit.js';
 import { runMcpCommand } from './cli/mcp.js';
+import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from './cli/config.js';
 import {
   exportSession,
   forkSession,
@@ -37,6 +38,8 @@ export interface ParsedArgs {
   dryRun: boolean;
   sessionsCommand?: { action: SessionsAction; query?: string };
   mcpCommand?: { action: McpAction; args: string[] };
+  /** `jamcli config`, with no action or an unknown one left undefined so usage is shown. */
+  configCommand?: { action?: ConfigAction; args: string[] };
   audit: boolean;
   acp: boolean;
   help: boolean;
@@ -162,6 +165,14 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       }
       return parsed;
     }
+    if (token === 'config') {
+      const action = argv[i + 1];
+      parsed.configCommand = {
+        action: CONFIG_ACTIONS.includes(action as ConfigAction) ? (action as ConfigAction) : undefined,
+        args: argv.slice(i + 2),
+      };
+      return parsed;
+    }
     if (token === 'acp') {
       parsed.acp = true;
       continue;
@@ -197,6 +208,7 @@ export const USAGE = `Usage: jamcli [options]
 
   jamcli sessions list|search <query>|show <id>|export <id>|fork <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
+  jamcli config list|get|set|unset|migrate   Read and change configuration, layer by layer
   jamcli mcp add|list|test|remove   Manage MCP servers in .jamcli/mcp.json
   jamcli acp                   Serve the Agent Client Protocol over stdio
 
@@ -267,6 +279,15 @@ export const runCli = async (argv: string[]): Promise<number> => {
 
   if (parsed.mcpCommand) {
     return runMcpCommand(parsed.mcpCommand, projectRoot);
+  }
+
+  if (parsed.configCommand) {
+    const { action, args } = parsed.configCommand;
+    if (!action) {
+      process.stderr.write(`${CONFIG_USAGE}\n`);
+      return 2;
+    }
+    return runConfigCommand({ action, args }, projectRoot);
   }
 
   if (parsed.acp) {
