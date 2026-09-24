@@ -18,14 +18,7 @@ export interface Budget {
 
 export const BUDGETS: Budget[] = [
   { id: 'version', measure: 'jamcli --version', limit: 60, unit: 'ms', enforced: true },
-  {
-    id: 'headless',
-    measure: 'headless overhead before the first chat request, fake provider, no MCP',
-    limit: 150,
-    unit: 'ms',
-    enforced: false,
-    note: 'about 240 ms at 5.6, most of it loading modules; enforced after the build change in stage 6',
-  },
+  { id: 'headless', measure: 'headless overhead before the first chat request, fake provider, no MCP', limit: 150, unit: 'ms', enforced: true },
   { id: 'grep', measure: 'grep across 20,000 files with ripgrep present', limit: 500, unit: 'ms', enforced: true },
   { id: 'first-frame', measure: 'interface first frame', limit: 250, unit: 'ms', enforced: false, note: 'measured once the interface moves to OpenTUI in stage 6' },
   { id: 'keystroke', measure: 'keystroke to frame, p95, 1,000-message transcript', limit: 16, unit: 'ms', enforced: false, note: 'measured once the interface moves to OpenTUI in stage 6' },
