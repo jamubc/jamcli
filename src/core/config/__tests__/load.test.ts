@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadConfig, permissionLayers } from '../load.js';
+import { loadConfig, permissionLayers, userConfigFile } from '../load.js';
 import { loadPermissions } from '../../permissions/config.js';
 
 let root: string;
@@ -127,4 +127,19 @@ test('loading writes nothing, in the project or the user directory', () => {
   expect(profile).toEqual({ name: 'default' });
   expect(fs.readdirSync(root)).toEqual([]);
   expect(fs.existsSync(userDir)).toBe(false);
+});
+
+test("the user's file follows XDG_CONFIG_HOME, and JAMCLI_CONFIG_DIR above it", () => {
+  const saved = { dir: process.env.JAMCLI_CONFIG_DIR, xdg: process.env.XDG_CONFIG_HOME };
+  try {
+    delete process.env.JAMCLI_CONFIG_DIR;
+    process.env.XDG_CONFIG_HOME = path.join(root, 'xdg');
+    expect(userConfigFile()).toBe(path.join(root, 'xdg', 'jamcli', 'config.json'));
+    process.env.JAMCLI_CONFIG_DIR = userDir;
+    expect(userConfigFile()).toBe(path.join(userDir, 'config.json'));
+  } finally {
+    process.env.JAMCLI_CONFIG_DIR = saved.dir;
+    if (saved.xdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved.xdg;
+  }
 });
