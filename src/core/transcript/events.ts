@@ -63,7 +63,21 @@ export type TranscriptEvent =
       strategy?: 'summary' | 'drop';
       trigger?: 'auto' | 'manual';
     }
-  | { v: 2; type: 'checkpoint'; ts: number; ref: string; files?: string[] }
+  | {
+      v: 2;
+      type: 'checkpoint';
+      ts: number;
+      /** A commit on the session's private ref, or a backup directory outside a repository. */
+      ref: string;
+      /** Outside a repository: the files backed up, relative to the project. */
+      files?: string[];
+      /** In a repository: the working copy once the step was done, so a restore touches only what it changed. */
+      after?: string;
+      /** What was about to change it, such as `edit src/a.ts`. */
+      label?: string;
+      /** The index, among events after the header, of the message that began the turn. */
+      turn?: number;
+    }
   | { v: 2; type: 'end'; ts: number; status: RunStatus };
 
 export type TranscriptEventType = TranscriptEvent['type'];

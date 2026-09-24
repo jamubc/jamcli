@@ -70,6 +70,13 @@ export interface BatchContext {
   cap?: number;
   /** Applied to every result and progress chunk before anything else sees it. */
   redact?: (text: string) => string;
+  /**
+   * Called once per step, before the first call that may change something runs, such as
+   * to take a checkpoint. A failure is the caller's to report; the call runs regardless.
+   */
+  beforeChange?: (call: ToolCall) => Promise<void>;
+  /** Called once the step's calls are done, when `beforeChange` was, such as to settle the checkpoint. */
+  afterChange?: () => Promise<void>;
 }
 
 export interface BatchOutcome {
@@ -153,6 +160,13 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
     const auto = ctx.dispatcher.autoApproval?.(call);
     return { decision: 'allow', ...(auto ?? {}) };
   };
+
+  /** Whether a call may change files or run something: anything but a read or the agent's own plan. */
+  const changes = (call: ToolCall) => {
+    const policyClass = ctx.dispatcher.policyClass?.(call.name);
+    return policyClass ? policyClass !== 'read' && policyClass !== 'state' && policyClass !== 'network' : !ctx.dispatcher.isReadOnly?.(call.name);
+  };
+  let changing = false;
 
   const readOnly = (call: ToolCall) => Boolean(ctx.dispatcher.isReadOnly?.(call.name)) && verdictOf(call).decision === 'allow';
 
@@ -288,11 +302,16 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         ...(verdict.reason ? { reason: verdict.reason } : {}),
       });
     }
+    if (!changing && changes(call)) {
+      changing = true;
+      await ctx.beforeChange?.(call).catch(() => undefined);
+    }
     settle(i, await perform(call));
     ran += 1;
     if (remaining !== undefined) remaining -= 1;
     i += 1;
   }
 
+  if (changing) await ctx.afterChange?.().catch(() => undefined);
   return { results, ran, capped, denial };
 }

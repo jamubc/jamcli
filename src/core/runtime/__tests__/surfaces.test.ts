@@ -93,7 +93,7 @@ const surfaces: Record<string, () => Promise<string>> = {
   },
 };
 
-/** A transcript without what may differ: ids, timestamps, and who decided on which surface. */
+/** A transcript without what may differ: ids, timestamps, backup directories, and who decided on which surface. */
 const comparable = (events: TranscriptEvent[]) =>
   events.map((event) => {
     const { ts: _ts, ...rest } = event as TranscriptEvent & Record<string, unknown>;
@@ -103,6 +103,8 @@ const comparable = (events: TranscriptEvent[]) =>
       return { ...rest, message };
     }
     if (event.type === 'approval') return { type: 'approval', callId: event.callId, tool: event.tool, allow: event.allow };
+    // A backup directory is named after its session.
+    if (event.type === 'checkpoint') return { ...rest, ref: event.files ? '<backup>' : event.ref };
     return rest;
   });
 

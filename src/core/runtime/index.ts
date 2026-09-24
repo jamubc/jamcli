@@ -2,6 +2,7 @@ import path from 'path';
 import { CoreAgent } from '../agent.js';
 import type { AgentEvent, ApprovalPreview, JamSession, RunResult, ToolCall } from '../types.js';
 import { describeCall, previewCall } from '../approval.js';
+import { CheckpointStore, filesOfCall, type Checkpoint, type RestorePreview } from '../git/checkpoints.js';
 import { createSession } from '../state.js';
 import { createChatProvider, listConfiguredProviders } from '../providers/factory.js';
 import { isListableProvider, prefixSetNow, type ChatProvider } from '../providers/types.js';
@@ -164,7 +165,25 @@ export interface Runtime {
   listModels(timeoutMs?: number): Promise<{ models: ModelInfo[]; problems: string[] }>;
   /** Copy this session, up to an event, into a new one, and return the new id. */
   fork(atEvent?: number): string;
+  /** The checkpoints this session took before its changes, oldest first. */
+  checkpoints(): CheckpointInfo[];
+  /** What restoring checkpoint `n` would change in the working copy. */
+  previewCheckpoint(n: number): Promise<RestorePreview>;
+  /**
+   * Put the working copy back as checkpoint `n` found it, after taking a checkpoint of how
+   * it is now, so the restore can itself be undone. Refused while a turn runs.
+   */
+  restoreCheckpoint(n: number): Promise<string[]>;
   close(): Promise<void>;
+}
+
+/** A checkpoint as the session log records it, numbered from 1. */
+export interface CheckpointInfo extends Checkpoint {
+  n: number;
+  label: string;
+  ts: number;
+  /** Where the turn that made the change began, for forking the conversation back to it. */
+  turn?: number;
 }
 
 /** Where the `models` block came from, for the catalog's messages: its file when only one layer sets it. */
@@ -391,6 +410,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       trustOffNote: true,
       redact,
       signal: options.signal,
+      // A delegated run shares the working copy; the checkpoint before its task call covers it.
+      ...(options.surface === 'child' ? {} : { beforeChange: takeCheckpoint, afterChange: settleCheckpoint }),
     });
   let agent = buildAgent();
   /** What is offered, and what the model is told, depend on the mode and the rules. */
@@ -428,6 +449,60 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     model: `${choice.provider}:${choice.model}`,
     onError: (error) => emitting?.({ type: 'notice', level: 'error', message: `The session log could not be written: ${error.message}` }),
   });
+  const checkpointStore = new CheckpointStore(projectRoot, log.id);
+  let checkpointsFailed = false;
+  /** The step's checkpoint, taken before its first change and recorded once the step is done. */
+  let stepCheckpoint: { taken: Checkpoint; label: string } | undefined;
+  const checkpointsOff = (error: any) => {
+    checkpointsFailed = true;
+    stepCheckpoint = undefined;
+    emitting?.({ type: 'notice', level: 'warn', message: `Checkpoints are off for this session, so /undo cannot restore its changes: ${error?.message ?? error}` });
+  };
+  /** Before a step's first change: a checkpoint of the working copy. */
+  async function takeCheckpoint(call: ToolCall): Promise<void> {
+    if (checkpointsFailed) return;
+    const label = describeCall(call);
+    try {
+      const taken = await checkpointStore.take(label, filesOfCall(call, projectRoot));
+      stepCheckpoint = taken ? { taken, label } : undefined;
+    } catch (error: any) {
+      checkpointsOff(error);
+    }
+  }
+  /** Once the step is done: what it changed, recorded in the log; a step that changed nothing leaves no checkpoint. */
+  async function settleCheckpoint(): Promise<void> {
+    const pending = stepCheckpoint;
+    stepCheckpoint = undefined;
+    if (!pending) return;
+    try {
+      const after = await checkpointStore.settle(pending.taken, pending.label);
+      if (pending.taken.kind === 'git' && !after) return;
+      const { taken, label } = pending;
+      recorder.recordCheckpoint({ ref: taken.ref, ...(taken.files ? { files: taken.files } : {}), ...(after ? { after } : {}), label });
+    } catch (error: any) {
+      checkpointsOff(error);
+    }
+  }
+  const checkpointList = (): CheckpointInfo[] =>
+    log
+      .events()
+      .filter((event): event is Extract<typeof event, { type: 'checkpoint' }> => event.type === 'checkpoint')
+      .map((event, index) => ({
+        n: index + 1,
+        ref: event.ref,
+        kind: event.files ? 'files' : 'git',
+        ...(event.files ? { files: event.files } : {}),
+        ...(event.after ? { after: event.after } : {}),
+        label: event.label ?? 'a change',
+        ts: event.ts,
+        ...(event.turn !== undefined ? { turn: event.turn } : {}),
+      }));
+  const checkpointNumbered = (n: number): CheckpointInfo => {
+    const found = checkpointList().find((entry) => entry.n === n);
+    if (!found) throw new Error(`This session has no checkpoint ${n}.`);
+    return found;
+  };
+
   observation = observeSession(observer, {
     sessionId: log.id,
     surface: options.surface,
@@ -677,6 +752,24 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     fork(atEvent) {
       return SessionLog.fork(projectRoot, log.id, { atEvent, surface: options.surface }).id;
+    },
+
+    checkpoints: checkpointList,
+
+    async previewCheckpoint(n) {
+      return checkpointStore.preview(checkpointNumbered(n));
+    },
+
+    async restoreCheckpoint(n) {
+      if (running) throw new Error('A turn is running; restore when it ends.');
+      const target = checkpointNumbered(n);
+      const label = `before restoring checkpoint ${n}`;
+      const now = await checkpointStore.take(label, target.files ?? []);
+      const restored = await checkpointStore.restore(target);
+      // What the restore replaced is checkpointed like a step's change, so it can be undone too.
+      const after = now ? await checkpointStore.settle(now, label) : undefined;
+      if (now && (now.kind === 'files' || after)) recorder.recordCheckpoint({ ref: now.ref, ...(now.files ? { files: now.files } : {}), ...(after ? { after } : {}), label });
+      return restored;
     },
 
     async close() {

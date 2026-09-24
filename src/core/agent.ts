@@ -64,6 +64,10 @@ export interface AgentOptions {
   };
   /** Replaces credentials in tool output. Defaults to the credentials in the environment. */
   redact?: Redactor;
+  /** Called once per step, before the first call that may change something, to take a checkpoint. */
+  beforeChange?: (call: ToolCall) => Promise<void>;
+  /** Called once that step's calls are done, to settle the checkpoint. */
+  afterChange?: () => Promise<void>;
 }
 
 interface StepOutput {
@@ -293,6 +297,8 @@ export class CoreAgent implements Agent {
         remaining: cap === undefined ? undefined : cap - usedCalls,
         cap,
         redact: this.redact,
+        ...(this.options.beforeChange ? { beforeChange: this.options.beforeChange } : {}),
+        ...(this.options.afterChange ? { afterChange: this.options.afterChange } : {}),
       });
       usedCalls += batch.ran;
 

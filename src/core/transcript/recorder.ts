@@ -20,13 +20,31 @@ export class TranscriptRecorder {
   private started: boolean;
   private failed = false;
   private readonly pending: NewTranscriptEvent[] = [];
+  /** Events in the log after its header, as a fork counts them. */
+  private written: number;
+  /** Where the message that began the current turn is, in that count. */
+  private turnStart: number | undefined;
 
   constructor(
     readonly log: SessionLog,
     private readonly options: TranscriptRecorderOptions
   ) {
     this.model = options.model;
-    this.started = log.events().some((event) => event.type === 'message');
+    const events = log.events();
+    this.started = events.some((event) => event.type === 'message');
+    this.written = events.filter((event) => event.type !== 'session').length;
+  }
+
+  /** Record a checkpoint taken during the current turn, with where that turn began. */
+  recordCheckpoint(checkpoint: { ref: string; files?: string[]; after?: string; label: string }): void {
+    this.write({
+      type: 'checkpoint',
+      ref: checkpoint.ref,
+      ...(checkpoint.files ? { files: checkpoint.files } : {}),
+      ...(checkpoint.after ? { after: checkpoint.after } : {}),
+      label: checkpoint.label,
+      ...(this.turnStart !== undefined ? { turn: this.turnStart } : {}),
+    });
   }
 
   readonly handle = (event: AgentEvent): void => {
@@ -102,7 +120,11 @@ export class TranscriptRecorder {
     }
     const batch = [...this.pending.splice(0), event];
     this.guard(() => {
-      for (const entry of batch) this.log.append(entry);
+      for (const entry of batch) {
+        this.log.append(entry);
+        if (entry.type === 'message' && entry.message.role === 'user') this.turnStart = this.written;
+        this.written += 1;
+      }
     });
   }
 
