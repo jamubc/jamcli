@@ -29,6 +29,7 @@
     "@types/diff": "^5.0.9",
     "@types/node": "^20.11.24",
     "@types/react": "^19.2.0",
+    "@xterm/headless": "6.0.0",
     "typescript": "^7.0.2"
   },
   "module": "src/index.tsx",
