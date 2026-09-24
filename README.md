@@ -136,6 +136,44 @@ JamCLI automatically detects the project root by walking up the directory tree f
 - `AGENTS.md`, `CLAUDE.md`, and `.jamcli/rules/*.md`: project rules, collected from the project root toward the working directory. A section headed `# when: <glob>` applies only to matching work.
 - `styles` may be created using `/config > Style > Create Custom Style`
 
+### Models: limits and prices
+
+JamCLI sizes each request from what it knows about the model: its context window, its
+output limit, and its prices. Each fact comes from the first source that has it:
+
+1. the `models` block in `config.json`;
+2. the provider's own metadata: Ollama's `/api/show`, OpenRouter's model list, and
+   Anthropic's Models API, cached for a day under the cache directory;
+3. a table bundled with JamCLI for Claude models, checked against Anthropic's published
+   documentation;
+4. a context window of 8,192 tokens, and no price.
+
+Ollama models cost nothing, and their window is the `num_ctx` JamCLI sends: the model's
+entry, else `api_registry.ollama.num_ctx`, else the model's own limit capped at 16,384.
+
+OpenAI's models route reports no limits or prices, so describe OpenAI models yourself.
+Prices are US dollars per million tokens:
+
+```json
+{
+  "models": {
+    "openai:example-model": {
+      "context_window": 200000,
+      "max_output": 32000,
+      "price": { "input": 2, "output": 8, "cache_read": 0.5 }
+    },
+    "ollama:qwen3-coder:30b": { "context_window": 65536 }
+  },
+  "agent_loop": { "max_output_tokens": 32000 }
+}
+```
+
+The OpenAI numbers are illustrations; take real ones from your provider. The other
+settings are `tools`, `reasoning`, `images`, `thinking` (`adaptive` or `budget`),
+`always_thinks`, `effort`, and the price `cache_write`. `agent_loop.max_output_tokens`
+caps how much each reply may write, 32,000 by default and never more than the model
+allows. A reply cut off at that limit says so.
+
 ## Development
 
 ### Run Locally (without installing)

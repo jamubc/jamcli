@@ -558,6 +558,46 @@ cost zero.
 **Why.** Context budgets (D10), the status line, `/cost`, and headless JSON all need these
 numbers, and guessing them is how compaction fires too late or never.
 
+As built (4.1), each fact resolves on its own: the first source that knows it wins, and
+`ModelInfo.sources` records which one did, so a limit from the provider and a price from
+the table can meet in one entry.
+
+- **The bundled table** holds the twelve current and legacy Claude models, with aliases
+  for the dated ones. Every number was checked on 2026-09-24 against platform.claude.com:
+  the models overview, each model's page, and the pricing page. A test holds the rows to
+  the published multipliers: a five-minute cache write is 1.25 times input, and a cache
+  read is a tenth of input, except 0.025 on Claude Fable 5.1 and 0.05 on Claude Opus 5.5.
+- **OpenAI rows are absent.** This environment's network policy blocks openai.com and
+  openrouter.ai, so no OpenAI number could be checked, and D9 forbids a guessed one.
+  OpenAI's own `/models` route reports no limits or prices, so an OpenAI model is known
+  only through the `models` block. Until then its window is the default, and the first
+  turn names the setting that fixes it. This is a gap in the feature matrix, closed by
+  adding rows once they can be checked.
+- **Provider metadata.** Ollama's `/api/show` gives the context length and capabilities.
+  An OpenAI-compatible `/models` entry gives OpenRouter's limits, prices, and
+  capabilities, and the context window under the names other servers use
+  (`context_window`, `max_context_length`, `max_model_len`). Anthropic's
+  `GET /v1/models/{id}` gives `max_input_tokens`, `max_tokens`, and the thinking style.
+  A request is made once, never retried, and abandoned after three seconds. Only answers
+  are cached, for a day, keyed by provider, configured endpoint, and model, so a provider
+  that was down is asked again next time.
+- **Ollama.** Ollama allocates the whole window it is asked for, so the catalog's window
+  is the `num_ctx` sent: the model's `models` entry, then `api_registry.ollama.num_ctx`,
+  then the model's own limit capped at 16,384. Behind Ollama's `/v1` route the window
+  cannot be requested, so it is not capped. Ollama models cost zero unless configured.
+- **Gateways.** An endpoint that speaks the Anthropic dialect gets a bundled Claude row's
+  limits but not its prices, because that endpoint sets its own.
+- **Output requests** ask for the model's limit capped at `agent_loop.max_output_tokens`,
+  32,000 by default. Every request reserves its output in the window (D10), and most
+  replies need far less than 128,000. The cap is not about rate limits: Anthropic's
+  rate-limit page says `max_tokens` does not count toward output tokens per minute. A
+  model with no known limit sends none, so the server's default applies, and a reply cut
+  off at the limit is reported with the limit and the setting.
+- **Timing.** A session starts from what is known without the network, and each turn
+  waits for the provider's answer, so the first request is sized from it. A switch
+  resolves the new model the same way, and an answer about a model the session has
+  already left is dropped.
+
 ### D10. Context management
 
 Context management is on by default. The budget is the model's context window, minus the

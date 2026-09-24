@@ -375,7 +375,30 @@ cover headless, ACP, and delegation.
 
 ## Stage 4: Models, cost, and context
 
-- [ ] 4.1 The model catalog (D9). Files: `src/core/catalog/` (new), `catalog.json`, tests. Sources are configuration, provider metadata (OpenRouter, Ollama `/api/show`, Anthropic, and OpenAI), the bundled table, and defaults. Metadata is cached for a day.
+- [x] 4.1 The model catalog (D9). Files: `src/core/catalog/` (new), `catalog.json`, tests. Sources are configuration, provider metadata (OpenRouter, Ollama `/api/show`, Anthropic, and OpenAI), the bundled table, and defaults. Metadata is cached for a day.
+  - **Verification**: the catalog is built as recorded under D9. Each provider describes one model from its own route against the fake server:
+    - Ollama's context length and capabilities;
+    - an OpenRouter entry's limits, capabilities, and prices, with free kept as a price and a varying price left out;
+    - the context window under Groq's, Mistral's, and vLLM's names;
+    - Anthropic's limits and thinking style, with a zero limit read as unknown;
+    - one attempt only, even for a failure a chat request would retry.
+  - The catalog tests cover:
+    - the order of sources for each fact, and the source recorded;
+    - the bundled row applying whole, an alias reaching its dated row, and a gateway getting limits without prices;
+    - the default window and an unpriced model;
+    - Ollama's window from each setting, the cap, and zero cost;
+    - the day-long cache across sessions, per endpoint, with failures never kept;
+    - an unreadable cache, a provider that does not answer in time, and every mistake in the `models` block reported by name;
+    - the bundled table against the published price multipliers.
+  - Through the runtime:
+    - Anthropic requests carry `max_tokens` from the model's metadata, capped by `agent_loop.max_output_tokens`;
+    - Ollama requests carry the catalog's `num_ctx`, from a model entry or `api_registry.ollama.num_ctx`;
+    - an unknown window is named once, with its setting, except for Ollama;
+    - a switch sizes the next request, and a late answer about the previous model is dropped;
+    - a reply cut off at the output limit is reported in all three wire formats.
+  - Found and fixed on the way: `cancel()` reached the current agent, so after a mid-turn switch rebuilt it, the running turn could not be cancelled. A test now cancels after a mode switch.
+  - OpenAI rows are absent because this environment blocks openai.com, as recorded under D9. The gap is recorded in `docs/feature-matrix.md`.
+  - 62 mutation probes, each turning a test red, across the provider parsers, the catalog, the runtime wiring, the notice, and the cancel fix.
 - [ ] 4.2 The cost ledger. Files: `src/core/catalog/cost.ts`, runtime, transcript. Cost per request, per session, and per model. Unknown prices are reported as unpriced.
 - [ ] 4.3 Context management v2 (D10; F20). Files: `src/core/context/`, tests. On by default, budgets from the catalog, estimates corrected by reported usage, pair-safe compaction, `/compact [focus]`, and a fallback that is reported.
 - [ ] 4.4 Anthropic caching and thinking (D8). Files: `src/core/providers/anthropic.ts`, tests. Load the `claude-api` skill before editing for current model identifiers, caching rules, and thinking signatures.

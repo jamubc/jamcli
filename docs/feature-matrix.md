@@ -58,6 +58,8 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Resume with tool context | ✗ text only (F17) | ✓ | ✓ [1] | n.v. | ◐ [5] | n.v. | parity |
 | Fork, rewind | ◐ `/fork` | ✓ | ✓ [1] | n.v. | ◐ [5] | n.v. | parity |
 | Context usage view, compaction | ◐ off by default | ✓ model-aware, `/context` | ✓ `/context` [1] | n.v. | n.v. | n.v. | parity |
+| Model limits and prices, per model | ✗ fixed 4,096-token output, no prices (F14) | ✓ configuration, provider metadata, and a checked table, with each fact's source | n.v. | n.v. | n.v. | n.v. | parity |
+| Bundled OpenAI model rows | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | gap: OpenAI's documentation is blocked from the build environment, so no number could be checked; OpenAI models take limits and prices from the `models` block, and the first turn names the setting |
 | Cost tracking | ✗ tokens only | ✓ per request, session, model | ✓ `/cost`, `/usage` [1] | n.v. | n.v. | n.v. | parity |
 | OpenTelemetry | ✗ | ✓ opt-in, content excluded by default | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | Structured logs and a local trace | ✗ | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
