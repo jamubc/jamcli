@@ -70,6 +70,8 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
   private readonly name: string;
   private readonly keyVariable?: string;
   private readonly retryPolicy?: RetryPolicy;
+  /** Cleared when an endpoint rejects `cache_control`, so it is not sent again. */
+  private promptCaching = true;
 
   constructor(options: AnthropicProviderOptions = {}) {
     this.apiKey = options.apiKey;
@@ -107,6 +109,30 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
       keyVariable: this.keyVariable,
       policy: this.retryPolicy,
     });
+  }
+
+  /**
+   * Send a Messages request. An endpoint that rejects `cache_control`, such as an older
+   * gateway, gets one retry without it, and is not sent it again.
+   */
+  private async post(messages: ChatMessage[], options: ProviderRequestOptions, stream: boolean): Promise<Response> {
+    const request = () =>
+      this.send(
+        '/messages',
+        {
+          method: 'POST',
+          headers: this.buildHeaders(stream ? { Accept: 'text/event-stream' } : undefined),
+          body: JSON.stringify(this.buildBody(messages, options, stream)),
+        },
+        options
+      );
+    try {
+      return await request();
+    } catch (error) {
+      if (!this.promptCaching || !(error instanceof ProviderError) || error.status !== 400 || !/cache_control/i.test(error.detail ?? '')) throw error;
+      this.promptCaching = false;
+      return request();
+    }
   }
 
   private buildBody(
@@ -170,15 +196,25 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     };
     const thinking = thinkingFor(options, body.max_tokens as number);
     if (thinking && body.thinking === undefined) body.thinking = thinking;
-    if (system.length) body.system = system.join('\n\n');
+    // The cache prefix runs tools, then system, then messages: a breakpoint closes each, so
+    // an unchanged system prompt and tool list are read from the cache even when the
+    // conversation is not, and the conversation up to the latest turn is read next time.
+    const cache = this.promptCaching;
+    if (system.length) {
+      const text = system.join('\n\n');
+      body.system = cache ? [{ type: 'text', text, cache_control: EPHEMERAL }] : text;
+    }
     if (options.tools?.length) {
-      body.tools = options.tools.map((tool) => ({
+      const tools: Record<string, unknown>[] = options.tools.map((tool) => ({
         name: tool.function.name,
         ...(tool.function.description ? { description: tool.function.description } : {}),
         input_schema: tool.function.parameters ?? { type: 'object', properties: {} },
       }));
+      if (cache) tools[tools.length - 1].cache_control = EPHEMERAL;
+      body.tools = tools;
       body.tool_choice = mapToolChoice(options.toolChoice);
     }
+    if (cache) markCacheEnd(translated);
     return body;
   }
 
@@ -213,15 +249,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): AsyncGenerator<StreamChunk> {
-    const response = await this.send(
-      '/messages',
-      {
-        method: 'POST',
-        headers: this.buildHeaders({ Accept: 'text/event-stream' }),
-        body: JSON.stringify(this.buildBody(messages, options, true)),
-      },
-      options
-    );
+    const response = await this.post(messages, options, true);
     if (!response.body) {
       throw new ProviderError({ provider: this.name, detail: 'the response had no body' });
     }
@@ -321,15 +349,7 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): Promise<CompletionResult> {
-    const response = await this.send(
-      '/messages',
-      {
-        method: 'POST',
-        headers: this.buildHeaders(),
-        body: JSON.stringify(this.buildBody(messages, options, false)),
-      },
-      options
-    );
+    const response = await this.post(messages, options, false);
 
     const json: any = await response.json();
     let content = '';
@@ -385,6 +405,25 @@ function mapUsage(usage: any): TokenUsage | undefined {
   };
 }
 
+
+/** The five-minute cache, the price the catalog records for cache writes. */
+const EPHEMERAL = { type: 'ephemeral' } as const;
+
+/**
+ * Put a cache breakpoint on the last block of the conversation that can carry one:
+ * thinking cannot, and an empty text block is refused.
+ */
+function markCacheEnd(messages: { content: AnthropicContentBlock[] }[]): void {
+  const last = messages[messages.length - 1];
+  if (!last) return;
+  for (let index = last.content.length - 1; index >= 0; index -= 1) {
+    const block = last.content[index];
+    if (block.type === 'thinking' || block.type === 'redacted_thinking') continue;
+    if (block.type === 'text' && !block.text) continue;
+    block.cache_control = EPHEMERAL;
+    return;
+  }
+}
 
 /** The smallest thinking budget the API takes. */
 const MIN_THINKING_BUDGET = 1_024;

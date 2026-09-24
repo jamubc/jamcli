@@ -50,7 +50,7 @@ test('translates a request to the Anthropic Messages shape', async () => {
   expect(captured.url).toBe('https://api.anthropic.test/v1/messages');
   expect(captured.headers['x-api-key']).toBe('sk-ant');
   expect(captured.headers['anthropic-version']).toBe('2023-06-01');
-  expect(captured.body.system).toBe('be nice');
+  expect(captured.body.system).toEqual([{ type: 'text', text: 'be nice', cache_control: { type: 'ephemeral' } }]);
   expect(captured.body.max_tokens).toBeGreaterThan(0);
   expect(captured.body.messages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'hi' }] });
   expect(captured.body.messages[1].content[0]).toEqual({
@@ -63,11 +63,13 @@ test('translates a request to the Anthropic Messages shape', async () => {
     type: 'tool_result',
     tool_use_id: 'toolu_1',
     content: 'a.ts',
+    cache_control: { type: 'ephemeral' },
   });
   expect(captured.body.tools[0]).toEqual({
     name: 'list_files',
     description: 'd',
     input_schema: { type: 'object' },
+    cache_control: { type: 'ephemeral' },
   });
   expect(result.content).toBe('ok');
   expect(result.usage).toEqual({ prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 });
