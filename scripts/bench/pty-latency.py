@@ -42,7 +42,7 @@ def main():
     parser.add_argument('--keys', type=int, default=30)
     parser.add_argument('--json')
     parser.add_argument('--full-view', action='store_true', help='press Ctrl+R after resuming, to render the whole history')
-    parser.add_argument('--command', default=f'node {os.path.join(REPO, "dist", "index.js")}')
+    parser.add_argument('--command', default=f'bun {os.path.join(REPO, "dist", "index.js")}')
     args = parser.parse_args()
 
     base = tempfile.mkdtemp(prefix='jamcli-pty-')

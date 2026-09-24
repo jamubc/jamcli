@@ -17,7 +17,7 @@ const entry = path.join(repo, 'dist', 'index.js');
 
 const run = (args: string[], options: { cwd?: string; env?: Record<string, string | undefined> } = {}) =>
   new Promise<{ code: number | null; stdout: string }>((resolve, reject) => {
-    const child = spawn(process.env.BENCH_NODE ?? 'node', [entry, ...args], { cwd: options.cwd, env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn(process.env.BENCH_RUNTIME ?? process.execPath, [entry, ...args], { cwd: options.cwd, env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'ignore'] });
     let stdout = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.on('error', reject);
