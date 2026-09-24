@@ -238,11 +238,18 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
 
   /** What the Models API reports about one model: its limits and capabilities, but not its prices. */
   async describeModel(model: string, signal?: AbortSignal): Promise<ModelFacts | undefined> {
-    const response = await fetchWithRetry(
-      this.url(`/models/${encodeURIComponent(model)}`),
-      { headers: this.buildHeaders({ Accept: 'application/json' }) },
-      { provider: this.name, signal, secrets: [this.apiKey], keyVariable: this.keyVariable, policy: NO_RETRY }
-    );
+    let response: Response;
+    try {
+      response = await fetchWithRetry(
+        this.url(`/models/${encodeURIComponent(model)}`),
+        { headers: this.buildHeaders({ Accept: 'application/json' }) },
+        { provider: this.name, signal, secrets: [this.apiKey], keyVariable: this.keyVariable, policy: NO_RETRY }
+      );
+    } catch (error) {
+      // A model the API does not have is one it does not list.
+      if (error instanceof ProviderError && error.status === 404) return undefined;
+      throw error;
+    }
     return anthropicFacts(await response.json());
   }
 

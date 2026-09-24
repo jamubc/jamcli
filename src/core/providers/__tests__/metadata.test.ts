@@ -18,8 +18,8 @@ test('Ollama reports the context length under the model architecture, and its ca
   const provider = new OllamaProvider({ endpoint: server.ollamaBaseUrl });
   expect(await provider.describeModel('coder:7b')).toEqual({ contextWindow: 131072, tools: true, reasoning: true, images: false });
   expect(await provider.describeModel('looker')).toEqual({ contextWindow: 4096, tools: false, reasoning: false, images: true });
-  const missing = await provider.describeModel('absent').catch((error) => error);
-  expect(missing).toBeInstanceOf(ProviderError);
+  // A model Ollama does not have is not listed, as the provider contract says, rather than an error.
+  expect(await provider.describeModel('absent')).toBeUndefined();
 });
 
 test('metadata is asked for once, even when the failure is one a chat request would retry', async () => {
@@ -129,8 +129,7 @@ test('the Anthropic Models API gives limits and thinking style, and a zero limit
   const request = server.requests.find((entry) => entry.path === '/v1/models/claude-new')!;
   expect(request.headers['x-api-key']).toBe('sk-ant-test-key-123456');
   expect(request.headers['anthropic-version']).toBeDefined();
-  const missing = (await provider.describeModel('claude-absent').catch((error) => error)) as ProviderError;
-  expect(missing.status).toBe(404);
+  expect(await provider.describeModel('claude-absent')).toBeUndefined();
 });
 
 test('a describe that is cancelled stops at once', async () => {

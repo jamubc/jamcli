@@ -82,11 +82,18 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
 
   /** What `/api/show` reports: the model's own context length and, where the server lists them, its capabilities. */
   async describeModel(model: string, signal?: AbortSignal): Promise<ModelFacts | undefined> {
-    const response = await fetchWithRetry(
-      this.url('/api/show'),
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }) },
-      { provider: 'ollama', signal, policy: NO_RETRY }
-    );
+    let response: Response;
+    try {
+      response = await fetchWithRetry(
+        this.url('/api/show'),
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }) },
+        { provider: 'ollama', signal, policy: NO_RETRY }
+      );
+    } catch (error) {
+      // Ollama answers 404 for a model it does not have, which is not listing it.
+      if (error instanceof ProviderError && error.status === 404) return undefined;
+      throw error;
+    }
     return ollamaFacts(await response.json());
   }
 
