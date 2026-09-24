@@ -479,6 +479,39 @@
         "reduced_motion": {
           "type": "boolean",
           "description": "Stop the spinner and shimmer. On by itself in screen reader mode."
+        },
+        "status_text_style": {
+          "type": "string",
+          "pattern": "^(subtle|rainbow|minimal|aurora|mono|custom:[\\w.-]+)$",
+          "description": "How the working indicator's words shimmer: subtle, rainbow, minimal, aurora, mono, or custom:<name>. Defaults to subtle."
+        },
+        "status_spinner_style": {
+          "type": "string",
+          "pattern": "^(classic|orbit|pulse|big_classic|big_orbit|big_pulse|custom:[\\w.-]+)$",
+          "description": "The working indicator's spinner: classic, orbit, pulse, big_classic, big_orbit, big_pulse, or custom:<name>. Defaults to classic."
+        },
+        "custom_status_styles": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "A JSON file with label, shimmerColors, shimmer, spinnerFrames, spinnerColors, and spinnerIntervalMs."
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Styles of your own, by name, each read from a JSON file. Name one as custom:<name>."
         }
       },
       "additionalProperties": false,

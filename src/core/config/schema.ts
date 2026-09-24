@@ -160,6 +160,17 @@ export const ConfigFileSchema = z
         theme: z.enum(['dark', 'light', 'high-contrast', 'monochrome']).describe('The interface\'s colors. NO_COLOR forces monochrome. Defaults to dark.'),
         screen_reader: z.boolean().describe('Draw the interface as plain labeled lines, with no boxes, marks, or animation. --screen-reader turns it on for one run.'),
         reduced_motion: z.boolean().describe('Stop the spinner and shimmer. On by itself in screen reader mode.'),
+        status_text_style: z
+          .string()
+          .regex(/^(subtle|rainbow|minimal|aurora|mono|custom:[\w.-]+)$/, 'a built-in text style (subtle, rainbow, minimal, aurora, mono) or custom:<name>')
+          .describe('How the working indicator\'s words shimmer: subtle, rainbow, minimal, aurora, mono, or custom:<name>. Defaults to subtle.'),
+        status_spinner_style: z
+          .string()
+          .regex(/^(classic|orbit|pulse|big_classic|big_orbit|big_pulse|custom:[\w.-]+)$/, 'a built-in spinner (classic, orbit, pulse, big_classic, big_orbit, big_pulse) or custom:<name>')
+          .describe('The working indicator\'s spinner: classic, orbit, pulse, big_classic, big_orbit, big_pulse, or custom:<name>. Defaults to classic.'),
+        custom_status_styles: z
+          .record(z.string(), z.strictObject({ path: z.string().describe('A JSON file with label, shimmerColors, shimmer, spinnerFrames, spinnerColors, and spinnerIntervalMs.'), label: z.string().optional() }))
+          .describe('Styles of your own, by name, each read from a JSON file. Name one as custom:<name>.'),
       })
       .partial()
       .describe('How the interface looks and moves.'),

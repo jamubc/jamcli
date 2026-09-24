@@ -144,6 +144,12 @@ export interface UiSettings {
   screen_reader?: boolean;
   /** No spinner or shimmer. */
   reduced_motion?: boolean;
+  /** How the working indicator's words shimmer. Defaults to subtle. */
+  status_text_style?: StatusTextStyleId;
+  /** The working indicator's spinner. Defaults to classic. */
+  status_spinner_style?: StatusSpinnerStyleId;
+  /** Styles of the person's own, by name, each read from a JSON file. */
+  custom_status_styles?: Record<string, StatusIndicatorStyleRef>;
 }
 
 export interface ContextSettings {
