@@ -37,6 +37,7 @@ import {
 import type { ProviderName } from './config/defaults.js';
 import { normalizePermission, toolPermissionsOf, upsertServer } from './config/mcpConfig.js';
 import { ensureProjectStateDir } from '../core/transcript/log.js';
+import { loadConfig } from '../core/config/load.js';
 import { readProfile, writeProfile } from './config/profileConfig.js';
 import {
   customStatusStylePath,
@@ -118,9 +119,12 @@ export class ConfigService {
     return this.getConfig();
   }
 
-  /** The project's configuration with defaults filled in. Reading writes nothing. */
+  /**
+   * The configuration as sessions resolve it, from every layer, with the legacy
+   * interface's defaults filled in. Reading writes nothing.
+   */
   async getConfig(): Promise<Config> {
-    return this.normalizeConfig((await this.readProjectJson(this.configPath)) as Config);
+    return this.normalizeConfig(loadConfig({ projectRoot: this.projectRoot }).config);
   }
 
   async getUiConfig(): Promise<UiConfig> {
@@ -183,9 +187,9 @@ export class ConfigService {
     return readProfile(this.profilesDir, profileName);
   }
 
+  /** The active profile, from the user's and the project's profile files, as sessions resolve it. */
   async getActiveProfile(): Promise<Profile> {
-    const config = await this.getConfig();
-    return this.getProfile(config.active_profile);
+    return loadConfig({ projectRoot: this.projectRoot }).profile;
   }
 
   async updateSystemPrompt(systemPrompt: string): Promise<Profile> {
