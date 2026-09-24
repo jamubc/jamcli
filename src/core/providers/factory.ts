@@ -62,23 +62,14 @@ export function keySource(name: string, registry: ApiRegistry = {}): { from: 'en
 }
 
 const unconfigured = (name: string): Error => {
-  if (name === 'openrouter') {
-    return new Error(
-      'Provider "openrouter" is not configured. Set api_registry.openrouter.api_key, api_registry.openrouter.key_env_var, or the OPENROUTER_API_KEY environment variable.'
-    );
+  const variable = FALLBACK_ENV[name];
+  if (!variable) {
+    return new Error(`Provider "${name}" is not configured. Add an entry to api_registry.endpoints with id "${name}" and a base_url.`);
   }
-  if (name === 'openai') {
-    return new Error(
-      'Provider "openai" is not configured. Set api_registry.openai.base_url, api_registry.openai.api_key, api_registry.openai.key_env_var, or the OPENAI_API_KEY environment variable.'
-    );
-  }
-  if (name === 'anthropic') {
-    return new Error(
-      'Provider "anthropic" is not configured. Set api_registry.anthropic.base_url, api_registry.anthropic.api_key, api_registry.anthropic.key_env_var, or the ANTHROPIC_API_KEY environment variable.'
-    );
-  }
+  const store = name === 'openrouter' ? 'jamcli auth set openrouter or jamcli auth login openrouter' : `jamcli auth set ${name}`;
+  const server = name === 'openrouter' ? '' : ` To use a compatible server instead, set api_registry.${name}.base_url.`;
   return new Error(
-    `Provider "${name}" is not configured. Add an entry to api_registry.endpoints with id "${name}" and a base_url.`
+    `Provider "${name}" is not configured. Store a key with ${store}, set ${variable}, or name the variable holding it in api_registry.${name}.key_env_var.${server}`
   );
 };
 

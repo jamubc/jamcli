@@ -129,7 +129,7 @@ export const auditConfiguration = (input: AuditInput): AuditReport => {
         criterion: 'missing_guardrails',
         severity: 'high',
         subject: key,
-        detail: 'a credential is stored in the project file; prefer key_env_var',
+        detail: 'a credential is stored in a project file; name its variable in key_env_var, or store it with jamcli auth set <provider>',
       });
     }
   }

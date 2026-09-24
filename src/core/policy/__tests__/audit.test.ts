@@ -3,6 +3,7 @@ import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
 import { auditConfiguration, renderAuditReport, summarizeBySeverity } from '../audit.js';
+import { projectKeyNames } from '../../../cli/audit.js';
 
 const makeProject = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-audit-'));
@@ -42,7 +43,20 @@ test('a credential stored in the project file is reported without its value', ()
   });
   const finding = report.findings.find((item) => item.subject.endsWith('api_key'));
   expect(finding?.severity).toBe('high');
+  expect(finding?.detail).toContain('jamcli auth set');
   expect(JSON.stringify(report)).not.toContain('sk-');
+});
+
+test('keys in the project-local file are found too, each named with its file', () => {
+  const root = makeProject();
+  fs.mkdirSync(path.join(root, '.jamcli'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ api_registry: { openai: { key_env_var: 'OPENAI_API_KEY' } } }));
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.local.json'), JSON.stringify({ api_registry: { anthropic: { api_key: 'sk-ant-local' } } }));
+  const report = auditConfiguration({ projectRoot: root, configKeyNames: projectKeyNames(root) });
+  expect(report.findings.filter((item) => item.subject.endsWith('api_key')).map((item) => item.subject)).toEqual([
+    '.jamcli/config.local.json api_registry.anthropic.api_key',
+  ]);
+  expect(JSON.stringify(report)).not.toContain('sk-ant-local');
 });
 
 test('an MCP server that inherits the environment is a high isolation finding', () => {

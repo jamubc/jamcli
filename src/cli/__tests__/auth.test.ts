@@ -9,6 +9,7 @@ import { runAuthCommand, type AuthAction, type AuthCommandIo } from '../auth.js'
 import { fileStore, forgetStoredKeys } from '../../core/config/credentials.js';
 import { openRouterLogin, pkcePair } from '../../core/config/pkce.js';
 import { parseArgs } from '../../cli.js';
+import { createChatProvider } from '../../core/providers/factory.js';
 
 let root: string;
 const saved = { config: process.env.JAMCLI_CONFIG_DIR, key: process.env.OPENROUTER_API_KEY };
@@ -165,4 +166,11 @@ test('a PKCE challenge is the unpadded base64url SHA-256 of its verifier', () =>
   expect(verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
   expect(challenge).toBe(createHash('sha256').update(verifier).digest('base64url'));
   expect(challenge).not.toContain('=');
+});
+
+test('a provider with no key says how to store one', () => {
+  expect(() => createChatProvider('openrouter', {})).toThrow('Store a key with jamcli auth set openrouter or jamcli auth login openrouter, set OPENROUTER_API_KEY');
+  expect(() => createChatProvider('anthropic', {})).toThrow('To use a compatible server instead, set api_registry.anthropic.base_url.');
+  fileStore().set('anthropic', 'sk-ant-stored-for-factory');
+  expect(() => createChatProvider('anthropic', {})).not.toThrow();
 });

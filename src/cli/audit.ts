@@ -28,6 +28,13 @@ const collectKeyNames = (value: unknown, prefix = ''): string[] => {
   return names;
 };
 
+/** The registry keys in the project's configuration files, each named with its file. Values are never read out. */
+export const projectKeyNames = (projectRoot: string): string[] =>
+  ['config.json', 'config.local.json'].flatMap((name) => {
+    const json = readJsonIfPresent(path.join(projectRoot, '.jamcli', name));
+    return json ? collectKeyNames(json.api_registry ?? {}, 'api_registry').map((key) => `.jamcli/${name} ${key}`) : [];
+  });
+
 export const runAuditCli = async (): Promise<number> => {
   const projectRoot = resolveJamcliProjectRoot();
   const configService = new ConfigService(projectRoot);
@@ -40,9 +47,7 @@ export const runAuditCli = async (): Promise<number> => {
     mcpServers = [];
   }
 
-  const configPath = path.join(projectRoot, '.jamcli', 'config.json');
-  const configJson = readJsonIfPresent(configPath);
-  const configKeyNames = configJson ? collectKeyNames(configJson.api_registry ?? {}, 'api_registry') : [];
+  const configKeyNames = projectKeyNames(projectRoot);
 
   const report = auditConfiguration({
     projectRoot,
