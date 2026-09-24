@@ -75,12 +75,21 @@ export interface StatusData {
   retry?: { attempt: number; delayMs: number; reason: string };
 }
 
+/** One item of the model's todo list, as its `todo_write` call left it. */
+export interface TodoView {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  active_form?: string;
+}
+
 export interface ViewState {
   rows: Row[];
   approvals: PendingApproval[];
   status: StatusData;
   running: boolean;
   nextId: number;
+  /** The todo list the model last wrote in this session, when it has written one. */
+  todos?: TodoView[];
 }
 
 export type ViewAction =
@@ -210,7 +219,8 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         // The change made replaces the one proposed, and a change is shown open.
         ...(madeDiff ? { diff: madeDiff, collapsed: false } : {}),
       }));
-      return { ...state, rows, approvals: state.approvals.filter((approval) => approval.callId !== result.callId) };
+      const todos = result.tool === 'todo_write' && result.success && Array.isArray(result.metadata?.todos) ? (result.metadata.todos as TodoView[]) : undefined;
+      return { ...state, rows, approvals: state.approvals.filter((approval) => approval.callId !== result.callId), ...(todos ? { todos } : {}) };
     }
 
     case 'approval_request': {
@@ -348,7 +358,7 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     case 'load': {
       const { rows, nextId } = rowsFrom(action.messages, state.nextId);
       // Tokens are counted from events, so another session's count starts over.
-      return { ...state, rows, nextId, approvals: [], running: false, status: { ...state.status, phase: 'idle', retry: undefined, inputTokens: 0, outputTokens: 0 } };
+      return { ...state, rows, nextId, approvals: [], running: false, todos: undefined, status: { ...state.status, phase: 'idle', retry: undefined, inputTokens: 0, outputTokens: 0 } };
     }
     case 'status':
       return { ...state, status: { ...state.status, ...action.patch } };

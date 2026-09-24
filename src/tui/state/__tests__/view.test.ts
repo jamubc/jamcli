@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { OUTPUT_TAIL_LINES, initialView, reduceView, tail, type Row, type ViewAction, type ViewState } from '../view.js';
+import { OUTPUT_TAIL_LINES, initialView, reduceView, tail, type Row, type TodoView, type ViewAction, type ViewState } from '../view.js';
 import type { AgentEvent, ChatMessage } from '../../../core/types.js';
 
 const run = (actions: ViewAction[], from: ViewState = initialView({ model: 'ollama:qwen', mode: 'default', sandbox: 'bwrap' })) => actions.reduce(reduceView, from);
@@ -180,4 +180,21 @@ test('a command and what it reports are rows of their own, and another session s
   state = reduceView(state, { type: 'load', messages: [] });
   expect(state.rows).toEqual([]);
   expect(state.status).toMatchObject({ inputTokens: 0, outputTokens: 0, phase: 'idle' });
+});
+
+test('the todo list is the one the model last wrote, and another session has none', () => {
+  const todos: TodoView[] = [
+    { content: 'Read the parser', status: 'completed' },
+    { content: 'Fix the bug', status: 'in_progress', active_form: 'Fixing the bug' },
+  ];
+  let state = run([
+    event({ type: 'tool_call', call: call('t1', 'todo_write', { todos }) }),
+    event({ type: 'tool_result', result: { tool: 'todo_write', success: true, output: 'ok', durationMs: 1, callId: 't1', metadata: { todos } } }),
+  ]);
+  expect(state.todos).toEqual(todos);
+  // A failed write, or another tool's metadata, changes nothing.
+  state = reduceView(state, event({ type: 'tool_result', result: { tool: 'todo_write', success: false, output: 'bad', durationMs: 1, callId: 't2', metadata: { todos: [] } } }));
+  state = reduceView(state, event({ type: 'tool_result', result: { tool: 'read_file', success: true, output: 'x', durationMs: 1, callId: 'r1', metadata: { todos: [] } } }));
+  expect(state.todos).toEqual(todos);
+  expect(reduceView(state, { type: 'load', messages: [] }).todos).toBeUndefined();
 });
