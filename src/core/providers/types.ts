@@ -68,6 +68,15 @@ export interface ProviderRequestOptions {
 /** A `replayReasoningSince` for a prefix set now: after every message that already exists. */
 export const prefixSetNow = (): number => Date.now() + 1;
 
+/**
+ * Wait until the clock has reached `since`. A message created in the millisecond a prefix
+ * was set would otherwise be dated before it and lose its reasoning; waiting at most that
+ * millisecond dates everything that follows at or after it.
+ */
+export async function clockPast(since: number | undefined): Promise<void> {
+  while (since !== undefined && Date.now() < since) await new Promise((resolve) => setTimeout(resolve, 1));
+}
+
 /** The wire family a provider speaks. Signed reasoning is replayed only within a family. */
 export type ProviderFamily = 'openai' | 'anthropic' | 'ollama';
 

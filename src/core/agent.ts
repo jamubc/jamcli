@@ -1,6 +1,6 @@
 import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage, ToolCall, ToolResult } from './types.js';
 import { addModelUsage, addUsage, appendMessages } from './state.js';
-import { prefixSetNow, type ChatProvider, type ProviderRequestOptions, type StreamChunk, type ToolDefinition } from './providers/types.js';
+import { clockPast, prefixSetNow, type ChatProvider, type ProviderRequestOptions, type StreamChunk, type ToolDefinition } from './providers/types.js';
 import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';
 import { HeadTailBuffer } from './tools/command.js';
 import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
@@ -152,6 +152,7 @@ export class CoreAgent implements Agent {
     signal: AbortSignal
   ): Promise<RunResult> {
     const { provider, dispatcher, hooks } = this.options;
+    await clockPast(this.reasoningSince);
     let working = session;
     const record = (message: ChatMessage) => {
       working = appendMessages(working, [message]);
@@ -355,6 +356,7 @@ export class CoreAgent implements Agent {
     if (!result) return { session: working, compacted: false };
     // The kept messages' reasoning was signed against the conversation the summary replaced.
     this.reasoningSince = prefixSetNow();
+    await clockPast(this.reasoningSince);
     let next: JamSession = { ...working, messages: result.messages, updatedAt: Date.now() };
     if (result.usage) next = this.account(next, result.usage, this.options.modelUsageKey, this.options.price, emit);
     const after = this.countContext(next.messages);
