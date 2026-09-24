@@ -52,7 +52,7 @@ test('a call that asks shows the permission prompt, and Escape denies it', async
 
 test('1 allows a call once; Shift+Tab changes the mode; Ctrl+C twice asks to leave', async () => {
   let exited = 0;
-  const { runtime, setup, close } = await open({}, () => void (exited += 1));
+  const { runtime, setup, close } = await open({}, { onExit: () => void (exited += 1) });
   try {
     context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo allowed-output' } }] }, { text: 'It printed.' });
     await setup.mockInput.typeText('run it');

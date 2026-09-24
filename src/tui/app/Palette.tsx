@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from '@opentui/react';
 import type { SlashCommand } from './commands.js';
-import { useTheme } from './theme.js';
+import { framed, usePlain, useTheme } from './theme.js';
 
 /** How many matches the palette shows at once. */
 export const PALETTE_ROWS = 8;
@@ -12,6 +12,7 @@ export const PALETTE_ROWS = 8;
  */
 export function Palette({ matches, selected }: { matches: SlashCommand[]; selected: number }) {
   const colors = useTheme();
+  const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   // Inside the border and padding; a line longer than that is cut, not wrapped.
   const room = Math.max(20, columns - 4);
@@ -20,7 +21,8 @@ export function Palette({ matches, selected }: { matches: SlashCommand[]; select
   const shown = matches.slice(start, start + PALETTE_ROWS);
   const width = Math.min(28, Math.max(...shown.map((command) => command.name.length + (command.args ? command.args.length + 1 : 0))));
   return (
-    <box border borderColor={colors.border} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
+    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
+      {plain ? <text>{`Commands matching: ${matches.length}`}</text> : null}
       {matches.length === 0 ? (
         <text fg={colors.dim}>No command starts with that. /help lists them.</text>
       ) : (
@@ -31,7 +33,7 @@ export function Palette({ matches, selected }: { matches: SlashCommand[]; select
           const from = command.source === 'built-in' ? '' : ` (${command.source})`;
           return (
             <text key={command.name} fg={chosen ? colors.accent : undefined}>
-              {fit(`${chosen ? '> ' : '  '}${head} ${command.summary}${from}`)}
+              {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head} ${command.summary}${from}`)}
             </text>
           );
         })

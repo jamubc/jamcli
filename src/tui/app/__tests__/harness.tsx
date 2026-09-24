@@ -4,11 +4,16 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { testRender } from '@opentui/react/test-utils';
-import { App } from '../App.js';
+import { App, type AppProps } from '../App.js';
 import type { SessionChoice } from '../commands.js';
-import type { Theme } from '../theme.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from '../../../core/runtime/index.js';
 import { startFakeProvider, type FakeProviderOptions, type FakeProviderServer } from '../../../testing/fakeProvider.js';
+
+/** How the interface is opened: its size, and the props a person's settings would give it. */
+export interface ViewOptions extends Pick<AppProps, 'theme' | 'screenReader' | 'reducedMotion' | 'keys'> {
+  onExit?: () => void;
+  size?: { width: number; height: number };
+}
 
 export type Setup = Awaited<ReturnType<typeof testRender>>;
 
@@ -57,7 +62,8 @@ export function interfaceHarness(provider: FakeProviderOptions = {}) {
     else process.env.JAMCLI_STATE_DIR = sharedState;
     fs.rmSync(path.dirname(context.root), { recursive: true, force: true });
   });
-  const open = async (options: Partial<RuntimeOptions> = {}, onExit = () => undefined, size = { width: 100, height: 30 }, theme?: Theme) => {
+  const open = async (options: Partial<RuntimeOptions> = {}, view: ViewOptions = {}) => {
+    const { onExit = () => undefined, size = { width: 100, height: 30 }, ...shown } = view;
     const base: RuntimeOptions = { projectRoot: context.root, surface: 'tui', mcp: false, env: {}, ...options };
     const opened: Runtime[] = [];
     const make = async (choice: SessionChoice = {}) => {
@@ -70,7 +76,7 @@ export function interfaceHarness(provider: FakeProviderOptions = {}) {
       return made;
     };
     const runtime = await make();
-    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} openSession={make} {...(theme ? { theme } : {})} />, { ...size, exitOnCtrlC: false });
+    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} openSession={make} {...shown} />, { ...size, exitOnCtrlC: false });
     await setup.renderOnce();
     return {
       runtime,

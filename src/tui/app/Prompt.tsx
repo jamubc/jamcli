@@ -2,7 +2,7 @@
 import type { SyntaxStyle } from '@opentui/core';
 import type { PendingApproval } from '../state/view.js';
 import { DiffView } from './Rows.js';
-import { useTheme } from './theme.js';
+import { framed, usePlain, useTheme } from './theme.js';
 
 /** An input's submitted text: OpenTUI's React input hands over the value itself. */
 const submitted = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -23,12 +23,13 @@ export function PermissionPrompt(props: {
 }) {
   const { approval, queued, syntax, file, selected, feedback } = props;
   const theme = useTheme();
+  const plain = usePlain();
   const preview = approval.preview?.kind === 'diff' ? undefined : approval.preview?.text.split('\n').slice(0, 12).join('\n');
   const pattern = approval.suggestions[selected];
   const others = approval.suggestions.length > 1 ? ` (${selected + 1} of ${approval.suggestions.length}; Up and Down choose)` : '';
   return (
-    <box border borderColor={theme.warn} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
-      <text fg={theme.warn}>{`Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued} waiting)` : ''}`}</text>
+    <box {...framed(plain, theme.warn)} flexDirection="column" flexShrink={0}>
+      <text fg={theme.warn}>{`${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued} waiting)` : ''}`}</text>
       <text fg={theme.dim}>{`Asked because ${approval.reason}.`}</text>
       {approval.preview?.kind === 'diff' ? <DiffView diff={approval.preview.text} file={file} syntax={syntax} /> : null}
       {preview ? <text>{preview}</text> : null}
@@ -52,9 +53,10 @@ export function PermissionPrompt(props: {
 /** Asks the person to type yes before bypass mode turns on. */
 export function BypassConfirm({ onAnswer }: { onAnswer: (text: string) => void }) {
   const theme = useTheme();
+  const plain = usePlain();
   return (
-    <box border borderColor={theme.error} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
-      <text fg={theme.error}>Turn on bypass mode?</text>
+    <box {...framed(plain, theme.error)} flexDirection="column" flexShrink={0}>
+      <text fg={theme.error}>{`${plain ? 'Confirm: ' : ''}Turn on bypass mode?`}</text>
       <text>Nothing will ask before it runs: every edit and every command goes ahead, and only deny rules stop a call.</text>
       <text>Type yes and press Enter to turn it on. Anything else, or Escape, leaves the mode as it is.</text>
       <input focused placeholder="yes" onSubmit={(value: unknown) => onAnswer(submitted(value))} />

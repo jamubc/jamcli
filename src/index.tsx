@@ -35,11 +35,14 @@ const HEADLESS_INTENTS = new Set([
   '--trace-file',
 ]);
 
+/** Flags only the interface reads. */
+const INTERFACE_FLAGS = new Set(['--screen-reader']);
+
 const startInterface = async () => {
   // The OpenTUI interface is chosen by JAMCLI_INTERFACE=opentui until it replaces the Ink one.
   if (process.env.JAMCLI_INTERFACE === 'opentui') {
     const { startOpenTui } = await import('./tui/app/start.js');
-    await startOpenTui();
+    await startOpenTui(undefined, { screenReader: argv.includes('--screen-reader') });
     return;
   }
   const { startTui } = await import('./tui/start.js');
@@ -61,8 +64,9 @@ const main = async () => {
 
   const cwdIndex = argv.indexOf('--cwd');
   if (cwdIndex === -1) {
-    if (argv.length) {
-      process.stderr.write(`Unknown option: ${argv.join(', ')}\n`);
+    const unknown = argv.filter((token) => !INTERFACE_FLAGS.has(token));
+    if (unknown.length) {
+      process.stderr.write(`Unknown option: ${unknown.join(', ')}\n`);
       process.exit(2);
     }
     await startInterface();

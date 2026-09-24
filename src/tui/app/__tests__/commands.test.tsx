@@ -22,7 +22,7 @@ async function turn(setup: Setup, message: string, reply: string): Promise<void>
 const readJson = (file: string) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab completes, and Escape closes it', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await setup.mockInput.typeText('/co');
     const palette = await frameWith(setup, (frame) => frame.includes('> /context'));
@@ -75,7 +75,7 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
 }, 30_000);
 
 test('/cost, /context, and /model report on the session, and /model switches later turns', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await turn(setup, 'hi there', 'Hello.');
     await send(setup, '/cost');
@@ -99,7 +99,7 @@ test('/cost, /context, and /model report on the session, and /model switches lat
 }, 30_000);
 
 test('/permissions lists the rules, adds one for the session or a file, and removes it', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await send(setup, '/permissions');
     const listed = await frameWith(setup, (frame) => frame.includes('Mode: default.'));
@@ -127,7 +127,7 @@ test('/permissions lists the rules, adds one for the session or a file, and remo
 }, 30_000);
 
 test('/clear starts a new session, /resume lists and reopens the last, and /fork continues in a copy', async () => {
-  const { setup, current, close } = await open({}, undefined, tall);
+  const { setup, current, close } = await open({}, { size: tall });
   try {
     await turn(setup, 'first question', 'First answer.');
     const first = current().sessionId;
@@ -165,7 +165,7 @@ test('/clear starts a new session, /resume lists and reopens the last, and /fork
 }, 30_000);
 
 test('commands that change the session wait for a running turn, and the others answer at once', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     context.server.enqueue({ text: 'Too slow.', delayMs: 3_000 });
     await send(setup, 'take a while');
@@ -182,7 +182,7 @@ test('commands that change the session wait for a running turn, and the others a
 }, 30_000);
 
 test('/compact says when there is nothing to compact yet', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await send(setup, '/compact');
     await frameWith(setup, (frame) => frame.includes('Nothing to compact yet: the conversation is too short.') && frame.includes('· ready'));
@@ -192,7 +192,7 @@ test('/compact says when there is nothing to compact yet', async () => {
 }, 30_000);
 
 test('/export writes the session as Markdown and will not overwrite a file; /copy says what it did', async () => {
-  const { setup, current, close } = await open({}, undefined, tall);
+  const { setup, current, close } = await open({}, { size: tall });
   try {
     await turn(setup, 'export me', 'Exported words.');
     const id = current().sessionId;
@@ -218,7 +218,7 @@ test('/export writes the session as Markdown and will not overwrite a file; /cop
 }, 30_000);
 
 test('/tools, /mcp, /categories, and /doctor report, and /config reads and changes settings through the same code as jamcli config', async () => {
-  const { setup, current, close } = await open({}, undefined, tall);
+  const { setup, current, close } = await open({}, { size: tall });
   try {
     await turn(setup, 'hello', 'Hi.');
     await send(setup, '/tools');
@@ -258,7 +258,7 @@ test('/profile lists the profiles, and switches this session to one without writ
   fs.mkdirSync(profiles);
   fs.writeFileSync(path.join(profiles, 'default.json'), JSON.stringify({ name: 'Default', preferred_model: 'fake-model' }));
   fs.writeFileSync(path.join(profiles, 'terse.json'), JSON.stringify({ name: 'Terse', preferred_model: 'fake-model', system_prompt_override: 'Answer in one word.' }));
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await send(setup, '/profile');
     const listed = await frameWith(setup, (frame) => frame.includes('Profiles:'));

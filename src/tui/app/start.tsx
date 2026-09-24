@@ -10,7 +10,7 @@ import { loadConfig } from '../../core/config/load.js';
  * Start the OpenTUI interface. OpenTUI draws through native code that Bun loads; on Node
  * it needs a newer release and an experimental flag, so the interface asks for Bun.
  */
-export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoot()): Promise<void> {
+export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoot(), options: { screenReader?: boolean } = {}): Promise<void> {
   if (!process.versions.bun) {
     process.stderr.write('This interface runs on Bun. Start it with: bun $(which jamcli)\n');
     process.exit(1);
@@ -37,6 +37,16 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
   };
   process.once('SIGTERM', () => void exit(143));
   process.once('SIGHUP', () => void exit(129));
-  const theme = resolveTheme(loadConfig({ projectRoot }).config.ui?.theme, process.env);
-  createRoot(renderer).render(<App runtime={current} projectRoot={projectRoot} onExit={() => void exit()} openSession={openSession} theme={theme} />);
+  const ui = loadConfig({ projectRoot }).config.ui ?? {};
+  createRoot(renderer).render(
+    <App
+      runtime={current}
+      projectRoot={projectRoot}
+      onExit={() => void exit()}
+      openSession={openSession}
+      theme={resolveTheme(ui.theme, process.env)}
+      screenReader={options.screenReader === true || ui.screen_reader === true}
+      reducedMotion={ui.reduced_motion === true}
+    />
+  );
 }

@@ -33,7 +33,7 @@ test('/model lists what the providers offer with what is known of each, filters 
   const config = readJson(userConfig());
   config.api_registry.endpoints = [{ id: 'down', base_url: 'http://127.0.0.1:9/v1' }];
   fs.writeFileSync(userConfig(), JSON.stringify(config));
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await send(setup, '/model');
     const listed = await frameWith(setup, (frame) => frame.includes('ollama:other-model') && frame.includes('Not listed: down:'));
@@ -53,7 +53,7 @@ test('/model lists what the providers offer with what is known of each, filters 
 }, 30_000);
 
 test('/resume lists the sessions, and Enter opens the chosen one', async () => {
-  const { setup, current, close } = await open({}, undefined, tall);
+  const { setup, current, close } = await open({}, { size: tall });
   try {
     context.server.enqueue({ text: 'An answer about parsers.' });
     await send(setup, 'parser question');
@@ -74,7 +74,7 @@ test('/resume lists the sessions, and Enter opens the chosen one', async () => {
 }, 30_000);
 
 test('? on an empty composer opens help; Enter puts the chosen command in the composer, and Escape closes it', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await setup.mockInput.typeText('?');
     const help = await frameWith(setup, (frame) => frame.includes('Keys: Enter sends'));
@@ -97,7 +97,7 @@ test('? on an empty composer opens help; Enter puts the chosen command in the co
 }, 30_000);
 
 test('/config lists each setting with its file, and Enter starts a /config set for it', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await send(setup, '/config');
     const listed = await frameWith(setup, (frame) => frame.includes('Settings, each with the file it comes from'));
@@ -112,7 +112,7 @@ test('/config lists each setting with its file, and Enter starts a /config set f
 }, 30_000);
 
 test('/theme changes the colors at once and saves the choice for every project', async () => {
-  const { setup, close } = await open({}, undefined, tall);
+  const { setup, close } = await open({}, { size: tall });
   try {
     await frameWith(setup, (frame) => frame.includes('default mode'));
     const before = colorOf(setup, 'default mode');
@@ -140,7 +140,7 @@ test('/theme changes the colors at once and saves the choice for every project',
 }, 30_000);
 
 test('the monochrome theme draws every state in the terminal\'s own color', async () => {
-  const { setup, close } = await open({}, undefined, tall, THEMES.monochrome);
+  const { setup, close } = await open({}, { size: tall, theme: THEMES.monochrome });
   try {
     context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] });
     await send(setup, 'run it');

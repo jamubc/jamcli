@@ -30,6 +30,54 @@ test('--help reaches the command line without the interface', async () => {
   expect(out).toContain('Usage: jamcli');
 });
 
+test('the interface takes --screen-reader, and any other unknown option is refused by name', async () => {
+  expect(USAGE).toContain('--screen-reader');
+  const child = Bun.spawn(['bun', ENTRY, '--screen-reader', '--bogus'], { stdout: 'pipe', stderr: 'pipe' });
+  const [err, code] = await Promise.all([new Response(child.stderr).text(), child.exited]);
+  expect(err).toBe('Unknown option: --bogus\n');
+  expect(code).toBe(2);
+});
+
+/** The text a terminal program drew, with the escape sequences taken out, and whether it exited. */
+async function inTerminal(args: string[], env: Record<string, string>, until: (screen: string) => boolean) {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-pty-'));
+  fs.mkdirSync(path.join(base, 'project'));
+  let raw = '';
+  const decoder = new TextDecoder();
+  const screen = () => raw.replace(/\x1b\[[0-9;?>$]*[A-Za-z]/g, '\n').replace(/\x1b[P\]][^\x07\x1b]*(\x07|\x1b\\)/g, '');
+  const child = Bun.spawn(['bun', ENTRY, ...args], {
+    cwd: path.join(base, 'project'),
+    env: { ...process.env, TERM: 'xterm-256color', JAMCLI_CONFIG_DIR: path.join(base, 'user'), JAMCLI_STATE_DIR: path.join(base, 'state'), JAMCLI_CACHE_DIR: path.join(base, 'cache'), ...env },
+    terminal: { cols: 100, rows: 30, data: (_terminal: unknown, data: Uint8Array) => void (raw += decoder.decode(data)) },
+  } as any);
+  try {
+    const deadline = Date.now() + 10_000;
+    while (!until(screen()) && Date.now() < deadline) await Bun.sleep(50);
+    const drawn = screen();
+    const terminal = (child as any).terminal as { write(data: string): void };
+    terminal.write('\x03');
+    await Bun.sleep(100);
+    terminal.write('\x03');
+    const code = await Promise.race([child.exited, Bun.sleep(5_000).then(() => 'still running')]);
+    return { drawn, code };
+  } finally {
+    child.kill();
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+}
+
+test('in a terminal, --screen-reader draws plain labeled lines with no boxes or bars, and Ctrl+C twice exits', async () => {
+  const booted = (screen: string) => /Status: default mode, .*, ready/.test(screen);
+  const plain = await inTerminal(['--screen-reader'], { JAMCLI_INTERFACE: 'opentui' }, booted);
+  expect(plain.drawn).toMatch(/JamCLI, project project, session /);
+  expect(plain.drawn).toContain('Message: Message JamCLI.');
+  expect(plain.drawn).not.toMatch(/[┌┐└┘│─▄█]/);
+  expect(plain.code).toBe(0);
+  const framed = await inTerminal([], { JAMCLI_INTERFACE: 'opentui' }, (screen) => /default mode · .* · ready/.test(screen));
+  expect(framed.drawn).toMatch(/[┌┐└┘│─]/);
+  expect(framed.code).toBe(0);
+}, 40_000);
+
 test('every subcommand the usage lists reaches the command line', async () => {
   const source = fs.readFileSync(ENTRY, 'utf8');
   const subcommands = [...USAGE.matchAll(/^ {2}jamcli ([a-z]+)/gm)].map((match) => match[1]);

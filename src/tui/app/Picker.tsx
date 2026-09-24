@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from '@opentui/react';
-import { useTheme } from './theme.js';
+import { framed, usePlain, useTheme } from './theme.js';
 
 /** One choice in an overlay. */
 export interface PickItem {
@@ -10,6 +10,8 @@ export interface PickItem {
   detail?: string;
   /** The choice in effect now, marked as such. */
   current?: boolean;
+  /** What choosing it gives, when that is more than the label shows. */
+  value?: string;
 }
 
 /** What a command asks the interface to show: a list to choose from, filtered as the person types. */
@@ -45,6 +47,7 @@ export function filterItems(items: PickItem[], filter: string): PickItem[] {
  */
 export function Picker(props: { title: string; items: PickItem[] | undefined; note?: string; empty: string; hint?: string; filter: string; selected: number }) {
   const theme = useTheme();
+  const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   const room = Math.max(20, columns - 4);
   const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
@@ -53,7 +56,7 @@ export function Picker(props: { title: string; items: PickItem[] | undefined; no
   const visible = shown?.slice(start, start + PICKER_ROWS) ?? [];
   const width = Math.min(48, Math.max(0, ...visible.map((item) => item.label.length + (item.current ? ' (in use)'.length : 0))));
   return (
-    <box border borderColor={theme.accent} flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
+    <box {...framed(plain, theme.accent)} flexDirection="column" flexShrink={0}>
       <text fg={theme.accent}>{fit(`${props.title}${shown && props.items && shown.length !== props.items.length ? ` (${shown.length} of ${props.items.length})` : ''}`)}</text>
       <text fg={theme.dim}>{fit(`Filter: ${props.filter}${props.filter ? '' : '(type to narrow the list)'}`)}</text>
       {shown === undefined ? <text fg={theme.dim}>Asking…</text> : null}
@@ -65,7 +68,7 @@ export function Picker(props: { title: string; items: PickItem[] | undefined; no
         const label = text.length >= width ? `${text}  ` : text.padEnd(width + 2);
         return (
           <text key={item.key} fg={chosen ? theme.accent : undefined}>
-            {fit(`${chosen ? '> ' : '  '}${label}${item.detail ?? ''}`)}
+            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${label}${item.detail ?? ''}`)}
           </text>
         );
       })}

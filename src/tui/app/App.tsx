@@ -11,7 +11,10 @@ import { createSyntaxStyle } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
 import { Palette } from './Palette.js';
 import { Picker, filterItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
-import { THEMES, ThemeContext, type Theme } from './theme.js';
+import { MotionContext, PlainContext, THEMES, ThemeContext, framed, type Theme } from './theme.js';
+import { keysFor, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
+import { earlierMessages } from './history.js';
+import type { TodoView } from '../state/view.js';
 import { RowView } from './Rows.js';
 import { BypassConfirm, PermissionPrompt } from './Prompt.js';
 
@@ -27,6 +30,32 @@ export interface AppProps {
   commands?: SlashCommand[];
   /** The theme to start with, resolved from `ui.theme` and NO_COLOR. Defaults to dark. */
   theme?: Theme;
+  /** Plain labeled lines with no boxes or marks, from `--screen-reader` or `ui.screen_reader`. */
+  screenReader?: boolean;
+  /** No spinner or shimmer, from `ui.reduced_motion`, and always in screen reader mode. */
+  reducedMotion?: boolean;
+  /** The keys, with what was wrong in the keybindings file. Read from the user's file when absent. */
+  keys?: { bindings: Keybindings; problems: string[] };
+}
+
+const TODO_WORDS: Record<TodoView['status'], string> = { pending: 'to do', in_progress: 'doing', completed: 'done' };
+
+/** The model's todo list, shown and hidden with the todos key. */
+function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; plain: boolean; colors: Theme }) {
+  return (
+    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
+      <text fg={colors.accent}>Todo list</text>
+      {todos?.length ? (
+        todos.map((todo, index) => (
+          <text key={index} fg={todo.status === 'completed' ? colors.dim : undefined}>
+            {`${TODO_WORDS[todo.status]}: ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}`}
+          </text>
+        ))
+      ) : (
+        <text fg={colors.dim}>No todo list yet. The model writes one with todo_write as it works.</text>
+      )}
+    </box>
+  );
 }
 
 /** The pattern a prompt offers, by its place among the suggestions, and whether it is taking feedback. */
@@ -42,7 +71,12 @@ const naming = (draft: string) => draft.startsWith('/') && !/\s/.test(draft);
 /** Commands the design names that arrive with later work. Typing one says so rather than calling it unknown. */
 const LATER = new Set(['rewind', 'undo', 'diff', 'commit', 'pr', 'skills', 'hooks', 'plugins', 'workflows']);
 
-export function App({ runtime: first, projectRoot, onExit, openSession: open, commands: extra = [], theme: startTheme = THEMES.dark }: AppProps) {
+export function App(props: AppProps) {
+  const { runtime: first, projectRoot, onExit, openSession: open, commands: extra = [], theme: startTheme = THEMES.dark, screenReader = false } = props;
+  const reducedMotion = screenReader || Boolean(props.reducedMotion);
+  const keys = useMemo(() => props.keys ?? loadKeybindings(), [props.keys]);
+  const bound = (action: KeyAction, key: KeyLike) => matchesAction(keys.bindings, action, key);
+  const [showTodos, setShowTodos] = useState(false);
   const renderer = useRenderer();
   const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState => initialView());
   const [runtime, setRuntime] = useState(first);
@@ -59,6 +93,9 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
     controller.refresh();
     for (const notice of runtime.notices) dispatch({ type: 'notice', level: 'warn', text: notice });
   }, [controller, runtime]);
+  useEffect(() => {
+    for (const problem of keys.problems) dispatch({ type: 'notice', level: 'warn', text: problem });
+  }, [keys]);
 
   const approval = state.approvals[0];
   /**
@@ -114,6 +151,10 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
   const overlay = useRef<Open | undefined>(undefined);
   const [, setOverlayView] = useState(0);
   const setOverlay = (next: Open | undefined) => {
+    // Focus moves at once, not at the next render, so a key typed right after opening or
+    // choosing lands where the person sees it will.
+    if (next && !overlay.current) composer.current?.blur();
+    if (!next && overlay.current) composer.current?.focus();
     overlay.current = next;
     setOverlayView((count) => count + 1);
   };
@@ -154,7 +195,21 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
       composer.current?.setText(text);
       composer.current?.gotoBufferEnd();
     },
+    keys: keys.bindings,
   });
+
+  /** Search what the person has sent before, and put the chosen message in the composer. */
+  const openHistory = () =>
+    pick({
+      title: 'Earlier messages, newest first',
+      items: earlierMessages(projectRoot, { id: runtime.sessionId, messages: runtime.session.messages }),
+      empty: 'Nothing sent yet in this project.',
+      hint: 'Enter puts it in the composer',
+      choose: (item) => {
+        composer.current?.setText(item.value ?? item.label);
+        composer.current?.gotoBufferEnd();
+      },
+    });
 
   const runCommand = async (line: string, options: { quiet?: boolean } = {}) => {
     const parsed = parseCommand(line);
@@ -201,14 +256,14 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
   };
 
   useKeyboard((key) => {
-    if (key.ctrl && key.name === 'c') {
+    if (bound('exit', key)) {
       if (controller.running) {
         controller.cancel();
         return;
       }
       if (exitArmed) return onExit();
       setExitArmed(true);
-      dispatch({ type: 'notice', level: 'info', text: 'Press Ctrl+C again to exit.' });
+      dispatch({ type: 'notice', level: 'info', text: `Press ${keysFor(keys.bindings, 'exit')} again to exit.` });
       setTimeout(() => setExitArmed(false), 2_000);
       return;
     }
@@ -234,6 +289,8 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
     }
     const open = overlay.current;
     if (open) {
+      // The overlay takes every key, including the Enter that closes it and hands focus back.
+      key.preventDefault();
       const shown = open.items ? filterItems(open.items, open.filter) : [];
       const last = Math.max(0, shown.length - 1);
       const step = { down: 1, up: -1, pagedown: PICKER_ROWS, pageup: -PICKER_ROWS }[key.name as 'down'];
@@ -249,8 +306,8 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
       return;
     }
     const draft = composer.current?.plainText ?? '';
-    // ? on an empty composer lists the commands and keys.
-    if (key.sequence === '?' && draft === '') {
+    // Help, on an empty composer, lists the commands and keys.
+    if (bound('help', key) && draft === '') {
       key.preventDefault();
       return void runCommand('/help', { quiet: true });
     }
@@ -276,85 +333,100 @@ export function App({ runtime: first, projectRoot, onExit, openSession: open, co
         return setPalette({ draft, index: 0, closed: draft });
       }
     }
-    if (key.name === 'escape' && controller.running) {
+    if (bound('interrupt', key) && controller.running) {
       controller.cancel();
       return;
     }
-    if (key.name === 'tab' && key.shift) {
+    if (bound('cycle_mode', key)) {
+      key.preventDefault();
       controller.cycleMode();
       return;
     }
-    if (key.ctrl && key.name === 'o') {
+    if (bound('tool_detail', key)) {
       const last = [...state.rows].reverse().find((row) => row.kind === 'tool');
       if (last) dispatch({ type: 'toggle', id: last.id });
       return;
     }
-    if (key.ctrl && key.name === 'l') renderer.requestRender();
+    if (bound('history', key)) {
+      key.preventDefault();
+      return openHistory();
+    }
+    if (bound('todos', key)) {
+      key.preventDefault();
+      return setShowTodos((shown) => !shown);
+    }
+    if (bound('redraw', key)) renderer.requestRender();
   });
 
+  const chords = (action: KeyAction, submitAs: 'submit' | 'newline') =>
+    keys.bindings[action].filter((chord) => chord.name.length > 1 || /[a-z]/.test(chord.name)).map((chord) => ({ name: chord.name, ctrl: chord.ctrl, shift: chord.shift, meta: chord.meta, action: submitAs }));
+
+  const plain = screenReader;
   return (
     <ThemeContext.Provider value={theme}>
-      <box flexDirection="column" width="100%" height="100%">
-        <box height={1} flexShrink={0}>
-          <text fg={theme.dim}>{`jamcli · ${path.basename(projectRoot)}${branch ? ` · ${branch}` : ''} · session ${runtime.sessionId}`}</text>
-        </box>
-        <scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
-          {state.rows.map((row) => (
-            <RowView key={row.id} row={row} syntax={syntax} />
-          ))}
-        </scrollbox>
-        {approval ? (
-          <PermissionPrompt
-            approval={approval}
-            queued={state.approvals.length}
-            syntax={syntax}
-            file={(state.rows.find((row) => row.kind === 'tool' && row.callId === approval.callId) as { path?: string } | undefined)?.path}
-            selected={selected}
-            feedback={feedback}
-            onFeedback={(text) => answer({ allow: false, ...(text.trim() ? { feedback: text.trim() } : {}) })}
-          />
-        ) : confirmBypass ? (
-          <BypassConfirm
-            onAnswer={(text) => {
-              setConfirmBypass(false);
-              if (text.trim().toLowerCase() === 'yes') controller.setMode('bypass', { bypassConfirmed: true });
-              else dispatch({ type: 'notice', level: 'info', text: 'Bypass mode was not turned on.' });
-            }}
-          />
-        ) : (
-          <box flexDirection="column" flexShrink={0}>
-            {overlay.current ? (
-              <Picker
-                title={overlay.current.request.title}
-                items={overlay.current.items}
-                note={overlay.current.note ?? overlay.current.request.note}
-                empty={overlay.current.request.empty}
-                hint={overlay.current.request.hint}
-                filter={overlay.current.filter}
-                selected={overlay.current.index}
+      <PlainContext.Provider value={plain}>
+        <MotionContext.Provider value={reducedMotion}>
+          <box flexDirection="column" width="100%" height="100%">
+            <box height={1} flexShrink={0}>
+              <text fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
+            </box>
+            <scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling {...(plain ? { verticalScrollbarOptions: { visible: false } } : {})}>
+              {state.rows.map((row) => (
+                <RowView key={row.id} row={row} syntax={syntax} />
+              ))}
+            </scrollbox>
+            {approval ? (
+              <PermissionPrompt
+                approval={approval}
+                queued={state.approvals.length}
+                syntax={syntax}
+                file={(state.rows.find((row) => row.kind === 'tool' && row.callId === approval.callId) as { path?: string } | undefined)?.path}
+                selected={selected}
+                feedback={feedback}
+                onFeedback={(text) => answer({ allow: false, ...(text.trim() ? { feedback: text.trim() } : {}) })}
               />
-            ) : matches ? (
-              <Palette matches={matches} selected={palette.current.index} />
-            ) : null}
-            <box border borderColor={theme.border} flexShrink={0} height={5}>
-              <textarea
-                ref={composer}
-                focused={!overlay.current}
-                placeholder="Message JamCLI. Enter sends, Shift+Enter adds a line, / lists commands."
-                keyBindings={[
-                  { name: 'return', action: 'submit' },
-                  { name: 'return', shift: true, action: 'newline' },
-                ]}
-                onSubmit={submit}
-                onContentChange={onDraft}
+            ) : confirmBypass ? (
+              <BypassConfirm
+                onAnswer={(text) => {
+                  setConfirmBypass(false);
+                  if (text.trim().toLowerCase() === 'yes') controller.setMode('bypass', { bypassConfirmed: true });
+                  else dispatch({ type: 'notice', level: 'info', text: 'Bypass mode was not turned on.' });
+                }}
               />
+            ) : (
+              <box flexDirection="column" flexShrink={0}>
+                {overlay.current ? (
+                  <Picker
+                    title={overlay.current.request.title}
+                    items={overlay.current.items}
+                    note={overlay.current.note ?? overlay.current.request.note}
+                    empty={overlay.current.request.empty}
+                    hint={overlay.current.request.hint}
+                    filter={overlay.current.filter}
+                    selected={overlay.current.index}
+                  />
+                ) : matches ? (
+                  <Palette matches={matches} selected={palette.current.index} />
+                ) : null}
+                {showTodos ? <TodoPanel todos={state.todos} plain={plain} colors={theme} /> : null}
+                <box {...framed(plain, theme.border)} paddingLeft={0} paddingRight={0} flexShrink={0} height={plain ? 3 : 5}>
+                  <textarea
+                    ref={composer}
+                    focused={!overlay.current}
+                    placeholder={`${plain ? 'Message: ' : ''}Message JamCLI. ${keysFor(keys.bindings, 'send')} sends, ${keysFor(keys.bindings, 'newline')} adds a line, / lists commands.`}
+                    keyBindings={[...chords('send', 'submit'), ...chords('newline', 'newline')]}
+                    onSubmit={submit}
+                    onContentChange={onDraft}
+                  />
+                </box>
+              </box>
+            )}
+            <box height={1} flexShrink={0}>
+              <text fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${statusParts(state.status).join(plain ? ', ' : ' · ')}`}</text>
             </box>
           </box>
-        )}
-        <box height={1} flexShrink={0}>
-          <text fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{statusParts(state.status).join(' · ')}</text>
-        </box>
-      </box>
+        </MotionContext.Provider>
+      </PlainContext.Provider>
     </ThemeContext.Provider>
   );
 }

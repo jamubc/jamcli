@@ -15,6 +15,7 @@ import type { ViewAction } from '../state/view.js';
 import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from './reports.js';
 import type { PickItem, PickRequest } from './Picker.js';
 import { THEME_NAMES, THEMES, noColor, type Theme } from './theme.js';
+import { keysHelp, type Keybindings } from './keys.js';
 import type { ThemeName } from '../../types/config.js';
 
 /** Where a command comes from. Custom commands arrive with stage 8 and show their source in the palette. */
@@ -59,6 +60,8 @@ export interface CommandContext {
   setTheme(theme: Theme): void;
   /** Put text in the composer for the person to finish. */
   prefill(text: string): void;
+  /** The keys in effect, for help. */
+  readonly keys: Keybindings;
 }
 
 export interface SlashCommand {
@@ -175,16 +178,13 @@ const help: SlashCommand = {
         detail: `${command.summary}${command.source === 'built-in' ? '' : ` (${command.source})`}`,
       })),
       empty: 'No commands.',
-      note: KEYS_HELP,
+      note: keysHelp(ctx.keys),
       hint: 'Enter puts the command in the composer',
       choose: (item) => ctx.prefill(`/${item.key} `),
     });
   },
 };
 
-/** The keys, for the help overlay. */
-export const KEYS_HELP =
-  'Keys: Enter sends · Shift+Enter adds a line · / lists commands · ? this list · Escape stops a turn · Shift+Tab changes the mode · Ctrl+O opens the last tool block · Ctrl+C twice leaves';
 
 const model: SlashCommand = {
   name: 'model',

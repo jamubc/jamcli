@@ -231,6 +231,7 @@ export const USAGE = `Usage: jamcli [options]
   -p, --prompt <text>          Run one prompt without the interface
       --output-format <fmt>    text (default), json, or stream-json
       --cwd <path>             Run in this directory
+      --screen-reader          Draw the interface as plain labeled lines, with no boxes or animation
       --max-turns <n>          Bound the number of turns
       --model <id>             Run this turn on a specific model
       --resume <session-id>    Continue an existing session
