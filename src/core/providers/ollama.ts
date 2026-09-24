@@ -13,6 +13,13 @@ import { NO_RETRY, ProviderError, fetchWithRetry, type RetryPolicy } from './htt
 import type { ModelFacts } from '../catalog/types.js';
 import { extractReasoningDelta, parseToolCalls, readLines } from './openai-compat.js';
 
+/** One step of a model download: what Ollama is doing, and bytes done of the total when it says. */
+export interface PullProgress {
+  status: string;
+  total?: number;
+  completed?: number;
+}
+
 export interface OllamaProviderOptions {
   endpoint: string;
   /** Context window to request. Without it, the model's own limit is used, capped. */
@@ -95,6 +102,29 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       throw error;
     }
     return ollamaFacts(await response.json());
+  }
+
+  /**
+   * Download a model, reporting each step as Ollama streams it. Resolves once the model
+   * is ready. An error Ollama reports mid-stream rejects with its words.
+   */
+  async pull(model: string, onProgress: (progress: PullProgress) => void = () => {}, signal?: AbortSignal): Promise<void> {
+    const response = await fetchWithRetry(
+      this.url('/api/pull'),
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, stream: true }) },
+      { provider: 'ollama', signal, policy: NO_RETRY }
+    );
+    if (!response.body) throw new ProviderError({ provider: 'ollama', message: `Ollama sent nothing back for the pull of ${model}.` });
+    let finished = false;
+    for await (const line of readLines(response.body)) {
+      if (!line.trim()) continue;
+      const data: any = JSON.parse(line);
+      if (data?.error) throw new ProviderError({ provider: 'ollama', message: `Ollama could not pull ${model}: ${data.error}` });
+      const status = String(data?.status ?? '');
+      onProgress({ status, ...(typeof data?.total === 'number' ? { total: data.total } : {}), ...(typeof data?.completed === 'number' ? { completed: data.completed } : {}) });
+      if (status === 'success') finished = true;
+    }
+    if (!finished) throw new ProviderError({ provider: 'ollama', message: `The pull of ${model} stopped before Ollama said it was done.` });
   }
 
   /** The model's reported context length from `/api/show`, or undefined when unknown. */

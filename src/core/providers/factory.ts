@@ -73,8 +73,11 @@ const unconfigured = (name: string): Error => {
   );
 };
 
+/** Where Ollama is asked: its base URL, its endpoint, or this machine's default port. */
+export const ollamaEndpoint = (config: ApiRegistry['ollama']): string => (config?.base_url || config?.endpoint || 'http://localhost:11434').replace(/\/+$/, '');
+
 const buildOllama = (config: ApiRegistry['ollama']): ChatProvider => {
-  const endpoint = (config?.base_url || config?.endpoint || 'http://localhost:11434').replace(/\/+$/, '');
+  const endpoint = ollamaEndpoint(config);
   if (/\/v1$/.test(endpoint)) {
     return new OpenAICompatProvider({ baseUrl: endpoint, dialect: 'openai', name: 'ollama' });
   }

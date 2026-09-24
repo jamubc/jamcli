@@ -71,6 +71,8 @@ export interface FakeModel {
 
 export interface FakeProviderOptions {
   models?: FakeModel[];
+  /** What `/api/pull` does: add the model with these facts (the default), or fail with these words. */
+  pull?: { adds?: Omit<FakeModel, 'id'>; error?: string };
 }
 
 export interface FakeProviderServer {
@@ -370,7 +372,8 @@ const headersOf = (request: Request): Record<string, string> => {
 };
 
 export function startFakeProvider(options: FakeProviderOptions = {}): FakeProviderServer {
-  const models = options.models ?? DEFAULT_MODELS;
+  // A pull adds to the list, so it is this server's own copy.
+  const models = [...(options.models ?? DEFAULT_MODELS)];
   const queue: ScriptedTurn[] = [];
   const requests: CapturedRequest[] = [];
 
@@ -464,6 +467,17 @@ export function startFakeProvider(options: FakeProviderOptions = {}): FakeProvid
       if (request.method === 'GET' && path === '/api/tags') {
         record('models');
         return Response.json({ models: models.map((model) => ({ name: model.id, model: model.id })) });
+      }
+      if (request.method === 'POST' && path === '/api/pull') {
+        record('models');
+        const id = String(body?.model ?? body?.name ?? '');
+        const lines = [{ status: 'pulling manifest' }, { status: `pulling ${id}`, total: 1000, completed: 0 }, { status: `pulling ${id}`, total: 1000, completed: 500 }];
+        if (options.pull?.error) lines.push({ error: options.pull.error } as any);
+        else {
+          lines.push({ status: `pulling ${id}`, total: 1000, completed: 1000 }, { status: 'verifying sha256 digest' }, { status: 'success' });
+          if (!models.some((model) => model.id === id)) models.push({ id, capabilities: ['completion', 'tools'], ...(options.pull?.adds ?? {}) });
+        }
+        return new Response(lines.map((line) => `${JSON.stringify(line)}\n`).join(''), { headers: { 'content-type': 'application/x-ndjson' } });
       }
       if (request.method === 'POST' && path === '/api/show') {
         record('models');
