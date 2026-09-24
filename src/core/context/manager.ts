@@ -78,6 +78,10 @@ export class ContextManager {
         break;
       }
     }
+    // A tool result whose call was cut would be rejected by the provider, so it goes too.
+    while (contextMessages[0]?.role === 'tool') {
+      currentTokens -= countTotalTokens([contextMessages.shift()!]);
+    }
 
     if (systemPrompt) {
       contextMessages.unshift(systemPrompt);
@@ -102,7 +106,13 @@ export class ContextManager {
       return { context: messages };
     }
 
-    const endIndex = messages.length - KEEP_LAST;
+    // The kept tail starts at a message that is not a tool result, so no call is parted from its results.
+    let endIndex = messages.length - KEEP_LAST;
+    while (endIndex < messages.length && messages[endIndex].role === 'tool') endIndex += 1;
+    if (endIndex === messages.length) {
+      endIndex = messages.length - KEEP_LAST;
+      while (endIndex > startIndex && messages[endIndex].role === 'tool') endIndex -= 1;
+    }
     const toSummarize = messages.slice(startIndex, endIndex);
     const recentMessages = messages.slice(endIndex);
 

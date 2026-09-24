@@ -67,3 +67,31 @@ test('a failing summarizer keeps the original context', async () => {
   expect(result.context).toEqual(messages);
   expect(result.systemNotice).toContain('Failed');
 });
+
+const call = (...ids: string[]): ChatMessage => ({
+  role: 'assistant',
+  content: '',
+  timestamp: 0,
+  tool_calls: ids.map((id) => ({ id, type: 'function', function: { name: 'read_file', arguments: {} } })),
+});
+const toolResult = (id: string, content = 'result'): ChatMessage => ({ role: 'tool', content, tool_call_id: id, timestamp: 0 });
+const orphaned = (messages: ChatMessage[]) => {
+  const ids = new Set(messages.flatMap((message) => (message.tool_calls ?? []).map((toolCall) => toolCall.id)));
+  return messages.filter((message) => message.role === 'tool' && !ids.has(message.tool_call_id));
+};
+
+test('the legacy summarizer keeps a tool call with its results', async () => {
+  // Keeping the last four messages would start the tail on a result whose call was summarized.
+  const messages = [msg('system', 'base'), msg('user', 'read three files'), call('c1', 'c2', 'c3'), toolResult('c1'), toolResult('c2'), toolResult('c3'), msg('assistant', 'done')];
+  const result = await ContextManager.manageContext(messages, { enabled: true, max_tokens: 100000, compression_threshold: 0.9, strategy: 'summarize' }, quiet, 'test-model', true);
+  expect(orphaned(result.context)).toEqual([]);
+  expect(result.context.at(-1)!.content).toBe('done');
+});
+
+test('legacy truncation drops a result whose call did not fit', async () => {
+  // The call's own text is what does not fit, so the cut falls between it and its result.
+  const messages = [msg('system', 'base'), msg('user', 'read it'), { ...call('c1'), content: 'y'.repeat(100) }, toolResult('c1', 'x'.repeat(200)), msg('assistant', 'done')];
+  const result = await ContextManager.manageContext(messages, { enabled: true, max_tokens: 60, compression_threshold: 0.9, strategy: 'truncate' }, quiet, 'test-model', true);
+  expect(orphaned(result.context)).toEqual([]);
+  expect(result.context.map((message) => message.role)).toEqual(['system', 'assistant']);
+});
