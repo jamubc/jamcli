@@ -1,0 +1,508 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The JSON schema this file follows, for editors."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The model sessions start on, as \"provider:model\" or a model on the profile's provider."
+    },
+    "active_profile": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The profile in profiles/<name>.json to use."
+    },
+    "api_registry": {
+      "type": "object",
+      "properties": {
+        "ollama": {
+          "type": "object",
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "description": "Where Ollama listens. Defaults to http://localhost:11434."
+            },
+            "base_url": {
+              "type": "string"
+            },
+            "num_ctx": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "The context window Ollama allocates for every request."
+            }
+          },
+          "additionalProperties": false
+        },
+        "openai": {
+          "type": "object",
+          "properties": {
+            "api_key": {
+              "type": "string",
+              "description": "A key stored in the file. Prefer key_env_var, so the key stays out of files."
+            },
+            "key_env_var": {
+              "type": "string",
+              "description": "The environment variable holding the key."
+            },
+            "base_url": {
+              "type": "string",
+              "description": "The API base URL."
+            }
+          },
+          "additionalProperties": false
+        },
+        "anthropic": {
+          "type": "object",
+          "properties": {
+            "api_key": {
+              "type": "string",
+              "description": "A key stored in the file. Prefer key_env_var, so the key stays out of files."
+            },
+            "key_env_var": {
+              "type": "string",
+              "description": "The environment variable holding the key."
+            },
+            "base_url": {
+              "type": "string",
+              "description": "The API base URL."
+            }
+          },
+          "additionalProperties": false
+        },
+        "openrouter": {
+          "type": "object",
+          "properties": {
+            "api_key": {
+              "type": "string",
+              "description": "A key stored in the file. Prefer key_env_var, so the key stays out of files."
+            },
+            "key_env_var": {
+              "type": "string",
+              "description": "The environment variable holding the key."
+            },
+            "base_url": {
+              "type": "string",
+              "description": "The API base URL."
+            },
+            "referer": {
+              "type": "string",
+              "description": "Sent as HTTP-Referer, for OpenRouter attribution."
+            },
+            "title": {
+              "type": "string",
+              "description": "Sent as X-Title, for OpenRouter attribution."
+            }
+          },
+          "additionalProperties": false
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The provider name models are addressed by, as in \"id:model\"."
+              },
+              "base_url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "dialect": {
+                "description": "The wire format. Defaults to openai.",
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "anthropic"
+                ]
+              },
+              "api_key": {
+                "type": "string",
+                "description": "A key stored in the file. Prefer key_env_var, so the key stays out of files."
+              },
+              "key_env_var": {
+                "type": "string",
+                "description": "The environment variable holding the key."
+              },
+              "headers": {
+                "description": "Headers sent with every request.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "base_url"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Other OpenAI or Anthropic compatible endpoints."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Where each provider is and how to authenticate to it."
+    },
+    "models": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "context_window": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Tokens the model accepts in one request."
+          },
+          "max_output": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Most tokens the model writes in one reply."
+          },
+          "tools": {
+            "type": "boolean"
+          },
+          "reasoning": {
+            "type": "boolean"
+          },
+          "images": {
+            "type": "boolean"
+          },
+          "thinking": {
+            "type": "string",
+            "enum": [
+              "adaptive",
+              "budget"
+            ]
+          },
+          "always_thinks": {
+            "type": "boolean"
+          },
+          "effort": {
+            "type": "boolean"
+          },
+          "price": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "number",
+                "minimum": 0
+              },
+              "output": {
+                "type": "number",
+                "minimum": 0
+              },
+              "cache_read": {
+                "type": "number",
+                "minimum": 0
+              },
+              "cache_write": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "additionalProperties": false,
+            "description": "US dollars per million tokens."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Facts about models, keyed \"provider:model\", overriding what providers report."
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Rules that allow a call without asking, such as \"run_command(npm test *)\". Lists from every layer apply."
+        },
+        "ask": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Rules that ask before a call, such as \"run_command(npm test *)\". Lists from every layer apply."
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Rules that refuse a call; a deny always wins, such as \"run_command(npm test *)\". Lists from every layer apply."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "plan",
+            "default",
+            "accept-edits",
+            "auto",
+            "bypass"
+          ],
+          "description": "The mode a session starts in."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sandbox": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "On by default wherever a sandbox works."
+        },
+        "network": {
+          "type": "boolean",
+          "description": "Let sandboxed commands reach the network. Off by default."
+        },
+        "writable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Directories besides the project and the temporary directory that commands may write."
+        },
+        "hidden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths hidden from commands in addition to the defaults."
+        },
+        "env": {
+          "type": "string",
+          "enum": [
+            "scrubbed",
+            "minimal"
+          ],
+          "description": "How much of the environment commands and servers inherit."
+        },
+        "env_passthrough": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Variables passed to every process by name."
+        }
+      },
+      "additionalProperties": false
+    },
+    "agent_loop": {
+      "type": "object",
+      "properties": {
+        "max_steps": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Model requests per user turn before the loop stops."
+        },
+        "max_tool_calls_per_turn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Tool calls per turn; 0 means no cap beyond the step limit."
+        },
+        "tool_result_max_chars": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Characters of one tool result kept in context."
+        },
+        "command_timeout_ms": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Default timeout for a command."
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Output tokens to ask for per reply, capped by the model's own limit."
+        }
+      },
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "auto_compact": {
+          "type": "boolean",
+          "description": "Summarize older turns when a request nears the model's window. On by default."
+        }
+      },
+      "additionalProperties": false
+    },
+    "categories": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reasoning": {
+              "type": "string",
+              "enum": [
+                "off",
+                "on",
+                "auto"
+              ]
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "description": "Model chains delegation routes each category of task to."
+    },
+    "delegation": {
+      "type": "object",
+      "properties": {
+        "max_depth": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "max_concurrent": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "max_turns_per_child": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "trust": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "dedupe": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "The classifier that screens tool output before the model reads it."
+    },
+    "telemetry": {
+      "type": "boolean",
+      "description": "Off by default. Nothing leaves the machine unless configured."
+    },
+    "context_management": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_tokens": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "compression_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "summarize",
+            "truncate"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Context settings for the legacy interface. Sessions use context instead."
+    },
+    "general": {
+      "type": "object",
+      "properties": {
+        "show_tool_calling_models_only": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "available_models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "ollama",
+              "openai",
+              "anthropic",
+              "openrouter"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "supports_tool_calling": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "JamCLI configuration"
+}
