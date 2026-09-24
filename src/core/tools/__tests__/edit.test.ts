@@ -1,5 +1,6 @@
 import { test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { remove } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
@@ -13,16 +14,16 @@ const anchorsOf = (metadata: Record<string, unknown> | undefined): { line: numbe
   (metadata?.anchors as { line: number; anchor: string }[]) ?? [];
 
 beforeAll(async () => {
-  projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-edit-'));
+  projectRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-edit-'));
   filePath = path.join(projectRoot, 'file.txt');
 });
 
 afterAll(async () => {
-  await fs.remove(projectRoot);
+  await remove(projectRoot);
 });
 
 beforeEach(async () => {
-  await fs.writeFile(filePath, 'alpha\nbeta\nalpha\n');
+  await fs.promises.writeFile(filePath, 'alpha\nbeta\nalpha\n');
 });
 
 test('an ambiguous find is rejected with the match count and never edits', async () => {
@@ -37,7 +38,7 @@ test('an ambiguous find is rejected with the match count and never edits', async
   expect(result.success).toBe(false);
   expect(result.output).toContain('2');
   expect(result.output.toLowerCase()).toContain('ambiguous');
-  expect(await fs.readFile(filePath, 'utf-8')).toBe('alpha\nbeta\nalpha\n');
+  expect(await fs.promises.readFile(filePath, 'utf-8')).toBe('alpha\nbeta\nalpha\n');
 });
 
 test('a unique find is applied', async () => {
@@ -50,7 +51,7 @@ test('a unique find is applied', async () => {
   );
 
   expect(result.success).toBe(true);
-  expect(await fs.readFile(filePath, 'utf-8')).toBe('alpha\ngamma\nalpha\n');
+  expect(await fs.promises.readFile(filePath, 'utf-8')).toBe('alpha\ngamma\nalpha\n');
 });
 
 test('an anchored edit with matching anchors is applied', async () => {
@@ -64,7 +65,7 @@ test('an anchored edit with matching anchors is applied', async () => {
   );
 
   expect(result.success).toBe(true);
-  expect(await fs.readFile(filePath, 'utf-8')).toBe('alpha\ngamma\nalpha\n');
+  expect(await fs.promises.readFile(filePath, 'utf-8')).toBe('alpha\ngamma\nalpha\n');
 });
 
 test('a stale anchor is rejected, the file is left byte-identical, and fresh anchors are returned', async () => {
@@ -73,8 +74,8 @@ test('a stale anchor is rejected, the file is left byte-identical, and fresh anc
   const anchors = anchorsOf(read.metadata);
 
   // An external change lands on line 2 after the read.
-  await fs.writeFile(filePath, 'alpha\nEXTERNAL\nalpha\n');
-  const before = await fs.readFile(filePath);
+  await fs.promises.writeFile(filePath, 'alpha\nEXTERNAL\nalpha\n');
+  const before = await fs.promises.readFile(filePath);
 
   const ctx: ToolContext = { projectRoot };
   let thrown: unknown;
@@ -92,5 +93,5 @@ test('a stale anchor is rejected, the file is left byte-identical, and fresh anc
   expect(stale.freshAnchors.find((entry) => entry.line === 2)!.anchor).not.toBe(
     anchors.find((entry) => entry.line === 2)!.anchor
   );
-  expect(await fs.readFile(filePath)).toEqual(before);
+  expect(await fs.promises.readFile(filePath)).toEqual(before);
 });

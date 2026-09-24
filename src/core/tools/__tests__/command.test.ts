@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { pathExists, remove } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
@@ -8,11 +9,11 @@ import { HeadTailBuffer } from '../command.js';
 let projectRoot: string;
 
 beforeEach(async () => {
-  projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-command-'));
+  projectRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-command-'));
 });
 
 afterEach(async () => {
-  await fs.remove(projectRoot);
+  await remove(projectRoot);
 });
 
 const run = (args: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
@@ -44,7 +45,7 @@ test('a timed out command is stopped with its whole process group', async () => 
   expect(result.status).toBe('timeout');
   expect(result.output).toContain('Timed out');
   await sleep(1_500);
-  expect(await fs.pathExists(path.join(projectRoot, 'leak.txt'))).toBe(false);
+  expect(await pathExists(path.join(projectRoot, 'leak.txt'))).toBe(false);
 });
 
 test('cancelling stops the command and reports it as cancelled', async () => {

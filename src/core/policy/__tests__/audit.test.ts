@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDirSync } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { auditConfiguration, renderAuditReport, summarizeBySeverity } from '../audit.js';
@@ -7,7 +8,7 @@ import { projectKeyNames } from '../../../cli/audit.js';
 
 const makeProject = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-audit-'));
-  fs.mkdirpSync(path.join(root, '.jamcli'));
+  ensureDirSync(path.join(root, '.jamcli'));
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Rules\nBe careful.\n');
   return root;
 };

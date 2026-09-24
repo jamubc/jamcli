@@ -1,5 +1,6 @@
 import { test, expect, beforeAll, afterAll } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir, remove } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
@@ -7,15 +8,15 @@ import { createBuiltinRegistry } from '../registry.js';
 let projectRoot: string;
 
 beforeAll(async () => {
-  projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-grep-'));
-  await fs.writeFile(path.join(projectRoot, 'sample.txt'), 'alpha\nbeta\nGAMMA\ngamma\nomega\n');
-  await fs.writeFile(path.join(projectRoot, 'other.md'), 'nothing here\n');
-  await fs.ensureDir(path.join(projectRoot, 'node_modules'));
-  await fs.writeFile(path.join(projectRoot, 'node_modules', 'ignored.txt'), 'beta in ignored dir\n');
+  projectRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-grep-'));
+  await fs.promises.writeFile(path.join(projectRoot, 'sample.txt'), 'alpha\nbeta\nGAMMA\ngamma\nomega\n');
+  await fs.promises.writeFile(path.join(projectRoot, 'other.md'), 'nothing here\n');
+  await ensureDir(path.join(projectRoot, 'node_modules'));
+  await fs.promises.writeFile(path.join(projectRoot, 'node_modules', 'ignored.txt'), 'beta in ignored dir\n');
 });
 
 afterAll(async () => {
-  await fs.remove(projectRoot);
+  await remove(projectRoot);
 });
 
 test('grep returns matches with surrounding context lines', async () => {

@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir, outputJson, remove } from '../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../tools/registry.js';
@@ -40,7 +41,7 @@ const echoDispatcher = (ask: string[] = []): ToolDispatcher => ({
 const defs = (...names: string[]) => names.map((name) => ({ type: 'function' as const, function: { name } }));
 
 const withProject = async (run: (root: string) => Promise<void>) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-'));
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-'));
   const state = process.env.JAMCLI_STATE_DIR;
   process.env.JAMCLI_STATE_DIR = path.join(root, '.state');
   try {
@@ -48,7 +49,7 @@ const withProject = async (run: (root: string) => Promise<void>) => {
   } finally {
     if (state === undefined) delete process.env.JAMCLI_STATE_DIR;
     else process.env.JAMCLI_STATE_DIR = state;
-    await fs.remove(root);
+    await remove(root);
   }
 };
 
@@ -62,8 +63,8 @@ const withConfiguredProject = (
     const server = startFakeProvider();
     try {
       const apiRegistry = registry ? registry(server) : { ollama: { endpoint: server.ollamaBaseUrl } };
-      await fs.outputJson(path.join(root, '.jamcli', 'config.json'), { api_registry: apiRegistry });
-      await fs.outputJson(path.join(root, '.jamcli', 'profiles', 'default.json'), { name: 'Default', ...profile });
+      await outputJson(path.join(root, '.jamcli', 'config.json'), { api_registry: apiRegistry });
+      await outputJson(path.join(root, '.jamcli', 'profiles', 'default.json'), { name: 'Default', ...profile });
       await run(root, server);
     } finally {
       server.close();
@@ -101,19 +102,19 @@ test('F4: write_file creates a file under the project root (2.2)', () =>
   withProject(async (root) => {
     const result = await createBuiltinRegistry().execute('write_file', { path: 'hello.txt', content: 'hi\n' }, { projectRoot: root });
     expect(result.success).toBe(true);
-    expect(await fs.readFile(path.join(root, 'hello.txt'), 'utf-8')).toBe('hi\n');
+    expect(await fs.promises.readFile(path.join(root, 'hello.txt'), 'utf-8')).toBe('hi\n');
   }));
 
 test('F5: edit replacements keep $$, $&, $` and $\' literally (2.3)', () =>
   withProject(async (root) => {
-    await fs.writeFile(path.join(root, 'run.sh'), 'echo PID\n');
+    await fs.promises.writeFile(path.join(root, 'run.sh'), 'echo PID\n');
     const replacement = 'echo "pid=$$ match=$&"';
     await createBuiltinRegistry().execute(
       'edit',
       { path: 'run.sh', find_string: 'echo PID', replace_string: replacement },
       { projectRoot: root }
     );
-    expect(await fs.readFile(path.join(root, 'run.sh'), 'utf-8')).toBe(`${replacement}\n`);
+    expect(await fs.promises.readFile(path.join(root, 'run.sh'), 'utf-8')).toBe(`${replacement}\n`);
   }));
 
 test('F6: an ACP session sends earlier turns with the second prompt (2.13)', () =>
@@ -170,8 +171,8 @@ test('F10: --allow-tool run_command runs the command headlessly (2.12)', () =>
   withProject(async (root) => {
     const server = startFakeProvider();
     try {
-      await fs.outputJson(path.join(root, '.jamcli', 'config.json'), { api_registry: { ollama: { endpoint: server.ollamaBaseUrl } } });
-      await fs.outputJson(path.join(root, '.jamcli', 'profiles', 'default.json'), { name: 'Default', preferred_model: 'fake-model' });
+      await outputJson(path.join(root, '.jamcli', 'config.json'), { api_registry: { ollama: { endpoint: server.ollamaBaseUrl } } });
+      await outputJson(path.join(root, '.jamcli', 'profiles', 'default.json'), { name: 'Default', preferred_model: 'fake-model' });
       server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo f10-ran' } }] }, { text: 'ok' });
       const outcome = await runHeadless({ prompt: 'run it', projectRoot: root, allowTools: ['run_command'], runtime: { mcp: false } });
       expect(outcome.permissionDenials).toEqual([]);
@@ -191,10 +192,10 @@ test('F11: run_command reports exit codes and times out (2.5)', () =>
   }));
 test('F12: grep finds a match past the 400th file and honors .gitignore (2.6)', () =>
   withProject(async (root) => {
-    for (let i = 0; i < 450; i += 1) await fs.writeFile(path.join(root, `f${String(i).padStart(3, '0')}.txt`), 'x\n');
-    await fs.writeFile(path.join(root, 'f449.txt'), 'target\n');
-    await fs.writeFile(path.join(root, '.gitignore'), 'secret.txt\n');
-    await fs.writeFile(path.join(root, 'secret.txt'), 'target\n');
+    for (let i = 0; i < 450; i += 1) await fs.promises.writeFile(path.join(root, `f${String(i).padStart(3, '0')}.txt`), 'x\n');
+    await fs.promises.writeFile(path.join(root, 'f449.txt'), 'target\n');
+    await fs.promises.writeFile(path.join(root, '.gitignore'), 'secret.txt\n');
+    await fs.promises.writeFile(path.join(root, 'secret.txt'), 'target\n');
     for (const backend of ['builtin', 'auto'] as const) {
       const result = await createBuiltinRegistry().execute(
         'grep',
@@ -270,7 +271,7 @@ test('F18: a created .jamcli directory ignores itself (5.1)', () =>
       return result.stdout.toString();
     };
     const project = path.join(root, 'repo');
-    await fs.mkdirp(project);
+    await ensureDir(project);
     const start = () => createRuntime({ projectRoot: project, surface: 'headless', mcp: false, env: {}, provider: createScriptedProvider([{ text: 'ok' }]) });
     git('init', '-q', project);
     // Starting a session writes nothing.
@@ -283,8 +284,8 @@ test('F18: a created .jamcli directory ignores itself (5.1)', () =>
     expect(git('-C', project, 'status', '--porcelain', '--untracked-files=all')).toBe('');
 
     // A directory an earlier version made without one gets it the next time something is stored.
-    await fs.remove(path.join(project, '.jamcli', '.gitignore'));
-    await fs.outputJson(path.join(project, '.jamcli', 'config.json'), {});
+    await remove(path.join(project, '.jamcli', '.gitignore'));
+    await outputJson(path.join(project, '.jamcli', 'config.json'), {});
     expect(git('-C', project, 'status', '--porcelain', '--untracked-files=all')).not.toBe('');
     await (await start()).run('again');
     expect(git('-C', project, 'status', '--porcelain', '--untracked-files=all')).toBe('');
@@ -336,15 +337,15 @@ test('F21: tool output is escaped and bounded in the classifier prompt (2.11)', 
 
 test('F22: a symbolic link out of the project is refused (2.4)', () =>
   withProject(async (root) => {
-    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-outside-'));
+    const outside = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-audit-outside-'));
     try {
-      await fs.writeFile(path.join(outside, 'secret'), 'SECRET');
-      await fs.symlink(outside, path.join(root, 'link'));
+      await fs.promises.writeFile(path.join(outside, 'secret'), 'SECRET');
+      await fs.promises.symlink(outside, path.join(root, 'link'));
       const result = await createBuiltinRegistry().execute('read_file', { path: 'link/secret' }, { projectRoot: root });
       expect(result.success).toBe(false);
       expect(result.output).not.toContain('SECRET');
     } finally {
-      await fs.remove(outside);
+      await remove(outside);
     }
   }));
 
@@ -364,7 +365,7 @@ test('F23: MCP servers do not receive provider keys (3.5)', async () => {
 });
 test('F24: @ references expand on every surface (2.12, 2.13)', () =>
   withConfiguredProject(async (root, server) => {
-    await fs.writeFile(path.join(root, 'notes.txt'), 'the notes say hello\n');
+    await fs.promises.writeFile(path.join(root, 'notes.txt'), 'the notes say hello\n');
     for (const request of Object.values(await bothSurfaces(root, server, 'read @notes.txt'))) {
       expect(request.messages.find((m: any) => m.role === 'user').content).toContain('the notes say hello');
     }

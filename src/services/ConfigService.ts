@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir, pathExists, readJson, writeJson } from '../utils/fsx.js';
 import path from 'path';
 import os from 'os';
 import {
@@ -96,16 +97,16 @@ export class ConfigService {
 
   /** A project file's JSON object, or an empty one when the file is absent. */
   private async readProjectJson(file: string): Promise<Record<string, any>> {
-    if (!(await fs.pathExists(file))) return {};
-    const value = await fs.readJson(file);
+    if (!(await pathExists(file))) return {};
+    const value = await readJson(file);
     return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   }
 
   /** Write a project file, creating `.jamcli/` ignoring itself when this is the first thing stored there. */
   private async writeProjectJson(file: string, value: unknown): Promise<void> {
     ensureProjectStateDir(this.projectRoot);
-    await fs.ensureDir(path.dirname(file));
-    await fs.writeJson(file, value, { spaces: 2 });
+    await ensureDir(path.dirname(file));
+    await writeJson(file, value, { spaces: 2 });
   }
 
   /**

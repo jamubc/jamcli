@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import fs from 'fs';
 import path from 'path';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { collectAnchors, formatAnchoredLine } from './anchors.js';
@@ -24,14 +24,14 @@ export async function readFileRunner(args: Record<string, any>, ctx: ToolContext
 
   const absolute = resolveProjectPath(ctx.projectRoot, target, { additionalRoots: ctx.additionalRoots });
   const rel = path.relative(ctx.projectRoot, absolute) || '.';
-  const stat = await fs.stat(absolute);
+  const stat = await fs.promises.stat(absolute);
   if (stat.isDirectory()) {
     throw new Error(`${rel} is a directory; use glob to list it.`);
   }
   if (stat.size > MAX_FILE_BYTES) {
     throw new Error(`${rel} is ${stat.size} bytes, too large to read whole; use grep to find what you need in it.`);
   }
-  const buffer = await fs.readFile(absolute);
+  const buffer = await fs.promises.readFile(absolute);
   if (buffer.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
     return {
       output: `${rel} is a binary file (${stat.size} bytes); read_file shows text only.`,

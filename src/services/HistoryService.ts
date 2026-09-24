@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir } from '../utils/fsx.js';
 import path from 'path';
 import { Message, TokenUsage } from '../core/types.js';
 import {
@@ -119,8 +120,8 @@ export class HistoryService {
     const markdown = await this.exportToMarkdown();
     ensureProjectStateDir(this.projectRoot);
     const exportPath = path.join(path.dirname(this.log.file), `${this.sessionId}.md`);
-    await fs.ensureDir(path.dirname(exportPath));
-    await fs.writeFile(exportPath, markdown, 'utf-8');
+    await ensureDir(path.dirname(exportPath));
+    await fs.promises.writeFile(exportPath, markdown, 'utf-8');
     return exportPath;
   }
 }

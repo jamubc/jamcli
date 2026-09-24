@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir, remove } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
@@ -8,32 +9,32 @@ import { findRipgrep } from '../search.js';
 let projectRoot: string;
 
 beforeAll(async () => {
-  projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-search-'));
+  projectRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-search-'));
   // 1,000 files; the only match lives in the last one, far past the old 400-file cap.
-  await fs.ensureDir(path.join(projectRoot, 'many'));
+  await ensureDir(path.join(projectRoot, 'many'));
   for (let i = 0; i < 1000; i += 1) {
     const name = `file-${String(i).padStart(4, '0')}.txt`;
-    await fs.writeFile(path.join(projectRoot, 'many', name), i === 999 ? 'needle-in-the-last-file\n' : `hay ${i}\n`);
+    await fs.promises.writeFile(path.join(projectRoot, 'many', name), i === 999 ? 'needle-in-the-last-file\n' : `hay ${i}\n`);
   }
   // Ignore rules, in a directory that is not a git repository.
-  await fs.writeFile(path.join(projectRoot, '.gitignore'), 'build/\n*.log\n');
-  await fs.ensureDir(path.join(projectRoot, 'build'));
-  await fs.writeFile(path.join(projectRoot, 'build', 'out.txt'), 'needle-ignored-build\n');
-  await fs.writeFile(path.join(projectRoot, 'debug.log'), 'needle-ignored-log\n');
-  await fs.ensureDir(path.join(projectRoot, 'pkg', 'gen'));
-  await fs.writeFile(path.join(projectRoot, 'pkg', '.gitignore'), 'gen/\n');
-  await fs.writeFile(path.join(projectRoot, 'pkg', 'gen', 'code.txt'), 'needle-ignored-nested\n');
-  await fs.writeFile(path.join(projectRoot, 'pkg', 'kept.txt'), 'needle-kept\nsecond needle-kept line\n');
+  await fs.promises.writeFile(path.join(projectRoot, '.gitignore'), 'build/\n*.log\n');
+  await ensureDir(path.join(projectRoot, 'build'));
+  await fs.promises.writeFile(path.join(projectRoot, 'build', 'out.txt'), 'needle-ignored-build\n');
+  await fs.promises.writeFile(path.join(projectRoot, 'debug.log'), 'needle-ignored-log\n');
+  await ensureDir(path.join(projectRoot, 'pkg', 'gen'));
+  await fs.promises.writeFile(path.join(projectRoot, 'pkg', '.gitignore'), 'gen/\n');
+  await fs.promises.writeFile(path.join(projectRoot, 'pkg', 'gen', 'code.txt'), 'needle-ignored-nested\n');
+  await fs.promises.writeFile(path.join(projectRoot, 'pkg', 'kept.txt'), 'needle-kept\nsecond needle-kept line\n');
   // Hidden files and a fake .git directory.
-  await fs.writeFile(path.join(projectRoot, '.env.example'), 'needle-hidden\n');
-  await fs.ensureDir(path.join(projectRoot, '.git'));
-  await fs.writeFile(path.join(projectRoot, '.git', 'config'), 'needle-git-internal\n');
+  await fs.promises.writeFile(path.join(projectRoot, '.env.example'), 'needle-hidden\n');
+  await ensureDir(path.join(projectRoot, '.git'));
+  await fs.promises.writeFile(path.join(projectRoot, '.git', 'config'), 'needle-git-internal\n');
   // A binary file with a match in it.
-  await fs.writeFile(path.join(projectRoot, 'blob.bin'), Buffer.concat([Buffer.from('needle-binary'), Buffer.alloc(16)]));
+  await fs.promises.writeFile(path.join(projectRoot, 'blob.bin'), Buffer.concat([Buffer.from('needle-binary'), Buffer.alloc(16)]));
 });
 
 afterAll(async () => {
-  await fs.remove(projectRoot);
+  await remove(projectRoot);
 });
 
 const backends: ('ripgrep' | 'builtin')[] = findRipgrep() ? ['ripgrep', 'builtin'] : ['builtin'];

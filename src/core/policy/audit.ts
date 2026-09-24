@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import fs from 'fs';
 import path from 'path';
 import { listTools } from '../tools/registry.js';
 import { resolveToolPolicy } from './index.js';

@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir, pathExists } from '../../utils/fsx.js';
 import path from 'path';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { resolveProjectPath } from './paths.js';
@@ -25,15 +26,15 @@ export async function writeFile(args: Record<string, any>, ctx: ToolContext): Pr
   const relative = String(args.path ?? '');
   const content = String(args.content ?? '');
   const target = resolveProjectPath(ctx.projectRoot, relative);
-  const exists = await fs.pathExists(target);
+  const exists = await pathExists(target);
 
   if (exists) {
-    const stat = await fs.stat(target);
+    const stat = await fs.promises.stat(target);
     if (stat.isDirectory()) {
       return { output: `Refused: ${relative} is a directory.` };
     }
     if (!args.overwrite) {
-      const current = await fs.readFile(target, 'utf8').catch(() => '');
+      const current = await fs.promises.readFile(target, 'utf8').catch(() => '');
       return {
         output: [
           `Refused to overwrite ${relative}: it already exists (${current.length} chars).`,
@@ -44,10 +45,10 @@ export async function writeFile(args: Record<string, any>, ctx: ToolContext): Pr
   }
 
   if (args.create_directories !== false) {
-    await fs.ensureDir(path.dirname(target));
+    await ensureDir(path.dirname(target));
   }
 
-  await fs.writeFile(target, content, 'utf8');
+  await fs.promises.writeFile(target, content, 'utf8');
   const bytes = Buffer.byteLength(content, 'utf8');
   return { output: `${exists ? 'Overwrote' : 'Created'} ${relative} (${bytes} bytes).` };
 }

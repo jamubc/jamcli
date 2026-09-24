@@ -1,5 +1,6 @@
 import { test, expect, beforeAll, afterAll } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { remove } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
@@ -11,16 +12,16 @@ const anchorsOf = (metadata: Record<string, unknown> | undefined): { line: numbe
   (metadata?.anchors as { line: number; anchor: string }[]) ?? [];
 
 beforeAll(async () => {
-  projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-anchors-'));
+  projectRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-anchors-'));
   filePath = path.join(projectRoot, 'file.txt');
 });
 
 afterAll(async () => {
-  await fs.remove(projectRoot);
+  await remove(projectRoot);
 });
 
 test('read_file returns a line number and anchor for every requested line', async () => {
-  await fs.writeFile(filePath, 'a\nb\nc\n');
+  await fs.promises.writeFile(filePath, 'a\nb\nc\n');
   const registry = createBuiltinRegistry();
 
   const result = await registry.execute('read_file', { path: 'file.txt', start_line: 2, end_line: 3 }, { projectRoot });
@@ -31,7 +32,7 @@ test('read_file returns a line number and anchor for every requested line', asyn
 });
 
 test('an anchor stays stable for unchanged content and changes after an edit', async () => {
-  await fs.writeFile(filePath, 'first line\nsecond line\nthird line\n');
+  await fs.promises.writeFile(filePath, 'first line\nsecond line\nthird line\n');
   const registry = createBuiltinRegistry();
 
   const first = await registry.execute('read_file', { path: 'file.txt' }, { projectRoot });

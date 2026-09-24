@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir, readJson, remove, writeJson } from '../../utils/fsx.js';
 import os from 'node:os';
 import path from 'node:path';
 import { runMcpCommand, type McpCommandIo } from '../mcp.js';
@@ -7,14 +8,14 @@ import { runMcpCommand, type McpCommandIo } from '../mcp.js';
 const silentIo: McpCommandIo = { out: () => undefined, err: () => undefined };
 
 const makeProject = async (): Promise<string> => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-mcp-'));
-  await fs.ensureDir(path.join(root, '.jamcli'));
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-mcp-'));
+  await ensureDir(path.join(root, '.jamcli'));
   return root;
 };
 
 const seedConfig = async (root: string): Promise<string> => {
   const mcpPath = path.join(root, '.jamcli', 'mcp.json');
-  await fs.writeJson(
+  await writeJson(
     mcpPath,
     {
       context_window_limit: 4096,
@@ -42,7 +43,7 @@ test('mcp add writes a stdio server and preserves unrelated configuration keys',
   );
   expect(code).toBe(0);
 
-  const written = await fs.readJson(mcpPath);
+  const written = await readJson(mcpPath);
   expect(written.context_window_limit).toBe(4096);
   expect(written.ignore_patterns).toEqual(['node_modules/**', 'dist/**']);
   expect(written.tools.run_command).toEqual({ allowed: false, require_approval: true });
@@ -68,7 +69,7 @@ test('mcp add stores an http server with url and headers', async () => {
   );
   expect(code).toBe(0);
 
-  const written = await fs.readJson(mcpPath);
+  const written = await readJson(mcpPath);
   expect(written.custom_extension).toEqual({ keep: true });
   expect(written.servers[0]).toMatchObject({
     id: 'remote',
@@ -87,7 +88,7 @@ test('mcp remove deletes only the named server and keeps every other key', async
   const code = await runMcpCommand({ action: 'remove', args: ['dropme'] }, root, silentIo);
   expect(code).toBe(0);
 
-  const written = await fs.readJson(mcpPath);
+  const written = await readJson(mcpPath);
   expect(written.context_window_limit).toBe(4096);
   expect(written.ignore_patterns).toEqual(['node_modules/**', 'dist/**']);
   expect(written.tools.run_command).toEqual({ allowed: false, require_approval: true });
@@ -98,20 +99,20 @@ test('mcp remove deletes only the named server and keeps every other key', async
 test('mcp add with neither command nor url fails and writes nothing', async () => {
   const root = await makeProject();
   const mcpPath = await seedConfig(root);
-  const before = await fs.readFile(mcpPath, 'utf8');
+  const before = await fs.promises.readFile(mcpPath, 'utf8');
 
   const code = await runMcpCommand({ action: 'add', args: ['broken'] }, root, silentIo);
   expect(code).toBe(2);
-  expect(await fs.readFile(mcpPath, 'utf8')).toBe(before);
+  expect(await fs.promises.readFile(mcpPath, 'utf8')).toBe(before);
 });
 
 test('mcp add in a project without .jamcli creates it ignoring itself', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-mcp-'));
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-mcp-'));
   try {
     expect(await runMcpCommand({ action: 'add', args: ['files', '--command', 'npx'] }, root, silentIo)).toBe(0);
-    expect((await fs.readJson(path.join(root, '.jamcli', 'mcp.json'))).servers.map((server: { id: string }) => server.id)).toEqual(['files']);
-    expect(await fs.readFile(path.join(root, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
+    expect((await readJson(path.join(root, '.jamcli', 'mcp.json'))).servers.map((server: { id: string }) => server.id)).toEqual(['files']);
+    expect(await fs.promises.readFile(path.join(root, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
   } finally {
-    await fs.remove(root);
+    await remove(root);
   }
 });

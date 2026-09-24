@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { pathExists, readJson } from '../utils/fsx.js';
 import path from 'path';
 import {
   StatusIndicatorCustomDefinition,
@@ -188,9 +189,9 @@ export const DEFAULT_STATUS_STYLE: StatusStyleDefinition = buildStatusStyle(
 const readCustomDefinition = async (ref?: StatusIndicatorStyleRef): Promise<StatusIndicatorCustomDefinition | null> => {
   if (!ref?.path) return null;
   try {
-    const exists = await fs.pathExists(ref.path);
+    const exists = await pathExists(ref.path);
     if (!exists) return null;
-    const content = await fs.readJson(ref.path);
+    const content = await readJson(ref.path);
     return content as StatusIndicatorCustomDefinition;
   } catch {
     return null;

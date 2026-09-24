@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { readJsonSync } from '../utils/fsx.js';
 import path from 'path';
 import { auditConfiguration, renderAuditReport } from '../core/policy/audit.js';
 import { resolveJamcliProjectRoot } from '../utils/projectRoot.js';
@@ -9,7 +10,7 @@ import type { ToolPermissionValue } from '../types/config.js';
 const readJsonIfPresent = (file: string): any | null => {
   try {
     if (!fs.existsSync(file)) return null;
-    return fs.readJSONSync(file);
+    return readJsonSync(file);
   } catch {
     return null;
   }

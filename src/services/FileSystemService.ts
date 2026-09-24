@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDir } from '../utils/fsx.js';
 import path from 'path';
 import { applyPatch } from 'diff';
 
@@ -10,13 +11,13 @@ export class FileSystemService {
   }
 
   async readFile(filePath: string): Promise<string> {
-    return fs.readFile(this.resolvePath(filePath), 'utf-8');
+    return fs.promises.readFile(this.resolvePath(filePath), 'utf-8');
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
     const absolute = this.resolvePath(filePath);
-    await fs.ensureDir(path.dirname(absolute));
-    await fs.writeFile(absolute, content, 'utf-8');
+    await ensureDir(path.dirname(absolute));
+    await fs.promises.writeFile(absolute, content, 'utf-8');
   }
 
   async applyEdit(filePath: string, findString: string, replaceString: string): Promise<void> {

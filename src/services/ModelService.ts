@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { writeJson } from '../utils/fsx.js';
 import path from 'path';
 import { ConfigService } from './ConfigService.js';
 import { createChatProvider, listConfiguredProviders } from '../core/providers/factory.js';
@@ -124,7 +125,7 @@ export class ModelService {
     // Save updated profile
     const config = await this.configService.getConfig();
     const profilePath = path.join(this.configService['jamDir'], 'profiles', `${config.active_profile}.json`);
-    await fs.writeJson(profilePath, profile, { spaces: 2 });
+    await writeJson(profilePath, profile, { spaces: 2 });
 
     return profile;
   }

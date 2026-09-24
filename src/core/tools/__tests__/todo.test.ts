@@ -1,5 +1,6 @@
 import { test, expect, beforeAll, afterAll } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { pathExists, remove } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
@@ -7,11 +8,11 @@ import { createBuiltinRegistry } from '../registry.js';
 let projectRoot: string;
 
 beforeAll(async () => {
-  projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-todo-'));
+  projectRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-todo-'));
 });
 
 afterAll(async () => {
-  await fs.remove(projectRoot);
+  await remove(projectRoot);
 });
 
 test('todo_write persists a list that todo_read returns', async () => {
@@ -25,9 +26,9 @@ test('todo_write persists a list that todo_read returns', async () => {
   expect(write.success).toBe(true);
 
   const file = path.join(projectRoot, '.jamcli', 'todos.json');
-  expect(await fs.pathExists(file)).toBe(true);
+  expect(await pathExists(file)).toBe(true);
   // The list is local state, so the directory holding it ignores itself (F18).
-  expect(await fs.readFile(path.join(projectRoot, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
+  expect(await fs.promises.readFile(path.join(projectRoot, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
 
   const read = await registry.execute('todo_read', {}, { projectRoot });
   expect(read.success).toBe(true);

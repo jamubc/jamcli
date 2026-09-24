@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { execFileSync } from 'child_process';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { remove } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
@@ -8,11 +9,11 @@ import { createBuiltinRegistry } from '../registry.js';
 let projectRoot: string;
 
 beforeEach(async () => {
-  projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-toolset-'));
+  projectRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-toolset-'));
 });
 
 afterEach(async () => {
-  await fs.remove(projectRoot);
+  await remove(projectRoot);
 });
 
 const exec = (tool: string, args: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
@@ -28,7 +29,7 @@ test('one tool per job is advertised, and the old names stay callable as hidden 
   expect(registry.get('list_files')?.aliasOf).toBe('glob');
   expect(registry.get('search_code')?.aliasOf).toBe('grep');
 
-  await fs.writeFile(path.join(projectRoot, 'notes.md'), 'Find Me here\n');
+  await fs.promises.writeFile(path.join(projectRoot, 'notes.md'), 'Find Me here\n');
   const listed = await exec('list_files', { pattern: '*.md' });
   expect(listed.output).toContain('notes.md');
   const searched = await exec('search_code', { query: 'find me' });
@@ -44,10 +45,10 @@ test('git_log shows recent commits', async () => {
       env: { ...process.env, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@x' },
     });
   git('init', '-q');
-  await fs.writeFile(path.join(projectRoot, 'a.txt'), 'a\n');
+  await fs.promises.writeFile(path.join(projectRoot, 'a.txt'), 'a\n');
   git('add', 'a.txt');
   git('commit', '-q', '-m', 'first commit');
-  await fs.writeFile(path.join(projectRoot, 'a.txt'), 'b\n');
+  await fs.promises.writeFile(path.join(projectRoot, 'a.txt'), 'b\n');
   git('commit', '-q', '-am', 'second commit');
   const result = await exec('git_log', { limit: 1 });
   expect(result.output).toContain('second commit');

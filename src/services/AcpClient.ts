@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { pathExists, readJson } from '../utils/fsx.js';
 import path from 'node:path';
 import { subprocessEnv } from '../core/sandbox/env.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -255,12 +256,12 @@ export class AcpClient {
         return;
       }
       if (method === 'fs/read_text_file') {
-        const content = await fs.readFile(String(data.path), 'utf8');
+        const content = await fs.promises.readFile(String(data.path), 'utf8');
         this.send({ jsonrpc: '2.0', id, result: { content } });
         return;
       }
       if (method === 'fs/write_text_file') {
-        await fs.writeFile(String(data.path), String(data.content ?? ''), 'utf8');
+        await fs.promises.writeFile(String(data.path), String(data.content ?? ''), 'utf8');
         this.send({ jsonrpc: '2.0', id, result: {} });
         return;
       }
@@ -359,9 +360,9 @@ export const normalizeAgentsFile = (raw: unknown): AcpAgentConfig[] => {
 
 export const loadAgentConfigs = async (projectRoot: string): Promise<AcpAgentConfig[]> => {
   const file = path.join(projectRoot, '.jamcli', 'agents.json');
-  if (!(await fs.pathExists(file))) return [];
+  if (!(await pathExists(file))) return [];
   try {
-    return normalizeAgentsFile(await fs.readJson(file));
+    return normalizeAgentsFile(await readJson(file));
   } catch {
     return [];
   }

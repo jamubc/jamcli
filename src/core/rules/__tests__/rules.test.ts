@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import fs from 'fs-extra';
+import fs from 'fs';
+import { ensureDirSync } from '../../../utils/fsx.js';
 import os from 'os';
 import path from 'path';
 import { applyRules, loadRules, renderRulesReport, ruleDirectories } from '../index.js';
@@ -7,7 +8,7 @@ import { applyRules, loadRules, renderRulesReport, ruleDirectories } from '../in
 const makeTree = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-rules-'));
   const nested = path.join(root, 'packages', 'app');
-  fs.mkdirpSync(nested);
+  ensureDirSync(nested);
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Root rule\nAlways run the gates.\n');
   fs.writeFileSync(
     path.join(nested, 'AGENTS.md'),

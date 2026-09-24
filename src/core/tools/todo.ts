@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { pathExists, readJson, writeJson } from '../../utils/fsx.js';
 import path from 'path';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { ensureProjectStateDir } from '../transcript/log.js';
@@ -52,9 +53,9 @@ function formatTodos(todos: TodoItem[]): string {
 
 async function readTodos(ctx: ToolContext, session: string): Promise<TodoItem[]> {
   const file = resolveTodoFile(ctx, session);
-  if (!(await fs.pathExists(file))) return [];
+  if (!(await pathExists(file))) return [];
   try {
-    const data = await fs.readJson(file);
+    const data = await readJson(file);
     const list = Array.isArray(data) ? data : Array.isArray(data?.todos) ? data.todos : [];
     return (list as unknown[]).map(normalizeItem).filter((item): item is TodoItem => item !== null);
   } catch {
@@ -65,7 +66,7 @@ async function readTodos(ctx: ToolContext, session: string): Promise<TodoItem[]>
 async function writeTodos(ctx: ToolContext, session: string, todos: TodoItem[]): Promise<string> {
   const file = resolveTodoFile(ctx, session);
   ensureProjectStateDir(ctx.projectRoot);
-  await fs.writeJson(file, { session, updated_at: new Date().toISOString(), todos }, { spaces: 2 });
+  await writeJson(file, { session, updated_at: new Date().toISOString(), todos }, { spaces: 2 });
   return file;
 }
 

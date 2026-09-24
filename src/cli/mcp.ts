@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'fs';
+import { pathExists, readJson, writeJson } from '../utils/fsx.js';
 import path from 'path';
 import { McpTestService } from '../services/McpTestService.js';
 import type { McpServerConfig, McpTransport } from '../types/mcp.js';
@@ -29,9 +30,9 @@ export const mcpConfigPath = (projectRoot: string): string => path.join(projectR
  */
 const readMcpConfig = async (projectRoot: string): Promise<Record<string, any>> => {
   const file = mcpConfigPath(projectRoot);
-  if (!(await fs.pathExists(file))) return {};
+  if (!(await pathExists(file))) return {};
   try {
-    const raw = await fs.readJson(file);
+    const raw = await readJson(file);
     return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   } catch {
     return {};
@@ -40,7 +41,7 @@ const readMcpConfig = async (projectRoot: string): Promise<Record<string, any>> 
 
 const writeMcpConfig = async (projectRoot: string, config: Record<string, any>): Promise<void> => {
   ensureProjectStateDir(projectRoot);
-  await fs.writeJson(mcpConfigPath(projectRoot), config, { spaces: 2 });
+  await writeJson(mcpConfigPath(projectRoot), config, { spaces: 2 });
 };
 
 export interface ParsedServer {
