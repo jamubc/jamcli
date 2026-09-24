@@ -3,7 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { JAMCLI_VERSION } from '../core/version.js';
-import { USAGE } from '../cli.js';
+import { USAGE, parseArgs } from '../cli.js';
+import { startFakeProvider } from '../testing/fakeProvider.js';
 
 const ENTRY = path.join(import.meta.dir, '../index.tsx');
 
@@ -49,4 +50,45 @@ test('every subcommand the usage lists reaches the command line', async () => {
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
+});
+
+test('-v and -vv show the log on standard error, and --trace-file keeps the spans', async () => {
+  const server = startFakeProvider();
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-entry-observe-'));
+  try {
+    const userDir = path.join(cwd, 'user');
+    fs.mkdirSync(userDir);
+    fs.writeFileSync(path.join(userDir, 'config.json'), JSON.stringify({ api_registry: { ollama: { endpoint: server.ollamaBaseUrl } }, model: 'ollama:fake-model' }));
+    const run = async (...args: string[]) => {
+      const child = Bun.spawn(['bun', ENTRY, ...args], {
+        cwd,
+        env: { ...process.env, JAMCLI_CONFIG_DIR: userDir, JAMCLI_STATE_DIR: path.join(cwd, 'state') },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+      return { out, err, code };
+    };
+    server.enqueue({ text: 'first' }, { text: 'second' });
+    const trace = path.join(cwd, 'trace.jsonl');
+    const info = await run('-p', 'say hi', '-v', '--trace-file', trace);
+    expect(info).toMatchObject({ code: 0, out: 'first\n' });
+    expect(info.err).toContain('[info] session started');
+    expect(info.err).not.toContain('say hi');
+    const names = fs.readFileSync(trace, 'utf8').trim().split('\n').map((line) => JSON.parse(line).name);
+    expect(names).toEqual(['chat fake-model', 'invoke_agent jamcli', 'session']);
+
+    const debug = await run('-p', 'say hi', '-vv');
+    expect(debug.err).toMatch(/\[debug\] prompt session=\S+ text=say hi\n/);
+    expect(debug.err).not.toContain('undefined');
+    // Without --log-file, the log is the day's file in the state directory.
+    expect(fs.readdirSync(path.join(cwd, 'state', 'logs'))).toEqual([`${new Date().toISOString().slice(0, 10)}.jsonl`]);
+  } finally {
+    server.close();
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+  expect(parseArgs(['-p', 'x', '-v']).verbosity).toBe(1);
+  expect(parseArgs(['-v']).version).toBe(true);
+  expect(parseArgs(['-vv', '--verbose']).verbosity).toBe(3);
+  expect(parseArgs(['--log-file']).unknown).toEqual(['--log-file needs a path']);
 });

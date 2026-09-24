@@ -27,6 +27,11 @@ const HEADLESS_INTENTS = new Set([
   '--permission-mode',
   '--dangerously-bypass-permissions',
   '--dry-run',
+  '-v',
+  '-vv',
+  '--verbose',
+  '--log-file',
+  '--trace-file',
 ]);
 
 const startInterface = async () => {
@@ -35,7 +40,8 @@ const startInterface = async () => {
 };
 
 const main = async () => {
-  if (argv.includes('--version') || argv.includes('-v')) {
+  // `-v` alone is the version, as it always was; with anything else it asks for more log detail.
+  if (argv.includes('--version') || (argv.length === 1 && argv[0] === '-v')) {
     const { JAMCLI_VERSION } = await import('./core/version.js');
     process.stdout.write(`${JAMCLI_VERSION}\n`);
     return;

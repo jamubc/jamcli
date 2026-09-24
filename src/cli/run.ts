@@ -17,6 +17,8 @@ export interface HeadlessOptions {
   dryRun?: boolean;
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent) => void;
+  /** Log level and files, from `-v`, `-vv`, `--log-file`, and `--trace-file`. */
+  observe?: RuntimeOptions['observe'];
   /** Assembly overrides, for tests. */
   runtime?: Partial<RuntimeOptions>;
 }
@@ -63,6 +65,7 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
     dryRun: options.dryRun,
     maxSteps: options.maxTurns,
     signal: options.signal,
+    observe: options.observe,
     ...options.runtime,
   });
   const permissionDenials: PermissionDenial[] = [];

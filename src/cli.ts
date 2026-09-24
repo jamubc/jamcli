@@ -37,6 +37,10 @@ export interface ParsedArgs {
   permissionMode?: string;
   bypassPermissions: boolean;
   dryRun: boolean;
+  /** `-v` once for info, `-vv` or twice for debug. */
+  verbosity: number;
+  logFile?: string;
+  traceFile?: string;
   sessionsCommand?: { action: SessionsAction; query?: string };
   mcpCommand?: { action: McpAction; args: string[] };
   /** `jamcli config`, with no action or an unknown one left undefined so usage is shown. */
@@ -60,6 +64,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     disallowedTools: [],
     bypassPermissions: false,
     dryRun: false,
+    verbosity: 0,
     help: false,
     version: false,
     audit: false,
@@ -142,8 +147,24 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       parsed.help = true;
       continue;
     }
-    if (token === '--version' || token === '-v') {
+    if (token === '--version' || (token === '-v' && argv.length === 1)) {
       parsed.version = true;
+      continue;
+    }
+    if (token === '-v' || token === '--verbose') {
+      parsed.verbosity += 1;
+      continue;
+    }
+    if (token === '-vv') {
+      parsed.verbosity += 2;
+      continue;
+    }
+    if (token === '--log-file' || token === '--trace-file') {
+      const value = argv[i + 1];
+      if (!value || value.startsWith('-')) parsed.unknown.push(`${token} needs a path`);
+      else if (token === '--log-file') parsed.logFile = value;
+      else parsed.traceFile = value;
+      i += 1;
       continue;
     }
     if (token === 'audit') {
@@ -216,6 +237,9 @@ export const USAGE = `Usage: jamcli [options]
       --permission-mode <mode> plan, default, accept-edits, auto, or bypass
       --dangerously-bypass-permissions  Run in bypass mode: nothing asks, only denies stop
       --dry-run                Make no change; report each call that would have made one
+  -v, -vv, --verbose           Log more: -v adds each request and tool call, -vv prompts and outputs too
+      --log-file <path>        Write the log here instead of the state directory's logs/
+      --trace-file <path>      Write each span (session, turn, model request, tool call) as JSON lines
 
   jamcli sessions list|search <query>|show <id>|export <id>|fork <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
@@ -225,7 +249,7 @@ export const USAGE = `Usage: jamcli [options]
   jamcli acp                   Serve the Agent Client Protocol over stdio
 
   --help                       Show this help
-  --version                    Show the version`;
+  --version, -v                Show the version (-v alone)`;
 
 const serializeUsage = (usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) =>
   usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
@@ -361,6 +385,11 @@ export const runCli = async (argv: string[]): Promise<number> => {
       },
       bypassPermissions: parsed.bypassPermissions,
       dryRun: parsed.dryRun,
+      observe: {
+        ...(parsed.verbosity ? { level: parsed.verbosity > 1 ? 'debug' : 'info', echo: (line: string) => process.stderr.write(`${line}\n`) } : {}),
+        ...(parsed.logFile ? { logFile: parsed.logFile } : {}),
+        ...(parsed.traceFile ? { traceFile: parsed.traceFile } : {}),
+      },
       signal: controller.signal,
       onEvent: streaming
         ? (event: AgentEvent) => {
