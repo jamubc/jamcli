@@ -39,6 +39,8 @@ export interface ScriptedTurn {
   chunkSize?: number;
   /** Close the stream after this many events, without a terminal event. */
   cutAfterEvents?: number;
+  /** Pause the stream after this many events, for `ms`, so a test can see a reply part-way. */
+  pauseAfterEvents?: { events: number; ms: number };
   /** The stop reason to report in the dialect's own field, such as `max_tokens` or `length`. */
   stopReason?: string;
   /**
@@ -121,6 +123,7 @@ const streamBody = (events: string[], turn: ScriptedTurn): ReadableStream<Uint8A
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       for (let i = 0; i < Math.min(limit, events.length); i += 1) {
+        if (turn.pauseAfterEvents && i === turn.pauseAfterEvents.events) await sleep(turn.pauseAfterEvents.ms);
         controller.enqueue(encoder.encode(events[i]));
       }
       controller.close();

@@ -1,0 +1,250 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`the empty session 1`] = `
+"jamcli · project · session <session>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
+│commands.                                                                     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+default mode · ollama:fake-model · context N% · no sandbox · ready
+"
+`;
+
+exports[`a reply part-way through streaming 1`] = `
+"jamcli · project · session <session>
+
+> tell me
+Here is the first part,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
+│commands.                                                                     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+⠋ writing · default mode · ollama:fake-model · context N% · no sandbox
+"
+`;
+
+exports[`a finished tool block and the reply after it 1`] = `
+"jamcli · project · session <session>
+
+> read the notes
+✓ done: read_file notes.txt, N ms
+i The trust gate is off because no classifier model is configured.
+It lists alpha and beta.
+
+
+
+
+
+
+
+
+
+
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
+│commands.                                                                     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+default mode · ollama:fake-model · context N% · no sandbox · ready
+"
+`;
+
+exports[`the permission prompt for a command 1`] = `
+"jamcli · project · session <session>
+
+> run the tests
+? asking: run_command npm test
+
+
+
+
+
+
+
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Allow run_command npm test?                                                  │
+│ Asked because default mode asks before tools that run commands.              │
+│ npm test                                                                     │
+│ 1 allow once                                                                 │
+│ 2 allow run_command(npm test) for this session (1 of 3; Up and Down choose)  │
+│ 3 allow run_command(npm test) for this project, saved in .jamcli/config.     │
+│ local.json                                                                   │
+│ 4 deny, and say why · Escape denies                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+default mode · ollama:fake-model · context N% · no sandbox · waiting for you
+"
+`;
+
+exports[`a diff, in the prompt for an edit 1`] = `
+"jamcli · project · session <session>
+
+> change it
+? asking: edit a.txt, 1 line added and 1 removed
+
+
+
+
+
+
+
+
+
+
+
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Allow edit a.txt?                                                            │
+│ Asked because default mode asks before tools that change files.              │
+│  1   one                                                                     │
+│  2 - two                                                                     │
+│  2 + TWO                                                                     │
+│  3   three                                                                   │
+│ 1 allow once                                                                 │
+│ 2 allow edit(a.txt) for this session (1 of 2; Up and Down choose)            │
+│ 3 allow edit(a.txt) for this project, saved in .jamcli/config.local.json     │
+│ 4 deny, and say why · Escape denies                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+default mode · ollama:fake-model · context N% · no sandbox · waiting for you
+"
+`;
+
+exports[`screen reader mode, through a reply, a tool, and a prompt 1`] = `
+"JamCLI, project project, session <session>
+You: read the notes
+Tool done: read_file notes.txt, N ms
+Note: The trust gate is off because no classifier model is configured.
+JamCLI: It says alpha.
+You: list
+Tool asking: run_command ls
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Permission needed: Allow run_command ls?
+Asked because default mode asks before tools that run commands.
+ls
+1 allow once
+2 allow run_command(ls) for this session (1 of 2; Up and Down choose)
+3 allow run_command(ls) for this project, saved in .jamcli/config.local.json
+4 deny, and say why · Escape denies
+Status: default mode, ollama:fake-model, context N%, no sandbox, waiting for
+"
+`;
+
+exports[`NO_COLOR: the same frame, every character in the terminal's own colors 1`] = `
+{
+  "colors": [
+    "255,767,255,255 on 0,0,0,0",
+  ],
+  "frame": 
+"jamcli · project · session <session>
+
+> change it
+? asking: edit a.txt, 1 line added and 1 removed
+
+
+
+
+
+
+
+
+
+
+
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Allow edit a.txt?                                                            │
+│ Asked because default mode asks before tools that change files.              │
+│  1   one                                                                     │
+│  2 - two                                                                     │
+│  2 + TWO                                                                     │
+│  3   three                                                                   │
+│ 1 allow once                                                                 │
+│ 2 allow edit(a.txt) for this session (1 of 2; Up and Down choose)            │
+│ 3 allow edit(a.txt) for this project, saved in .jamcli/config.local.json     │
+│ 4 deny, and say why · Escape denies                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+default mode · ollama:fake-model · context N% · no sandbox · waiting for you
+"
+,
+}
+`;
+
+exports[`an overlay: the list, the one chosen, and how to move 1`] = `
+"jamcli · project · session <session>
+
+> /theme
+
+
+
+
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Themes                                                                       │
+│ Filter: (type to narrow the list)                                            │
+│ > dark (in use)  light text on a dark background                             │
+│   light          dark text on a light background                             │
+│   high-contrast  the brightest colors, for low vision or bright rooms        │
+│   monochrome     no color at all; every state is still a word                │
+│ Enter uses it and saves it · Up and Down move · Escape closes                │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
+│commands.                                                                     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+default mode · ollama:fake-model · context N% · no sandbox · ready
+"
+`;
