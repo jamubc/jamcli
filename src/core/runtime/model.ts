@@ -29,14 +29,14 @@ export function resolveModel(ref: string | undefined, profile: Profile | undefin
 }
 
 /** The trust gate's classifier, when one is configured and enabled. */
-export function trustClassifier(config: Config): { provider?: ChatProvider; model?: string; note?: string } {
+export function trustClassifier(config: Config): { provider?: ChatProvider; model?: string; choice?: ModelChoice; note?: string } {
   const trust = config.trust;
   if (trust?.enabled === false) return {};
   const ref = trust?.model ?? config.categories?.quick?.[0]?.model;
   if (!ref) return {};
   const choice = resolveModel(ref, { preferred_provider: 'ollama' } as Profile, config.api_registry);
   try {
-    return { provider: createChatProvider(choice.provider, config.api_registry), model: choice.model };
+    return { provider: createChatProvider(choice.provider, config.api_registry), model: choice.model, choice };
   } catch (error: any) {
     return { note: `The trust gate is off: ${error?.message ?? error}` };
   }

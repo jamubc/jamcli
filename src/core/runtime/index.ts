@@ -25,6 +25,7 @@ import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
+import { CostLedger, type SpendSummary } from '../catalog/cost.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
 
@@ -79,6 +80,8 @@ export interface Runtime {
   readonly model: ModelChoice;
   /** What the catalog knows about that model: its limits, capabilities, and prices, and where each came from. */
   readonly modelInfo: ModelInfo;
+  /** What the session has cost so far, by model, with requests that had no known price counted apart. */
+  spend(): SpendSummary;
   /** What the model is offered, with schemas. */
   readonly tools: ToolSummary[];
   /** The conversation so far, as the next request will carry it. */
@@ -235,6 +238,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   }
 
   let modelInfo: ModelInfo = catalog.lookup(choice.provider, choice.model, provider?.family);
+  const trustKey = trust.choice ? `${trust.choice.provider}:${trust.choice.model}` : undefined;
+  let trustInfo: ModelInfo | undefined = trust.choice ? catalog.lookup(trust.choice.provider, trust.choice.model, trust.provider?.family) : undefined;
 
   const loop = config.agent_loop;
   const buildAgent = () =>
@@ -255,6 +260,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       hooks,
       trustProvider: trust.provider,
       trustModel: trust.model,
+      trustUsageKey: trustKey,
+      trustPrice: trustInfo?.price,
+      price: modelInfo.price,
       trustThreshold: config.trust?.threshold,
       trustOffNote: true,
       redact,
@@ -271,6 +279,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         permissionMode: permissions.mode,
       });
   let session = options.sessionId ? log.toSession() : createSession(projectRoot, log.id);
+  /** A continued session keeps what it cost before, as each request was priced then. */
+  const ledger = options.sessionId ? CostLedger.fromEvents(log.events()) : new CostLedger();
   let emitting: ((event: AgentEvent) => void) | undefined;
   const recorder = new TranscriptRecorder(log, {
     surface: options.surface,
@@ -309,6 +319,16 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     }
   };
   let modelReady = resolveModelInfo();
+  // The classifier is fixed for the session, so it is asked about once.
+  const trustReady = trust.choice
+    ? catalog.resolve(trust.choice.provider, trust.choice.model, trust.provider).then(
+        (info) => {
+          trustInfo = info;
+          agent = buildAgent();
+        },
+        () => undefined
+      )
+    : Promise.resolve();
 
   return {
     get sessionId() {
@@ -319,6 +339,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     get modelInfo() {
       return modelInfo;
+    },
+    spend() {
+      return ledger.summary();
     },
     get tools() {
       return toolSet.summaries;
@@ -349,12 +372,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       if (running) throw new Error('A turn is already running in this session.');
       running = true;
       const emit = (event: AgentEvent) => {
+        if (event.type === 'usage') ledger.record({ model: event.model, usage: event.usage, cost: event.cost, delegated: Boolean(event.delegatedSession) });
         recorder.handle(event);
         onEvent?.(event);
       };
       emitting = emit;
       try {
-        await modelReady;
+        await Promise.all([modelReady, trustReady]);
         for (const message of pending.splice(0)) emit({ type: 'notice', level: 'warn', message });
         if (!provider) {
           const error = providerError ?? 'No model provider is configured for this session.';

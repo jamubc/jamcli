@@ -49,9 +49,17 @@ export class TranscriptRecorder {
           ...(event.reason ? { reason: event.reason } : {}),
         });
         return;
-      case 'usage':
-        this.write({ type: 'usage', ...(this.model ? { model: this.model } : {}), usage: event.usage });
+      case 'usage': {
+        const model = event.model ?? this.model;
+        this.write({
+          type: 'usage',
+          ...(model ? { model } : {}),
+          usage: event.usage,
+          ...(event.cost !== undefined ? { cost: event.cost } : {}),
+          ...(event.delegatedSession ? { delegated: event.delegatedSession } : {}),
+        });
         return;
+      }
       case 'notice':
         this.write({ type: 'notice', level: event.level ?? 'info', message: event.message, ...(event.code ? { code: event.code } : {}) });
         return;

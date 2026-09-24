@@ -37,7 +37,17 @@ export type TranscriptEvent =
       feedback?: string;
       reason?: string;
     }
-  | { v: 2; type: 'usage'; ts: number; model?: string; usage: TokenUsage; cost?: number }
+  | {
+      v: 2;
+      type: 'usage';
+      ts: number;
+      model?: string;
+      usage: TokenUsage;
+      /** US dollars, priced when the request was made. Absent when the price was unknown. */
+      cost?: number;
+      /** The delegated session that made the request, when this session did not. */
+      delegated?: string;
+    }
   | { v: 2; type: 'notice'; ts: number; level: 'info' | 'warn' | 'error'; message: string; code?: string }
   | { v: 2; type: 'model'; ts: number; from?: string; to: string }
   | { v: 2; type: 'permission_mode'; ts: number; from: string; to: string }

@@ -1,9 +1,11 @@
-import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, ToolCall, ToolResult } from './types.js';
+import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage, ToolCall, ToolResult } from './types.js';
 import { addModelUsage, addUsage, appendMessages } from './state.js';
 import type { ChatProvider, ProviderRequestOptions, StreamChunk, ToolDefinition } from './providers/types.js';
 import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';
 import { HeadTailBuffer } from './tools/command.js';
 import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
+import { requestCost } from './catalog/cost.js';
+import type { ModelPrice } from './catalog/types.js';
 import { emitHookEvent, type HookBus } from './hooks/index.js';
 import type { AgentLoopConfig } from '../types/config.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
@@ -26,6 +28,10 @@ export interface AgentOptions {
   loop?: AgentLoopConfig;
   trustProvider?: ChatProvider;
   trustModel?: string;
+  /** `provider:model` of the trust gate's classifier, which its usage is recorded under. */
+  trustUsageKey?: string;
+  /** What the classifier costs per million tokens, when known. */
+  trustPrice?: ModelPrice;
   /** Relevance below which the trust gate removes a result. */
   trustThreshold?: number;
   trustOffNote?: boolean;
@@ -33,6 +39,8 @@ export interface AgentOptions {
   reasoning?: ProviderRequestOptions['reasoning'];
   maxOutputTokens?: number;
   contextLength?: number;
+  /** What the session's model costs per million tokens. Without it, requests are unpriced. */
+  price?: ModelPrice;
   /** Replaces credentials in tool output. Defaults to the credentials in the environment. */
   redact?: Redactor;
 }
@@ -150,9 +158,7 @@ export class CoreAgent implements Agent {
 
       const usage = step.done?.usage;
       if (usage) {
-        working = addUsage(working, usage);
-        if (this.options.modelUsageKey) working = addModelUsage(working, this.options.modelUsageKey, usage);
-        emit({ type: 'usage', usage });
+        working = this.account(working, usage, this.options.modelUsageKey, this.options.price, emit);
       }
 
       const { calls, unusable } = normalizeCalls(step.done?.toolCalls, steps);
@@ -194,7 +200,11 @@ export class CoreAgent implements Agent {
       });
       usedCalls += batch.ran;
 
-      const results = await this.screen(turnPrompt, calls, batch.results, signal, emit);
+      const screened = await this.screen(turnPrompt, calls, batch.results, signal, emit);
+      if (screened.usage) {
+        working = this.account(working, screened.usage, this.options.trustUsageKey, this.options.trustPrice, emit);
+      }
+      const results = screened.results;
       for (let i = 0; i < calls.length; i += 1) {
         const output = this.truncate(results[i].output);
         record({
@@ -216,6 +226,21 @@ export class CoreAgent implements Agent {
         return finish('limit', `Stopped: the limit of ${cap} tool calls per turn was reached.`, steps);
       }
     }
+  }
+
+  /** Add a request's usage to the session and report it, priced when the price is known. */
+  private account(
+    session: JamSession,
+    usage: TokenUsage,
+    model: string | undefined,
+    price: ModelPrice | undefined,
+    emit: (e: AgentEvent) => void
+  ): JamSession {
+    let next = addUsage(session, usage);
+    if (model) next = addModelUsage(next, model, usage);
+    const cost = requestCost(usage, price);
+    emit({ type: 'usage', usage, ...(model ? { model } : {}), ...(cost !== undefined ? { cost } : {}) });
+    return next;
   }
 
   /** The request for a step: the system prompt first, then the conversation in order. */
@@ -292,12 +317,12 @@ export class CoreAgent implements Agent {
     results: ToolResult[],
     signal: AbortSignal,
     emit: (e: AgentEvent) => void
-  ): Promise<ToolResult[]> {
+  ): Promise<{ results: ToolResult[]; usage?: TokenUsage }> {
     const candidates: (ScreeningCandidate & { result: number })[] = [];
     results.forEach((result, index) => {
       if (result.status === 'ok' || result.status === 'error') candidates.push({ tool: calls[index].name, output: result.output, result: index });
     });
-    if (!candidates.length) return results;
+    if (!candidates.length) return { results };
     const screening = await screenToolResults({
       prompt,
       provider: this.options.trustProvider,
@@ -316,7 +341,7 @@ export class CoreAgent implements Agent {
       emit({ type: 'notice', level: 'warn', code: 'trust_gate', message: `Removed ${candidate.tool} result: ${removal.reason}` });
       out[candidate.result] = { ...out[candidate.result], output: `[This result was withheld by the trust gate: ${removal.reason}.]` };
     }
-    return out;
+    return { results: out, ...(screening.usage ? { usage: screening.usage } : {}) };
   }
 }
 

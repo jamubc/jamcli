@@ -23,7 +23,11 @@ export interface ScriptedTurn {
   /** Signature attached to the reasoning block (Anthropic only). */
   reasoningSignature?: string;
   toolCalls?: ScriptedToolCall[];
-  usage?: { prompt: number; completion: number };
+  /**
+   * `prompt` is the whole prompt, cache reads and writes included, as OpenAI counts it.
+   * Anthropic reports the cache parts beside a smaller `input_tokens`, and the fake does too.
+   */
+  usage?: { prompt: number; completion: number; cacheRead?: number; cacheWrite?: number };
   /** Respond with this HTTP status instead of a completion. */
   status?: number;
   /** Body sent with a non-200 status. */
@@ -89,6 +93,17 @@ const split = (text: string, size: number): string[] => {
   return parts;
 };
 
+/** Anthropic's input counts: uncached input beside the cache reads and writes. */
+const anthropicInput = (turn: ScriptedTurn) => {
+  const read = turn.usage?.cacheRead ?? 0;
+  const write = turn.usage?.cacheWrite ?? 0;
+  return {
+    input_tokens: (turn.usage?.prompt ?? 0) - read - write,
+    ...(read ? { cache_read_input_tokens: read } : {}),
+    ...(write ? { cache_creation_input_tokens: write } : {}),
+  };
+};
+
 const callId = (dialect: Dialect, index: number, call: ScriptedToolCall) =>
   call.id ?? (dialect === 'anthropic' ? `toolu_fake_${index}` : `call_fake_${index}`);
 
@@ -146,6 +161,7 @@ const openaiStreamEvents = (turn: ScriptedTurn, model: string, includeUsage: boo
           prompt_tokens: turn.usage.prompt,
           completion_tokens: turn.usage.completion,
           total_tokens: turn.usage.prompt + turn.usage.completion,
+          ...(turn.usage.cacheRead ? { prompt_tokens_details: { cached_tokens: turn.usage.cacheRead } } : {}),
         },
       })
     );
@@ -185,6 +201,7 @@ const openaiJson = (turn: ScriptedTurn, model: string) => ({
           prompt_tokens: turn.usage.prompt,
           completion_tokens: turn.usage.completion,
           total_tokens: turn.usage.prompt + turn.usage.completion,
+          ...(turn.usage.cacheRead ? { prompt_tokens_details: { cached_tokens: turn.usage.cacheRead } } : {}),
         },
       }
     : {}),
@@ -203,7 +220,7 @@ const anthropicStreamEvents = (turn: ScriptedTurn, model: string): string[] => {
         model,
         content: [],
         stop_reason: null,
-        usage: { input_tokens: turn.usage?.prompt ?? 0, output_tokens: 1 },
+        usage: { ...anthropicInput(turn), output_tokens: 1 },
       },
     }),
   ];
@@ -268,7 +285,7 @@ const anthropicJson = (turn: ScriptedTurn, model: string) => {
     model,
     content,
     stop_reason: turn.stopReason ?? (turn.toolCalls?.length ? 'tool_use' : 'end_turn'),
-    usage: { input_tokens: turn.usage?.prompt ?? 0, output_tokens: turn.usage?.completion ?? 0 },
+    usage: { ...anthropicInput(turn), output_tokens: turn.usage?.completion ?? 0 },
   };
 };
 

@@ -128,7 +128,16 @@ export type AgentEvent =
   | { type: 'tool_call'; call: ToolCall }
   | { type: 'tool_progress'; callId: string; tool: string; chunk: string }
   | { type: 'tool_result'; result: ToolResult }
-  | { type: 'usage'; usage: TokenUsage }
+  | {
+      type: 'usage';
+      usage: TokenUsage;
+      /** `provider:model` the request went to. */
+      model?: string;
+      /** US dollars. Absent when the model has no known price. */
+      cost?: number;
+      /** Set when a session this one delegated to made the request. */
+      delegatedSession?: string;
+    }
   | { type: 'retry'; attempt: number; delayMs: number; reason: string }
   | { type: 'compaction'; beforeTokens: number; afterTokens: number; strategy: string }
   | { type: 'notice'; message: string; level?: 'info' | 'warn' | 'error'; code?: string }

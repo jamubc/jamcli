@@ -1,4 +1,5 @@
 import type { ChatProvider } from '../providers/types.js';
+import type { TokenUsage } from '../types.js';
 import { HeadTailBuffer } from '../tools/command.js';
 
 export interface ScreeningCandidate {
@@ -26,6 +27,8 @@ export interface ScreeningOutcome {
   deduped: Removal[];
   notes: string[];
   screened: boolean;
+  /** What the classifier request used, when the provider reported it. */
+  usage?: TokenUsage;
 }
 
 export interface ScreenOptions {
@@ -131,11 +134,13 @@ export const screenToolResults = async ({
   }
 
   let verdicts: ScreeningVerdict[] = [];
+  let usage: TokenUsage | undefined;
   try {
     const completion = await provider.complete(
       [{ role: 'user', content: buildClassifierPrompt(prompt, unique), timestamp: Date.now() }],
       { model, signal }
     );
+    usage = completion.usage;
     verdicts = parseVerdicts(completion.content ?? '', unique.length);
   } catch (error: any) {
     notes.push(`The trust gate failed open: ${error?.message ?? String(error)}`);
@@ -178,5 +183,5 @@ export const screenToolResults = async ({
     notes.push('Every tool result this turn was removed by the trust gate.');
   }
 
-  return { kept, dropped, deduped, notes, screened: true };
+  return { kept, dropped, deduped, notes, screened: true, ...(usage ? { usage } : {}) };
 };
