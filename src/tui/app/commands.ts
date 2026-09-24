@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import type { Runtime } from '../../core/runtime/index.js';
 import type { EditableRuleScope } from '../../core/runtime/index.js';
@@ -6,6 +7,7 @@ import { isPermissionMode, type PermissionMode } from '../../core/permissions/mo
 import type { Decision } from '../../core/permissions/rules.js';
 import { loadConfig, userConfigFile } from '../../core/config/load.js';
 import { storedKey } from '../../core/config/credentials.js';
+import { userConfigDir } from '../../utils/paths.js';
 import { DEFAULT_CATEGORIES, describeChain, listCategories } from '../../core/routing/categories.js';
 import { readSessionIndex, readTranscript, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from '../../cli/config.js';
@@ -479,7 +481,12 @@ const profile: SlashCommand = {
     const names = [...new Set(dirs.flatMap((dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : [])).filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5)))].sort();
     const active = ctx.profile ?? loadConfig({ projectRoot: ctx.projectRoot }).config.active_profile ?? 'default';
     if (!args) {
-      if (!names.length) return ctx.show(`The profile is ${active}, from the defaults. Profiles are files in ~/.config/jamcli/profiles/ or .jamcli/profiles/.`);
+      if (!names.length) {
+        const home = os.homedir();
+        const mine = path.join(userConfigDir(), 'profiles');
+        const shown = mine.startsWith(home + path.sep) ? `~${mine.slice(home.length)}` : mine;
+        return ctx.show(`The profile is ${active}, from the defaults. Profiles are files in ${shown}${path.sep} or .jamcli/profiles/.`);
+      }
       return ctx.show([`The profile is ${active}.`, 'Profiles:', ...names.map((name) => `- ${name}${name === active ? ' (this one)' : ''}`), '', 'Switch this session with /profile <name>.'].join('\n'));
     }
     if (!names.includes(args)) return ctx.notice('warn', `No profile ${args}. Profiles: ${names.join(', ') || 'none'}.`);
