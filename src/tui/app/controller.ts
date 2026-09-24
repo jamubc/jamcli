@@ -35,6 +35,23 @@ export function gitBranch(root: string): string | undefined {
  * the view, holds each pending approval's answer until the person gives it, and keeps
  * the status line current. It knows nothing of rendering.
  */
+/** The status line's facts, read from the runtime. */
+export function statusOf(runtime: Runtime): Partial<StatusData> {
+  const usage = runtime.contextUsage();
+  const spend = runtime.spend();
+  // With no model chosen there is no window to measure against, so neither is shown.
+  const chosen = Boolean(runtime.model.model);
+  return {
+    mode: runtime.permissionMode,
+    model: chosen ? `${runtime.model.provider}:${runtime.model.model}` : '',
+    sandbox: runtime.sandbox.kind,
+    contextPercent: chosen && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined,
+    costUsd: spend.requests > 0 && spend.unpriced === spend.requests ? null : spend.requests ? spend.cost : null,
+    unpriced: spend.unpriced,
+    mcpServers: new Set(runtime.tools.filter((tool) => tool.source === 'mcp').map((tool) => tool.server)).size,
+  };
+}
+
 export class SessionController {
   private readonly decisions = new Map<string, (decision: ApprovalDecision) => void>();
 
@@ -50,19 +67,7 @@ export class SessionController {
 
   /** The status line's facts that come from the runtime rather than from events. */
   status(): Partial<StatusData> {
-    const usage = this.runtime.contextUsage();
-    const spend = this.runtime.spend();
-    // With no model chosen there is no window to measure against, so neither is shown.
-    const chosen = Boolean(this.runtime.model.model);
-    return {
-      mode: this.runtime.permissionMode,
-      model: chosen ? `${this.runtime.model.provider}:${this.runtime.model.model}` : '',
-      sandbox: this.runtime.sandbox.kind,
-      contextPercent: chosen && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined,
-      costUsd: spend.requests > 0 && spend.unpriced === spend.requests ? null : spend.requests ? spend.cost : null,
-      unpriced: spend.unpriced,
-      mcpServers: new Set(this.runtime.tools.filter((tool) => tool.source === 'mcp').map((tool) => tool.server)).size,
-    };
+    return statusOf(this.runtime);
   }
 
   refresh(): void {

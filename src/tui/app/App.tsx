@@ -5,7 +5,7 @@ import { useKeyboard, useRenderer } from '@opentui/react';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { initialView, reduceView, type ViewState } from '../state/view.js';
-import { SessionController, gitBranch } from './controller.js';
+import { SessionController, statusOf, gitBranch } from './controller.js';
 import { statusParts } from './format.js';
 import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
@@ -98,7 +98,8 @@ export function App(props: AppProps) {
   const renderer = useRenderer();
   // A session opened with messages already in it shows them from the first frame.
   const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState =>
-    first.session.messages.length ? reduceView(initialView(), { type: 'load', messages: first.session.messages }) : initialView()
+    // The status line has the session's facts from the first frame, not after an effect.
+    first.session.messages.length ? reduceView(initialView(statusOf(first)), { type: 'load', messages: first.session.messages }) : initialView(statusOf(first))
   );
   const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch), [runtime]);
