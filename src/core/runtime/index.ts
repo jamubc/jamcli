@@ -24,6 +24,7 @@ import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type Sand
 import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
+import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
 
@@ -76,6 +77,8 @@ export interface Runtime {
   readonly sessionId: string;
   /** The provider and model turns run on. */
   readonly model: ModelChoice;
+  /** What the catalog knows about that model: its limits, capabilities, and prices, and where each came from. */
+  readonly modelInfo: ModelInfo;
   /** What the model is offered, with schemas. */
   readonly tools: ToolSummary[];
   /** The conversation so far, as the next request will carry it. */
@@ -115,6 +118,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const profile = await configService.getActiveProfile();
   const mcpConfig = await configService.getMcpConfig();
   const redact = createRedactor(env, configuredSecrets(config.api_registry, env));
+  const catalog = new ModelCatalog({ models: config.models, modelsSource: '.jamcli/config.json models', registry: config.api_registry });
+  notices.push(...catalog.problems);
 
   const sandboxSettings = (config as { sandbox?: SandboxSettings }).sandbox ?? {};
   const withheld = keyVariables(config.api_registry);
@@ -229,6 +234,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     }
   }
 
+  let modelInfo: ModelInfo = catalog.lookup(choice.provider, choice.model, provider?.family);
+
   const loop = config.agent_loop;
   const buildAgent = () =>
     new CoreAgent({
@@ -236,6 +243,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       model: choice.model,
       temperature: profile.temperature,
       modelUsageKey: `${choice.provider}:${choice.model}`,
+      maxOutputTokens: requestedOutputTokens(modelInfo, loop?.max_output_tokens),
+      // Only Ollama sizes its window per request; the others ignore it.
+      contextLength: modelInfo.contextWindow,
       dispatcher: toolSet.dispatcher,
       toolDefinitions: toolSet.definitions,
       maxSteps: options.maxSteps ?? loop?.max_steps ?? DEFAULT_AGENT_LOOP_CONFIG.max_steps,
@@ -275,12 +285,40 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** The agent running the current turn. A switch during the turn builds a new agent for later turns. */
   let turnAgent: CoreAgent | undefined;
 
+  /**
+   * Ask the provider about the model, then size requests from the answer. Turns wait for
+   * it, so a session starts without waiting on the network, and the first request is
+   * sized from the provider's own numbers.
+   */
+  const resolveModelInfo = async (): Promise<void> => {
+    const asked = choice;
+    try {
+      const info = await catalog.resolve(asked.provider, asked.model, provider);
+      if (asked !== choice) return;
+      modelInfo = info;
+      agent = buildAgent();
+      if (info.sources.contextWindow === 'default' && info.provider !== 'ollama') {
+        const notice =
+          `JamCLI does not know the context window of ${info.provider}:${info.model}, so it assumes ${info.contextWindow.toLocaleString('en-US')} tokens. ` +
+          `Set models["${info.provider}:${info.model}"].context_window in .jamcli/config.json.`;
+        notices.push(notice);
+        pending.push(notice);
+      }
+    } catch (error: any) {
+      pending.push(`The details of ${asked.provider}:${asked.model} could not be read: ${error?.message ?? error}`);
+    }
+  };
+  let modelReady = resolveModelInfo();
+
   return {
     get sessionId() {
       return log.id;
     },
     get model() {
       return { ...choice };
+    },
+    get modelInfo() {
+      return modelInfo;
     },
     get tools() {
       return toolSet.summaries;
@@ -316,6 +354,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       };
       emitting = emit;
       try {
+        await modelReady;
         for (const message of pending.splice(0)) emit({ type: 'notice', level: 'warn', message });
         if (!provider) {
           const error = providerError ?? 'No model provider is configured for this session.';
@@ -345,8 +384,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       provider = createChatProvider(next.provider, config.api_registry);
       providerError = undefined;
       choice = next;
+      modelInfo = catalog.lookup(next.provider, next.model, provider.family);
       agent = buildAgent();
       recorder.switchModel(`${next.provider}:${next.model}`);
+      modelReady = resolveModelInfo();
     },
 
     fork(atEvent) {

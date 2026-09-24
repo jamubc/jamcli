@@ -55,6 +55,22 @@ export const DEFAULT_DELEGATION_CONFIG: DelegationConfig = {
   max_turns_per_child: 8,
 };
 
+/**
+ * What configuration says about one model, overriding the provider's metadata and the
+ * bundled table. Prices are US dollars per million tokens.
+ */
+export interface ModelSettings {
+  context_window?: number;
+  max_output?: number;
+  tools?: boolean;
+  reasoning?: boolean;
+  images?: boolean;
+  thinking?: 'adaptive' | 'budget';
+  always_thinks?: boolean;
+  effort?: boolean;
+  price?: { input: number; output: number; cache_read?: number; cache_write?: number };
+}
+
 export interface ModelInfo {
   id: string;
   provider: 'ollama' | 'openai' | 'anthropic' | 'openrouter';
@@ -79,6 +95,8 @@ export interface AgentLoopConfig {
   tool_result_max_chars: number;
   /** Default timeout for a command, in milliseconds. */
   command_timeout_ms?: number;
+  /** Output tokens to ask for per reply. The model's own limit caps it. Defaults to 32,000. */
+  max_output_tokens?: number;
 }
 
 /** Sized for multi-step work: reading, editing, and testing within one turn. */
@@ -100,6 +118,8 @@ export interface Config {
   categories?: Record<string, CategoryChain>;
   delegation?: DelegationConfig;
   trust?: TrustConfig;
+  /** Facts about models for the model catalog, keyed `provider:model`. */
+  models?: Record<string, ModelSettings>;
 }
 
 export type StatusTextStyleId = 'rainbow' | 'subtle' | 'minimal' | 'aurora' | 'mono' | `custom:${string}`;
