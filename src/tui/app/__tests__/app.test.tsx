@@ -104,3 +104,19 @@ test('replies render as Markdown, and an edit shows its diff in the prompt and i
     await close();
   }
 }, 20_000);
+
+test('Escape stops a running turn, and the interface says it stopped', async () => {
+  const { setup, close } = await open();
+  try {
+    context.server.enqueue({ text: 'Too late.', delayMs: 3_000 });
+    await setup.mockInput.typeText('take your time');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (value) => value.includes('· thinking'));
+    setup.mockInput.pressEscape();
+    const after = await frameWith(setup, (value) => value.includes('Stopped.'));
+    expect(after).toContain('· ready');
+    expect(after).not.toContain('Too late.');
+  } finally {
+    await close();
+  }
+}, 20_000);

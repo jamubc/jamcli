@@ -131,6 +131,9 @@ test('a block toggles open, output keeps only its tail, and clear empties the tr
   expect(tail(long).split('\n')).toHaveLength(OUTPUT_TAIL_LINES);
   expect(tail(long).endsWith('line 99')).toBe(true);
   expect(tail('x'.repeat(10_000))).toHaveLength(4_000);
+  // Output streamed while the call runs is held to the same tail.
+  const streamed = run([event({ type: 'tool_progress', callId: 'c5', tool: 'read_file', chunk: long })], state);
+  expect(tool(streamed, 'c5')).toMatchObject({ phase: 'running', output: tail(long) });
   const done = reduceView(state, event({ type: 'tool_result', result: { tool: 'read_file', success: true, output: long, durationMs: 1, callId: 'c5' } }));
   expect(tool(done, 'c5').output).toBe(tail(long));
   expect(reduceView(state, { type: 'clear' }).rows).toEqual([]);
