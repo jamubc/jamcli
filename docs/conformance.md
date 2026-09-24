@@ -40,15 +40,15 @@ Updated as stages of `rehaul-jamcli` land.
 |---|---|---|---|
 | AGENTS.md | project instructions | implemented | `src/core/rules/__tests__/rules.test.ts` |
 | Agent Skills (`SKILL.md`) | skills | planned (stage 8) | |
-| JSON Schema 2020-12 | tool schemas, published configuration schema | tool schemas implemented; configuration schema planned (stage 5) | `src/core/tools/__tests__/validation.test.ts` |
-| JSON Lines | transcripts, logs, traces, stream-json output | implemented | |
+| JSON Schema 2020-12 | tool schemas, published configuration schema | implemented; `docs/config.schema.json` is generated from the Zod schemas, and a test fails when it is stale | `src/core/tools/__tests__/validation.test.ts`, `src/core/config/__tests__/schema.test.ts` |
+| JSON Lines | transcripts, logs, traces, stream-json output | implemented | `src/core/runtime/__tests__/observe.test.ts`, `src/cli/__tests__/headless.test.ts` |
 | SARIF 2.1.0 | `jamcli audit --format sarif` | planned (stage 12 at the latest) | |
-| OpenTelemetry OTLP/HTTP JSON, GenAI semantic conventions | optional trace and metric export | planned (stage 5) | |
-| OAuth 2.0 PKCE (RFC 7636) | OpenRouter login, MCP authorization | planned (stages 5 and 9) | |
+| OpenTelemetry OTLP/HTTP JSON, GenAI semantic conventions | optional trace export; metrics are not exported | implemented against an in-memory collector: hex ids, nanosecond times, typed attributes, the `OTEL_EXPORTER_OTLP_*` variables, and the `gen_ai.*` span attributes for chat and tool execution | `src/core/observe/__tests__/otlp.test.ts` |
+| OAuth 2.0 PKCE (RFC 7636) | OpenRouter login, MCP authorization | OpenRouter login implemented against a fake authorization server, with a live sign-in owed; MCP authorization planned (stage 9) | `src/cli/__tests__/auth.test.ts` |
 | Semantic Versioning 2.0 | plugin versions and engine ranges | planned (stage 10) | |
 | Conventional Commits 1.0 | drafted commit messages | planned (stage 7) | |
 | CycloneDX SBOM, SLSA build provenance | release artifacts | planned (stage 12) | |
-| XDG Base Directory | configuration, state, cache, and data paths | implemented for state; completed in stage 5 | |
+| XDG Base Directory | configuration, state, cache, and data paths | implemented: configuration follows `XDG_CONFIG_HOME`, state holds logs and the session index, and cache holds model metadata | `src/core/config/__tests__/load.test.ts` |
 | `NO_COLOR` | monochrome output | planned (stage 6) | |
 | Bracketed paste, OSC 8 hyperlinks, OSC 52 clipboard | terminal behavior | bracketed paste implemented; the others planned (stage 6) | |
 

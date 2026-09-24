@@ -104,6 +104,7 @@ jamcli -p "read package.json and report the version" --output-format stream-json
 - Commands run in a sandbox where one works (bubblewrap on Linux, Seatbelt on macOS): the project is writable, the network is off, and credentials such as `~/.ssh` are hidden. No process JamCLI starts gets a variable whose name looks like a credential. The result's `sandbox` field says which sandbox ran.
 - `--cwd`, `--max-turns`, `--model`, `--continue`, and `--resume <id>` bound and shape the run. `--model` takes `provider:model` or a model on the profile's provider, and a model id with its own colon, such as `qwen2.5-coder:7b`, stays whole.
 - `@path` in a prompt includes that file or directory listing, as it does in the interface.
+- `-v` shows each model request, tool call, and approval on stderr as it happens, and `-vv` adds prompts, arguments, and outputs. Either way the log is also written as JSON lines to `~/.local/state/jamcli/logs/` (one file a day, kept 14 days), or to `--log-file <path>`. Without a flag only warnings and errors are logged. `--trace-file <path>` writes a span for the session, each turn, each model request, and each tool call. Keys and tokens are redacted from both. `-v` on its own still prints the version. The interface and `jamcli acp` read `JAMCLI_LOG_LEVEL`, `JAMCLI_LOG_FILE`, and `JAMCLI_TRACE_FILE` instead.
 - `jamcli sessions list`, `search <query>`, `show <id>`, `export <id>`, and `fork <id>` work on this project's sessions. Sessions record every message, tool call, result, and approval decision, and older history files are read without being rewritten.
 - `jamcli mcp add|list|test|remove` manages MCP servers, and `jamcli audit` reports tool access, isolation, and guardrail findings by severity without writing anything.
 - `jamcli acp` serves the Agent Client Protocol over stdio for an ACP client such as Zed:
@@ -143,6 +144,17 @@ jamcli config unset agent_loop.max_steps --scope user
 Values are read as JSON where they parse, so `30`, `true`, and `["read_file"]` keep their types. `jamcli config` never prints a key, a header, or an environment value. Editors can complete configuration files from [`docs/config.schema.json`](docs/config.schema.json).
 
 JamCLI writes nothing into a project until it has something to keep there: a session's history, a permission granted at a prompt, a todo list, or a `jamcli config set`. It then creates `.jamcli/` with a `.gitignore` that ignores the whole directory, so history and keys never reach a repository by accident. To share a file with a team, add an exception to `.jamcli/.gitignore`, such as `!config.json`.
+
+### Traces over OpenTelemetry
+
+Nothing leaves your machine unless you turn it on. To send traces to an OpenTelemetry collector:
+
+```bash
+jamcli config set otel.enabled true --scope user
+jamcli config set otel.endpoint http://localhost:4318/v1/traces --scope user   # or set OTEL_EXPORTER_OTLP_ENDPOINT
+```
+
+Spans follow the OpenTelemetry GenAI conventions (`chat <model>`, `execute_tool <name>`, `invoke_agent jamcli`) with the provider, model, and token counts. Prompts, outputs, and tool results are left out unless `otel.include_content` is `true`, and even then keys are redacted. `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, and `OTEL_RESOURCE_ATTRIBUTES` are honored, and `otel.headers` adds headers such as a collector token.
 
 ### Keys
 

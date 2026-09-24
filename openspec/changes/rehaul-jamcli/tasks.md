@@ -477,8 +477,25 @@ cover headless, ACP, and delegation.
   - 16 mutation probes, each turning a test red, across the stores, the order, redaction, and the sign-in.
   - Found along the way: a key not found was remembered as absent for the life of the process. Fixed, with a test.
   - Owed: a sign-in against OpenRouter itself, which this environment cannot reach.
-- [ ] 5.3 Logs and traces (D13). Files: `src/core/observe/` (new), `src/cli.ts`. Structured logs, `-v` and `-vv`, `--log-file`, and `--trace-file`.
-- [ ] 5.4 The OpenTelemetry exporter. Files: `src/core/observe/otlp.ts`, tests with an in-memory collector. GenAI attributes, content excluded by default, off by default.
+- [x] 5.3 Logs and traces (D13). Files: `src/core/observe/` (new), `src/cli.ts`. Structured logs, `-v` and `-vv`, `--log-file`, and `--trace-file`.
+  - **Verification**: built as recorded under D13, including the conflict over `-v`.
+  - Tests:
+    - levels, lazy files, redaction of every line and span, and the readable echo;
+    - spans with their trace, parent, attributes, and time, and a model request's span however its reading ends;
+    - each hook run timed, and old logs removed while nothing else is;
+    - through the runtime, a turn traced as a session, a turn, two model requests, and a tool call, each under the right parent;
+    - prompts and outputs logged only at debug, redacted; a compaction's span; a delegated run inside its parent's trace;
+    - end to end through the entry point, `-v` and `-vv` on standard error, the day's log file, and `--trace-file`.
+  - 18 mutation probes, each turning a test red but one: removing the entry point's check for a lone `-v` changes nothing, because the command line gives the same answer; it stays as the path that loads less.
+- [x] 5.4 The OpenTelemetry exporter. Files: `src/core/observe/otlp.ts`, tests with an in-memory collector. GenAI attributes, content excluded by default, off by default.
+  - **Verification**: built as recorded under D13, in about 160 lines, without the OpenTelemetry SDK.
+  - Tests, against an in-memory collector:
+    - the export request's shape: hex ids, nanosecond times as strings, typed attributes, span kinds, status codes, and the resource from `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES`;
+    - the endpoint and headers from configuration, then the standard variables;
+    - batching, the final flush, and a failing collector reported once;
+    - nothing sent unless turned on, even with a collector in the environment;
+    - a session's spans with their GenAI attributes and no content, and with `include_content`, content redacted.
+  - 12 mutation probes, each turning a test red.
 - [ ] 5.5 `jamcli doctor`. Files: `src/cli/doctor.ts`. Checks provider reachability, models, ripgrep, sandbox kind, git, `gh`, MCP servers, language servers, keychain, and configuration errors, each with a fix.
 - [ ] 5.6 Performance measurement in CI (D24). Files: `.github/workflows/ci.yml`, `scripts/bench/`. Record startup and headless overhead. Budgets that cannot pass before stage 6's build change are recorded but not enforced yet.
 

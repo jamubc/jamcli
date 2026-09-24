@@ -874,6 +874,38 @@ As built (5.2):
 - **Default.** `telemetry` stays `false` and the exporter is off. Nothing leaves the
   machine unless configured.
 
+As built (5.3, 5.4):
+
+- **`-v`.** It already printed the version, and a test and every habit say so. `-v` on
+  its own still does; with anything else it raises the level, as `--verbose` always
+  does. `-v` is info, `-vv` debug, and each shows the log readably on standard error
+  besides writing it.
+- **Logs.** `<state>/logs/YYYY-MM-DD.jsonl`, at `warn` by default, kept fourteen days;
+  old files are removed when a day's first line is written. Nothing is written until
+  there is a line. Info adds each request's usage, each tool call, each approval, and
+  each compaction; debug adds the prompt, the response, tool arguments, and tool output,
+  each cut at 4,000 characters. Every line passes through the session's redaction.
+  Where there are no flags, as in the interface and over ACP, `JAMCLI_LOG_LEVEL`,
+  `JAMCLI_LOG_FILE`, and `JAMCLI_TRACE_FILE` do the same.
+- **Spans.** `session`, `invoke_agent jamcli` for a turn, `chat {model}` for a model
+  request, `execute_tool {name}`, `hook {event}`, and `compaction`, named and attributed
+  by the GenAI conventions (`gen_ai.provider.name`, `gen_ai.request.model`,
+  `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.tool.name`,
+  `gen_ai.conversation.id`). Model requests are timed by wrapping the provider, so the
+  trust classifier's are traced too, marked `jamcli.purpose=trust`. A delegated run
+  records into its parent's observer, its session span under the parent's turn.
+- **Exporter.** `otel.enabled` turns it on; `telemetry` remains the legacy interface's
+  switch and sends nothing. The endpoint is `otel.endpoint`, then
+  `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, then `OTEL_EXPORTER_OTLP_ENDPOINT` with
+  `/v1/traces`, then `http://localhost:4318/v1/traces`. A collector in the environment
+  alone sends nothing. Spans go in batches of 64, every five seconds, and when the
+  session closes; an export that fails is reported once, and none waits more than ten
+  seconds. Only traces are exported; metrics are not.
+- **Content.** With `otel.include_content`, spans carry `gen_ai.input.messages`,
+  `gen_ai.output.messages`, and the tool call's arguments and result, redacted and cut
+  at 16,000 characters. That applies to the trace file too, since the spans are the
+  same.
+
 ### D14. The interface
 
 **Stack.** `@opentui/core` and `@opentui/react` at exact versions, with React 19.2 and
