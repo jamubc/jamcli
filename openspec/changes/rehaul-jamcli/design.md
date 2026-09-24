@@ -1382,6 +1382,11 @@ single-file binaries:
 OpenTUI's native library is embedded per target. The bundled tree-sitter assets are
 checked in a binary smoke test.
 
+As built (6.13), the build is `scripts/build.ts` over `Bun.build` rather than the
+command line, for three reasons: dependencies stay external (`packages: 'external'`),
+lazily loaded parts go to chunks (`splitting`), and the shebang is written onto the
+entry alone, since Bun's `banner` option repeats it on every chunk.
+
 **Startup.** `src/index.tsx` imports nothing heavy. It dispatches on the arguments first
 and dynamically imports the interface, the ACP server, or the headless runner.
 
