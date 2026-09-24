@@ -626,7 +626,9 @@ the table can meet in one entry.
   `GET /v1/models/{id}` gives `max_input_tokens`, `max_tokens`, and the thinking style.
   A request is made once, never retried, and abandoned after three seconds. Only answers
   are cached, for a day, keyed by provider, configured endpoint, and model, so a provider
-  that was down is asked again next time.
+  that was down is asked again next time. A model the provider does not have, which
+  Ollama and the Anthropic API answer with 404, reads as unlisted rather than as a
+  failure to ask; `jamcli doctor` found that in 5.5.
 - **Ollama.** Ollama allocates the whole window it is asked for, so the catalog's window
   is the `num_ctx` sent: the model's `models` entry, then `api_registry.ollama.num_ctx`,
   then the model's own limit capped at 16,384. Behind Ollama's `/v1` route the window
@@ -973,6 +975,19 @@ reduces them into view state with a pure reducer that is unit tested, and forwar
 5. writes user configuration only.
 
 `jamcli doctor` runs the same checks non-interactively.
+
+As built (5.5), ahead of the interface, `jamcli doctor` checks without changing
+anything: the configuration files read and each value that did not fit; keys in project
+files; the key store, and a credentials file others can read; every model a session may
+use (its own, the trust classifier's, and each delegation category's) by asking its
+provider; ripgrep, the sandbox, git, and gh; each enabled MCP server, started and asked
+for its tools; and the trace collector when one is turned on. Language servers found on
+the path are listed, since JamCLI does not use them until stage 9. Each check reports
+`ok`, `info`, `warn`, or `fail` as a word, so the report reads the same without color and
+to a screen reader, and each problem carries a fix. Network checks run together, five
+seconds each at most, so an offline machine gets its answer at once. `--json` gives the
+same list, and the exit code is 1 when anything failed. Pulling a model and writing user
+configuration stay with the interface's onboarding in stage 6.
 
 **Tests.** Frame-text snapshots of key states through the OpenTUI test renderer, with
 mock keys driving flows. Snapshots compare text, not escape codes. This amends the

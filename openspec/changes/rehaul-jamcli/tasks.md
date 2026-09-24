@@ -496,7 +496,15 @@ cover headless, ACP, and delegation.
     - nothing sent unless turned on, even with a collector in the environment;
     - a session's spans with their GenAI attributes and no content, and with `include_content`, content redacted.
   - 12 mutation probes, each turning a test red.
-- [ ] 5.5 `jamcli doctor`. Files: `src/cli/doctor.ts`. Checks provider reachability, models, ripgrep, sandbox kind, git, `gh`, MCP servers, language servers, keychain, and configuration errors, each with a fix.
+- [x] 5.5 `jamcli doctor`. Files: `src/cli/doctor.ts`. Checks provider reachability, models, ripgrep, sandbox kind, git, `gh`, MCP servers, language servers, keychain, and configuration errors, each with a fix.
+  - **Verification**: built as recorded under D14's onboarding note.
+  - Tests, with a fake Ollama and a PATH holding only fake programs:
+    - a working local setup passes and names what it found;
+    - a missing model, an unconfigured provider, a value that does not fit, a key in a project file, missing ripgrep and git, no sandbox, an unreachable collector, and a `.jamcli/` without its `.gitignore`, each with its fix, and the key never shown;
+    - an Ollama that is not running, a key the provider refuses, and a credentials file others can read;
+    - a collector judged by its answer; MCP servers that start, fail, or are turned off.
+  - 12 mutation probes, each turning a test red.
+  - Found along the way: Ollama and the Anthropic API answer a missing model with 404, which the providers threw as a failure to ask, against their own contract. Fixed, with the stage 4 tests that pinned the old behavior corrected, as recorded under D9.
 - [ ] 5.6 Performance measurement in CI (D24). Files: `.github/workflows/ci.yml`, `scripts/bench/`. Record startup and headless overhead. Budgets that cannot pass before stage 6's build change are recorded but not enforced yet.
 
 ## Stage 6: The interface on OpenTUI

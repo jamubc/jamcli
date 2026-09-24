@@ -66,7 +66,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Cost tracking | ✗ tokens only | ✓ per request, session, model | ✓ `/cost`, `/usage` [1] | n.v. | n.v. | n.v. | parity |
 | OpenTelemetry | ✗ | ✓ opt-in trace export over OTLP/HTTP JSON with GenAI attributes, content excluded by default; no metrics | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | Structured logs and a local trace | ✗ | ✓ JSON lines at four levels, `-v`/`-vv` on stderr, `--trace-file` | ✓ [1] | n.v. | n.v. | n.v. | parity |
-| Environment diagnostics | ✗ | ✓ `jamcli doctor` | n.v. | n.v. | n.v. | n.v. | parity |
+| Environment diagnostics | ✗ | ✓ `jamcli doctor`: configuration, keys, every model in use, tools, the sandbox, MCP servers, and the collector, each problem with a fix | n.v. | n.v. | n.v. | n.v. | parity |
 | Layered configuration, each value's origin shown | ◐ one project file, written at startup and never ignored (F18) | ✓ user, project, local, environment, and flags; `jamcli config list --show-origin`; a generated JSON schema | n.v. | n.v. | n.v. | n.v. | parity |
 
 ## Git
