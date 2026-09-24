@@ -115,48 +115,70 @@ const flagRules = (values: string[] | undefined, decision: Decision, flag: strin
     return [parsed.rule];
   });
 
+/** The layers read straight from their files, for a caller without the layered configuration. */
+function readLayers(projectRoot: string, env: Record<string, string | undefined>, errors: string[]): PermissionLayer[] {
+  const files: { scope: RuleScope; file: string; label: string }[] = [
+    { scope: 'user', file: path.join(userConfigDir(), 'config.json'), label: '~/.config/jamcli/config.json' },
+    { scope: 'project', file: path.join(projectRoot, '.jamcli', 'config.json'), label: '.jamcli/config.json' },
+    { scope: 'local', file: path.join(projectRoot, '.jamcli', 'config.local.json'), label: '.jamcli/config.local.json' },
+  ];
+  const layers: PermissionLayer[] = files.map(({ scope, file, label }) => {
+    const { value, error } = readJson(file);
+    if (error) errors.push(error);
+    return { scope, label, permissions: value?.permissions };
+  });
+  if (env.JAMCLI_PERMISSION_MODE) layers.push({ scope: 'env', label: 'JAMCLI_PERMISSION_MODE', permissions: { mode: env.JAMCLI_PERMISSION_MODE as PermissionMode } });
+  return layers;
+}
+
+/** One layer of configuration as the permission loader reads it: its `permissions` block and where it came from. */
+export interface PermissionLayer {
+  scope: RuleScope | 'env';
+  label: string;
+  permissions?: PermissionSettings;
+}
+
 /**
  * Every rule a session starts with, from built-in defaults, the user's configuration,
  * the project's, the project-local file, and the run's flags, each with its source.
+ * Given `layers`, as the layered configuration resolves them, the files and the
+ * environment are not read again.
  */
 export function loadPermissions(options: {
   projectRoot: string;
   legacyTools?: Record<string, ToolPermissionValue | undefined>;
   flags?: PermissionFlags;
   env?: Record<string, string | undefined>;
+  layers?: PermissionLayer[];
 }): LoadedPermissions {
   const errors: string[] = [];
   const env = options.env ?? process.env;
   const rules: Rule[] = BUILTIN_RULES.map((text) => (parseRule(text, 'allow', 'builtin', 'built-in') as { rule: Rule }).rule);
-  const layers: { scope: RuleScope; file: string; label: string }[] = [
-    { scope: 'user', file: path.join(userConfigDir(), 'config.json'), label: '~/.config/jamcli/config.json' },
-    { scope: 'project', file: path.join(options.projectRoot, '.jamcli', 'config.json'), label: '.jamcli/config.json' },
-    { scope: 'local', file: path.join(options.projectRoot, '.jamcli', 'config.local.json'), label: '.jamcli/config.local.json' },
-  ];
+  const layers = options.layers ?? readLayers(options.projectRoot, env, errors);
 
   let mode: PermissionMode = 'default';
   let modeSource = 'the default';
+  let legacyAdded = false;
+  const addLegacy = () => {
+    if (legacyAdded) return;
+    legacyAdded = true;
+    rules.push(...legacyRules(options.legacyTools, '.jamcli/mcp.json'));
+  };
   for (const layer of layers) {
-    const { value, error } = readJson(layer.file);
-    if (error) errors.push(error);
-    const settings: PermissionSettings | undefined = value?.permissions;
-    rules.push(...rulesFromSettings(settings, layer.scope, layer.label, errors));
-    if (layer.scope === 'project') rules.push(...legacyRules(options.legacyTools, '.jamcli/mcp.json'));
+    // The legacy block sits with the project's rules, after the user's.
+    if (layer.scope === 'local' || layer.scope === 'env') addLegacy();
+    const settings = layer.permissions;
+    if (layer.scope !== 'env') rules.push(...rulesFromSettings(settings, layer.scope, layer.label, errors));
+    if (layer.scope === 'project') addLegacy();
     if (settings?.mode !== undefined) {
+      const source = layer.scope === 'env' ? layer.label : `${layer.label} permissions.mode`;
       if (isPermissionMode(settings.mode)) {
         mode = settings.mode;
-        modeSource = `${layer.label} permissions.mode`;
-      } else errors.push(`${layer.label} permissions.mode "${settings.mode}" is not a mode.`);
+        modeSource = source;
+      } else errors.push(`${source} "${settings.mode}" is not a mode.`);
     }
   }
-
-  const envMode = env.JAMCLI_PERMISSION_MODE;
-  if (envMode) {
-    if (isPermissionMode(envMode)) {
-      mode = envMode;
-      modeSource = 'JAMCLI_PERMISSION_MODE';
-    } else errors.push(`JAMCLI_PERMISSION_MODE "${envMode}" is not a mode.`);
-  }
+  addLegacy();
 
   const flags = options.flags ?? {};
   const byComma = (value: string) => value.split(',').map((part) => part.trim()).filter(Boolean);
