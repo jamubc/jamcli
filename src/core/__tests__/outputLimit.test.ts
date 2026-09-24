@@ -47,3 +47,10 @@ test('a limit the session did not set is still reported, and a reply that ends o
   ]);
   expect((await noticesFrom(provider)).notices).toEqual([]);
 });
+
+test('a reply the model declined says so, rather than reading as a finished answer', async () => {
+  server.enqueue({ text: '', stopReason: 'refusal' });
+  const { notices, result } = await noticesFrom(new AnthropicProvider({ baseUrl: server.anthropicBaseUrl }));
+  expect(notices).toEqual(['The model declined this request, so the reply may be empty or partial. Rephrase it, or switch models with /model.']);
+  expect(result.status).toBe('ok');
+});

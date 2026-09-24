@@ -244,6 +244,13 @@ export class CoreAgent implements Agent {
 
       const { calls, unusable } = normalizeCalls(step.done?.toolCalls, steps);
       record(this.assistantMessage(step.text, step.reasoning, calls, step.done));
+      if (step.done?.stopReason === 'refusal') {
+        emit({
+          type: 'notice',
+          level: 'warn',
+          message: 'The model declined this request, so the reply may be empty or partial. Rephrase it, or switch models with /model.',
+        });
+      }
       if (OUTPUT_LIMIT_REASONS.has(step.done?.stopReason ?? '')) {
         const limit = this.options.maxOutputTokens;
         emit({
