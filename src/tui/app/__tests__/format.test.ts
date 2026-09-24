@@ -27,4 +27,7 @@ test('the status line names each fact in words, and marks a cost that misses unp
     'no sandbox',
     'retrying (2): 429',
   ]);
+  // A free model's nothing takes no room; nothing plus requests with no price still shows.
+  expect(statusParts({ ...status, costUsd: 0, unpriced: 0 })).not.toContain('$0.00');
+  expect(statusParts({ ...status, costUsd: 0, unpriced: 2 })).toContain('$0.00+');
 });

@@ -70,7 +70,8 @@ export function compactionLine(row: Extract<Row, { kind: 'compaction' }>): strin
 export function statusParts(status: StatusData): string[] {
   const parts = [status.mode === 'bypass' ? 'BYPASS mode' : `${status.mode} mode`, status.model || 'no model'];
   if (status.contextPercent !== undefined) parts.push(`context ${Math.round(status.contextPercent)}%`);
-  if (status.costUsd !== null) parts.push(`${formatUsd(status.costUsd)}${status.unpriced ? '+' : ''}`);
+  // Nothing is billed for a free model, so a cost of nothing takes no room; /cost still says it.
+  if (status.costUsd !== null && (status.costUsd > 0 || status.unpriced)) parts.push(`${formatUsd(status.costUsd)}${status.unpriced ? '+' : ''}`);
   else if (status.inputTokens || status.outputTokens) parts.push('cost unknown');
   if (status.inputTokens || status.outputTokens) parts.push(`${formatTokens(status.inputTokens)} in, ${formatTokens(status.outputTokens)} out`);
   parts.push(status.sandbox === 'none' ? 'no sandbox' : `sandbox ${status.sandbox}`);
