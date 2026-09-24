@@ -17,6 +17,8 @@ export interface SessionPermissionOptions {
   bypass?: boolean;
   sandboxed: boolean;
   env?: Record<string, string | undefined>;
+  /** `git.allow_commit_in_bypass`: bypass mode commits without asking. */
+  commitInBypass?: boolean;
 }
 
 /**
@@ -39,7 +41,7 @@ export function sessionPermissions(options: SessionPermissionOptions): { engine:
     notices.push(`${loaded.modeSource} asks for ${mode} mode, but ${refusal} This session starts in default mode.`);
     mode = 'default';
   }
-  const { classOf, namesOf } = toolNaming(options.registry);
+  const { classOf, namesOf, alwaysAsks } = toolNaming(options.registry);
   const engine = new PermissionEngine({
     projectRoot: options.projectRoot,
     rules: loaded.rules,
@@ -47,6 +49,8 @@ export function sessionPermissions(options: SessionPermissionOptions): { engine:
     sandboxed: options.sandboxed,
     classOf,
     namesOf,
+    alwaysAsks,
+    bypassAllowsAlwaysAsked: options.commitInBypass === true,
   });
   for (const rule of engine.unmatched(options.registry.list().map((tool) => tool.name))) {
     notices.push(`The rule ${rule.text} (${rule.source}) names no tool, so it has no effect.`);

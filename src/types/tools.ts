@@ -150,6 +150,8 @@ export interface RegisteredTool {
   hidden?: boolean;
   /** The canonical tool this one stands in for, so rules and grants for either apply to both. */
   aliasOf?: string;
+  /** Asks every time: no rule, grant, or mode allows it ahead, and a deny still stops it. */
+  alwaysAsks?: boolean;
 }
 
 export interface RegistryValidationResult {

@@ -27,6 +27,10 @@ export interface PermissionEngineOptions {
   classOf: (tool: string) => PolicyClass | 'unknown';
   /** Every name a tool answers to: its canonical name first, then its aliases. */
   namesOf: (tool: string) => string[];
+  /** Tools that ask every time, such as a commit, whatever the rules and the mode say. */
+  alwaysAsks?: (tool: string) => boolean;
+  /** Whether bypass mode may run those without asking, as `git.allow_commit_in_bypass` says. */
+  bypassAllowsAlwaysAsked?: boolean;
 }
 
 /** A person's choices for this run outrank configuration, except a deny, which nothing outranks. */
@@ -145,6 +149,10 @@ export class PermissionEngine {
     const byMode = MODE_DEFAULTS[this.currentMode][toolClass];
     if (this.currentMode === 'plan' && byMode === 'deny') {
       return { decision: 'deny', by: 'mode', reason: 'plan mode is on, so this session only reads and plans' };
+    }
+    if (this.options.alwaysAsks?.(names[0])) {
+      if (this.currentMode === 'bypass' && this.options.bypassAllowsAlwaysAsked) return { decision: 'allow', by: 'mode', reason: 'bypass mode allows it, as git.allow_commit_in_bypass says' };
+      return { decision: 'ask', by: 'policy', reason: 'a commit is always asked for; no rule or mode allows one ahead' };
     }
     if (this.currentMode === 'bypass') return { decision: 'allow', by: 'mode', reason: 'bypass mode allows everything no rule denies' };
 

@@ -89,6 +89,7 @@ export function toolNaming(registry: ToolRegistry) {
     canonical,
     namesOf: (name: string) => [canonical(name), ...(aliases.get(canonical(name)) ?? [])],
     classOf: (name: string): PolicyClass | 'unknown' => registry.get(name)?.policy ?? 'unknown',
+    alwaysAsks: (name: string) => Boolean(registry.get(name)?.alwaysAsks),
   };
 }
 
