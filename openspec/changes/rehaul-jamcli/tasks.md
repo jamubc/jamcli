@@ -202,7 +202,17 @@ Line references describe the tree when the change opened.
     - The interface still renders from the bundle under Node and from the sources under Bun, checked in a pseudo-terminal.
     - 3 tests: the entry has no static imports, `--version` and `-v` print the recorded version, and `--help` reaches the command line.
     - Mutation probes: a static import of the interface, and a wrong version, each turn a test red.
-- [ ] 2.16 The conformance test for one runtime. Files: `src/core/runtime/__tests__/surfaces.test.ts`. Drive the same scripted session through the headless and ACP assemblies and the interface's runtime factory call, and assert identical tool lists, provider requests, and transcripts.
+- [x] 2.16 The conformance test for one runtime. Files: `src/core/runtime/__tests__/surfaces.test.ts`. Drive the same scripted session through the headless and ACP assemblies and the interface's runtime factory call, and assert identical tool lists, provider requests, and transcripts.
+  - **Verification**: the interface's factory call is `createInterfaceRuntime` in `src/tui/runtime.ts`, which stage 6 renders from.
+    - The same scripted conversation runs through `runHeadless` with `--allow-tool edit`, `createAcpSession` with the editor allowing, and `createInterfaceRuntime` with the user allowing. The conversation has two concurrent reads (one from an MCP server), an edit, an `@` reference, and a rules file.
+    - The provider requests are identical on all three, and so are the transcripts once session ids, timestamps, and the deciding surface are set aside. A second test checks that each surface records itself as the decider: `headless` by flag, `acp` and `tui` by the user.
+    - Mutation probes, each turning a test red:
+      - ACP choosing its own model;
+      - headless hiding a tool;
+      - the interface bounding its steps;
+      - the prompt naming the surface;
+      - ACP skipping references;
+      - the interface allowing by flag.
 
 The Ink interface keeps running on its existing paths until stage 6; the checks above
 cover headless, ACP, and delegation.
