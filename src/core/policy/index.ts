@@ -1,4 +1,5 @@
 import type { ToolPermission, ToolPermissionValue } from '../../types/config.js';
+import type { RegisteredToolClass } from '../../types/tools.js';
 import { listTools } from '../tools/registry.js';
 
 export type ToolDecision = 'allow' | 'ask' | 'deny';
@@ -18,7 +19,7 @@ export interface ToolPolicyResolution {
 const STATE_CHANGING: ToolDecision = 'ask';
 const READ_ONLY: ToolDecision = 'allow';
 
-export const policyClassOf = (tool: string): 'read' | 'write' | 'execute' | 'unknown' => {
+export const policyClassOf = (tool: string): RegisteredToolClass | 'unknown' => {
   const registered = listTools().find((entry) => entry.name === tool);
   if (!registered) return 'unknown';
   return registered.policy;

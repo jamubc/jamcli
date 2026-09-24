@@ -9,6 +9,9 @@ export type ToolName = 'list_files' | 'read_file' | 'search_code' | 'apply_patch
 
 export type ToolPolicyClass = 'read' | 'write' | 'execute';
 
+/** What a registered tool can do, which decides its default in each permission mode. */
+export type RegisteredToolClass = ToolPolicyClass | 'network' | 'delegate' | 'state';
+
 export interface ToolDefinition {
   label: string;
   description: string;
@@ -139,7 +142,7 @@ export interface RegisteredTool {
   name: string;
   description: string;
   inputSchema: JsonSchema;
-  policy: ToolPolicyClass;
+  policy: RegisteredToolClass;
   runner: ToolRunner;
   /** Registered and callable, but not advertised to the model. */
   hidden?: boolean;

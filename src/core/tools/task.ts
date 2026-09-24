@@ -178,7 +178,7 @@ export const TASK_TOOLS: RegisteredTool[] = [
     description:
       'Delegate work to a child agent run on a model chosen by category. Returns the child result, or an id when background is set.',
     inputSchema: taskSchema,
-    policy: 'execute',
+    policy: 'delegate',
     runner: taskRunner,
   },
   {
@@ -199,7 +199,7 @@ export const TASK_TOOLS: RegisteredTool[] = [
     name: 'task_cancel',
     description: 'Cancel a running background delegated task.',
     inputSchema: idSchema,
-    policy: 'write',
+    policy: 'delegate',
     runner: taskCancelRunner,
   },
 ];

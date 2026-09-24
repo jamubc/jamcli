@@ -151,7 +151,7 @@ export const TODO_TOOLS: RegisteredTool[] = [
     name: 'todo_write',
     description: 'Replace the session todo list, persisted under the project .jamcli directory.',
     inputSchema: todoWriteSchema,
-    policy: 'write',
+    policy: 'state',
     runner: todoWriteRunner,
   },
 ];

@@ -153,7 +153,7 @@ export const ACP_TOOLS: RegisteredTool[] = [
     name: 'delegate',
     description: 'Delegate one prompt to an external ACP agent configured in .jamcli/agents.json.',
     inputSchema: delegateSchema,
-    policy: 'execute',
+    policy: 'delegate',
     runner: delegateToAcpRunner,
   },
   {
@@ -174,7 +174,7 @@ export const ACP_TOOLS: RegisteredTool[] = [
     name: 'delegate_cancel',
     description: 'Cancel a running ACP delegation.',
     inputSchema: cancelSchema,
-    policy: 'write',
+    policy: 'delegate',
     runner: acpCancelRunner,
   },
 ];
