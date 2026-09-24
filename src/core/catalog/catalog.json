@@ -1,0 +1,198 @@
+{
+  "verified": "2026-09-24",
+  "sources": [
+    "https://platform.claude.com/docs/en/about-claude/models/overview",
+    "https://platform.claude.com/docs/en/about-claude/pricing"
+  ],
+  "note": "Prices are US dollars per million tokens. cache_write is the five-minute cache. Add a row only from a published source, and update verified when you do.",
+  "aliases": {
+    "anthropic:claude-haiku-4-5": "anthropic:claude-haiku-4-5-20251001",
+    "anthropic:claude-opus-4-5": "anthropic:claude-opus-4-5-20251101",
+    "anthropic:claude-sonnet-4-5": "anthropic:claude-sonnet-4-5-20250929"
+  },
+  "models": {
+    "anthropic:claude-fable-5-1": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "always_thinks": true,
+      "effort": true,
+      "price": {
+        "input": 10,
+        "output": 50,
+        "cache_read": 0.25,
+        "cache_write": 12.5
+      }
+    },
+    "anthropic:claude-opus-5-5": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "always_thinks": true,
+      "effort": true,
+      "price": {
+        "input": 4,
+        "output": 20,
+        "cache_read": 0.2,
+        "cache_write": 5
+      }
+    },
+    "anthropic:claude-sonnet-5": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "effort": true,
+      "price": {
+        "input": 2,
+        "output": 10,
+        "cache_read": 0.2,
+        "cache_write": 2.5
+      }
+    },
+    "anthropic:claude-haiku-4-5-20251001": {
+      "context_window": 200000,
+      "max_output": 64000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "budget",
+      "effort": false,
+      "price": {
+        "input": 1,
+        "output": 5,
+        "cache_read": 0.1,
+        "cache_write": 1.25
+      }
+    },
+    "anthropic:claude-fable-5": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "always_thinks": true,
+      "effort": true,
+      "price": {
+        "input": 10,
+        "output": 50,
+        "cache_read": 1,
+        "cache_write": 12.5
+      }
+    },
+    "anthropic:claude-opus-5": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "effort": true,
+      "price": {
+        "input": 5,
+        "output": 25,
+        "cache_read": 0.5,
+        "cache_write": 6.25
+      }
+    },
+    "anthropic:claude-opus-4-8": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "effort": true,
+      "price": {
+        "input": 5,
+        "output": 25,
+        "cache_read": 0.5,
+        "cache_write": 6.25
+      }
+    },
+    "anthropic:claude-opus-4-7": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "effort": true,
+      "price": {
+        "input": 5,
+        "output": 25,
+        "cache_read": 0.5,
+        "cache_write": 6.25
+      }
+    },
+    "anthropic:claude-opus-4-6": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "effort": true,
+      "price": {
+        "input": 5,
+        "output": 25,
+        "cache_read": 0.5,
+        "cache_write": 6.25
+      }
+    },
+    "anthropic:claude-opus-4-5-20251101": {
+      "context_window": 200000,
+      "max_output": 64000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "budget",
+      "effort": true,
+      "price": {
+        "input": 5,
+        "output": 25,
+        "cache_read": 0.5,
+        "cache_write": 6.25
+      }
+    },
+    "anthropic:claude-sonnet-4-6": {
+      "context_window": 1000000,
+      "max_output": 128000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "adaptive",
+      "effort": true,
+      "price": {
+        "input": 3,
+        "output": 15,
+        "cache_read": 0.3,
+        "cache_write": 3.75
+      }
+    },
+    "anthropic:claude-sonnet-4-5-20250929": {
+      "context_window": 200000,
+      "max_output": 64000,
+      "tools": true,
+      "reasoning": true,
+      "images": true,
+      "thinking": "budget",
+      "effort": false,
+      "price": {
+        "input": 3,
+        "output": 15,
+        "cache_read": 0.3,
+        "cache_write": 3.75
+      }
+    }
+  }
+}

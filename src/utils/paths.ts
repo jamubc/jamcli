@@ -36,6 +36,11 @@ export function userConfigDir(): string {
   return path.join(base, 'jamcli');
 }
 
+/** The cache directory, for what JamCLI can fetch again, such as model metadata. JAMCLI_CACHE_DIR overrides it. */
+export function userCacheDir(): string {
+  return process.env.JAMCLI_CACHE_DIR || jamcliPaths.cache;
+}
+
 // Helper to get platform-specific state directory. JAMCLI_STATE_DIR overrides it.
 export function getStateDir(): string {
   if (process.env.JAMCLI_STATE_DIR) {
