@@ -435,8 +435,18 @@ cover headless, ACP, and delegation.
     - the estimate learns from OpenAI's counts and not from Ollama's.
   - F20 is live: an agent turn compacts mid-turn, and every request, the summary's included, carries each result with its call. The legacy interface's manager was fixed the same way; its two new tests fail without the fix.
   - 35 mutation probes, each turning a test red, across the estimate, the budget, the cut, the summary, the agent loop, the log, and the runtime.
-- [ ] 4.4 Anthropic caching and thinking (D8). Files: `src/core/providers/anthropic.ts`, tests. Load the `claude-api` skill before editing for current model identifiers, caching rules, and thinking signatures.
-- [ ] 4.5 Optional: an OpenAI Responses API adapter. If it does not land, record the gap in `docs/feature-matrix.md`.
+- [x] 4.4 Anthropic caching and thinking (D8). Files: `src/core/providers/anthropic.ts`, tests. Load the `claude-api` skill before editing for current model identifiers, caching rules, and thinking signatures.
+  - **Verification**: built as recorded under D8. The `claude-api` skill was not available when the work began, so the edits followed Anthropic's documentation read the same day. The skill, loaded afterwards, agrees on every rule used, and it named one more gap, refusals, which is now covered.
+  - Tests:
+    - a temperature is sent only to a budget-style model that is not thinking, and the default profile's 0.7 no longer reaches a current model;
+    - thinking for each style and level, including the models that reject turning it off;
+    - the three cache breakpoints, never on thinking or empty text;
+    - the one retry without `cache_control`;
+    - signed thinking replayed within a turn and dropped after a mode switch, a continued session, a requested compaction, a rebuilt agent, and a compaction in the middle of a turn;
+    - a declined reply is reported.
+  - The temperature and refusal tests fail with their changes reverted. 24 mutation probes, each turning a test red, across thinking, caching, and replay.
+- [x] 4.5 Optional: an OpenAI Responses API adapter. If it does not land, record the gap in `docs/feature-matrix.md`.
+  - **Verification**: it did not land, because OpenAI's documentation is blocked from this environment, as recorded under D8. The gap is recorded in `docs/feature-matrix.md`.
 
 ## Stage 5: Configuration, credentials, observability, command line
 

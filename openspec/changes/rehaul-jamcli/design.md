@@ -532,6 +532,48 @@ The `ChatProvider` interface keeps its shape and gains:
 optional. If it does not land, it is recorded as a gap in the feature matrix.
 Chat Completions remains fully supported for OpenAI models.
 
+As built (4.4), checked against Anthropic's documentation of 2026-09-24 and the
+`claude-api` skill:
+
+- **Caching.** Explicit breakpoints close the tool list, the system prompt, and the latest
+  message: three of the four the API allows. The top-level automatic form exists, but
+  legacy Bedrock refuses it, and D8 names these three. A breakpoint never lands on
+  thinking or on an empty text block. An endpoint that rejects `cache_control` gets one
+  retry without it and is not sent it again. The five-minute cache is used, and its
+  write price is the catalog's `cache_write`.
+- **Thinking** follows the catalog's style for the model.
+  - An adaptive model is asked for `{type: "adaptive", display: "summarized"}` under `auto`
+    and `on`, so the interface can show the summary. The newest models default to hiding
+    it.
+  - Under `off`, thinking is turned off, except on Claude Fable 5.1, Claude Fable 5, and
+    Claude Opus 5.5, which reject that and are left at their default.
+  - A model that takes a budget (Haiku 4.5, Sonnet 4.5, Opus 4.5) gets half its output
+    limit, at least 1,024 tokens, and only under `on`.
+  - A model the catalog does not know is not configured.
+  - Effort is not set, so each model's default applies. Changing effort mid-session would
+    invalidate the cache, and choosing it per model is a later setting.
+- **Temperature.** Opus 4.7 and later models refuse a temperature other than the default
+  on every request, and earlier models refuse it while thinking. The default profile sets
+  0.7, so every request to a current model failed. Only a budget-style model that is not
+  thinking now gets a temperature.
+- **Replay.** A thinking block's signature holds only while the system prompt, the tools,
+  and the messages before it are unchanged. For accounts created on or after 2026-08-31,
+  a stale block fails the whole request. Signed reasoning is replayed only from messages
+  made since the prefix was last set: this process's start, a mode switch, or a
+  compaction, including one in the middle of a turn. Dropping the oldest blocks is what
+  the API allows.
+  - A continued session starts afresh, because it cannot know its prefix is unchanged.
+  - Mid-conversation system messages would keep the prefix across a mode switch on the
+    models that take them. That is left for later, because Sonnet 5 does not.
+- **Refusals.** A reply that stops with `refusal` is reported rather than read as a
+  finished answer. The server-side `fallbacks` parameter is not sent, because moving to
+  another model is the user's choice.
+
+As built (4.5), the OpenAI Responses adapter did not land. OpenAI's documentation is
+blocked from this environment, so it could not be built against the current reference or
+checked against the service. The gap is recorded in the feature matrix, and Chat
+Completions remains fully supported.
+
 ### D9. Model catalog and cost
 
 `src/core/catalog/` resolves a `ModelInfo` for any `provider:model`:

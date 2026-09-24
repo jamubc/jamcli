@@ -177,6 +177,11 @@ settings are `tools`, `reasoning`, `images`, `thinking` (`adaptive` or `budget`)
 caps how much each reply may write, 32,000 by default and never more than the model
 allows. A reply cut off at that limit says so.
 
+For Claude models, JamCLI caches the tool list, the system prompt, and the conversation so
+far, and asks each model to think in the way it supports. Opus 4.7 and later models
+refuse a temperature, so a profile's temperature is sent only to older models while they
+are not thinking.
+
 ### Context
 
 When a conversation nears the model's context window, JamCLI summarizes its older part
