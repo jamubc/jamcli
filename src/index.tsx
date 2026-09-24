@@ -38,9 +38,19 @@ const HEADLESS_INTENTS = new Set([
 /** Flags only the interface reads. */
 const INTERFACE_FLAGS = new Set(['--screen-reader']);
 
-const startInterface = async () => {
-  const { startOpenTui } = await import('./tui/app/start.js');
-  await startOpenTui(undefined, { screenReader: argv.includes('--screen-reader') });
+/** The interface's arguments: its own flags, and `--cwd` and `--worktree` with their values. */
+const interfaceArguments = () => {
+  const found: { cwd?: string; worktree?: string; unknown: string[]; missing?: string } = { unknown: [] };
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (token === '--cwd' || token === '--worktree') {
+      const value = argv[i + 1];
+      if (value === undefined) found.missing = token === '--cwd' ? '--cwd needs a path' : '--worktree needs a name';
+      else found[token === '--cwd' ? 'cwd' : 'worktree'] = value;
+      i += 1;
+    } else if (!INTERFACE_FLAGS.has(token)) found.unknown.push(token);
+  }
+  return found;
 };
 
 const main = async () => {
@@ -56,23 +66,18 @@ const main = async () => {
     process.exit(await runCli(argv));
   }
 
-  const cwdIndex = argv.indexOf('--cwd');
-  if (cwdIndex === -1) {
-    const unknown = argv.filter((token) => !INTERFACE_FLAGS.has(token));
-    if (unknown.length) {
-      process.stderr.write(`Unknown option: ${unknown.join(', ')}\n`);
-      process.exit(2);
-    }
-    await startInterface();
-    return;
-  }
-  const target = argv[cwdIndex + 1];
-  if (!target) {
-    process.stderr.write('--cwd needs a path\n');
+  const found = interfaceArguments();
+  if (found.unknown.length) {
+    process.stderr.write(`Unknown option: ${found.unknown.join(', ')}\n`);
     process.exit(2);
   }
-  process.chdir(target);
-  await startInterface();
+  if (found.missing) {
+    process.stderr.write(`${found.missing}\n`);
+    process.exit(2);
+  }
+  if (found.cwd) process.chdir(found.cwd);
+  const { startOpenTui } = await import('./tui/app/start.js');
+  await startOpenTui(undefined, { screenReader: argv.includes('--screen-reader'), ...(found.worktree !== undefined ? { worktree: found.worktree } : {}) });
 };
 
 void main();

@@ -10,7 +10,7 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 function confirm(ctx: CommandContext, paths: string[], given: string | undefined): void {
   let plan: CommitPlan;
   try {
-    plan = planCommit(ctx.projectRoot, paths);
+    plan = planCommit(ctx.runtime.workRoot, paths);
   } catch (error: any) {
     return ctx.notice('warn', `Not committed: ${error?.message ?? error}`);
   }
@@ -37,7 +37,7 @@ function confirm(ctx: CommandContext, paths: string[], given: string | undefined
     choose: async (item) => {
       if (item.key === 'edit') return ctx.prefill(`/commit ${message}`);
       try {
-        const done = await commitChanges(ctx.projectRoot, message, { paths, ...(attribution ? { attribution } : {}) });
+        const done = await commitChanges(ctx.runtime.workRoot, message, { paths, ...(attribution ? { attribution } : {}) });
         ctx.notice('info', `Committed ${done.sha.slice(0, 12)}: ${done.subject}.`);
         if (done.output) ctx.show(done.output);
       } catch (error: any) {
@@ -56,13 +56,13 @@ export const commit: SlashCommand = {
     if (ctx.running) return ctx.notice('warn', 'A turn is running; commit when it ends, or press Escape to stop it.');
     let plan: CommitPlan;
     try {
-      plan = planCommit(ctx.projectRoot);
+      plan = planCommit(ctx.runtime.workRoot);
     } catch {
       return ctx.notice('info', 'This project is not a git repository, so there is nothing to commit.');
     }
     const given = args.trim() || undefined;
     if (plan.files.length) return confirm(ctx, [], given);
-    const changes = await readChanges(ctx.projectRoot);
+    const changes = await readChanges(ctx.runtime.workRoot);
     const changed = new Set([...changes.unstaged.map((file) => file.file)]).size;
     if (!changed && !changes.untracked.length) return ctx.notice('info', 'Nothing to commit: the working copy is as the last commit left it.');
     ctx.pick({

@@ -116,7 +116,7 @@ export function App(props: AppProps) {
    */
   const anchor = useRef<{ fromBottom: number; until: number } | undefined>(undefined);
   const [exitArmed, setExitArmed] = useState(false);
-  const branch = useMemo(() => gitBranch(projectRoot), [projectRoot]);
+  const branch = useMemo(() => gitBranch(runtime.workRoot), [runtime.workRoot]);
   const [theme, setTheme] = useState<Theme>(startTheme);
   const [statusStyle, setStatusStyle] = useState<StatusStyleDefinition>(props.statusStyle ?? DEFAULT_STATUS_STYLE);
   const syntax = useMemo(() => createSyntaxStyle(theme), [theme]);

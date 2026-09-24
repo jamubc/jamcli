@@ -54,7 +54,7 @@ export const pr: SlashCommand = {
     if (ctx.running) return ctx.notice('warn', 'A turn is running; open a pull request when it ends, or press Escape to stop it.');
     let state: BranchState;
     try {
-      state = await branchState(ctx.projectRoot);
+      state = await branchState(ctx.runtime.workRoot);
     } catch (error: any) {
       return ctx.notice('info', error?.message ?? String(error));
     }
@@ -83,7 +83,7 @@ export const pr: SlashCommand = {
         const pushed = pushBranch(state).then(
           () => {
             ctx.notice('info', `Pushed ${state.branch} to ${state.remote}.`);
-            return branchState(ctx.projectRoot);
+            return branchState(ctx.runtime.workRoot);
           },
           (error: any) => {
             throw new Error(`Not pushed: ${error?.message ?? error}`);

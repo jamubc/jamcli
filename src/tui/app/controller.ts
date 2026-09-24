@@ -11,12 +11,17 @@ export const MODE_CYCLE: PermissionMode[] = ['default', 'accept-edits', 'plan', 
 /** The answer to a permission prompt: once, for the session or the project with a pattern, or no. */
 export type PromptChoice = { allow: true; scope: ApprovalScope; pattern?: string } | { allow: false; feedback?: string };
 
-/** The branch checked out in `root`, read from `.git/HEAD` without starting git. */
+/**
+ * The branch checked out in `root`, read from `.git/HEAD` without starting git. In a
+ * worktree `.git` is a file naming the worktree's own directory, whose HEAD is read.
+ */
 export function gitBranch(root: string): string | undefined {
   try {
     let dir = root;
     for (;;) {
-      const head = path.join(dir, '.git', 'HEAD');
+      const dotGit = path.join(dir, '.git');
+      const linked = fs.existsSync(dotGit) && fs.statSync(dotGit).isFile() ? /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(dotGit, 'utf8'))?.[1].trim() : undefined;
+      const head = linked ? path.join(path.resolve(dir, linked), 'HEAD') : path.join(dotGit, 'HEAD');
       if (fs.existsSync(head)) {
         const text = fs.readFileSync(head, 'utf8').trim();
         return text.startsWith('ref: refs/heads/') ? text.slice('ref: refs/heads/'.length) : text.slice(0, 7);

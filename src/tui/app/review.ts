@@ -79,7 +79,7 @@ function list(ctx: CommandContext, load: () => Promise<Changes>): void {
         choose: (action) =>
           list(ctx, async () => {
             await act(ctx, found, entry, action.key);
-            return readChanges(ctx.projectRoot);
+            return readChanges(ctx.runtime.workRoot);
           }),
       });
     },
@@ -90,7 +90,7 @@ function list(ctx: CommandContext, load: () => Promise<Changes>): void {
 async function review(ctx: CommandContext): Promise<void> {
   let changes: Changes;
   try {
-    changes = await readChanges(ctx.projectRoot);
+    changes = await readChanges(ctx.runtime.workRoot);
   } catch (error: any) {
     return ctx.notice('info', error?.message ?? String(error));
   }
