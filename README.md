@@ -256,6 +256,16 @@ older `context_management` block applies only to the legacy interface.
 bun run dev
 ```
 
+### Performance
+
+```bash
+bun run build
+bun run bench              # --version, headless overhead, and grep, against the budgets
+bun run bench -- --enforce # exit 1 when an enforced budget is missed
+```
+
+The budgets and the latest measurements are in `openspec/changes/rehaul-jamcli/design.md` (D24).
+
 ### Cleanup
 
 To remove the global `jamcli` command:

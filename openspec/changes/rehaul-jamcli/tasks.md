@@ -505,7 +505,11 @@ cover headless, ACP, and delegation.
     - a collector judged by its answer; MCP servers that start, fail, or are turned off.
   - 12 mutation probes, each turning a test red.
   - Found along the way: Ollama and the Anthropic API answer a missing model with 404, which the providers threw as a failure to ask, against their own contract. Fixed, with the stage 4 tests that pinned the old behavior corrected, as recorded under D9.
-- [ ] 5.6 Performance measurement in CI (D24). Files: `.github/workflows/ci.yml`, `scripts/bench/`. Record startup and headless overhead. Budgets that cannot pass before stage 6's build change are recorded but not enforced yet.
+- [x] 5.6 Performance measurement in CI (D24). Files: `.github/workflows/ci.yml`, `scripts/bench/`. Record startup and headless overhead. Budgets that cannot pass before stage 6's build change are recorded but not enforced yet.
+  - **Verification**: built as recorded under D24. `bun run bench -- --enforce` passes: `--version` about 46 ms against 60, grep about 45 ms against 500. Headless overhead is recorded, not enforced: about 320 ms at first and about 240 ms once the MCP client loads only for a configured server, against 150.
+  - Tests: the median, and each verdict (within, over, recorded, not measured), with a miss failing the job only for an enforced budget; the budgets are held to D24's. A session with a configured MCP server still starts it and offers its tools, and one with none makes no client.
+  - 3 mutation probes, each turning a test red.
+  - **Staged, like 1.1**: the performance job is in `openspec/changes/rehaul-jamcli/workflows/ci.yml`, because workflows cannot be pushed from here.
 
 ## Stage 6: The interface on OpenTUI
 

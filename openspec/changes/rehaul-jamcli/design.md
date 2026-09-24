@@ -1383,6 +1383,29 @@ Measured in CI from stage 5 onward, on Linux runners, as medians of five runs:
 A budget miss fails the performance job. A budget may only move with a recorded
 measurement and a reason in `tasks.md`.
 
+As built (5.6), `bun run bench` measures the built command, as medians of five runs, and
+`--enforce` fails on a missed budget that is enforced. On the build machine, with Node 22:
+
+| Measure | Budget | Measured at 5.6 | Enforced |
+|---|---|---|---|
+| `jamcli --version` | 60 ms | about 46 ms | yes |
+| Headless overhead before the first chat request | 150 ms | about 320 ms, then about 240 ms | from stage 6 |
+| `grep` across 20,000 files with ripgrep | 500 ms | about 45 ms | yes |
+| Interface first frame, keystroke to frame, idle memory | as above | not measurable before stage 6 | from stage 6 |
+
+- **`--version`** already met its budget: the entry point loads only the version module
+  for it, since stage 2.
+- **Headless** is measured to the chat request itself, the one the user waits on, with
+  the model's metadata request and a sandbox probe before it. Profiling showed most of
+  the time in loading modules. The MCP SDK was the largest, about 120 ms, loaded whether
+  or not a server was configured; it now loads only when one is. What remains is Node's
+  own start, JamCLI's chunks, zod, fs-extra, and the first `fetch` loading undici, which
+  is the build change of stage 6 to address, so the budget is enforced from then.
+- **CI.** The performance job is staged beside the gates workflow in
+  `openspec/changes/rehaul-jamcli/workflows/ci.yml`, for the same reason as 1.1. It
+  installs ripgrep, builds, runs the bench with `--enforce`, and keeps the measurements
+  as an artifact.
+
 ## Risks / Trade-offs
 
 - **Scope.** Twelve stages in one unit, and the project has stalled before. The stages are
