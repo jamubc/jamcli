@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/react */
-import { createRuntime } from '../../core/runtime/index.js';
+import { createInterfaceRuntime } from '../runtime.js';
 import { resolveJamcliProjectRoot } from '../../utils/projectRoot.js';
 import { App } from './App.js';
 import type { SessionChoice } from './commands.js';
@@ -24,7 +24,7 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
   const ui = settings.config.ui ?? {};
   // JamCLI answers Ctrl+C itself: the first stops a turn, and two in a row leave.
   const setUp = createCliRenderer({ exitOnCtrlC: false });
-  const [opened, statusStyle] = await Promise.all([createRuntime({ projectRoot, surface: 'tui' }), statusStyleFor(ui)]).catch(async (error) => {
+  const [opened, statusStyle] = await Promise.all([createInterfaceRuntime({ projectRoot }), statusStyleFor(ui)]).catch(async (error) => {
     // A session that cannot open leaves the terminal as it found it.
     (await setUp).destroy();
     throw error;
@@ -32,9 +32,8 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
   const renderer = await setUp;
   let current = opened;
   const openSession = async (choice: SessionChoice) =>
-    (current = await createRuntime({
+    (current = await createInterfaceRuntime({
       projectRoot,
-      surface: 'tui',
       ...(choice.sessionId ? { sessionId: choice.sessionId } : {}),
       ...(choice.profile ? { env: { ...process.env, JAMCLI_PROFILE: choice.profile } } : {}),
     }));

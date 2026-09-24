@@ -11,7 +11,7 @@ const ENTRY = path.join(import.meta.dir, '../index.tsx');
 test('the entry point loads nothing until it has read the arguments', () => {
   const source = fs.readFileSync(ENTRY, 'utf8');
   expect(source).not.toMatch(/^\s*import\s/m);
-  expect(source).toContain("await import('./tui/start.js')");
+  expect(source).toContain("await import('./tui/app/start.js')");
 });
 
 test('--version and -v print the recorded version', async () => {
@@ -68,12 +68,12 @@ async function inTerminal(args: string[], env: Record<string, string>, until: (s
 
 test('in a terminal, --screen-reader draws plain labeled lines with no boxes or bars, and Ctrl+C twice exits', async () => {
   const booted = (screen: string) => /Status: default mode, .*, ready/.test(screen);
-  const plain = await inTerminal(['--screen-reader'], { JAMCLI_INTERFACE: 'opentui' }, booted);
+  const plain = await inTerminal(['--screen-reader'], {}, booted);
   expect(plain.drawn).toMatch(/JamCLI, project project, session /);
   expect(plain.drawn).toContain('Message: Message JamCLI.');
   expect(plain.drawn).not.toMatch(/[┌┐└┘│─▄█]/);
   expect(plain.code).toBe(0);
-  const framed = await inTerminal([], { JAMCLI_INTERFACE: 'opentui' }, (screen) => /default mode · .* · ready/.test(screen));
+  const framed = await inTerminal([], {}, (screen) => /default mode · .* · ready/.test(screen));
   expect(framed.drawn).toMatch(/[┌┐└┘│─]/);
   expect(framed.code).toBe(0);
 }, 40_000);

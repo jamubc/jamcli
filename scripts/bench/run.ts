@@ -117,7 +117,7 @@ async function interfaceRuns(): Promise<Record<'first-frame' | 'keystroke' | 'id
   try {
     for (let index = 0; index < RUNS; index += 1) {
       const child = Bun.spawnSync(['python3', path.join(repo, 'scripts', 'bench', 'pty-latency.py'), '--json', json], {
-        env: { ...process.env, JAMCLI_INTERFACE: 'opentui' },
+        env: process.env,
         stdout: 'ignore',
         stderr: 'pipe',
       });
