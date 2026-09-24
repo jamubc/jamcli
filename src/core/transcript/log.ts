@@ -14,15 +14,16 @@ export type NewTranscriptEvent = Distribute<TranscriptEvent>;
 const GITIGNORE = '# Created by JamCLI. This directory holds local state and is never committed.\n*\n';
 
 /**
- * The project's `.jamcli` directory, created on first use with a `.gitignore` that
- * ignores the directory itself, so it stays out of any repository it lands in.
+ * The project's `.jamcli` directory, made ready for JamCLI to store something in. It is
+ * created on first use with a `.gitignore` that ignores the directory itself, so it
+ * stays out of any repository it lands in; a directory an earlier version created
+ * without one gets it then too. Nothing calls this until something must be stored.
  */
 export function ensureProjectStateDir(projectRoot: string): string {
   const dir = path.join(projectRoot, '.jamcli');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, '.gitignore'), GITIGNORE);
-  }
+  fs.mkdirSync(dir, { recursive: true });
+  const ignore = path.join(dir, '.gitignore');
+  if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, GITIGNORE);
   return dir;
 }
 

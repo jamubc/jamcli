@@ -31,7 +31,6 @@ const collectKeyNames = (value: unknown, prefix = ''): string[] => {
 export const runAuditCli = async (): Promise<number> => {
   const projectRoot = resolveJamcliProjectRoot();
   const configService = new ConfigService(projectRoot);
-  await configService.initialize();
 
   const permissions = (await configService.getToolPermissions()) as unknown as Record<string, ToolPermissionValue>;
   let mcpServers: McpServerConfig[] = [];

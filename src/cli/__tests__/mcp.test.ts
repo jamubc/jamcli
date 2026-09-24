@@ -104,3 +104,14 @@ test('mcp add with neither command nor url fails and writes nothing', async () =
   expect(code).toBe(2);
   expect(await fs.readFile(mcpPath, 'utf8')).toBe(before);
 });
+
+test('mcp add in a project without .jamcli creates it ignoring itself', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jamcli-mcp-'));
+  try {
+    expect(await runMcpCommand({ action: 'add', args: ['files', '--command', 'npx'] }, root, silentIo)).toBe(0);
+    expect((await fs.readJson(path.join(root, '.jamcli', 'mcp.json'))).servers.map((server: { id: string }) => server.id)).toEqual(['files']);
+    expect(await fs.readFile(path.join(root, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
+  } finally {
+    await fs.remove(root);
+  }
+});

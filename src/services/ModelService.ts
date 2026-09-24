@@ -130,34 +130,13 @@ export class ModelService {
   }
 
   async addApiKey(provider: 'openrouter' | 'openai' | 'anthropic', apiKey: string): Promise<void> {
-    const config = await this.configService.getConfig();
-    
-    if (provider === 'openrouter') {
-      config.api_registry.openrouter = { api_key: apiKey };
-    } else if (provider === 'openai') {
-      config.api_registry.openai = { api_key: apiKey };
-    } else if (provider === 'anthropic') {
-      config.api_registry.anthropic = { api_key: apiKey };
-    }
     this.modelCache.clear();
-
-    await fs.writeJson(
-      path.join(this.configService['projectRoot'], '.jamcli', 'config.json'),
-      config,
-      { spaces: 2 }
-    );
+    await this.configService.setProviderKey(provider, apiKey);
   }
 
   async removeProvider(provider: 'openrouter' | 'openai' | 'anthropic'): Promise<void> {
-    const config = await this.configService.getConfig();
-    delete config.api_registry[provider];
     this.modelCache.clear();
-
-    await fs.writeJson(
-      path.join(this.configService['projectRoot'], '.jamcli', 'config.json'),
-      config,
-      { spaces: 2 }
-    );
+    await this.configService.removeProvider(provider);
   }
 }
 

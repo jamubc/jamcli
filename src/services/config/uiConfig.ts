@@ -23,14 +23,16 @@ export const initializeUiConfig = async ({ uiConfigPath, statusStylesDir, global
   }
 };
 
+/** The interface's settings, or the defaults when none were saved. Reading writes nothing. */
 export const readUiConfig = async (paths: UiPaths): Promise<UiConfig> => {
-  await initializeUiConfig(paths);
-  return fs.readJson(paths.uiConfigPath);
+  if (!(await fs.pathExists(paths.uiConfigPath))) return { ...DEFAULT_UI_CONFIG };
+  return { ...DEFAULT_UI_CONFIG, ...(await fs.readJson(paths.uiConfigPath)) };
 };
 
 export const writeUiConfig = async (paths: UiPaths, partial: Partial<UiConfig>): Promise<UiConfig> => {
   const current = await readUiConfig(paths);
   const updated: UiConfig = { ...DEFAULT_UI_CONFIG, ...current, ...partial };
+  await initializeUiConfig(paths);
   await fs.writeJson(paths.uiConfigPath, updated, { spaces: 2 });
   return updated;
 };

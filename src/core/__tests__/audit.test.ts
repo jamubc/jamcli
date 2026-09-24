@@ -19,6 +19,7 @@ import { TokenCounter, contextBudget } from '../context/index.js';
 import type { AgentEvent } from '../types.js';
 import { createAcpSession } from '../../acp/session.js';
 import { McpManager } from '../../services/McpManager.js';
+import { createRuntime } from '../runtime/index.js';
 
 /**
  * Acceptance checks for the defects recorded in
@@ -261,7 +262,33 @@ test('F17: resume restores tool calls and results (2.10)', () =>
     expect(request.find((m) => m.role === 'assistant')?.tool_calls?.[0]).toMatchObject({ id: 'c1', function: { name: 'read_a' } });
     expect(request.find((m) => m.role === 'tool')).toMatchObject({ tool_call_id: 'c1', content: 'read_a ran' });
   }));
-test.todo('F18: a created .jamcli directory ignores itself (5.1)', pending);
+test('F18: a created .jamcli directory ignores itself (5.1)', () =>
+  withProject(async (root) => {
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(['git', ...args], { cwd: root, env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' } });
+      if (result.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr.toString()}`);
+      return result.stdout.toString();
+    };
+    const project = path.join(root, 'repo');
+    await fs.mkdirp(project);
+    const start = () => createRuntime({ projectRoot: project, surface: 'headless', mcp: false, env: {}, provider: createScriptedProvider([{ text: 'ok' }]) });
+    git('init', '-q', project);
+    // Starting a session writes nothing.
+    const runtime = await start();
+    expect(fs.existsSync(path.join(project, '.jamcli'))).toBe(false);
+    // The first thing stored creates the directory, ignoring itself.
+    await runtime.run('hi');
+    expect(fs.readFileSync(path.join(project, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
+    expect(fs.readdirSync(path.join(project, '.jamcli', 'history')).length).toBe(1);
+    expect(git('-C', project, 'status', '--porcelain', '--untracked-files=all')).toBe('');
+
+    // A directory an earlier version made without one gets it the next time something is stored.
+    await fs.remove(path.join(project, '.jamcli', '.gitignore'));
+    await fs.outputJson(path.join(project, '.jamcli', 'config.json'), {});
+    expect(git('-C', project, 'status', '--porcelain', '--untracked-files=all')).not.toBe('');
+    await (await start()).run('again');
+    expect(git('-C', project, 'status', '--porcelain', '--untracked-files=all')).toBe('');
+  }));
 test('F19: Ollama requests carry num_ctx (2.8)', async () => {
   const server = startFakeProvider();
   try {

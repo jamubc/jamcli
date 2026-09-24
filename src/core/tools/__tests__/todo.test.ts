@@ -26,6 +26,8 @@ test('todo_write persists a list that todo_read returns', async () => {
 
   const file = path.join(projectRoot, '.jamcli', 'todos.json');
   expect(await fs.pathExists(file)).toBe(true);
+  // The list is local state, so the directory holding it ignores itself (F18).
+  expect(await fs.readFile(path.join(projectRoot, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
 
   const read = await registry.execute('todo_read', {}, { projectRoot });
   expect(read.success).toBe(true);

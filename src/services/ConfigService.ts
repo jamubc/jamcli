@@ -25,7 +25,6 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_CONTEXT_MANAGEMENT,
   DEFAULT_MCP,
-  DEFAULT_PROFILE,
   DEFAULT_UI_CONFIG,
   GLOBAL_DIR,
   JAMCLI_DIR,
@@ -36,12 +35,12 @@ import {
   UI_CONFIG_FILE,
 } from './config/defaults.js';
 import type { ProviderName } from './config/defaults.js';
-import { normalizePermission, pendingToolDefaults, toolPermissionsOf, upsertServer } from './config/mcpConfig.js';
+import { normalizePermission, toolPermissionsOf, upsertServer } from './config/mcpConfig.js';
+import { ensureProjectStateDir } from '../core/transcript/log.js';
 import { readProfile, writeProfile } from './config/profileConfig.js';
 import {
   customStatusStylePath,
   ensureCustomStatusStyle,
-  initializeUiConfig,
   readUiConfig,
   registerCustomStatusStyle,
   writeUiConfig,
@@ -94,44 +93,34 @@ export class ConfigService {
     return path.join(this.profilesDir, `${profileName}.json`);
   }
 
-  async initialize() {
-    await fs.ensureDir(this.jamDir);
-    await fs.ensureDir(this.profilesDir);
-    await fs.ensureDir(path.join(this.jamDir, 'history'));
-    await this.initializeUiConfig();
-
-    if (!(await fs.pathExists(this.configPath))) {
-      await fs.writeJson(this.configPath, DEFAULT_CONFIG, { spaces: 2 });
-    }
-
-    if (!(await fs.pathExists(this.mcpPath))) {
-      await fs.writeJson(this.mcpPath, DEFAULT_MCP, { spaces: 2 });
-    }
-
-    const defaultProfilePath = path.join(this.profilesDir, 'default.json');
-    if (!(await fs.pathExists(defaultProfilePath))) {
-      await fs.writeJson(defaultProfilePath, DEFAULT_PROFILE, { spaces: 2 });
-    }
-
-    await this.ensureToolDefaults();
+  /** A project file's JSON object, or an empty one when the file is absent. */
+  private async readProjectJson(file: string): Promise<Record<string, any>> {
+    if (!(await fs.pathExists(file))) return {};
+    const value = await fs.readJson(file);
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   }
 
+  /** Write a project file, creating `.jamcli/` ignoring itself when this is the first thing stored there. */
+  private async writeProjectJson(file: string, value: unknown): Promise<void> {
+    ensureProjectStateDir(this.projectRoot);
+    await fs.ensureDir(path.dirname(file));
+    await fs.writeJson(file, value, { spaces: 2 });
+  }
+
+  /**
+   * Change the project's `.jamcli/config.json` and nothing else: what the user's file or
+   * the defaults supply is never copied into it.
+   */
+  async updateProjectConfig(change: (config: Record<string, any>) => void): Promise<Config> {
+    const config = await this.readProjectJson(this.configPath);
+    change(config);
+    await this.writeProjectJson(this.configPath, config);
+    return this.getConfig();
+  }
+
+  /** The project's configuration with defaults filled in. Reading writes nothing. */
   async getConfig(): Promise<Config> {
-    const raw = await fs.readJson(this.configPath);
-    const normalized = this.normalizeConfig(raw);
-
-    // Persist defaults if we filled any gaps
-    const rawJson = JSON.stringify(raw);
-    const normalizedJson = JSON.stringify(normalized);
-    if (rawJson !== normalizedJson) {
-      await fs.writeJson(this.configPath, normalized, { spaces: 2 });
-    }
-
-    return normalized;
-  }
-
-  async initializeUiConfig() {
-    await initializeUiConfig(this.uiPaths);
+    return this.normalizeConfig((await this.readProjectJson(this.configPath)) as Config);
   }
 
   async getUiConfig(): Promise<UiConfig> {
@@ -180,17 +169,10 @@ export class ConfigService {
     return ensureCustomStatusStyle(this.uiPaths, name, template);
   }
 
-  async saveConfig(config: Config): Promise<void> {
-    const normalized = this.normalizeConfig(config);
-    await fs.writeJson(this.configPath, normalized, { spaces: 2 });
-  }
-
+  /** The legacy `.jamcli/mcp.json`, with defaults for what it does not set. Reading writes nothing. */
   async getMcpConfig(): Promise<McpConfig> {
-    const mcp = await fs.readJson(this.mcpPath);
-    if (!Array.isArray(mcp.servers)) {
-      mcp.servers = [];
-    }
-    return mcp;
+    const mcp = await this.readProjectJson(this.mcpPath);
+    return { ...DEFAULT_MCP, ...mcp, servers: Array.isArray(mcp.servers) ? mcp.servers : [] } as McpConfig;
   }
 
   getMcpConfigPath(): string {
@@ -211,56 +193,46 @@ export class ConfigService {
   }
 
   async updateProvider(provider: ProviderName, value?: string): Promise<Config> {
-    const config = await this.getConfig();
-    switch (provider) {
-      case 'ollama': {
-        const endpoint = value && value.trim() ? value.trim() : 'http://localhost:11434';
-        config.api_registry.ollama = { endpoint };
-        break;
-      }
-      case 'openrouter': {
-        if (!value || !value.trim()) {
-          throw new Error('Provide an API key: /config provider set openrouter <api_key>');
-        }
-        config.api_registry.openrouter = { api_key: value.trim() };
-        break;
-      }
-      default:
-        throw new Error(`Provider ${provider} is not supported.`);
+    if (provider !== 'ollama' && provider !== 'openrouter') throw new Error(`Provider ${provider} is not supported.`);
+    if (provider === 'openrouter' && !value?.trim()) {
+      throw new Error('Provide an API key: /config provider set openrouter <api_key>');
     }
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
-    return config;
+    return this.updateProjectConfig((config) => {
+      const registry = (config.api_registry ??= {});
+      if (provider === 'ollama') registry.ollama = { endpoint: value?.trim() || 'http://localhost:11434' };
+      else registry.openrouter = { api_key: value!.trim() };
+    });
   }
 
-  async removeProvider(provider: ProviderName): Promise<Config> {
-    const config = await this.getConfig();
-    delete config.api_registry[provider];
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
-    return config;
+  async removeProvider(provider: string): Promise<Config> {
+    return this.updateProjectConfig((config) => {
+      if (config.api_registry) delete config.api_registry[provider];
+    });
+  }
+
+  /** Store a key in the project's configuration, as the legacy interface's provider menu does. */
+  async setProviderKey(provider: 'openrouter' | 'openai' | 'anthropic', apiKey: string): Promise<Config> {
+    return this.updateProjectConfig((config) => {
+      (config.api_registry ??= {})[provider] = { api_key: apiKey };
+    });
   }
 
   async updateContextManagement(updates: Partial<ContextManagementConfig>): Promise<Config> {
-    const config = await this.getConfig();
-    const current = this.normalizeContextConfig(config.context_management);
-    const next = this.normalizeContextConfig({ ...current, ...updates });
-    config.context_management = next;
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
-    return config;
+    return this.updateProjectConfig((config) => {
+      config.context_management = this.normalizeContextConfig({ ...this.normalizeContextConfig(config.context_management), ...updates });
+    });
   }
 
   async setTelemetry(enabled: boolean): Promise<Config> {
-    const config = await this.getConfig();
-    config.telemetry = Boolean(enabled);
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
-    return config;
+    return this.updateProjectConfig((config) => {
+      config.telemetry = Boolean(enabled);
+    });
   }
 
   async updateGeneralSettings(updates: Partial<GeneralConfig>): Promise<Config> {
-    const config = await this.getConfig();
-    const current = this.normalizeGeneralConfig(config.general);
-    config.general = this.normalizeGeneralConfig({ ...current, ...updates });
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
-    return config;
+    return this.updateProjectConfig((config) => {
+      config.general = this.normalizeGeneralConfig({ ...this.normalizeGeneralConfig(config.general), ...updates });
+    });
   }
 
   async configureOpenRouterProvider(options: {
@@ -269,26 +241,19 @@ export class ConfigService {
     referer?: string;
     title?: string;
   }): Promise<Config> {
-    const config = await this.getConfig();
-    config.api_registry.openrouter = {
-      ...(config.api_registry.openrouter || {}),
-      key_env_var: options.keyEnvVar,
-      base_url: options.baseUrl || undefined,
-      referer: options.referer || undefined,
-      title: options.title || undefined,
-    };
-    delete config.api_registry.openrouter?.api_key;
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
-    return config;
+    return this.updateProjectConfig((config) => {
+      const registry = (config.api_registry ??= {});
+      const next = { ...(registry.openrouter || {}), key_env_var: options.keyEnvVar, base_url: options.baseUrl, referer: options.referer, title: options.title };
+      delete next.api_key;
+      registry.openrouter = JSON.parse(JSON.stringify(next));
+    });
   }
 
   async upsertCustomModel(model: ModelInfo): Promise<Config> {
-    const config = await this.getConfig();
-    const existing = config.available_models || [];
-    const filtered = existing.filter((m) => m.id !== model.id);
-    config.available_models = [...filtered, model];
-    await fs.writeJson(this.configPath, config, { spaces: 2 });
-    return config;
+    return this.updateProjectConfig((config) => {
+      const existing: ModelInfo[] = Array.isArray(config.available_models) ? config.available_models : [];
+      config.available_models = [...existing.filter((m) => m.id !== model.id), model];
+    });
   }
 
   async getToolPermissions(): Promise<Record<ToolName, ToolPermission>> {
@@ -297,7 +262,7 @@ export class ConfigService {
   }
 
   async updateToolPermission(toolName: ToolName, updates: Partial<ToolPermission>): Promise<ToolPermission> {
-    const mcp = await this.getMcpConfig();
+    const mcp = await this.readProjectJson(this.mcpPath);
     mcp.tools = mcp.tools || {};
     const current = normalizePermission(mcp.tools[toolName] as ToolPermissionValue | undefined, TOOL_DEFAULTS[toolName]);
     const next: ToolPermission = {
@@ -306,7 +271,7 @@ export class ConfigService {
       description: updates.description ?? current.description,
     };
     mcp.tools[toolName] = next;
-    await fs.writeJson(this.mcpPath, mcp, { spaces: 2 });
+    await this.writeProjectJson(this.mcpPath, mcp);
     return next;
   }
 
@@ -316,38 +281,25 @@ export class ConfigService {
   }
 
   async upsertMcpServer(server: McpServerConfig): Promise<McpServerConfig[]> {
-    const mcp = await this.getMcpConfig();
-    const servers = upsertServer(mcp.servers, server);
+    const mcp = await this.readProjectJson(this.mcpPath);
+    const servers = upsertServer(Array.isArray(mcp.servers) ? mcp.servers : [], server);
     mcp.servers = servers;
-    await fs.writeJson(this.mcpPath, mcp, { spaces: 2 });
+    await this.writeProjectJson(this.mcpPath, mcp);
     return servers;
   }
 
   async removeMcpServer(id: string): Promise<McpServerConfig[]> {
-    const mcp = await this.getMcpConfig();
-    const servers = (Array.isArray(mcp.servers) ? mcp.servers : []).filter((server) => server.id !== id);
+    const mcp = await this.readProjectJson(this.mcpPath);
+    const servers = (Array.isArray(mcp.servers) ? (mcp.servers as McpServerConfig[]) : []).filter((server) => server.id !== id);
     mcp.servers = servers;
-    await fs.writeJson(this.mcpPath, mcp, { spaces: 2 });
+    await this.writeProjectJson(this.mcpPath, mcp);
     return servers;
   }
 
   private async updateActiveProfile(partial: Partial<Profile>): Promise<Profile> {
     const config = await this.getConfig();
-    const profilePath = this.getActiveProfilePath(config.active_profile);
-    return writeProfile(profilePath, partial);
-  }
-
-  private async ensureToolDefaults() {
-    try {
-      const mcp = await this.getMcpConfig();
-      const { tools, updated } = pendingToolDefaults(mcp.tools ?? {});
-      mcp.tools = tools;
-      if (updated) {
-        await fs.writeJson(this.mcpPath, mcp, { spaces: 2 });
-      }
-    } catch (error) {
-      console.error('Failed to ensure MCP tool defaults', error);
-    }
+    ensureProjectStateDir(this.projectRoot);
+    return writeProfile(this.getActiveProfilePath(config.active_profile), partial);
   }
 
   private normalizeContextConfig(config?: Partial<ContextManagementConfig>): ContextManagementConfig {

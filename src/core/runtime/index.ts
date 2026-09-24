@@ -140,7 +140,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const notices: string[] = [];
 
   const configService = options.configService ?? new ConfigService(projectRoot);
-  await configService.initialize();
   const config = await configService.getConfig();
   const profile = await configService.getActiveProfile();
   const mcpConfig = await configService.getMcpConfig();

@@ -60,7 +60,6 @@ export function useMountInit({
       }
       const freshConfigService = new ConfigService(projectRoot);
       configServiceRef.current = freshConfigService;
-      await freshConfigService.initialize();
       const loadedConfig = await freshConfigService.getConfig();
       const profile = await freshConfigService.getActiveProfile();
       setConfig(loadedConfig);

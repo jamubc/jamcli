@@ -12,8 +12,9 @@ export const readProfile = async (profilesDir: string, profileName: string): Pro
 };
 
 export const writeProfile = async (profilePath: string, partial: Partial<Profile>): Promise<Profile> => {
-  const profile = (await fs.readJson(profilePath)) as Profile;
+  const profile: Profile = (await fs.pathExists(profilePath)) ? await fs.readJson(profilePath) : { ...DEFAULT_PROFILE };
   const updated: Profile = { ...profile, ...partial };
+  await fs.ensureDir(path.dirname(profilePath));
   await fs.writeJson(profilePath, updated, { spaces: 2 });
   return updated;
 };

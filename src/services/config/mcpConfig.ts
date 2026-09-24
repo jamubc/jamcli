@@ -59,19 +59,3 @@ export const upsertServer = <T extends { id: string }>(existing: T[] | undefined
   }
   return servers;
 };
-
-export const pendingToolDefaults = (
-  tools: Record<string, ToolPermissionValue | undefined>
-): { tools: Record<string, ToolPermission>; updated: boolean } => {
-  let updated = false;
-  const normalizedTools = { ...tools };
-  for (const toolName of ALL_TOOL_NAMES) {
-    const current = tools[toolName];
-    const normalized = normalizePermission(current, TOOL_DEFAULTS[toolName]);
-    if (JSON.stringify(current ?? null) !== JSON.stringify(normalized)) {
-      normalizedTools[toolName] = normalized;
-      updated = true;
-    }
-  }
-  return { tools: normalizedTools as Record<string, ToolPermission>, updated };
-};

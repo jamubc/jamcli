@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
+import { ensureProjectStateDir } from '../transcript/log.js';
 
 const JAMCLI_DIR = '.jamcli';
 const TODO_FILE = 'todos.json';
@@ -63,7 +64,7 @@ async function readTodos(ctx: ToolContext, session: string): Promise<TodoItem[]>
 
 async function writeTodos(ctx: ToolContext, session: string, todos: TodoItem[]): Promise<string> {
   const file = resolveTodoFile(ctx, session);
-  await fs.ensureDir(path.dirname(file));
+  ensureProjectStateDir(ctx.projectRoot);
   await fs.writeJson(file, { session, updated_at: new Date().toISOString(), todos }, { spaces: 2 });
   return file;
 }

@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { McpTestService } from '../services/McpTestService.js';
 import type { McpServerConfig, McpTransport } from '../types/mcp.js';
+import { ensureProjectStateDir } from '../core/transcript/log.js';
 
 export interface McpCommandRequest {
   action: 'add' | 'list' | 'test' | 'remove';
@@ -38,9 +39,8 @@ const readMcpConfig = async (projectRoot: string): Promise<Record<string, any>> 
 };
 
 const writeMcpConfig = async (projectRoot: string, config: Record<string, any>): Promise<void> => {
-  const file = mcpConfigPath(projectRoot);
-  await fs.ensureDir(path.dirname(file));
-  await fs.writeJson(file, config, { spaces: 2 });
+  ensureProjectStateDir(projectRoot);
+  await fs.writeJson(mcpConfigPath(projectRoot), config, { spaces: 2 });
 };
 
 export interface ParsedServer {
