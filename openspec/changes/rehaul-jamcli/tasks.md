@@ -399,7 +399,23 @@ cover headless, ACP, and delegation.
   - Found and fixed on the way: `cancel()` reached the current agent, so after a mid-turn switch rebuilt it, the running turn could not be cancelled. A test now cancels after a mode switch.
   - OpenAI rows are absent because this environment blocks openai.com, as recorded under D9. The gap is recorded in `docs/feature-matrix.md`.
   - 62 mutation probes, each turning a test red, across the provider parsers, the catalog, the runtime wiring, the notice, and the cancel fix.
-- [ ] 4.2 The cost ledger. Files: `src/core/catalog/cost.ts`, runtime, transcript. Cost per request, per session, and per model. Unknown prices are reported as unpriced.
+- [x] 4.2 The cost ledger. Files: `src/core/catalog/cost.ts`, runtime, transcript. Cost per request, per session, and per model. Unknown prices are reported as unpriced.
+  - **Verification**: built as recorded under D9. Pricing is tested for fresh input, cache reads, cache writes, and output, in both the Anthropic and the OpenAI accounting, with a missing cache price charged as input.
+  - The ledger tests cover:
+    - each model kept apart, in the order used;
+    - unpriced requests counted apart;
+    - delegated spend visible;
+    - a summary that is a copy;
+    - a rebuild from a log, priced as it was.
+  - Through the runtime:
+    - a request's cost is on its usage event and in the log;
+    - a continued session keeps what it spent although the price changed since;
+    - an Ollama model costs zero, an unknown price is counted apart, and each model keeps its own;
+    - the trust gate's requests count under the classifier's model, in the log as well;
+    - a child's, a grandchild's, and a background child's requests reach the delegating session under the session that made them, and stay out of its own token totals.
+  - Headless JSON carries `total_cost_usd`, `unpriced_requests`, `model_usage`, and `delegated`, with `null` for a cost none of whose requests had a price. Stream `usage` events carry `model` and `cost_usd`, and an export states the cost and marks each request.
+  - The fake server now reports cache reads and writes the way each API does, and serves a scripted turn to one model only, so sessions running at once each get their own turns.
+  - 41 mutation probes, each turning a test red, across pricing, the ledger, the runtime, delegation, the log, headless JSON, and exports.
 - [ ] 4.3 Context management v2 (D10; F20). Files: `src/core/context/`, tests. On by default, budgets from the catalog, estimates corrected by reported usage, pair-safe compaction, `/compact [focus]`, and a fallback that is reported.
 - [ ] 4.4 Anthropic caching and thinking (D8). Files: `src/core/providers/anthropic.ts`, tests. Load the `claude-api` skill before editing for current model identifiers, caching rules, and thinking signatures.
 - [ ] 4.5 Optional: an OpenAI Responses API adapter. If it does not land, record the gap in `docs/feature-matrix.md`.

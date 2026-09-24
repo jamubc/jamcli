@@ -598,6 +598,23 @@ the table can meet in one entry.
   resolves the new model the same way, and an answer about a model the session has
   already left is dropped.
 
+As built (4.2), the agent prices each request as it is made and puts the cost on the usage
+event, which the session log keeps, so a later price change does not rewrite what a
+session spent. A continued session rebuilds its ledger from the log.
+
+- **Pricing.** Anthropic and OpenAI both count cache reads, and Anthropic cache writes,
+  inside the prompt total, so the rest of the prompt is priced as fresh input. A cache
+  price no source gives is charged at the input price.
+- **Unpriced.** A request to a model with no known price has no cost, and the ledger
+  counts it apart. A total over such requests is a lower bound, and headless JSON gives
+  `null` where none of the requests had a price, so unknown never reads as free.
+- **What counts.** The trust gate's classifier requests count under their own model.
+  Each request a delegated session makes reaches the delegating session's ledger and log,
+  marked with the session that made it, a grandchild's included, and so does one a
+  background child makes after the turn has ended. Those requests stay out of the
+  delegating session's own token totals, which describe its own conversation; the child
+  session keeps them in its own.
+
 ### D10. Context management
 
 Context management is on by default. The budget is the model's context window, minus the

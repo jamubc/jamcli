@@ -95,6 +95,7 @@ jamcli -p "read package.json and report the version" --output-format stream-json
 ```
 
 - `--output-format text` prints the answer on stdout and notices on stderr. `json` prints one object with `type` (`result`), `session_id`, `status`, `response`, `error` when there was one, `provider`, `model`, `permission_mode`, `sandbox`, `duration_ms`, `turns`, `usage`, `permission_denials`, `notices`, and in a dry run `dry_run`. `stream-json` prints one event per line while it runs, including tool output, approval decisions, retries, and notices, and ends with the same result object.
+- The result reports what the session cost: `total_cost_usd`, `unpriced_requests`, `model_usage` with requests, tokens, and `cost_usd` for each model, and `delegated` when delegated tasks spent part of it. A cost is `null` when none of its requests had a known price, and a lower bound while `unpriced_requests` is above zero. Each `usage` event in `stream-json` carries its `model` and `cost_usd`, and `delegated_session` when a delegated task made the request. `jamcli sessions show` prints the same account.
 - Exit codes: `0` on success, `1` on an error or a limited run, `2` on a usage error, and `130` when interrupted. The first Ctrl+C cancels the turn and still prints the result; a second one exits at once.
 - `--allow-tool <name>` and `--deny-tool <name>` govern the run without prompting. `--allow-tool` lets the named tool run without asking and leaves every other tool as it was. `--allowed-tools` and `--disallowed-tools` take rules such as `edit(src/**)` or `run_command(npm test *)`. A headless run never prompts: a call that would ask is not made, the model is told why and which flag would allow it, the run carries on, and the call is listed in `permission_denials`. A deny always wins.
 - `--permission-mode` picks `plan` (read and plan only), `default`, `accept-edits` (edits inside the project run without asking), `auto` (commands run without asking inside a sandbox, and only when one works here), or `bypass`, which only `--dangerously-bypass-permissions` can start. Rules and modes also live in the `permissions` block of `.jamcli/config.json`; the full syntax is in `openspec/changes/rehaul-jamcli/design.md` (D6) until the documentation lands.
@@ -150,6 +151,8 @@ output limit, and its prices. Each fact comes from the first source that has it:
 
 Ollama models cost nothing, and their window is the `num_ctx` JamCLI sends: the model's
 entry, else `api_registry.ollama.num_ctx`, else the model's own limit capped at 16,384.
+A model with no known price is reported as unpriced, never estimated. Each request is
+priced when it is made, so changing a price later does not rewrite what a session cost.
 
 OpenAI's models route reports no limits or prices, so describe OpenAI models yourself.
 Prices are US dollars per million tokens:
