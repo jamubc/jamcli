@@ -18,6 +18,7 @@ import { sessionPermissions } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { PermissionMode } from '../permissions/modes.js';
+import { LOCAL_CONFIG, grantedRules, writeProjectGrant } from '../permissions/grants.js';
 import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
@@ -131,11 +132,27 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     create: createRuntime,
   });
   const taskTool = registry.get('task');
+  /** A project grant applies at once and is written for later sessions. */
+  const grantProject = (text: string) => {
+    const { rules, errors } = grantedRules(text, 'local', `${LOCAL_CONFIG} permissions.allow (granted at a prompt)`);
+    if (errors.length) {
+      emitting?.({ type: 'notice', level: 'warn', message: `The grant was not saved: ${errors.join(' ')}` });
+      return;
+    }
+    try {
+      writeProjectGrant(projectRoot, rules.map((rule) => rule.text));
+      for (const rule of rules) permissions.add(rule);
+    } catch (error: any) {
+      emitting?.({ type: 'notice', level: 'warn', message: error?.message ?? String(error) });
+      for (const rule of rules) permissions.add({ ...rule, scope: 'session' });
+    }
+  };
   const buildTools = (): ToolSet =>
     createToolSet({
       registry,
       mcpServers,
       permissions,
+      grantProject,
       descriptions: taskTool
         ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }
         : undefined,

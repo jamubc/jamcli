@@ -149,7 +149,8 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
       return { decision: verdict.decision, by: verdict.by, ...(verdict.rule ? { rule: verdict.rule } : {}), reason: verdict.reason };
     },
     grant: (call, scope, pattern) => {
-      const text = pattern ?? suggestPatterns(call)[0] ?? call.name;
+      const text = pattern ?? suggestPatterns(call)[0];
+      if (!text) return;
       if (scope === 'project' && options.grantProject) options.grantProject(text);
       else permissions.grant(text);
     },

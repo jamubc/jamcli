@@ -269,7 +269,26 @@ cover headless, ACP, and delegation.
       - recording the plan;
       - leaving the mode off the session line;
       - children deciding alone.
-- [ ] 3.3 Grants. Files: runtime, `src/core/permissions/grants.ts`. Session grants and project grants written to `.jamcli/config.local.json`, with suggested patterns derived from the call.
+- [x] 3.3 Grants. Files: runtime, `src/core/permissions/grants.ts`. Session grants and project grants written to `.jamcli/config.local.json`, with suggested patterns derived from the call.
+  - **Verification**: suggested patterns (`suggestPatterns` in `src/core/approval.ts`) are written in the engine's rule syntax:
+    - A compound command gets a rule for each part, joined into one grantable list.
+    - The prefix forms end in ` *`, so they also match the bare command.
+    - A command with hidden code gets no suggestion, since it always asks.
+    - A patch gets rules for its files and directories.
+  - A session grant adds rules to the engine. A project grant also writes them to `.jamcli/config.local.json` under `permissions.allow`, keeping the rest of the file, with the directory created ignoring itself. If the file cannot be written, the grant still holds for the session and a notice says why.
+  - 4 tests:
+    - the suggestions for commands, patches, paths, and MCP tools;
+    - every suggestion, once granted, allows its own call;
+    - a project grant is saved, holds for the rest of the session, and holds in the next one;
+    - an unsaveable grant holds for the session with a notice.
+  - Mutation probes, each turning a test red:
+    - suggesting the whole command;
+    - suggesting for hidden code;
+    - not writing the grant;
+    - not applying it at once, which first slipped through and got its own case;
+    - losing the file's other settings;
+    - not splitting lists;
+    - forgetting an unsaveable grant.
 - [ ] 3.4 The sandbox adapters (D7). Files: `src/core/sandbox/` (new).
   - bubblewrap with a read-only root, writable project and temporary directory, hidden credential paths, and network off by default.
   - A Seatbelt profile generator, and `none`.

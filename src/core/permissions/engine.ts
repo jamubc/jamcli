@@ -2,8 +2,9 @@ import path from 'path';
 import os from 'os';
 import type { ApprovalBy, PolicyClass, ToolCall } from '../types.js';
 import { MODE_DEFAULTS, modeRefusal, type ModeDefault, type PermissionMode } from './modes.js';
-import { parseRule, patternMatches, toolMatches, type Decision, type Rule, type RuleScope, type Subject } from './rules.js';
+import { patternMatches, toolMatches, type Decision, type Rule, type RuleScope, type Subject } from './rules.js';
 import { subjectsOf } from './subjects.js';
+import { grantedRules } from './grants.js';
 
 export interface Verdict {
   decision: Decision;
@@ -100,11 +101,14 @@ export class PermissionEngine {
     this.rules.push(rule);
   }
 
-  /** Grant a pattern for this session. Returns an error when the text is not a rule. */
+  /**
+   * Grant a pattern, or a list of them, for this session. Returns an error, and grants
+   * nothing, when any item is not a rule.
+   */
   grant(text: string, source = 'granted at an approval prompt'): string | undefined {
-    const parsed = parseRule(text, 'allow', 'session', source);
-    if ('error' in parsed) return parsed.error;
-    this.add(parsed.rule);
+    const { rules, errors } = grantedRules(text, 'session', source);
+    if (errors.length) return errors.join(' ');
+    for (const rule of rules) this.add(rule);
     return undefined;
   }
 

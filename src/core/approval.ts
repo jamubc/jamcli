@@ -3,6 +3,8 @@ import path from 'path';
 import { createTwoFilesPatch } from 'diff';
 import type { ApprovalPreview, ApprovalRequest, PolicyClass, ToolCall } from './types.js';
 import { replaceLiteral } from './tools/textEdit.js';
+import { analyzeCommand } from './permissions/command.js';
+import { patchPaths } from './permissions/subjects.js';
 
 /**
  * Builds what a surface shows when a tool call needs a decision: one line naming the
@@ -33,16 +35,36 @@ export function describeCall(call: ToolCall): string {
   return args === '{}' ? call.name : `${call.name} ${clip(args, 120)}`;
 }
 
-/** Patterns a grant could remember, most specific first. */
+/** A rule list joined for one suggestion, without repeating a rule. */
+const joined = (rules: string[]) => [...new Set(rules)].join(', ');
+
+const isWord = (token: string | undefined) => !!token && /^[A-Za-z0-9._:-]+$/.test(token) && !token.startsWith('-');
+
+/**
+ * Patterns a grant could remember, most specific first, in the rule syntax the permission
+ * engine matches. A compound command is judged part by part, so each suggestion lists a
+ * rule for every part. Nothing is suggested when the command hides code, because such a
+ * command always asks and a grant could not change that.
+ */
 export function suggestPatterns(call: ToolCall): string[] {
   const command = argString(call, 'command');
   if (call.name === 'run_command' && command) {
-    const tokens = command.trim().split(/\s+/);
-    const out = [`run_command(${command.trim()})`];
-    const isWord = (token: string | undefined) => !!token && /^[A-Za-z0-9._:-]+$/.test(token) && !token.startsWith('-');
-    if (tokens.length > 2 && isWord(tokens[1])) out.push(`run_command(${tokens[0]} ${tokens[1]}*)`);
-    if (tokens.length > 1) out.push(`run_command(${tokens[0]}*)`);
-    return [...new Set(out)];
+    const analysis = analyzeCommand(command);
+    if (analysis.hidden.length || !analysis.parts.length) return [];
+    const words = analysis.parts.map((part) => part.split(/\s+/));
+    const exact = joined(analysis.parts.map((part) => `run_command(${part})`));
+    const subcommand = joined(
+      words.map((tokens) => (tokens.length > 1 && isWord(tokens[1]) ? `run_command(${tokens[0]} ${tokens[1]} *)` : `run_command(${tokens[0]} *)`))
+    );
+    const program = joined(words.map((tokens) => `run_command(${tokens[0]} *)`));
+    return [...new Set([exact, subcommand, program])];
+  }
+  if (call.name === 'apply_patch') {
+    const files = patchPaths(argString(call, 'patch') ?? '');
+    const dirs = [...new Set(files.map((file) => path.posix.dirname(file)))];
+    const out = files.length ? [joined(files.map((file) => `apply_patch(${file})`))] : [];
+    if (dirs.length && !dirs.includes('.')) out.push(joined(dirs.map((dir) => `apply_patch(${dir}/**)`)));
+    return [...new Set([...out, 'apply_patch'])];
   }
   const target = argString(call, 'path');
   if (target) {
