@@ -9,7 +9,8 @@ import type {
   StreamChunk,
 } from './types.js';
 import { requireModel } from './types.js';
-import { ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
+import { NO_RETRY, ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
+import type { ModelFacts } from '../catalog/types.js';
 import { extractReasoningDelta, parseToolCalls, readLines } from './openai-compat.js';
 
 export interface OllamaProviderOptions {
@@ -79,23 +80,24 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       .filter((model): model is ProviderModelInfo => model !== null);
   }
 
+  /** What `/api/show` reports: the model's own context length and, where the server lists them, its capabilities. */
+  async describeModel(model: string, signal?: AbortSignal): Promise<ModelFacts | undefined> {
+    const response = await fetchWithRetry(
+      this.url('/api/show'),
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }) },
+      { provider: 'ollama', signal, policy: NO_RETRY }
+    );
+    return ollamaFacts(await response.json());
+  }
+
   /** The model's reported context length from `/api/show`, or undefined when unknown. */
   async modelContextLength(model: string): Promise<number | undefined> {
     try {
-      const response = await globalThis.fetch(this.url('/api/show'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model }),
-      });
-      if (!response.ok) return undefined;
-      const json: any = await response.json();
-      for (const [key, value] of Object.entries(json?.model_info ?? {})) {
-        if (key.endsWith('.context_length') && typeof value === 'number' && value > 0) return value;
-      }
+      return (await this.describeModel(model))?.contextWindow;
     } catch {
       // Unknown; the caller falls back.
+      return undefined;
     }
-    return undefined;
   }
 
   /** The `num_ctx` to send: the request's, the configured one, or the model's limit capped. */
@@ -201,6 +203,30 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       ...(json?.done_reason ? { stopReason: json.done_reason } : {}),
     };
   }
+}
+
+/**
+ * The facts in an `/api/show` response. The context length is under the model's
+ * architecture, such as `qwen3.context_length`; capabilities name `tools`, `thinking`, and
+ * `vision` when the model has them.
+ */
+export function ollamaFacts(json: any): ModelFacts {
+  const facts: ModelFacts = {};
+  const info = json?.model_info ?? {};
+  const architecture = info['general.architecture'];
+  const lengths = [
+    ...(typeof architecture === 'string' ? [info[`${architecture}.context_length`]] : []),
+    ...Object.entries(info).flatMap(([key, value]) => (key.endsWith('.context_length') ? [value] : [])),
+  ];
+  const length = lengths.find((value) => typeof value === 'number' && Number.isInteger(value) && value > 0);
+  if (length) facts.contextWindow = length as number;
+  if (Array.isArray(json?.capabilities)) {
+    const capabilities = json.capabilities.map(String);
+    facts.tools = capabilities.includes('tools');
+    facts.reasoning = capabilities.includes('thinking');
+    facts.images = capabilities.includes('vision');
+  }
+  return facts;
 }
 
 function ollamaUsage(json: any): TokenUsage | undefined {

@@ -9,7 +9,8 @@ import type {
   StreamChunk,
 } from './types.js';
 import { requireModel } from './types.js';
-import { ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
+import { NO_RETRY, ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
+import type { ModelFacts } from '../catalog/types.js';
 
 export type ProviderDialect = 'openai' | 'anthropic';
 
@@ -148,6 +149,22 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       .filter((model): model is ProviderModelInfo => model !== null);
   }
 
+  /**
+   * What the models route reports about one model. OpenRouter reports limits, prices, and
+   * capabilities; OpenAI itself reports none of them, so its models rely on configuration.
+   */
+  async describeModel(model: string, signal?: AbortSignal): Promise<ModelFacts | undefined> {
+    const response = await fetchWithRetry(
+      this.url('/models'),
+      { headers: this.buildHeaders({ Accept: 'application/json' }) },
+      { provider: this.name, signal, secrets: [this.apiKey], keyVariable: this.keyVariable, policy: NO_RETRY }
+    );
+    const json: any = await response.json();
+    const data: any[] = Array.isArray(json?.data) ? json.data : Array.isArray(json?.models) ? json.models : [];
+    const entry = data.find((item) => item && typeof item === 'object' && (item.id ?? item.name) === model);
+    return entry ? openAICompatFacts(entry) : undefined;
+  }
+
   async *streamChat(
     messages: ChatMessage[],
     options: ProviderRequestOptions
@@ -250,6 +267,56 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       ...(choice?.finish_reason ? { stopReason: choice.finish_reason } : {}),
     };
   }
+}
+
+
+const positiveCount = (...values: unknown[]): number | undefined =>
+  values.find((value): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0);
+
+/** A per-token price, as OpenRouter reports it, in dollars per million tokens. Negative means it varies. */
+const perMillion = (value: unknown): number | undefined => {
+  const amount = typeof value === 'string' && value.trim() ? Number(value) : typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(amount) || amount < 0) return undefined;
+  return Number((amount * 1_000_000).toPrecision(12));
+};
+
+/**
+ * The facts in one entry of a models route. Servers name the context window differently:
+ * OpenRouter and Together `context_length`, Groq `context_window`, Mistral
+ * `max_context_length`, and vLLM `max_model_len`.
+ */
+export function openAICompatFacts(entry: any): ModelFacts {
+  const facts: ModelFacts = {};
+  const contextWindow = positiveCount(
+    entry.context_length,
+    entry.top_provider?.context_length,
+    entry.context_window,
+    entry.max_context_length,
+    entry.max_model_len
+  );
+  if (contextWindow) facts.contextWindow = contextWindow;
+  const maxOutput = positiveCount(entry.top_provider?.max_completion_tokens, entry.max_completion_tokens, entry.max_output_tokens);
+  if (maxOutput) facts.maxOutput = maxOutput;
+  if (Array.isArray(entry.supported_parameters)) {
+    const parameters = entry.supported_parameters.map((parameter: unknown) => String(parameter).toLowerCase());
+    facts.tools = parameters.includes('tools') || parameters.includes('tool_choice');
+    facts.reasoning = parameters.includes('reasoning') || parameters.includes('include_reasoning');
+  }
+  const modalities = entry.architecture?.input_modalities;
+  if (Array.isArray(modalities)) facts.images = modalities.map(String).includes('image');
+  const pricing = entry.pricing;
+  if (pricing && typeof pricing === 'object') {
+    const input = perMillion(pricing.prompt);
+    const output = perMillion(pricing.completion);
+    if (input !== undefined && output !== undefined) {
+      facts.price = { input, output };
+      const cacheRead = perMillion(pricing.input_cache_read);
+      const cacheWrite = perMillion(pricing.input_cache_write);
+      if (cacheRead !== undefined) facts.price.cacheRead = cacheRead;
+      if (cacheWrite !== undefined) facts.price.cacheWrite = cacheWrite;
+    }
+  }
+  return facts;
 }
 
 export function extractReasoningDelta(delta: any): string | undefined {

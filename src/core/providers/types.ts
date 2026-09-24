@@ -1,5 +1,6 @@
 import type { ChatMessage, ProviderToolCall, ReasoningBlock, TokenUsage } from '../types.js';
 import type { RetryInfo } from './http.js';
+import type { ModelFacts } from '../catalog/types.js';
 
 export interface StreamChunk {
   content: string;
@@ -61,6 +62,11 @@ export interface ChatProvider {
   readonly family?: ProviderFamily;
   streamChat(messages: ChatMessage[], options: ProviderRequestOptions): AsyncGenerator<StreamChunk>;
   complete(messages: ChatMessage[], options: ProviderRequestOptions): Promise<CompletionResult>;
+  /**
+   * What the provider's own metadata says about one model, or undefined when it does not
+   * list the model. Throws when the provider cannot be asked. One attempt, no retries.
+   */
+  describeModel?(model: string, signal?: AbortSignal): Promise<ModelFacts | undefined>;
 }
 
 export interface ProviderModelInfo {

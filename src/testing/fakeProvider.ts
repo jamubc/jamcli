@@ -51,6 +51,11 @@ export interface FakeModel {
   /** Price per token, as OpenRouter reports it. */
   pricing?: { prompt: string; completion: string };
   capabilities?: string[];
+  /**
+   * Fields added to this model's entry on `/v1/models` and to the single-model route
+   * `/v1/models/{id}`, so a test can serve any provider's metadata shape verbatim.
+   */
+  metadata?: Record<string, unknown>;
 }
 
 export interface FakeProviderOptions {
@@ -421,8 +426,16 @@ export function startFakeProvider(options: FakeProviderOptions = {}): FakeProvid
             ...(model.contextLength ? { context_length: model.contextLength } : {}),
             ...(model.pricing ? { pricing: model.pricing } : {}),
             ...(model.capabilities?.includes('tools') ? { supported_parameters: ['tools', 'tool_choice'] } : {}),
+            ...(model.metadata ?? {}),
           })),
         });
+      }
+      if (request.method === 'GET' && path.startsWith('/v1/models/')) {
+        record('models');
+        const id = decodeURIComponent(path.slice('/v1/models/'.length));
+        const model = models.find((entry) => entry.id === id);
+        if (!model) return Response.json({ type: 'error', error: { type: 'not_found_error', message: `model: ${id}` } }, { status: 404 });
+        return Response.json({ type: 'model', id: model.id, display_name: model.id, ...(model.metadata ?? {}) });
       }
       if (request.method === 'GET' && path === '/api/tags') {
         record('models');

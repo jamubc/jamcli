@@ -9,7 +9,8 @@ import type {
   StreamChunk,
 } from './types.js';
 import { requireModel } from './types.js';
-import { ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
+import { NO_RETRY, ProviderError, fetchWithRetry, type RetryPolicy } from './http.js';
+import type { ModelFacts } from '../catalog/types.js';
 import { readLines } from './openai-compat.js';
 
 export interface AnthropicProviderOptions {
@@ -196,6 +197,16 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
       .filter((model): model is ProviderModelInfo => model !== null);
   }
 
+  /** What the Models API reports about one model: its limits and capabilities, but not its prices. */
+  async describeModel(model: string, signal?: AbortSignal): Promise<ModelFacts | undefined> {
+    const response = await fetchWithRetry(
+      this.url(`/models/${encodeURIComponent(model)}`),
+      { headers: this.buildHeaders({ Accept: 'application/json' }) },
+      { provider: this.name, signal, secrets: [this.apiKey], keyVariable: this.keyVariable, policy: NO_RETRY }
+    );
+    return anthropicFacts(await response.json());
+  }
+
   async *streamChat(
     messages: ChatMessage[],
     options: ProviderRequestOptions
@@ -370,6 +381,32 @@ function mapUsage(usage: any): TokenUsage | undefined {
     ...(cacheRead ? { cached_tokens: cacheRead } : {}),
     ...(cacheWrite ? { cache_write_tokens: cacheWrite } : {}),
   };
+}
+
+
+/**
+ * The facts in a Models API entry. A limit of zero or null means the API does not say.
+ * Adaptive thinking is preferred where a model takes both kinds, because budget thinking
+ * is deprecated there.
+ */
+export function anthropicFacts(json: any): ModelFacts {
+  const facts: ModelFacts = {};
+  const count = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value > 0;
+  if (count(json?.max_input_tokens)) facts.contextWindow = json.max_input_tokens;
+  if (count(json?.max_tokens)) facts.maxOutput = json.max_tokens;
+  const capabilities = json?.capabilities;
+  if (capabilities && typeof capabilities === 'object') {
+    const supported = (value: any): boolean | undefined => (typeof value?.supported === 'boolean' ? value.supported : undefined);
+    const images = supported(capabilities.image_input);
+    if (images !== undefined) facts.images = images;
+    const thinking = supported(capabilities.thinking);
+    if (thinking !== undefined) facts.reasoning = thinking;
+    if (supported(capabilities.thinking?.types?.adaptive)) facts.thinking = 'adaptive';
+    else if (supported(capabilities.thinking?.types?.enabled)) facts.thinking = 'budget';
+    const effort = supported(capabilities.effort);
+    if (effort !== undefined) facts.effort = effort;
+  }
+  return facts;
 }
 
 function mapToolChoice(

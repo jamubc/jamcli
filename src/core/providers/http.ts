@@ -18,6 +18,9 @@ export interface RetryPolicy {
 
 export const DEFAULT_RETRY_POLICY: RetryPolicy = { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 20_000 };
 
+/** One attempt: for requests whose failure is handled by going on without them, such as model metadata. */
+export const NO_RETRY: RetryPolicy = { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 };
+
 /** Statuses worth retrying: timeouts, conflicts, rate limits, and server-side failures. */
 const RETRYABLE_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
 
