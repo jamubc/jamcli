@@ -1,6 +1,7 @@
 import type { AgentEvent, RunResult } from '../types.js';
 import type { HookRunObserver } from '../hooks/index.js';
 import type { Observer, Span } from './observer.js';
+import { CONTENT_LIMIT } from './instrument.js';
 
 /** Characters of a prompt, an argument, or an output a debug log line keeps. */
 export const DEBUG_TEXT_LIMIT = 4_000;
@@ -26,8 +27,9 @@ export interface SessionObservation {
  */
 export function observeSession(
   observer: Observer,
-  facts: { sessionId: string; surface: string; provider: string; model: string; permissionMode: string; sandbox: string; parent?: Span }
+  facts: { sessionId: string; surface: string; provider: string; model: string; permissionMode: string; sandbox: string; parent?: Span; includeContent?: boolean }
 ): SessionObservation {
+  const content = (text: string) => (text.length > CONTENT_LIMIT ? `${text.slice(0, CONTENT_LIMIT)}... (${text.length - CONTENT_LIMIT} more characters)` : text);
   const session = observer.startSpan('session', {
     parent: facts.parent,
     attributes: {
@@ -91,7 +93,12 @@ export function observeSession(
             event.call.id,
             observer.startSpan(`execute_tool ${event.call.name}`, {
               parent: current(),
-              attributes: { 'gen_ai.operation.name': 'execute_tool', 'gen_ai.tool.name': event.call.name, 'gen_ai.tool.call.id': event.call.id },
+              attributes: {
+                'gen_ai.operation.name': 'execute_tool',
+                'gen_ai.tool.name': event.call.name,
+                'gen_ai.tool.call.id': event.call.id,
+                ...(facts.includeContent ? { 'gen_ai.tool.call.arguments': content(JSON.stringify(event.call.arguments ?? {})) } : {}),
+              },
             })
           );
           if (observer.enabled('debug')) {
@@ -103,7 +110,13 @@ export function observeSession(
           const result = event.result;
           const failed = result.status === 'error' || result.status === 'timeout';
           const id = result.callId ?? '';
-          tools.get(id)?.end({ ...(failed ? { error: result.status } : {}), attributes: { 'jamcli.tool.status': result.status ?? (result.success ? 'ok' : 'error') } });
+          tools.get(id)?.end({
+            ...(failed ? { error: result.status } : {}),
+            attributes: {
+              'jamcli.tool.status': result.status ?? (result.success ? 'ok' : 'error'),
+              ...(facts.includeContent ? { 'gen_ai.tool.call.result': content(result.output ?? '') } : {}),
+            },
+          });
           tools.delete(id);
           observer.log(failed ? 'warn' : 'info', 'tool call', { tool: result.tool, call: result.callId, status: result.status, duration_ms: result.durationMs });
           if (observer.enabled('debug')) observer.log('debug', 'tool output', { tool: result.tool, call: result.callId, output: bounded(result.output ?? '') });

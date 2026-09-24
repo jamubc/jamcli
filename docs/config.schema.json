@@ -429,7 +429,35 @@
     },
     "telemetry": {
       "type": "boolean",
-      "description": "Off by default. Nothing leaves the machine unless configured."
+      "description": "The legacy interface's telemetry switch. Traces are sent only when otel.enabled is true."
+    },
+    "otel": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Send traces to an OpenTelemetry collector. Off by default: nothing leaves the machine unless this is true."
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "The OTLP/HTTP traces URL. Defaults to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, OTEL_EXPORTER_OTLP_ENDPOINT, then http://localhost:4318/v1/traces."
+        },
+        "headers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Headers sent with every export, such as a collector token."
+        },
+        "include_content": {
+          "type": "boolean",
+          "description": "Put prompts, outputs, tool arguments, and tool results on spans. Off by default."
+        }
+      },
+      "additionalProperties": false
     },
     "context_management": {
       "type": "object",

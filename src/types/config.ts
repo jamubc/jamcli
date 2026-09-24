@@ -1,6 +1,7 @@
 import type { McpServerConfig } from './mcp.js';
 import type { PermissionSettings } from '../core/permissions/config.js';
 import type { SandboxSettings } from '../core/sandbox/types.js';
+import type { OtelSettings } from '../core/observe/otlp.js';
 
 export interface ApiRegistry {
   /** `num_ctx` sets the context window Ollama allocates for every request. */
@@ -128,6 +129,8 @@ export interface Config {
   context?: ContextSettings;
   permissions?: PermissionSettings;
   sandbox?: SandboxSettings;
+  /** The OpenTelemetry exporter, off unless `enabled`. */
+  otel?: OtelSettings;
 }
 
 export interface ContextSettings {

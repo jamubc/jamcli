@@ -146,7 +146,15 @@ export const ConfigFileSchema = z
       })
       .partial()
       .describe('The classifier that screens tool output before the model reads it.'),
-    telemetry: z.boolean().describe('Off by default. Nothing leaves the machine unless configured.'),
+    telemetry: z.boolean().describe('The legacy interface\'s telemetry switch. Traces are sent only when otel.enabled is true.'),
+    otel: z
+      .strictObject({
+        enabled: z.boolean().describe('Send traces to an OpenTelemetry collector. Off by default: nothing leaves the machine unless this is true.'),
+        endpoint: z.string().describe('The OTLP/HTTP traces URL. Defaults to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, OTEL_EXPORTER_OTLP_ENDPOINT, then http://localhost:4318/v1/traces.'),
+        headers: z.record(z.string(), z.string()).describe('Headers sent with every export, such as a collector token.'),
+        include_content: z.boolean().describe('Put prompts, outputs, tool arguments, and tool results on spans. Off by default.'),
+      })
+      .partial(),
     // Read by the legacy interface only.
     context_management: z
       .strictObject({

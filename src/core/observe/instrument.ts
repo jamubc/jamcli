@@ -10,7 +10,17 @@ export interface InstrumentOptions {
   parent: () => Span | undefined;
   /** Why the request is made, when it is not the conversation's own: `trust` for the classifier. */
   purpose?: string;
+  /** Put what was sent and what came back on the span, as `otel.include_content` asks. */
+  includeContent?: boolean;
 }
+
+/** Characters of content one span attribute keeps. */
+export const CONTENT_LIMIT = 16_000;
+const boundedContent = (text: string) => (text.length > CONTENT_LIMIT ? `${text.slice(0, CONTENT_LIMIT)}... (${text.length - CONTENT_LIMIT} more characters)` : text);
+
+/** Messages as the GenAI conventions record them: a role and its text parts, as one JSON string. */
+export const contentAttribute = (messages: { role: string; content?: string }[]) =>
+  boundedContent(JSON.stringify(messages.map((message) => ({ role: message.role, parts: [{ type: 'text', content: message.content ?? '' }] }))));
 
 const usageAttributes = (usage: TokenUsage | undefined) =>
   usage
@@ -43,12 +53,19 @@ export function instrumentProvider(provider: ChatProvider, options: InstrumentOp
         'jamcli.request.messages': messages.length,
         'jamcli.request.tools': request.tools?.length,
         ...(options.purpose ? { 'jamcli.purpose': options.purpose } : {}),
+        ...(options.includeContent ? { 'gen_ai.input.messages': contentAttribute(messages) } : {}),
       },
     });
     const started = Date.now();
     return {
-      finish(usage: TokenUsage | undefined, stopReason: string | undefined) {
-        span.end({ attributes: { ...usageAttributes(usage), ...(stopReason ? { 'gen_ai.response.finish_reasons': stopReason } : {}) } });
+      finish(usage: TokenUsage | undefined, stopReason: string | undefined, output: string) {
+        span.end({
+          attributes: {
+            ...usageAttributes(usage),
+            ...(stopReason ? { 'gen_ai.response.finish_reasons': stopReason } : {}),
+            ...(options.includeContent ? { 'gen_ai.output.messages': contentAttribute([{ role: 'assistant', content: output }]) } : {}),
+          },
+        });
         observer.log('debug', 'model request', {
           provider: options.providerName,
           model,
@@ -81,11 +98,13 @@ export function instrumentProvider(provider: ChatProvider, options: InstrumentOp
       const call = begin(messages, request);
       let usage: TokenUsage | undefined;
       let stopReason: string | undefined;
+      let output = '';
       let failed = false;
       try {
         for await (const chunk of provider.streamChat(messages, request) as AsyncGenerator<StreamChunk>) {
           if (chunk.usage) usage = chunk.usage;
           if (chunk.stopReason) stopReason = chunk.stopReason;
+          if (options.includeContent && chunk.content) output += chunk.content;
           yield chunk;
         }
       } catch (error) {
@@ -94,14 +113,14 @@ export function instrumentProvider(provider: ChatProvider, options: InstrumentOp
         throw error;
       } finally {
         // Also when the reader stops early.
-        if (!failed) call.finish(usage, stopReason);
+        if (!failed) call.finish(usage, stopReason, output);
       }
     },
     async complete(messages, request) {
       const call = begin(messages, request);
       try {
         const result = await provider.complete(messages, request);
-        call.finish(result.usage, result.stopReason);
+        call.finish(result.usage, result.stopReason, result.content ?? '');
         return result;
       } catch (error) {
         call.fail(error);

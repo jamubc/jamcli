@@ -31,6 +31,7 @@ import { loadConfig, permissionLayers, type LoadedConfig } from '../config/load.
 import { revealedKeys } from '../config/credentials.js';
 import { observerFor, type ObserveSettings } from '../observe/setup.js';
 import { instrumentProvider } from '../observe/instrument.js';
+import { exportTarget, otlpExporter } from '../observe/otlp.js';
 import { observeSession, type SessionObservation } from '../observe/session.js';
 import type { Observer, Span } from '../observe/observer.js';
 
@@ -161,9 +162,22 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const { config, profile, mcp: mcpConfig } = settings;
   const redact = createRedactor(env, configuredSecrets(config.api_registry, env), revealedKeys);
   let observer: Observer;
+  const includeContent = config.otel?.include_content === true;
   if (options.observer) observer = options.observer.observer;
   else {
-    const made = observerFor(options.observe, env, redact);
+    // Traces leave the machine only when the configuration turns the exporter on.
+    const exporter = config.otel?.enabled
+      ? otlpExporter({
+          ...exportTarget(config.otel, env),
+          env,
+          onError: (message) => {
+            observer.log('warn', message);
+            if (emitting) emitting({ type: 'notice', level: 'warn', message });
+            else pending.push(message);
+          },
+        })
+      : undefined;
+    const made = observerFor({ ...options.observe, spans: [...(options.observe?.spans ?? []), ...(exporter ? [exporter] : [])] }, env, redact);
     observer = made.observer;
     notices.push(...made.problems);
   }
@@ -275,7 +289,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const hooks: HookBus = createHookBus({ onRun: (run) => observation?.hookRun(run) });
   /** A provider whose requests are timed and logged under the current turn. */
   const observed = (target: ChatProvider, name: string, purpose?: string) =>
-    instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose });
+    instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose, includeContent });
   const trust = trustClassifier(config);
   if (trust.note) notices.push(trust.note);
   if (trust.provider && trust.choice) trust.provider = observed(trust.provider, trust.choice.provider, 'trust');
@@ -373,6 +387,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     permissionMode: permissions.mode,
     sandbox: sandbox.kind,
     parent: options.observer?.parentSpan,
+    includeContent,
   });
   await emitHookEvent(hooks, 'session_start', { session, profile: config.active_profile });
 
