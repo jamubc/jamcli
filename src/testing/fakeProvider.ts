@@ -35,6 +35,8 @@ export interface ScriptedTurn {
   chunkSize?: number;
   /** Close the stream after this many events, without a terminal event. */
   cutAfterEvents?: number;
+  /** The stop reason to report in the dialect's own field, such as `max_tokens` or `length`. */
+  stopReason?: string;
 }
 
 export interface CapturedRequest {
@@ -131,7 +133,7 @@ const openaiStreamEvents = (turn: ScriptedTurn, model: string, includeUsage: boo
       events.push(chunk({ tool_calls: [{ index, function: { arguments: part } }] }));
     }
   });
-  events.push(chunk({}, turn.toolCalls?.length ? 'tool_calls' : 'stop'));
+  events.push(chunk({}, turn.stopReason ?? (turn.toolCalls?.length ? 'tool_calls' : 'stop')));
   if (includeUsage && turn.usage) {
     events.push(
       frame({
@@ -160,7 +162,7 @@ const openaiJson = (turn: ScriptedTurn, model: string) => ({
   choices: [
     {
       index: 0,
-      finish_reason: turn.toolCalls?.length ? 'tool_calls' : 'stop',
+      finish_reason: turn.stopReason ?? (turn.toolCalls?.length ? 'tool_calls' : 'stop'),
       message: {
         role: 'assistant',
         content: turn.text ?? '',
@@ -242,7 +244,7 @@ const anthropicStreamEvents = (turn: ScriptedTurn, model: string): string[] => {
   });
   events.push(
     frame('message_delta', {
-      delta: { stop_reason: turn.toolCalls?.length ? 'tool_use' : 'end_turn', stop_sequence: null },
+      delta: { stop_reason: turn.stopReason ?? (turn.toolCalls?.length ? 'tool_use' : 'end_turn'), stop_sequence: null },
       usage: { output_tokens: turn.usage?.completion ?? 0 },
     })
   );
@@ -265,7 +267,7 @@ const anthropicJson = (turn: ScriptedTurn, model: string) => {
     role: 'assistant',
     model,
     content,
-    stop_reason: turn.toolCalls?.length ? 'tool_use' : 'end_turn',
+    stop_reason: turn.stopReason ?? (turn.toolCalls?.length ? 'tool_use' : 'end_turn'),
     usage: { input_tokens: turn.usage?.prompt ?? 0, output_tokens: turn.usage?.completion ?? 0 },
   };
 };
@@ -307,7 +309,7 @@ const ollamaStreamEvents = (turn: ScriptedTurn, model: string): string[] => {
       ...base,
       message: { role: 'assistant', content: '' },
       done: true,
-      done_reason: 'stop',
+      done_reason: turn.stopReason ?? 'stop',
       prompt_eval_count: turn.usage?.prompt ?? 0,
       eval_count: turn.usage?.completion ?? 0,
     })
@@ -332,7 +334,7 @@ const ollamaJson = (turn: ScriptedTurn, model: string) => ({
       : {}),
   },
   done: true,
-  done_reason: 'stop',
+  done_reason: turn.stopReason ?? 'stop',
   prompt_eval_count: turn.usage?.prompt ?? 0,
   eval_count: turn.usage?.completion ?? 0,
 });

@@ -45,6 +45,9 @@ interface StepOutput {
 
 const userMessage = (content: string): ChatMessage => ({ role: 'user', content, timestamp: Date.now() });
 
+/** How each wire format says a reply was cut off at the output limit: Anthropic, then OpenAI and Ollama. */
+const OUTPUT_LIMIT_REASONS = new Set(['max_tokens', 'length']);
+
 /**
  * The turn engine. A user turn is a loop of steps: stream the model's reply, record it
  * as one assistant message with its text, reasoning, and every tool call, run the calls,
@@ -154,6 +157,16 @@ export class CoreAgent implements Agent {
 
       const { calls, unusable } = normalizeCalls(step.done?.toolCalls, steps);
       record(this.assistantMessage(step.text, step.reasoning, calls, step.done));
+      if (OUTPUT_LIMIT_REASONS.has(step.done?.stopReason ?? '')) {
+        const limit = this.options.maxOutputTokens;
+        emit({
+          type: 'notice',
+          level: 'warn',
+          message:
+            `The reply stopped at the output limit${limit ? ` of ${limit.toLocaleString('en-US')} tokens` : ''}, so it may be incomplete. ` +
+            'Raise agent_loop.max_output_tokens, or ask the model to continue.',
+        });
+      }
       if (unusable) {
         emit({ type: 'notice', level: 'warn', message: `The model returned ${unusable} tool call(s) without a tool name; they were ignored.` });
       }

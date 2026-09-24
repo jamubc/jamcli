@@ -163,3 +163,39 @@ test('an answer about a model the session has already left is dropped', async ()
   expect(runtime.modelInfo.contextWindow).toBe(DEFAULT_OLLAMA_CONTEXT_CAP);
   expect(lastRequest().options.num_ctx).toBe(DEFAULT_OLLAMA_CONTEXT_CAP);
 });
+
+test('a reply cut off at the output limit says so, in every wire format', async () => {
+  const noticesOf = async (runtime: Awaited<ReturnType<typeof start>>) => {
+    const notices: string[] = [];
+    await runtime.run('write a lot', (event) => {
+      if (event.type === 'notice') notices.push(event.message);
+    });
+    return notices;
+  };
+  configure({}, { preferred_provider: 'anthropic', preferred_model: 'claude-x' });
+  const anthropic = await start();
+  server.enqueue({ text: 'half a rep', stopReason: 'max_tokens' });
+  expect(await noticesOf(anthropic)).toEqual([
+    'The reply stopped at the output limit of 20,000 tokens, so it may be incomplete. Raise agent_loop.max_output_tokens, or ask the model to continue.',
+  ]);
+
+  configure();
+  const ollama = await start();
+  server.enqueue({ text: 'half a rep', stopReason: 'length' }, { text: 'done' });
+  expect(await noticesOf(ollama)).toEqual([
+    'The reply stopped at the output limit, so it may be incomplete. Raise agent_loop.max_output_tokens, or ask the model to continue.',
+  ]);
+  // A reply that ends on its own says nothing.
+  expect(await noticesOf(ollama)).toEqual([]);
+
+  configure(
+    { api_registry: { openai: { base_url: server.openaiBaseUrl, api_key: 'sk-test-0123456789abcdef' } }, models: { 'openai:known': { context_window: 100_000, max_output: 4_000 } } },
+    { preferred_provider: 'openai', preferred_model: 'known' }
+  );
+  const openai = await start();
+  server.enqueue({ text: 'half a rep', stopReason: 'length' });
+  expect(await noticesOf(openai)).toEqual([
+    'The reply stopped at the output limit of 4,000 tokens, so it may be incomplete. Raise agent_loop.max_output_tokens, or ask the model to continue.',
+  ]);
+  expect(lastRequest().max_tokens).toBe(4_000);
+});
