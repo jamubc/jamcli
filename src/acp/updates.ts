@@ -54,6 +54,7 @@ export const toolLocations = (call: ToolCall, root: string): ToolCallLocation[] 
 export function toolTitle(call: ToolCall): string {
   const args = call.arguments ?? {};
   if (call.name === 'run_command' && typeof args.command === 'string') return `run_command: ${args.command.split('\n')[0].slice(0, 120)}`;
+  if (call.name === 'web_fetch' && typeof args.url === 'string') return `web_fetch ${args.url}`;
   const files = pathsOf(call);
   if (files.length) return `${call.name} ${files.join(', ')}`;
   if (typeof args.pattern === 'string') return `${call.name} ${args.pattern}`;

@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { PassThrough } from 'node:stream';
 import { AcpServer } from '../server.js';
+import { toolTitle } from '../updates.js';
 import { startFakeProvider, type FakeProviderServer } from '../../testing/fakeProvider.js';
 
 // The SDK's own zod schemas, which its package does not export, checked against every message.
@@ -187,6 +188,11 @@ test('session/load replays the recorded conversation before it answers', async (
 });
 
 const editCall = (id: string) => ({ id, name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } });
+
+test('a web_fetch tool call names its URL in the title', () => {
+  expect(toolTitle({ id: 'w1', name: 'web_fetch', arguments: { url: 'https://example.com/a' } })).toBe('web_fetch https://example.com/a');
+  expect(toolTitle({ id: 'e1', name: 'edit', arguments: { path: 'a.txt' } })).toBe('edit a.txt');
+});
 
 test('allow-always grants for the session, so the next call does not ask', async () => {
   const client = connect();
