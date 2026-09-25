@@ -1,9 +1,9 @@
 # Feature matrix
 
 Where JamCLI stands against the coding CLIs it is benchmarked on, and why each gap is a
-gap. The "Before" column is `openspec/changes/rehaul-jamcli/audit.md`. The "Target"
-column is what the `rehaul-jamcli` change delivers. Both are updated as stages land, and
-the final state is checked in stage 12.
+gap. The "Before" column is `openspec/changes/rehaul-jamcli/audit.md`. The "Now" column
+is what the `rehaul-jamcli` change delivered, checked against the code when it closed on
+2026-09-25. Work that did not land is listed in `openspec/DEFERRED.md`.
 
 **Legend:**
 
@@ -21,13 +21,13 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 
 | Decision | Meaning |
 |---|---|
-| parity | the target matches what the others offer |
-| exceeds | the target does something the verified cells do not show |
-| gap | not planned, with the reason given |
+| parity | JamCLI matches what the others offer |
+| exceeds | JamCLI does something the verified cells do not show |
+| gap | not built, with the reason given |
 
 ## Core agent
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | Reads, edits, and runs commands with approval in the interactive UI | ✗ (F1, F2) | ✓ | ✓ [1] | ✓ [2] | ✓ [4] | ✓ [6] | parity |
 | Same tools and behavior on every surface | ✗ (F1 to F3, F13) | ✓, enforced by a conformance test | n.v. | n.v. | n.v. | n.v. | exceeds |
@@ -39,24 +39,25 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Prompt caching and per-model thinking for Claude | ✗ (F14) | ✓ cache breakpoints, adaptive or budget thinking by model, replay only while valid | n.v. | n.v. | n.v. | n.v. | parity |
 | OpenAI Responses API | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | gap: OpenAI's documentation is blocked from the build environment, so the adapter could not be built against it; Chat Completions stays fully supported |
 | Headless use with machine-readable output | ◐ read-only, empty schemas | ✓ JSON, stream-json, `--dry-run` | ✓ `-p`, stream-json in and out, SDK [1] | n.v. | n.v. | n.v. | parity |
+| `@` mentions of files and MCP resources, `!` shell in the composer | ✗ | ✓ through the same permission engine | n.v. | n.v. | n.v. | n.v. | parity |
 | Delegated subagents | ◐ read-only children | ✓ full tools, narrowed policy, worktrees | ✓ background subagents, forks [1] | n.v. | n.v. | n.v. | parity |
 
 ## Safety and consent
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | Permission modes | ✗ | ✓ plan, default, accept-edits, auto, bypass | ✓ including classifier auto mode [1] | ✓ approval modes, permission profiles [2] | n.v. | n.v. | parity |
 | Pattern rules with scopes | ✗ | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | The rule behind every decision shown and logged | ✗ | ✓ | n.v. | n.v. | n.v. | n.v. | exceeds |
-| OS sandbox for commands | ✗ | ✓ Linux (bubblewrap), macOS (Seatbelt); ✗ Windows | ✓ [1] | ✓ workspace write, network off [2] | n.v. | n.v. | parity, with a gap on Windows: no supported sandbox primitive yet, and it is shown as unsandboxed |
+| OS sandbox for commands | ✗ | ✓ Linux (bubblewrap); ◐ macOS (Seatbelt, unit tested, the escape suite not yet run on a Mac); ✗ Windows | ✓ [1] | ✓ workspace write, network off [2] | n.v. | n.v. | parity, with a gap on Windows: no supported sandbox primitive yet, and it is shown as unsandboxed |
 | Credentials withheld from subprocesses | ✗ (F11, F23) | ✓ | n.v. | n.v. | n.v. | n.v. | exceeds |
-| Keys in the system keychain, browser sign-in | ✗ keys in the project file | ✓ keychain, Secret Service, or an owner-only file; OpenRouter PKCE sign-in | n.v. | n.v. | n.v. | n.v. | parity |
+| Keys in the system keychain, browser sign-in | ✗ keys in the project file | ✓ keychain, Secret Service, or an owner-only file; OpenRouter PKCE sign-in, tested against a local fake only | n.v. | n.v. | n.v. | n.v. | parity |
 | Tool output screened for prompt injection | ◐ headless only | ✓ every surface | ◐ classifier for permissions [1] | n.v. | n.v. | n.v. | exceeds |
 | Checkpoints, undo, rewind | ✗ | ✓ without touching the user's git state | ✓ [1] | n.v. | n.v. | n.v. | parity (Gemini CLI also checkpoints [7]) |
 
 ## Sessions and transparency
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | Resume with tool context | ✗ text only (F17) | ✓ | ✓ [1] | n.v. | ◐ [5] | n.v. | parity |
 | Fork, rewind | ◐ `/fork` | ✓ | ✓ [1] | n.v. | ◐ [5] | n.v. | parity |
@@ -71,7 +72,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 
 ## Git
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | Read-only git inspection | ✓ | ✓ plus `git_log` | n.v. | n.v. | n.v. | n.v. | parity |
 | Hunk-level diff review | ✗ | ✓ | n.v. | n.v. | n.v. | n.v. | parity |
@@ -80,28 +81,29 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 
 ## Extensibility
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | Project instruction files (`AGENTS.md`) | ✓ | ✓ | n.v. | ✓ [3] | n.v. | n.v. | parity |
 | Custom slash commands | ✗ | ✓ | n.v. | n.v. | n.v. | n.v. | parity |
 | Agent Skills (`SKILL.md`) | ✗ | ✓ | ✓ [1] | ✓ [8] | n.v. | ◐ taste files as skills [6] | parity |
 | User hooks | ◐ in-process only | ✓ command hooks with a JSON protocol | ✓ command, HTTP, agent hooks [1] | ✓ including managed hooks [9] | ✓ plugin hooks [5] | n.v. | parity |
-| Plugins | ✗ | ✓ bundles of standard parts, lockfile, consent, process isolation | ✓ marketplaces, integrity checks [1] | ✓ discovery [2] | ✓ JavaScript and TypeScript plugins [5] | n.v. | parity; exceeds on isolation only if stage 10's hostile plugin tests pass |
-| Declarative workflows with resume and schedules | ✗ | ✓ bounded parallelism, no daemon | ◐ workflows, scheduled cloud routines [1] | n.v. | n.v. | n.v. | parity |
+| Plugins | ✗ | ✓ bundles of commands, skills, hooks, and MCP servers; lockfile with integrity; consent recorded outside the project; every part sandboxed | ✓ marketplaces, integrity checks [1] | ✓ discovery [2] | ✓ JavaScript and TypeScript plugins [5] | n.v. | parity; the hostile plugin tests pass, but network access is on or off, not per declared host |
+| Declarative workflows with resume and schedules | ✗ | ✓ agent, command, tool, approval, commit, and nested steps; bounded parallelism; resume; git hooks and schedules, no daemon | ◐ workflows, scheduled cloud routines [1] | n.v. | n.v. | n.v. | parity |
 
 ## Protocols and integration
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
-| MCP client | ◐ 2025 protocol, no OAuth, interface only | ✓ 2026-07-28 with fallback, OAuth, elicitation, every surface | ✓ 2026-07-28 by default [1] | ✓ [2] | n.v. | n.v. | parity |
-| ACP agent (editor integration) | ◐ read-only, forgets turns | ✓ official SDK | n.v. | n.v. | ✓ [4] | n.v. | parity |
+| MCP client | ◐ 2025 protocol, no OAuth, interface only | ✓ 2026-07-28 with fallback, OAuth, elicitation, prompts, resources, tool search, every surface | ✓ 2026-07-28 by default [1] | ✓ [2] | n.v. | n.v. | parity |
+| ACP agent (editor integration) | ◐ read-only, forgets turns | ✓ official SDK: load, modes, config options, diffs; ◐ the editor's file system and terminals are not used | n.v. | n.v. | ✓ [4] | n.v. | parity |
 | ACP client (delegating to other agents) | ✓ | ✓ official SDK | n.v. | n.v. | n.v. | n.v. | exceeds |
-| LSP diagnostics and navigation | ✗ | ✓ | ◐ through a plugin [1] | n.v. | ✓ with formatters [4] | n.v. | parity |
+| LSP diagnostics and navigation | ✗ | ✓ diagnostics after edits, an `lsp` tool for hover, definition, references, symbols; servers sandboxed | ◐ through a plugin [1] | n.v. | ✓ with formatters [4] | n.v. | parity |
+| An editor watching an interactive session | ✗ | ✓ ACP observer on a local socket (`JAMCLI_ACP_ENDPOINT`) | n.v. | n.v. | n.v. | n.v. | exceeds |
 | IDE extension beyond ACP editors | ✗ | ✗ | ✓ VS Code [1] | n.v. | ✓ [4] | n.v. | gap: ACP reaches Zed, JetBrains, Neovim, and Emacs; a VS Code extension is a separate product |
 
 ## Interface
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | Diffs and tool blocks in the transcript | ◐ approval modal only | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | Permission prompt with pattern grants and feedback | ◐ allow or deny, once | ✓ once, a chosen pattern for the session or the project, or deny with feedback for the model | n.v. | n.v. | n.v. | n.v. | parity |
@@ -109,17 +111,18 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Vim editing mode | ✗ | ✗ | ✓ [1] | n.v. | n.v. | n.v. | gap: deferred until the composer is stable on OpenTUI; tracked for a later unit |
 | Screen reader mode | ✗ | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
 | `NO_COLOR`, high-contrast theme | ✗ | ✓ | ✓ `NO_COLOR` [1] | n.v. | n.v. | n.v. | parity |
-| Mouse in lists and scrolling | ✗ | ✓ | ✓ [1] | n.v. | n.v. | n.v. | parity |
+| Mouse in lists and scrolling | ✗ | ◐ OpenTUI's mouse input is on and the transcript scrolls with the wheel; no test covers it | ✓ [1] | n.v. | n.v. | n.v. | parity |
+| Glanceable status when tiled small | ✗ | ✓ micro mode: one static phrase | n.v. | n.v. | n.v. | n.v. | exceeds |
 | First-run onboarding | ✗ | ✓ local-first | n.v. | n.v. | n.v. | n.v. | parity |
 | Image input | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | gap: not in this unit; needs a vision-capable local path to keep the local-first promise |
-| Web fetch | ✗ | ✓ asks by default | n.v. | n.v. | n.v. | n.v. | parity |
+| Web fetch | ✗ | ✓ `web_fetch`: asks by default, rules by domain, a redirect to another host not followed | n.v. | n.v. | n.v. | n.v. | parity |
 | Web search | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | gap: every search API needs an account or network service; can be added as an MCP server |
 
 ## Distribution
 
-| Capability | JamCLI before | JamCLI target | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
+| Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
-| Single-file release binaries | ✗ | ✓ Linux, macOS, Windows, with checksums, SBOM, provenance | n.v. | ✓ [3] | n.v. | n.v. | parity |
+| Single-file release binaries | ✗ | ✓ Linux, macOS, Windows, with checksums, built and smoke-tested here; SBOM and provenance in the staged release job, not yet run | n.v. | ✓ [3] | n.v. | n.v. | parity |
 | npm package | ✗ | ✗ | n.v. | ✓ [3] | n.v. | n.v. | gap: the owner keeps the project unpublished on npm |
 
 ## Deliberate gaps
