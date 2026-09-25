@@ -113,7 +113,7 @@ test('the ACP server initializes, opens a session, and streams a prompt with a p
 
   const initialize = messages.find((message) => message.id === 1);
   expect(initialize.result.protocolVersion).toBe(1);
-  expect(initialize.result.agentInfo).toEqual({ name: 'jamcli', version: '1.0.0' });
+  expect(initialize.result.agentInfo).toEqual({ name: 'jamcli', version: '2.0.0' });
 
   const newSession = messages.find((message) => message.id === 2);
   expect(newSession.result.sessionId).toBe('session-1');
