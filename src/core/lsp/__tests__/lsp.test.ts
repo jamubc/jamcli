@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { LspManager } from '../manager.js';
 import { LspClient, fileUri } from '../client.js';
+import { detectSandbox } from '../../sandbox/detect.js';
 import { lspTool } from '../../tools/lsp.js';
 import { createRuntime } from '../../runtime/index.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
@@ -191,5 +192,51 @@ test('a long list of diagnostics is capped at 20 for the model', async () => {
     expect(tool.content.split(' error: ').length - 1).toBe(20);
   } finally {
     await runtime.close();
+  }
+}, 20_000);
+
+const bwrap = detectSandbox({ projectRoot: os.tmpdir(), settings: {} }).kind === 'bwrap';
+
+test.skipIf(!bwrap)('a wrapped language server cannot read a hidden path (bubblewrap)', async () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-lsp-outside-'));
+  const hidden = path.join(outside, 'hidden.txt');
+  fs.writeFileSync(hidden, 'a secret outside the project\n');
+  const probe = { command: process.execPath, args: [FAKE, 'probe'], extensions: ['fk'] };
+  const manager = new LspManager(root, { servers: { probe } }, { PATH: process.env.PATH, HOME: process.env.HOME, FAKE_LSP_HIDDEN: hidden }, detectSandbox({ projectRoot: root, settings: {} }).wrap);
+  try {
+    const seen: any = await manager.at('fake/probe', 'main.fk', 0, 0);
+    expect(seen).toEqual({ hidden: 'blocked', env: 'absent' });
+  } finally {
+    await manager.close();
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+}, 20_000);
+// Where bubblewrap is absent, this test is skipped: Seatbelt allows file reads by design
+// (it hides only credentials), so a hidden-path read is not a bwrap equivalent there. The
+// Seatbelt escape suite is module 15's 3.7 work.
+
+test('a language server gets the session environment, not the process one', async () => {
+  const previous = process.env.JAMCLI_PROBE_ONLY;
+  process.env.JAMCLI_PROBE_ONLY = 'from-process';
+  try {
+    fs.mkdirSync(path.join(root, '.jamcli', 'profiles'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, '.jamcli', 'config.json'),
+      JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false }, lsp: { servers: { probe: { command: process.execPath, args: [FAKE, 'probe'], extensions: ['fk'] } } } })
+    );
+    fs.writeFileSync(path.join(root, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_model: 'fake-model' }));
+    const runtime = await createRuntime({ projectRoot: root, surface: 'headless', mcp: false, env });
+    try {
+      provider.enqueue({ toolCalls: [{ id: 'l1', name: 'lsp', arguments: { operation: 'diagnostics', path: 'main.fk' } }] }, { text: 'done' });
+      await runtime.run('check it');
+      const tool = provider.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
+      expect(tool.content).toContain('env=absent');
+      expect(tool.content).not.toContain('from-process');
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    if (previous === undefined) delete process.env.JAMCLI_PROBE_ONLY;
+    else process.env.JAMCLI_PROBE_ONLY = previous;
   }
 }, 20_000);

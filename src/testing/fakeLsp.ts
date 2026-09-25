@@ -12,6 +12,7 @@ import { JsonRpcConnection } from '../core/protocols/jsonrpc/connection.js';
 import { contentLengthFraming } from '../core/protocols/jsonrpc/framing.js';
 
 const stubborn = process.argv.includes('stubborn');
+const probing = process.argv.includes('probe');
 if (process.argv.includes('fail-once')) {
   const marker = path.join(process.cwd(), '.failed-once');
   if (!fs.existsSync(marker)) {
@@ -32,6 +33,16 @@ const connection = new JsonRpcConnection({ framing: contentLengthFraming, write:
 process.stdin.on('data', (chunk: Buffer) => connection.receive(new Uint8Array(chunk)));
 
 const lines = (uri: string) => (texts.get(uri) ?? '').split('\n');
+const hiddenNow = () => {
+  try {
+    return fs.readFileSync(process.env.FAKE_LSP_HIDDEN ?? '', 'utf8').trim() || 'empty';
+  } catch {
+    return 'blocked';
+  }
+};
+/** In probe mode, one extra diagnostic says what this process can see. */
+const probeDiagnostic = () =>
+  probing ? [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, severity: 1, message: `env=${process.env.JAMCLI_PROBE_ONLY ?? 'absent'} hidden=${hiddenNow()}`, source: 'probe' }] : [];
 const publish = (uri: string) => {
   const found = (word: string, severity: number) =>
     lines(uri).flatMap((line, index) => {
@@ -39,7 +50,7 @@ const publish = (uri: string) => {
       return character < 0 ? [] : [{ range: { start: { line: index, character }, end: { line: index, character: character + word.length } }, severity, message: `found ${word} on line ${index + 1}`, source: 'fake' }];
     });
   // A little later, as a real server would.
-  setTimeout(() => connection.notify('textDocument/publishDiagnostics', { uri, diagnostics: [...found('ERROR', 1), ...found('WARN', 2)] }), 20);
+  setTimeout(() => connection.notify('textDocument/publishDiagnostics', { uri, diagnostics: [...found('ERROR', 1), ...found('WARN', 2), ...probeDiagnostic()] }), 20);
 };
 const wordAt = (uri: string, position: { line: number; character: number }) => {
   const line = lines(uri)[position.line] ?? '';
@@ -97,6 +108,7 @@ connection.onRequest('textDocument/documentSymbol', async (params) => {
 connection.onRequest('fake/opens', () => Object.fromEntries(opens));
 connection.onRequest('fake/changes', () => changes);
 connection.onRequest('fake/configuration', () => configuration);
+connection.onRequest('fake/probe', () => ({ hidden: hiddenNow(), env: process.env.JAMCLI_PROBE_ONLY ?? 'absent' }));
 connection.onRequest('shutdown', () => (stubborn ? new Promise(() => {}) : null));
 connection.onNotification('exit', () => {
   if (!stubborn) process.exit(0);

@@ -3,13 +3,13 @@
 **Description:** `lsp.test.ts` runs the fake server without a sandbox, so wrap and env regressions would pass silently.
 
 **Acceptance criteria:**
-- [ ] Bwrap test where fake server tries to read a hidden path fails when wrapped; `wrap: undefined` turns it red
-- [ ] Same test asserts server sees `envFor()` not `process.env`; whole-env turns it red
-- [ ] Follows the hostile plugin test pattern for hidden paths
+- [x] Bwrap test where fake server tries to read a hidden path fails when wrapped; `wrap: undefined` turns it red
+- [x] Same test asserts server sees `envFor()` not `process.env`; whole-env turns it red
+- [x] Follows the hostile plugin test pattern for hidden paths
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/lsp/__tests__/lsp.test.ts`
-- [ ] Skipped with reason when bubblewrap is absent
+- [x] Tests pass: `bun test src/core/lsp/__tests__/lsp.test.ts`
+- [x] Skipped with reason when bubblewrap is absent
 
 **Dependencies:** `06-probes-lsp.md` Task 1 (shares fake)
 
@@ -21,8 +21,8 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Task 1
-- [ ] Four gates pass
-- [ ] Escape suite pattern reused, not duplicated
+- [x] Four gates pass
+- [x] Escape suite pattern reused, not duplicated
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 471-480)
