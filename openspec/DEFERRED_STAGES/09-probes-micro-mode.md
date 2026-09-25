@@ -3,11 +3,11 @@
 **Description:** Approval-plus-error priority and stale error suppression are untested.
 
 **Acceptance criteria:**
-- [ ] State holding both approval and error shows `need input`; error-first turns it red
-- [ ] Error from an earlier turn does not show after `lastUser` slice; dropping the slice turns it red
+- [x] State holding both approval and error shows `need input`; error-first turns it red
+- [x] Error from an earlier turn does not show after `lastUser` slice; dropping the slice turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/tui/__tests__/micro.test.tsx`
+- [x] Tests pass: `bun test src/tui/__tests__/micro.test.tsx`
 
 **Dependencies:** None
 
@@ -21,12 +21,12 @@
 **Description:** Unknown `JAMCLI_MICRO` value handling needs a test on current behavior. Owner ruling on `ui.micro` is tracked separately and must not block this probe.
 
 **Acceptance criteria:**
-- [ ] Unknown value falls back to `auto` per current code, asserted in test
-- [ ] Treating unknown as `always` turns it red
-- [ ] If `16-owner-decisions.md` later allows `ui.micro`, add a follow-up test then; this task closes without it
+- [x] Unknown value falls back to `auto` per current code, asserted in test
+- [x] Treating unknown as `always` turns it red
+- [x] If `16-owner-decisions.md` later allows `ui.micro`, add a follow-up test then; this task closes without it
 
 **Verification:**
-- [ ] Tests pass: `bun test src/tui/__tests__/micro.test.tsx`
+- [x] Tests pass: `bun test src/tui/__tests__/micro.test.tsx`
 
 **Dependencies:** Task 1 only (explicitly not blocked on 16; see `16-owner-decisions.md` Task 2 for the separate ruling)
 
@@ -36,7 +36,8 @@
 **Estimated scope:** Small: 1 file
 
 ## Checkpoint: After Tasks 1-2
-- [ ] Caught probes re-run: `isMicro` boundary, `fitPhrase` word choice, forced reducedMotion, visible-not-unmount
+- [x] Caught probes re-run: `isMicro` boundary, `fitPhrase` word choice, forced reducedMotion, visible-not-unmount
+  - Note: the forced `reducedMotion` probe is an equivalent mutant for what the frame can show. In micro mode the full view is mounted but not visible, so its animation cannot reach the captured frame; the flag still stops the hidden animation work. See the module 09 entry in the run ledger. The other three are caught.
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 432-453)

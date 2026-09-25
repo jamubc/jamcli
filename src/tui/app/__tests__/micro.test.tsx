@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
 import { frameWith, interfaceHarness } from './harness.js';
-import { fitPhrase, isMicro, microPhrase } from '../micro.js';
+import { fitPhrase, isMicro, microPhrase, microSetting } from '../micro.js';
 import { initialView, reduceView } from '../../state/view.js';
 
 const { context, open } = interfaceHarness();
@@ -60,3 +60,31 @@ test('tiled small, the interface is one still phrase that follows the session; r
     await close();
   }
 }, 20_000);
+
+test('an error and a waiting call together show need input, because the person comes first', () => {
+  let state = initialView();
+  state = reduceView(state, { type: 'submit', text: 'go' });
+  state = reduceView(state, { type: 'event', event: { type: 'turn_start', prompt: 'go' } });
+  state = reduceView(state, { type: 'notice', level: 'error', text: 'The provider refused.' });
+  state = reduceView(state, { type: 'event', event: { type: 'approval_request', call: { id: 'r1', name: 'run_command', arguments: { command: 'bun test' } }, decide: () => undefined } as any });
+  expect(microPhrase(state).words).toEqual(['need', 'input']);
+});
+
+test('an error from an earlier turn is not shown once a new turn starts', () => {
+  let state = initialView();
+  state = reduceView(state, { type: 'submit', text: 'first' });
+  state = reduceView(state, { type: 'event', event: { type: 'turn_start', prompt: 'first' } });
+  state = reduceView(state, { type: 'notice', level: 'error', text: 'It failed.' });
+  state = reduceView(state, { type: 'event', event: { type: 'turn_end', status: 'error' } });
+  expect(microPhrase(state).words).toEqual(['error']);
+  state = reduceView(state, { type: 'submit', text: 'second' });
+  state = reduceView(state, { type: 'event', event: { type: 'turn_start', prompt: 'second' } });
+  expect(microPhrase(state).words).toEqual(['thinking']);
+});
+
+test('an unknown JAMCLI_MICRO value means auto', () => {
+  expect(microSetting('always')).toBe('always');
+  expect(microSetting('never')).toBe('never');
+  expect(microSetting(undefined)).toBe('auto');
+  expect(microSetting('sometimes')).toBe('auto');
+});
