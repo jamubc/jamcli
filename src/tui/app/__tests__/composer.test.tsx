@@ -47,3 +47,24 @@ test('a line that starts with ! runs as a command, asks first, and the model is 
     await close();
   }
 }, 20_000);
+
+test('with an observer attached, it hears the turn\'s events and each session opened, and the view is unchanged', async () => {
+  const events: string[] = [];
+  const attached: string[] = [];
+  const observer = { event: (event: { type: string }) => void events.push(event.type), attach: (runtime: { sessionId: string }) => void attached.push(runtime.sessionId) };
+  context.server.enqueue({ text: 'Observed.' });
+  const { setup, close, current } = await open({}, { size: { width: 110, height: 40 }, observer: observer as any });
+  try {
+    await setup.mockInput.typeText('hello');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Observed.'), 5_000);
+    expect(events).toContain('turn_start');
+    expect(events).toContain('turn_end');
+    await setup.mockInput.typeText('/clear');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, () => attached.length === 2, 5_000);
+    expect(attached[1]).toBe(current().sessionId);
+  } finally {
+    await close();
+  }
+}, 20_000);

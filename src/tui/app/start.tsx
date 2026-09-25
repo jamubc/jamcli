@@ -7,6 +7,7 @@ import { resolveTheme } from './theme.js';
 import { loadConfig } from '../../core/config/load.js';
 import { isFirstRun } from '../../core/onboarding/index.js';
 import { statusStyleFor } from './statusStyle.js';
+import type { ObserverHub } from '../observer.js';
 
 /**
  * Start the OpenTUI interface. OpenTUI draws through native code that Bun loads; on Node
@@ -41,6 +42,17 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
   });
   const renderer = await setUp;
   let current = opened;
+  // JAMCLI_ACP_ENDPOINT=unix:<path> serves the session on screen to ACP observers.
+  let observer: ObserverHub | undefined;
+  // Loaded only when asked for, so the interface starts as fast without it.
+  try {
+    if (process.env.JAMCLI_ACP_ENDPOINT) {
+      const { observerPath, startObserver } = await import('../observer.js');
+      observer = await startObserver(observerPath(process.env.JAMCLI_ACP_ENDPOINT)!, opened);
+    }
+  } catch (error: any) {
+    opened.notices.push(`The ACP observer endpoint is off: ${error?.message ?? error}`);
+  }
   const openSession = async (choice: SessionChoice) =>
     (current = await createInterfaceRuntime({
       projectRoot,
@@ -53,6 +65,7 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
     if (closing) return;
     closing = true;
     renderer.destroy();
+    await observer?.close().catch(() => undefined);
     await current.close().catch(() => undefined);
     process.exit(code);
   };
@@ -69,6 +82,7 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
       reducedMotion={ui.reduced_motion === true}
       firstRun={isFirstRun(settings)}
       statusStyle={statusStyle}
+      {...(observer ? { observer } : {})}
     />
   );
 }

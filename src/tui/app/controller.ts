@@ -62,7 +62,9 @@ export class SessionController {
 
   constructor(
     private readonly runtime: Runtime,
-    private readonly dispatch: (action: ViewAction) => void
+    private readonly dispatch: (action: ViewAction) => void,
+    /** Hears every event before the view does, such as the ACP observer. It must not throw or wait. */
+    private readonly tap?: (event: AgentEvent) => void
   ) {}
 
   /** Asks the person what an MCP server asked for; the interface sets it. */
@@ -98,6 +100,7 @@ export class SessionController {
       const result = await this.runtime.run(
         text,
         (event: AgentEvent) => {
+          this.tap?.(event);
           if (event.type === 'approval_request') this.decisions.set(event.call.id, event.decide);
           if (event.type === 'elicitation_request') {
             // With nobody set to ask, the server hears no rather than waiting forever.

@@ -10,7 +10,7 @@ import { createRuntime, type Runtime, type RuntimeOptions } from '../../../core/
 import { startFakeProvider, type FakeProviderOptions, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 
 /** How the interface is opened: its size, and the props a person's settings would give it. */
-export interface ViewOptions extends Pick<AppProps, 'theme' | 'screenReader' | 'reducedMotion' | 'keys' | 'firstRun' | 'statusStyle'> {
+export interface ViewOptions extends Pick<AppProps, 'theme' | 'screenReader' | 'reducedMotion' | 'keys' | 'firstRun' | 'statusStyle' | 'observer'> {
   onExit?: () => void;
   size?: { width: number; height: number };
 }

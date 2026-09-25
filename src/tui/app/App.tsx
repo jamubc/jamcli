@@ -23,6 +23,7 @@ import { earlierMessages } from './history.js';
 import type { TodoView } from '../state/view.js';
 import { RowView } from './Rows.js';
 import { BypassConfirm, PermissionPrompt } from './Prompt.js';
+import type { ObserverHub } from '../observer.js';
 
 export interface AppProps {
   /** The session the interface opens on. */
@@ -46,6 +47,8 @@ export interface AppProps {
   firstRun?: boolean;
   /** The working indicator's spinner and colors. Defaults to the classic spinner with subtle words. */
   statusStyle?: StatusStyleDefinition;
+  /** Hears every event and each session opened, for the ACP observer endpoint. */
+  observer?: Pick<ObserverHub, 'event' | 'attach'>;
 }
 
 /**
@@ -106,7 +109,8 @@ export function App(props: AppProps) {
     first.session.messages.length ? reduceView(initialView(statusOf(first)), { type: 'load', messages: first.session.messages }) : initialView(statusOf(first))
   );
   const [runtime, setRuntime] = useState(first);
-  const controller = useMemo(() => new SessionController(runtime, dispatch), [runtime]);
+  const controller = useMemo(() => new SessionController(runtime, dispatch, props.observer?.event), [runtime]);
+  useEffect(() => props.observer?.attach(runtime), [runtime]);
   // Custom commands are read again with each session, so a file added meanwhile is found.
   const custom = useMemo(() => customCommands(projectRoot, BUILTIN_COMMANDS), [projectRoot, runtime]);
   // MCP prompts arrive once the servers answer; the palette gains them then.
