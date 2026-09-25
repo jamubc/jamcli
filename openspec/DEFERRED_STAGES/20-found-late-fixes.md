@@ -76,8 +76,12 @@ Small items found late. Each is one task. Attach to the module that touches the 
 **Estimated scope:** Small: 1-2 files
 
 ## Checkpoint: After Tasks 1-4
-- [ ] 1.1 and 3.7 remain the only unchecked early-stage items, both tracked in `15-blocked-access-hardware.md`
-- [ ] Four gates pass
+- [x] Four gates pass
+- [x] Task 1: `openspec/project.md` marks the tsup line as replaced by `bun build`; the only other tsup references are the historical notes in `project.md` line 65, `tasks.md` 6.13, and `DEFERRED.md`.
+- [x] Task 2: the default `categories` comment documents the llama3 requirement and how to route elsewhere; `resolve.test.ts` already proves an unconfigured provider is skipped with a reason and an unservable chain returns a note naming each skipped model.
+- [ ] Task 3: the `/tools` report still opens scrolled to its bottom on a terminal shorter than the report. Gap: opening it at its top needs report-anchored transcript scrolling (the transcript is a sticky-bottom scrollbox), which is interface work for a later unit. The mouse wheel stays partial in `docs/feature-matrix.md` with its reason, as the task allows.
+- [x] Task 4: `toolTitle` names a `web_fetch` URL, with a test in `features.test.ts`; the D5 audit is filed under 12.9 in `tasks.md`.
+- [x] 1.1 and 3.7 are no longer unchecked: 1.1 landed the workflows (first run awaits the owner's push) and 3.7 ran and was recorded, both in `15-blocked-access-hardware.md`.
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 704-723)

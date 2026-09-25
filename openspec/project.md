@@ -51,7 +51,7 @@ gap with its reason. A standard is claimed only when a test exercises it, as rec
 Current, as measured in `package.json` and `src/` when `rehaul-jamcli` opened:
 
 - Bun 1.4.2 as the only runtime (CI pins it; use the same version locally)
-- TypeScript 7, bundled with tsup to `dist/index.js`
+- TypeScript 7, bundled with tsup to `dist/index.js` (replaced by `bun build`; see the update below)
 - Ink 7.1.1 and React 19.2 for the terminal UI, Zustand 5 for its state
 - Zod 4 for schema validation
 - `@modelcontextprotocol/sdk` for MCP clients
