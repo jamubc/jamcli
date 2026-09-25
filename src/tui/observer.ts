@@ -1,5 +1,6 @@
 import fs from 'fs';
 import net from 'net';
+import path from 'path';
 import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION, RequestError, type SessionUpdate } from '@agentclientprotocol/sdk';
 import { stopReasonFor, UpdateMapper } from '../acp/updates.js';
 import { JAMCLI_VERSION } from '../core/version.js';
@@ -47,6 +48,16 @@ export async function startObserver(socketPath: string, first: Runtime): Promise
   let state: State = 'idle';
   const watchers = new Set<Watcher>();
   const sockets = new Set<net.Socket>();
+
+  // A directory others can write lets them replace the socket path between the check and
+  // the bind, so the socket would not be private.
+  const directory = path.dirname(socketPath);
+  if (fs.existsSync(directory)) {
+    const mode = fs.statSync(directory).mode & 0o777;
+    if (mode & 0o022) {
+      throw new Error(`${directory} is writable by others (mode ${mode.toString(8)}), so the observer socket would not be private. Put it in a directory only you can write, such as one under the state directory.`);
+    }
+  }
 
   // A socket left by a process that is gone is removed; one that answers is in use.
   if (fs.existsSync(socketPath)) {

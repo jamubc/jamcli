@@ -149,6 +149,13 @@ test('the socket is user-private from the moment it exists, before any chmod', a
   expect(seen).toEqual([0o600]);
 });
 
+test('a socket path in a directory others can write is refused', async () => {
+  const shared = path.join(root, 'shared');
+  fs.mkdirSync(shared, { recursive: true });
+  fs.chmodSync(shared, 0o777);
+  await expect(startObserver(path.join(shared, 'observer.sock'), runtime)).rejects.toThrow('writable by others');
+});
+
 test('a client that stops reading is dropped once its backlog passes the limit', async () => {
   const client = await observe();
   await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
