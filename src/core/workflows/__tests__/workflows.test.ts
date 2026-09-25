@@ -6,6 +6,7 @@ import { execFileSync } from 'child_process';
 import { holds, parseExpr, render } from '../expr.js';
 import { resolveInputs, validateWorkflow, type Workflow } from '../schema.js';
 import { executeWorkflow, readRunLog, recordApproval, type StepRunners } from '../engine.js';
+import { runtimeRunners } from '../runners.js';
 import { cronLine, editCrontab, installGitHook, launchdPlist, listSchedules, scheduleWorkflow, unscheduleWorkflow, windowsTaskXml, type ScheduleSystem } from '../triggers.js';
 import { runWorkflowCommand } from '../../../cli/workflow.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
@@ -34,6 +35,9 @@ test('conditions are parsed, never evaluated as code, and templates read only pa
   const context = { inputs: { issue: 'bug', count: 3 }, steps: { test: { status: 'ok', output: 'passed' } } };
   expect(holds("steps.test.status == 'ok' and inputs.count >= 3", context)).toBe(true);
   expect(holds('not (inputs.count < 2 or steps.test.status != "ok")', context)).toBe(true);
+  // These two differ only if `and` is not evaluated as `or`.
+  expect(holds('inputs.count == 3 and inputs.count == 4', context)).toBe(false);
+  expect(holds('inputs.count == 3 or inputs.count == 4', context)).toBe(true);
   expect(holds('steps.missing.status == null', context)).toBe(true);
   expect(() => parseExpr('process.exit()')).toThrow('unexpected "("');
   expect(() => parseExpr('inputs.a ==')).toThrow('the condition ends too early');
@@ -225,4 +229,109 @@ test('triggers are written as files: a git hook, a crontab line, a launchd agent
   expect(windowsTaskXml('5 7 * * 3', root, 'fix', 'C:\\jamcli.exe')).toContain('<DaysOfWeek><Wednesday /></DaysOfWeek>');
   expect(windowsTaskXml('5 7 * * *', root, 'fix', 'C:\\jamcli.exe')).toContain('<StartBoundary>2026-01-01T07:05:00</StartBoundary>');
   expect(() => windowsTaskXml('5 7 1 * *', root, 'fix', 'jamcli')).toThrow('daily');
+});
+
+test('templates and conditions never read inherited properties', () => {
+  const context = { inputs: { issue: 'bug' }, steps: {} };
+  expect(render('[{{ inputs.constructor }}][{{ inputs.__proto__ }}][{{ inputs.toString }}]', context)).toBe('[][][]');
+  expect(holds('inputs.constructor == null and inputs.__proto__ == null and inputs.toString == null', context)).toBe(true);
+  context.inputs.constructor = 'mine' as any;
+  expect(render('{{ inputs.constructor }}', context)).toBe('mine');
+});
+
+/** A project with a provider and a workflows directory, for the run-through-the-command tests. */
+const project = () => {
+  fs.mkdirSync(path.join(root, '.jamcli', 'profiles'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.jamcli', 'workflows'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false } })
+  );
+  fs.writeFileSync(path.join(root, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_model: 'fake-model' }));
+};
+const runWorkflow = async (args: string[]) => {
+  const out: string[] = [];
+  const code = await runWorkflowCommand(args, root, { io: { out: (line) => out.push(line), err: (line) => out.push(line) }, runtime: { env: { PATH: process.env.PATH, HOME: process.env.HOME } } });
+  return { out, code };
+};
+
+test('the log says a step is running before the step starts', async () => {
+  let observed: any[] = [];
+  const base = fakeRunners([]).runners;
+  const runners: StepRunners = {
+    ...base,
+    run: async () => {
+      const dir = path.join(root, '.jamcli', 'workflows', 'runs');
+      const file = fs.readdirSync(dir).map((name) => path.join(dir, name))[0]!;
+      observed = fs.readFileSync(file, 'utf8').trim().split('\n').map((line) => JSON.parse(line)).filter((event) => event.type === 'step');
+      return { ok: true, output: 'ran' };
+    },
+  };
+  const summary = await executeWorkflow(workflow({ steps: [{ id: 'only', run: 'x' }] }), { projectRoot: root, inputs: {}, runners });
+  expect(summary.status).toBe('ok');
+  expect(observed).toEqual([expect.objectContaining({ type: 'step', id: 'only', status: 'running' })]);
+});
+
+test('a cancelled step is retried when the run resumes', async () => {
+  const flow = workflow({ steps: [{ id: 'only', run: 'x' }] });
+  const stopped = new AbortController();
+  stopped.abort();
+  const first = await executeWorkflow(flow, { projectRoot: root, inputs: {}, runners: fakeRunners([]).runners, signal: stopped.signal });
+  expect(first.status).toBe('cancelled');
+  expect(first.steps.only.status).toBe('cancelled');
+  const again: string[] = [];
+  const resumed = await executeWorkflow(flow, { projectRoot: root, inputs: {}, runners: fakeRunners(again).runners, resume: first.runId });
+  expect(resumed.status).toBe('ok');
+  expect(again).toEqual(['run:x']);
+});
+
+test('a run step nobody can approve fails without running the command', async () => {
+  project();
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'runs.yaml'), ['name: runs', 'steps:', '  - id: only', '    run: touch made.txt', ''].join('\n'));
+  const { out, code } = await runWorkflow(['run', 'runs', '--headless']);
+  expect(code).toBe(1);
+  expect(out.join('\n')).toContain('ended: failed');
+  expect(fs.existsSync(path.join(root, 'made.txt'))).toBe(false);
+}, 30_000);
+
+test('an agent step in plan mode cannot edit, and the model is told why', async () => {
+  project();
+  fs.writeFileSync(path.join(root, 'a.txt'), 'old\n');
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'plan.yaml'), ['name: plan', 'steps:', '  - id: think', '    agent: { mode: plan, prompt: "change a.txt" }', ''].join('\n'));
+  provider.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] }, { text: 'I could not change it.' });
+  const { code } = await runWorkflow(['run', 'plan', '--headless']);
+  expect(code).toBe(0);
+  const tool = provider.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
+  expect(tool.content).toContain('Not run');
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('old\n');
+}, 30_000);
+
+test('a nested workflow past depth five is refused', async () => {
+  project();
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'loop.yaml'), ['name: loop', 'steps:', '  - id: again', '    workflow: { name: loop }', ''].join('\n'));
+  const runners = runtimeRunners({ projectRoot: root, runtime: { env: { PATH: process.env.PATH, HOME: process.env.HOME } }, depth: 5 });
+  const outcome = await runners.workflow('loop', {}, new AbortController().signal);
+  expect(outcome.ok).toBe(false);
+  expect(outcome.output).toContain('nest at most 5 deep');
+}, 20_000);
+
+test('a commit step with message agent drafts the message from the session', async () => {
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).toString().trim();
+  project();
+  git('init', '-q');
+  fs.writeFileSync(path.join(root, 'notes.txt'), 'hello\n');
+  git('add', '.');
+  git('commit', '-qm', 'init');
+  fs.writeFileSync(path.join(root, 'notes.txt'), 'hello, changed\n');
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'save.yaml'), ['name: save', 'steps:', '  - id: save', '    commit: { message: agent, paths: [notes.txt] }', ''].join('\n'));
+  provider.enqueue({ text: 'fix: draft from here' });
+  const { code } = await runWorkflow(['run', 'save', '--headless']);
+  expect(code).toBe(0);
+  expect(git('log', '-1', '--format=%s')).toBe('fix: draft from here');
+}, 30_000);
+
+test('a cron line quotes a path that contains a quote', () => {
+  const odd = path.join(root, "it's here");
+  const line = cronLine('0 9 * * *', odd, 'fix', '/usr/local/bin/jamcli');
+  expect(line).toBe(`0 9 * * * cd '${odd.replace(/'/g, `'\\''`)}' && '/usr/local/bin/jamcli' workflow run 'fix' --headless # jamcli-workflow ${odd} fix`);
 });

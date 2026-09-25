@@ -3,11 +3,11 @@
 **Description:** `lookup` must not follow inherited properties.
 
 **Acceptance criteria:**
-- [ ] Test reads `inputs.constructor` and `__proto__` and asserts they do not resolve
-- [ ] Dropping `hasOwnProperty` turns it red
+- [x] Test reads `inputs.constructor` and `__proto__` and asserts they do not resolve
+- [x] Dropping `hasOwnProperty` turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/workflows/__tests__/workflows.test.ts`
+- [x] Tests pass: `bun test src/core/workflows/__tests__/workflows.test.ts`
 
 **Dependencies:** None
 
@@ -21,11 +21,11 @@
 **Description:** Log-before-start ordering and cancelled-step retry on resume are unproven.
 
 **Acceptance criteria:**
-- [ ] Document or test that log append happens before step start; post-start append turns it red (kill-between test if feasible, else reason)
-- [ ] Resume after cancel retries the cancelled step; non-retry turns it red
+- [x] Document or test that log append happens before step start; post-start append turns it red (kill-between test if feasible, else reason)
+- [x] Resume after cancel retries the cancelled step; non-retry turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/workflows/__tests__/engine.test.ts`
+- [x] Tests pass: `bun test src/core/workflows/__tests__/engine.test.ts`
 
 **Dependencies:** Task 1
 
@@ -39,13 +39,13 @@
 **Description:** Asking calls with no answer, agent mode, nesting, and agent-drafted commit need tests.
 
 **Acceptance criteria:**
-- [ ] Run step with no rule and no flag fails (does not auto-allow); `allow:true` turns it red
-- [ ] Agent step with edit in plan mode is refused; ignoring `mode` turns it red
-- [ ] Nested workflow beyond depth 5 is refused
-- [ ] `commit message: agent` drafts from session; skipping draft turns it red
+- [x] Run step with no rule and no flag fails (does not auto-allow); `allow:true` turns it red
+- [x] Agent step with edit in plan mode is refused; ignoring `mode` turns it red
+- [x] Nested workflow beyond depth 5 is refused
+- [x] `commit message: agent` drafts from session; skipping draft turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/workflows/__tests__/runners.test.ts`
+- [x] Tests pass: `bun test src/core/workflows/__tests__/runners.test.ts`
 
 **Dependencies:** Task 2
 
@@ -59,11 +59,11 @@
 **Description:** Cron quoting with special paths and the picker approval path need coverage.
 
 **Acceptance criteria:**
-- [ ] Path with a quote produces an exact quoted `cronLine`; unquoted turns it red
-- [ ] `/workflows run` with picker approval has an interface test (today only empty list tested)
+- [x] Path with a quote produces an exact quoted `cronLine`; unquoted turns it red
+- [x] `/workflows run` with picker approval has an interface test (today only empty list tested)
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/workflows/__tests__/triggers.test.ts src/tui/__tests__/workflows.test.tsx`
+- [x] Tests pass: `bun test src/core/workflows/__tests__/triggers.test.ts src/tui/__tests__/workflows.test.tsx`
 
 **Dependencies:** Task 3
 
@@ -74,7 +74,7 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-4
-- [ ] Caught probes re-run: tokenize unknown char, and-as-or, cycle search, checkPath ancestors, concurrency caps, failed-need skip, running-on-resume, foreign hook overwrite, crontab replace
+- [x] Caught probes re-run: tokenize unknown char, and-as-or, cycle search, checkPath ancestors, concurrency caps, failed-need skip, running-on-resume, foreign hook overwrite, crontab replace
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 373-431)
