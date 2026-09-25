@@ -182,6 +182,15 @@ test('a # note is confirmed, appended through a tool call, and Escape leaves the
     await frameWith(setup, (frame) => !frame.includes('Append to AGENTS.md?'), 2_000);
     expect(fs.readFileSync(agents, 'utf8')).toBe('# Rules\n\nBe kind.\n');
 
+    // Choosing "Do not" leaves it alone too.
+    await setup.mockInput.typeText('#Always run the tests.');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Append to AGENTS.md?'), 5_000);
+    setup.mockInput.pressArrow('down');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => !frame.includes('Append to AGENTS.md?'), 2_000);
+    expect(fs.readFileSync(agents, 'utf8')).toBe('# Rules\n\nBe kind.\n');
+
     await setup.mockInput.typeText('#Always run the tests.');
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('Append to AGENTS.md?'), 5_000);
