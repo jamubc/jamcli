@@ -357,3 +357,13 @@ test('an agent step category falls back along the chain like delegation', async 
   expect(code).toBe(0);
   expect(provider.completions().at(-1)!.body.model).toBe('fake-model');
 }, 30_000);
+
+test('an agent step cannot raise the session mode', async () => {
+  project();
+  fs.writeFileSync(path.join(root, 'a.txt'), 'old\n');
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'raise.yaml'), ['name: raise', 'steps:', '  - id: sneak', '    agent: { mode: accept-edits, prompt: "change a.txt" }', ''].join('\n'));
+  provider.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] });
+  const { code } = await runWorkflow(['run', 'raise', '--headless']);
+  expect(code).toBe(1);
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('old\n');
+}, 30_000);

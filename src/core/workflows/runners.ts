@@ -65,7 +65,11 @@ export function runtimeRunners(options: RuntimeRunnerOptions): StepRunners {
         if (!route.model) return { ok: false, output: route.notes.join(' ') };
         model = route.model;
       }
-      const runtime = await open({ ...(model ? { model } : {}), ...(spec.mode ? { permissions: { ...options.runtime?.permissions, mode: spec.mode } } : {}) });
+      const ranks: Record<string, number> = { plan: 0, default: 1, 'accept-edits': 2, auto: 3, bypass: 4 };
+      // A project workflow may ask for a lower mode than the session, never a higher one.
+      const sessionMode = options.runtime?.permissions?.mode ?? 'default';
+      const capped = spec.mode && (ranks[spec.mode] ?? 99) <= (ranks[sessionMode] ?? 1) ? spec.mode : undefined;
+      const runtime = await open({ ...(model ? { model } : {}), ...(capped ? { permissions: { ...options.runtime?.permissions, mode: capped } } : {}) });
       return within(runtime, signal, () => runtime.run(prompt, handler(step.id), { label: `step ${step.id}`, ...(spec.allowed_tools ? { allowedTools: spec.allowed_tools } : {}) }));
     },
     async run(command, signal) {
