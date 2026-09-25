@@ -3,13 +3,13 @@
 **Description:** Session-scoped allow and reject paths are untested.
 
 **Acceptance criteria:**
-- [ ] "allow always" grants for the session; second call does not ask again
-- [ ] `reject-always` denies; comparing `kind` wrongly turns it red
-- [ ] `requestPermission` failing (client error) denies safely; swallowing the error to allow turns it red
+- [x] "allow always" grants for the session; second call does not ask again
+- [x] `reject-always` denies; comparing `kind` wrongly turns it red
+- [x] `requestPermission` failing (client error) denies safely; swallowing the error to allow turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/acp/__tests__/features.test.ts`
-- [ ] Manual check: re-run caught probes (bypass offered, setMode refusal, replay order) still red when broken
+- [x] Tests pass: `bun test src/acp/__tests__/features.test.ts`
+- [x] Manual check: re-run caught probes (bypass offered, setMode refusal, replay order) still red when broken
 
 **Dependencies:** None
 
@@ -25,13 +25,13 @@
 **Description:** Command ordering, full update flushing, long output, and apply_patch paths need tests.
 
 **Acceptance criteria:**
-- [ ] Test asserts `available_commands_update` arrives after `session/new` reply
-- [ ] Test asserts every update precedes the prompt reply (`queue` awaited before `end_turn`)
-- [ ] Long output is cut at `OUTPUT_LIMIT`
-- [ ] `resource_link` blocks appear in `promptText`; `pathsOf` handles `apply_patch`
+- [x] Test asserts `available_commands_update` arrives after `session/new` reply
+- [x] Test asserts every update precedes the prompt reply (`queue` awaited before `end_turn`)
+- [x] Long output is cut at `OUTPUT_LIMIT`
+- [x] `resource_link` blocks appear in `promptText`; `pathsOf` handles `apply_patch`
 
 **Verification:**
-- [ ] Tests pass: `bun test src/acp/__tests__/features.test.ts src/acp/__tests__/runtime.test.ts`
+- [x] Tests pass: `bun test src/acp/__tests__/features.test.ts src/acp/__tests__/runtime.test.ts`
 
 **Dependencies:** Task 1
 
@@ -46,12 +46,12 @@
 **Description:** The delegating client must prove it offers no FS and handles agent exit with minimal env.
 
 **Acceptance criteria:**
-- [ ] Fake agent records client capabilities in `_meta`; test asserts FS caps are empty
-- [ ] Killing the fake agent mid-prompt fails the prompt cleanly; ignoring exit turns it red
-- [ ] Re-run caught probe: `process.env` whole vs `subprocessEnv` still red when broken
+- [x] Fake agent records client capabilities in `_meta`; test asserts FS caps are empty
+- [x] Killing the fake agent mid-prompt fails the prompt cleanly; ignoring exit turns it red
+- [x] Re-run caught probe: `process.env` whole vs `subprocessEnv` still red when broken
 
 **Verification:**
-- [ ] Tests pass: `bun test src/services/__tests__/acpClient.test.ts`
+- [x] Tests pass: `bun test src/services/__tests__/acpClient.test.ts`
 
 **Dependencies:** Task 1
 
@@ -62,8 +62,8 @@
 **Estimated scope:** Small: 1-2 files
 
 ## Checkpoint: After Tasks 1-3
-- [ ] All ACP tests pass with SDK schema validation on every message
-- [ ] Probe list for 9.3 runs end to end
+- [x] All ACP tests pass with SDK schema validation on every message
+- [x] Probe list for 9.3 runs end to end
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 207-253)

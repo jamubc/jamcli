@@ -93,3 +93,52 @@ test('an external agent gets no provider key unless its entry names one', async 
     else process.env.ANTHROPIC_API_KEY = previous;
   }
 });
+
+test('the client offers the agent no file system capabilities', async () => {
+  const client = new AcpClient({ command: process.execPath, args: [fixture] });
+  const init = await client.start();
+  expect((init as any)._meta.clientCapabilities.fs).toEqual({ readTextFile: false, writeTextFile: false });
+  await client.stop();
+});
+
+test('killing the agent mid-prompt fails the prompt cleanly', async () => {
+  const previous = process.env.FAKE_AGENT_HANG;
+  process.env.FAKE_AGENT_HANG = '1';
+  try {
+    const client = new AcpClient({ command: process.execPath, args: [fixture] });
+    await client.start();
+    const session = await client.newSession(process.cwd());
+    let started = false;
+    const settled = client.prompt(session.sessionId, 'ping', { timeoutMs: 3_000, onUpdate: () => (started = true) }).then(
+      () => 'resolved',
+      (reason: any) => String(reason?.message ?? reason)
+    );
+    // Wait until the prompt is really in flight, then kill the agent under it.
+    const deadline = Date.now() + 5_000;
+    while (!started && Date.now() < deadline) await Bun.sleep(20);
+    expect(started).toBe(true);
+    await client.stop();
+    expect(await settled).toMatch(/closed|exited/i);
+  } finally {
+    if (previous === undefined) delete process.env.FAKE_AGENT_HANG;
+    else process.env.FAKE_AGENT_HANG = previous;
+  }
+}, 20_000);
+
+test('an agent that exits while its pipe stays open still fails the prompt', async () => {
+  const previous = process.env.FAKE_AGENT_EXIT_KEEP_PIPE;
+  process.env.FAKE_AGENT_EXIT_KEEP_PIPE = '1';
+  try {
+    const client = new AcpClient({ command: process.execPath, args: [fixture] });
+    await client.start();
+    const session = await client.newSession(process.cwd());
+    const settled = client.prompt(session.sessionId, 'ping', { timeoutMs: 2_000 }).then(
+      () => 'resolved',
+      (reason: any) => String(reason?.message ?? reason)
+    );
+    expect(await settled).toMatch(/exited/i);
+  } finally {
+    if (previous === undefined) delete process.env.FAKE_AGENT_EXIT_KEEP_PIPE;
+    else process.env.FAKE_AGENT_EXIT_KEEP_PIPE = previous;
+  }
+}, 20_000);

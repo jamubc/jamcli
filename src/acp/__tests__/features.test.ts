@@ -92,22 +92,27 @@ const connect = () => {
   };
   const updates = (kind?: string) => messages.filter((message) => message.method === 'session/update' && (!kind || message.params.update.sessionUpdate === kind)).map((message) => message.params.update);
   const answer = (id: unknown, optionId: string) => input.write(`${JSON.stringify({ jsonrpc: '2.0', id, result: { outcome: { outcome: 'selected', optionId } } })}\n`);
+  const answerError = (id: unknown, message: string) => input.write(`${JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32603, message } })}\n`);
   const close = async () => {
     input.end();
     await done;
   };
-  return { messages, request, updates, answer, close, problems };
+  return { messages, request, updates, answer, answerError, close, problems };
 };
 
 test('a session offers modes, a model setting, and its commands; a mode can be switched but bypass is not offered', async () => {
   const client = connect();
   const init = await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
   expect(init.result.agentCapabilities).toMatchObject({ loadSession: true, promptCapabilities: { embeddedContext: true } });
-  const created = (await client.request('session/new', { cwd: root, mcpServers: [] })).result;
+  const createdReply = await client.request('session/new', { cwd: root, mcpServers: [] });
+  const created = createdReply.result;
   expect(created.modes.currentModeId).toBe('default');
   expect(created.modes.availableModes.map((mode: any) => mode.id)).toEqual(['plan', 'default', 'accept-edits', 'auto']);
   expect(created.configOptions[0]).toMatchObject({ id: 'model', type: 'select', currentValue: 'ollama:fake-model' });
   await waitFor(() => client.updates('available_commands_update').length > 0);
+  const commandsMessage = client.messages.find((message) => message.method === 'session/update' && message.params.update.sessionUpdate === 'available_commands_update');
+  // The list names the session, so it arrives after the reply that named it.
+  expect(client.messages.indexOf(commandsMessage)).toBeGreaterThan(client.messages.indexOf(createdReply));
   expect(client.updates('available_commands_update')[0].availableCommands).toEqual([{ name: 'review', description: 'Review a file', input: { hint: '<file>' } }]);
 
   expect((await client.request('session/set_mode', { sessionId: created.sessionId, modeId: 'plan' })).error).toBeUndefined();
@@ -129,16 +134,20 @@ test('a turn streams a plan, a diff for an edit, and a command runs as its promp
     { toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] },
     { text: 'Done.' }
   );
-  const pending = client.request('session/prompt', {
+  const pendingReply = client.request('session/prompt', {
     sessionId,
     prompt: [
       { type: 'text', text: '/review a.txt' },
       { type: 'resource', resource: { uri: 'file:///notes.md', text: 'the notes', mimeType: 'text/markdown' } },
+      { type: 'resource_link', uri: 'file:///guide.md', name: 'guide.md' },
     ],
   });
   await waitFor(() => client.messages.some((message) => message.method === 'session/request_permission'));
   client.answer(client.messages.find((message) => message.method === 'session/request_permission').id, 'allow-once');
-  expect((await pending).result.stopReason).toBe('end_turn');
+  const pending = await pendingReply;
+  expect(pending.result.stopReason).toBe('end_turn');
+  // Every update was flushed before the reply, so none arrives after end_turn.
+  expect(client.messages.filter((message, index) => message.method === 'session/update' && index > client.messages.indexOf(pending))).toEqual([]);
 
   expect(client.updates('plan')[0].entries).toEqual([
     { content: 'Edit a.txt', priority: 'medium', status: 'in_progress' },
@@ -149,9 +158,10 @@ test('a turn streams a plan, a diff for an edit, and a command runs as its promp
   const sent = server.completions().at(-3)!.body.messages.find((message: any) => message.role === 'user').content;
   expect(sent).toStartWith('Review a.txt closely.');
   expect(sent).toContain('Resource file:///notes.md:');
+  expect(sent).toContain('Linked: [guide.md](file:///guide.md)');
   expect(client.problems).toEqual([]);
   await client.close();
-});
+}, 30_000);
 
 test('session/load replays the recorded conversation before it answers', async () => {
   const first = connect();
@@ -175,3 +185,86 @@ test('session/load replays the recorded conversation before it answers', async (
   expect(second.problems).toEqual([]);
   await second.close();
 });
+
+const editCall = (id: string) => ({ id, name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } });
+
+test('allow-always grants for the session, so the next call does not ask', async () => {
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  server.enqueue({ toolCalls: [editCall('e1')] }, { text: 'first' });
+  const first = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'edit it' }] });
+  await waitFor(() => client.messages.some((message) => message.method === 'session/request_permission'));
+  client.answer(client.messages.find((message) => message.method === 'session/request_permission').id, 'allow-always');
+  expect((await first).result.stopReason).toBe('end_turn');
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
+
+  fs.writeFileSync(path.join(root, 'a.txt'), 'old\n');
+  const asks = () => client.messages.filter((message) => message.method === 'session/request_permission');
+  const before = asks().length;
+  server.enqueue({ toolCalls: [editCall('e2')] }, { text: 'second' });
+  const second = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'again' }] });
+  await Bun.sleep(250);
+  for (const extra of asks().slice(before)) client.answer(extra.id, 'reject-once');
+  expect(asks().length).toBe(before);
+  expect((await second).result.stopReason).toBe('end_turn');
+  await client.close();
+}, 20_000);
+
+test('reject-always denies the call, so the file is left as it was', async () => {
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  server.enqueue({ toolCalls: [editCall('e1')] });
+  const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'edit it' }] });
+  await waitFor(() => client.messages.some((message) => message.method === 'session/request_permission'));
+  client.answer(client.messages.find((message) => message.method === 'session/request_permission').id, 'reject-always');
+  // A rejection with no feedback stops the turn, and the model is told why.
+  expect((await pending).result.stopReason).toBe('refusal');
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('old\n');
+  expect(client.problems).toEqual([]);
+  await client.close();
+}, 20_000);
+
+test('a permission request that answers with an error denies the call', async () => {
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  server.enqueue({ toolCalls: [editCall('e1')] });
+  const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'edit it' }] });
+  await waitFor(() => client.messages.some((message) => message.method === 'session/request_permission'));
+  client.answerError(client.messages.find((message) => message.method === 'session/request_permission').id, 'the editor is unhappy');
+  expect((await pending).result.stopReason).toBe('refusal');
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('old\n');
+  await client.close();
+}, 20_000);
+
+test('a tool result past the output limit is cut, with the rest counted', async () => {
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'bun -e "console.log(\'x\'.repeat(25000))"' } }] }, { text: 'Ran it.' });
+  const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'run it' }] });
+  await waitFor(() => client.messages.some((message) => message.method === 'session/request_permission'));
+  client.answer(client.messages.find((message) => message.method === 'session/request_permission').id, 'allow-once');
+  await pending;
+  const update = client.updates('tool_call_update').filter((entry) => entry.toolCallId === 'c1').at(-1)!;
+  const body = (update.content as any[])[0].content.text as string;
+  expect(body).toMatch(/\[\d+ more characters\]/);
+  expect(body.length).toBeGreaterThan(19_900);
+  expect(body.length).toBeLessThan(20_100);
+  await client.close();
+}, 30_000);
+
+test('apply_patch reports every file it touches as a location', async () => {
+  fs.writeFileSync(path.join(root, 'c.txt'), 'one\n');
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  const patch = ['--- a/a.txt', '+++ b/a.txt', '@@ -1 +1 @@', '-old', '+new', '--- a/c.txt', '+++ b/c.txt', '@@ -1 +1 @@', '-one', '+two', ''].join('\n');
+  server.enqueue({ toolCalls: [{ id: 'p1', name: 'apply_patch', arguments: { patch } }] }, { text: 'Patched.' });
+  const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'patch it' }] });
+  await waitFor(() => client.messages.some((message) => message.method === 'session/request_permission'));
+  client.answer(client.messages.find((message) => message.method === 'session/request_permission').id, 'allow-once');
+  await pending;
+  const update = client.updates('tool_call').find((entry) => entry.toolCallId === 'p1');
+  expect(update.locations.map((location: any) => location.path).sort()).toEqual([path.join(root, 'a.txt'), path.join(root, 'c.txt')].sort());
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
+  expect(fs.readFileSync(path.join(root, 'c.txt'), 'utf8')).toBe('two\n');
+  await client.close();
+}, 30_000);

@@ -10,13 +10,14 @@ const SESSION_ID = 'fake-session';
 const stream = ndJsonStream(Writable.toWeb(process.stdout) as WritableStream<Uint8Array>, Readable.toWeb(process.stdin) as unknown as ReadableStream<Uint8Array>);
 new AgentSideConnection(
   (client) => ({
-    initialize: async () => ({
+    initialize: async (params) => ({
       protocolVersion: PROTOCOL_VERSION,
       agentInfo: { name: 'fake-agent', version: '0.0.1' },
       agentCapabilities: {},
       authMethods: [],
-      // For tests: the environment variable names this agent was started with.
-      _meta: { envNames: Object.keys(process.env) },
+      // For tests: the environment variable names this agent was started with, and the
+      // client capabilities it was offered.
+      _meta: { envNames: Object.keys(process.env), clientCapabilities: params.clientCapabilities },
     }),
     authenticate: async () => ({}),
     newSession: async () => ({
@@ -24,7 +25,15 @@ new AgentSideConnection(
       configOptions: [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'fake-model', options: [{ value: 'fake-model', name: 'fake-model' }] }],
     }),
     prompt: async (params) => {
+      // A test can make the agent exit while a helper keeps its stdout pipe open.
+      if (process.env.FAKE_AGENT_EXIT_KEEP_PIPE === '1') {
+        const { spawn } = await import('node:child_process');
+        spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: ['ignore', 'inherit', 'inherit'], detached: true }).unref();
+        process.exit(0);
+      }
       await client.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'pong ' } } });
+      // A test can make the agent hang mid-prompt and then kill it.
+      if (process.env.FAKE_AGENT_HANG === '1') await new Promise(() => {});
       const answer = await client.requestPermission({
         sessionId: params.sessionId,
         toolCall: { toolCallId: 'call-1', title: 'write_file', kind: 'edit', status: 'pending' },
