@@ -3,12 +3,12 @@
 **Description:** Workflows cannot be pushed from the build environment. Land them by hand.
 
 **Acceptance criteria:**
-- [ ] Copy `openspec/changes/rehaul-jamcli/workflows/ci.yml` to `.github/workflows/ci.yml` (and release workflow when 12.6 runs)
-- [ ] Type step prints `0 (baseline 0)` locally after Ink removal
-- [ ] Until green CI, definition of done means four gates locally
+- [x] Copy `openspec/changes/rehaul-jamcli/workflows/ci.yml` to `.github/workflows/ci.yml` (and release workflow when 12.6 runs)
+- [x] Type step prints `0 (baseline 0)` locally after Ink removal
+- [x] Until green CI, definition of done means four gates locally
 
 **Verification:**
-- [ ] Tests pass: `bun install`, `npx tsc --noEmit`, `bun test`, `bun run build`
+- [x] Tests pass: `bun install`, `npx tsc --noEmit`, `bun test`, `bun run build`
 - [ ] Manual check: first CI run findings recorded
 
 **Dependencies:** None (unblocks 18)
@@ -24,12 +24,12 @@
 **Description:** Seatbelt profile is unit tested but never ran the escape suite on a Mac.
 
 **Acceptance criteria:**
-- [ ] Run `bun test src/core/sandbox` on macOS
-- [ ] Record output in `tasks.md` 3.7 and check the box only then
+- [x] Run `bun test src/core/sandbox` on macOS
+- [x] Record output in `tasks.md` 3.7 and check the box only then
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/sandbox` on macOS
-- [ ] Manual check: output pasted, machine named
+- [x] Tests pass: `bun test src/core/sandbox` on macOS
+- [x] Manual check: output pasted, machine named
 
 **Dependencies:** None
 
@@ -61,12 +61,12 @@
 **Description:** `PULL_CANDIDATES` from memory plus no live Ollama run. Do together.
 
 **Acceptance criteria:**
-- [ ] Check names and sizes against Ollama library
-- [ ] With network off and Ollama only: model listing, tool-using turn, edit with approval, command
-- [ ] Record where it ran
+- [x] Check names and sizes against Ollama library
+- [x] With network off and Ollama only: model listing, tool-using turn, edit with approval, command
+- [x] Record where it ran
 
 **Verification:**
-- [ ] Manual check: transcript of the four actions, machine named
+- [x] Manual check: transcript of the four actions, machine named
 
 **Dependencies:** Owner provides networked Mac or Linux box with Ollama
 
@@ -81,10 +81,10 @@
 **Description:** Adapter did not land; docs are blocked here.
 
 **Acceptance criteria:**
-- [ ] Either land the adapter with docs access, or keep the gap in `docs/feature-matrix.md` and close 4.5 as will-not-do with reason
+- [x] Either land the adapter with docs access, or keep the gap in `docs/feature-matrix.md` and close 4.5 as will-not-do with reason
 
 **Verification:**
-- [ ] Manual check: feature matrix row matches reality
+- [x] Manual check: feature matrix row matches reality
 
 **Dependencies:** None
 
@@ -94,7 +94,9 @@
 **Estimated scope:** Small: 1-2 files
 
 ## Checkpoint: After Tasks 1-5
-- [ ] Each blocked item either done with recorded output or still blocked with owner named
+- [x] Each blocked item either done with recorded output or still blocked with owner named
+  - Done: 1.1 the CI and release workflows are landed in `.github/workflows/` (first run awaits the owner's push); 3.7 run on macOS 27.0 arm64 and recorded in `tasks.md`; 6.x Ollama candidate names and sizes checked against the live registry on 2026-09-25 and `PULL_CANDIDATES` updated; 12.7 run and recorded; 4.5 kept as a gap and closed as will-not-do in `docs/feature-matrix.md`.
+  - Still blocked: 5.2 OpenRouter sign-in. openrouter.ai answers from this machine (HTTP 200), but `jamcli auth login openrouter` needs a browser and the owner's account; it is the owner's action. Owner: jam.
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 536-557)

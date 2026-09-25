@@ -21,10 +21,11 @@ export interface Suggestion {
  * is decided on the machine, from its memory.
  */
 export const PULL_CANDIDATES: readonly Suggestion[] = [
-  { name: 'qwen3-coder:30b', downloadGb: 19, memoryGb: 24 },
-  { name: 'devstral:24b', downloadGb: 14, memoryGb: 18 },
-  { name: 'qwen2.5-coder:14b', downloadGb: 9, memoryGb: 12 },
-  { name: 'qwen2.5-coder:7b', downloadGb: 4.7, memoryGb: 7 },
+  // Names and sizes checked against the Ollama library on 2026-09-25 (manifest layer totals).
+  { name: 'qwen3-coder:30b', downloadGb: 18.5, memoryGb: 24 },
+  { name: 'devstral:24b', downloadGb: 14.3, memoryGb: 18 },
+  { name: 'qwen2.5-coder:14b', downloadGb: 8.9, memoryGb: 12 },
+  { name: 'qwen2.5-coder:7b', downloadGb: 4.6, memoryGb: 7 },
   { name: 'qwen2.5-coder:3b', downloadGb: 1.9, memoryGb: 4 },
 ];
 

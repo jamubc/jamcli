@@ -37,7 +37,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Provider breadth | ✓ OpenAI-compatible, Anthropic, Ollama, custom | ✓ plus catalog, retries | ◐ Anthropic API, Bedrock, Vertex, Foundry [1] | ◐ OpenAI, ChatGPT sign-in [3] | n.v. | n.v. | parity |
 | Model routing by kind of work | ✓ categories | ✓ | n.v. | n.v. | n.v. | n.v. | exceeds |
 | Prompt caching and per-model thinking for Claude | ✗ (F14) | ✓ cache breakpoints, adaptive or budget thinking by model, replay only while valid | n.v. | n.v. | n.v. | n.v. | parity |
-| OpenAI Responses API | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | gap: OpenAI's documentation is blocked from the build environment, so the adapter could not be built against it; Chat Completions stays fully supported |
+| OpenAI Responses API | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | will not do: OpenAI's documentation is blocked from the build environment, so the adapter was not built against it; closing 4.5 with the gap kept here; Chat Completions stays fully supported |
 | Headless use with machine-readable output | ◐ read-only, empty schemas | ✓ JSON, stream-json, `--dry-run` | ✓ `-p`, stream-json in and out, SDK [1] | n.v. | n.v. | n.v. | parity |
 | `@` mentions of files and MCP resources, `!` shell in the composer | ✗ | ✓ through the same permission engine | n.v. | n.v. | n.v. | n.v. | parity |
 | Delegated subagents | ◐ read-only children | ✓ full tools, narrowed policy, worktrees | ✓ background subagents, forks [1] | n.v. | n.v. | n.v. | parity |

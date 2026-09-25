@@ -29,7 +29,7 @@ test('a first run opens setup: the local models that call tools, and the choice 
     expect(listed).toContain('Set up JamCLI: choose the model to work with');
     expect(listed).toMatch(/ollama:coder:7b\s+on this machine · 65,536-token window · tools/);
     expect(listed).toContain('Download qwen2.5-coder:7b');
-    expect(listed).toContain('about 4.7 GB, suggested for 16 GB of memory');
+    expect(listed).toContain('about 4.6 GB, suggested for 16 GB of memory');
     expect(listed).toContain('1 installed model cannot call tools');
     expect(listed).not.toContain('ollama:chat:1b');
     await setup.mockInput.typeText('coder');
@@ -54,7 +54,7 @@ test('setup pulls the model suggested for the memory, says how far it has come, 
     await setup.mockInput.typeText('download');
     setup.mockInput.pressEnter();
     const done = await frameWith(setup, (frame) => frame.includes('Model: ollama:qwen2.5-coder:7b, saved in'));
-    expect(done).toContain('Downloading qwen2.5-coder:7b, about 4.7 GB.');
+    expect(done).toContain('Downloading qwen2.5-coder:7b, about 4.6 GB.');
     expect(done).toContain('Downloading qwen2.5-coder:7b: 50%.');
     expect(context.server.requests.some((request) => request.path === '/api/pull' && request.body?.model === 'qwen2.5-coder:7b')).toBe(true);
     expect(current().model.model).toBe('qwen2.5-coder:7b');
@@ -89,6 +89,9 @@ test('setup offers the hosted providers whose key is set, with only that provide
 }, 30_000);
 
 test('with Ollama down, setup says how to start it or which keys to set, in full', async () => {
+  // This case is about no provider key being set; the machine may have one.
+  const savedKeys: Record<string, string | undefined> = { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY };
+  for (const name of Object.keys(savedKeys)) delete process.env[name];
   fs.mkdirSync(path.join(context.root, '.jamcli'));
   fs.writeFileSync(path.join(context.root, '.jamcli', 'config.json'), JSON.stringify({ api_registry: { ollama: { endpoint: 'http://127.0.0.1:9' } } }));
   const { setup, close } = await open({}, { size: tall, firstRun: true });
@@ -102,6 +105,10 @@ test('with Ollama down, setup says how to start it or which keys to set, in full
     expect(listed).toMatch(/> Not now/);
   } finally {
     await close();
+    for (const [name, value] of Object.entries(savedKeys)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 }, 30_000);
 
@@ -136,7 +143,7 @@ test('a suggested model already installed is marked, not offered for download', 
   const survey = {
     ollama: { endpoint: 'http://localhost:11434', reachable: true, pulls: true, models: [{ name: 'qwen2.5-coder:7b', tools: true }, { name: 'mystery:1b' }] },
     keys: [],
-    suggestion: { name: 'qwen2.5-coder:7b', downloadGb: 4.7, memoryGb: 7 },
+    suggestion: { name: 'qwen2.5-coder:7b', downloadGb: 4.6, memoryGb: 7 },
     memoryBytes: 16 * GB,
   };
   const { items, note } = setupChoices(survey);
