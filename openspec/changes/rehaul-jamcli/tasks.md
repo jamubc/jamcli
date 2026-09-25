@@ -665,12 +665,19 @@ cover headless, ACP, and delegation.
 - [x] 9.1 The JSON-RPC layer with both framings. Files: `src/core/protocols/jsonrpc/`, property tests.
   - **Verification**: `JsonRpcConnection` sends requests with a timeout and a cancel signal, answers requests and notifications by method, returns `-32601` for an unknown method, and rejects everything pending when closed. Newline framing (ACP, MCP stdio) and `Content-Length` framing (LSP) both count bytes, not characters, and survive a message split at any byte, including inside a multibyte character and inside a header. Property tests cut random messages at random points in both framings.
   - 13 mutation probes, each turning a test red. One showed a redundant carriage-return strip, which was removed.
-- [ ] 9.2 MCP v2. Add `@modelcontextprotocol/client` in its own commit, then:
+- [x] 9.2 MCP v2. Add `@modelcontextprotocol/client` in its own commit, then:
   - negotiation, with the fallback path documented if needed;
   - OAuth with PKCE, the issuer check, and keychain tokens;
   - elicitation, prompts as commands, and resources as references;
   - tool search for large tool sets.
   - Conformance against reference servers.
+  - **Verification**: the client is `@modelcontextprotocol/client` 2.1 (the 1.x SDK is kept as a development dependency only, for a legacy test server). It asks for 2026-07-28 with `server/discover` and falls back to the 2025-11-25 handshake when a server does not answer it; `jamcli mcp test` reports the version and era.
+    - OAuth: `jamcli mcp login <id>` runs the authorization code flow with PKCE (S256) and dynamic client registration through a loopback redirect, checks the state and the RFC 9207 issuer, and keeps the tokens and the client in the credential store; `logout` removes them. A session never opens a browser: a server that needs signing in is reported with the command to run.
+    - Elicitation, in both eras: in the interface the person answers a form or a URL request in the picker; every other surface declines and says so; stopping the turn cancels a waiting request. A server's tool error reaches the model as a failed call.
+    - Prompts run as `/server:prompt` with arguments by position or `name=value`, in the palette and in `jamcli -p`. `@server:uri` puts a resource's text in the prompt, redacted like a file. The composer's `@` completes the project's paths and the servers' resources, and `!` runs a shell command through the permission path: both were D14 composer features that stage 6 had not built.
+    - Tool search: past `tool_search.threshold` (40 by default) MCP tools, their schemas are held back, and `search_tools` loads what the model asks for from its next step on.
+    - Conformance: tests run against a 2.x server (stdio and HTTP) and a 1.x server. By hand, against the reference server `@modelcontextprotocol/server-everything` 2026.8.31 over stdio: the fallback handshake, 15 tools, a tool call, 4 prompts, and 7 resources, one of them read.
+  - Tests: connection, OAuth (3, including a mixed-up issuer and a forged state), the runtime (8), the command line, and the interface (elicitation, prompts, `@`, `!`). 16 mutation probes on negotiation, OAuth, and elicitation, each turning a test red; three survived at first and got tests. The probes for prompts, resources, `@`, `!`, and tool search are deferred to `openspec/DEFERRED.md`.
 - [ ] 9.3 ACP on the official SDK. Add `@agentclientprotocol/sdk` in its own commit, then:
   - `session/load`, `session/set_mode`, plans, available commands, and diffs;
   - the editor's file system and terminals when offered;

@@ -172,6 +172,38 @@ then run the probe.
 - **break**: send `!cmd` to the model instead.
   - **caught by**: `composer.test.tsx`, which checks the model was not called.
 
+### 9.2 tool search
+
+`src/core/tools/toolSearch.ts` (`searchTools`, `toolSearchTool`):
+
+- **break**: name hits scored like description hits (`score += 3` → `score += 1`).
+  - **caught by**: `toolSearch.test.ts` "words in the name rank above...", which expects
+    `create_issue` before `list_issues`.
+- **break**: drop `.filter((entry) => entry.score > 0)`.
+  - **caught by**: the same test, where `weather` must find nothing.
+- **break**: in `select:`, match by prefix instead of exact name.
+  - **gap**: no test has two names where one is a prefix of the other.
+- **break**: the `limit` clamp (`Math.min(..., 20)`).
+  - **gap**: no test asks for more than 20.
+
+`src/core/runtime/index.ts` (the `searching` block) and `src/core/runtime/tools.ts`
+(`deferred`):
+
+- **break** `mcpServers.size > searchThreshold` → `>=`.
+  - **gap**: the test uses a threshold of 2 against 4 tools. Add a case at the threshold.
+- **break**: skip `toolSet.definitions.push(...)` in `load`, so a loaded tool appears only
+  after the next rebuild.
+  - **caught by**: `mcp.test.ts` "past the threshold...", whose second request must carry
+    `modern__echo`.
+- **break**: `deferred` also hides built-in tools.
+  - **gap**: the test checks MCP names only. Assert that `read_file` is still in the first
+    request.
+- **break**: a mode switch (`reassemble`) forgets the loaded tools.
+  - **gap**: no test loads a tool and then switches the mode.
+- **break**: `permissions.offers` is not consulted for a loaded tool.
+  - **gap**: a tool denied by a rule must not be loadable. `search_tools` reads
+    `toolSet.summaries`, which is already filtered, but no test proves it.
+
 ### Probes to repeat once later stages land
 
 These areas were probed in their own tasks, but the unfinished stages below add new paths
@@ -237,7 +269,6 @@ copy once the unit closes), what is missing, and what finishing it needs.
 
 (Updated as the unit closes. An item leaves this list when its task is checked.)
 
-- **9.2 tool search** for large MCP tool sets.
 - **9.3** ACP on the official SDK: `session/load`, `session/set_mode`, plans, available
   commands, diffs, the editor's file system and terminals, and schema validation. Also
   moving the ACP client to the SDK.
