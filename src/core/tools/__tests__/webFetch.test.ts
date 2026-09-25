@@ -12,6 +12,7 @@ beforeAll(() => {
   server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
+    idleTimeout: 255,
     fetch(request) {
       const { pathname } = new URL(request.url);
       if (pathname === '/page')
@@ -23,6 +24,8 @@ beforeAll(() => {
       if (pathname === '/away') return new Response(null, { status: 302, headers: { location: `http://localhost:${other.port}/x` } });
       if (pathname === '/loop') return new Response(null, { status: 302, headers: { location: '/loop' } });
       if (pathname === '/image') return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { 'content-type': 'image/png' } });
+      if (pathname === '/big') return new Response('x'.repeat(6 * 1024 * 1024), { headers: { 'content-type': 'text/plain' } });
+      if (pathname === '/hang') return new Response(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/plain' } });
       return new Response('missing', { status: 404, headers: { 'content-type': 'text/plain' } });
     },
   });
@@ -68,3 +71,20 @@ test('it is a network tool, and rules see the host it reaches', () => {
 test('entities decode, and markup inside text is dropped', () => {
   expect(htmlToText('<p>a &lt;b&gt; &#65;&#x42; <!-- note --> <b>c</b></p>')).toBe('a <b> AB c');
 });
+
+test('a response past five megabytes is cut, with a note', async () => {
+  const result = await fetchUrl(`${base}/big`);
+  expect(result.success).toBe(true);
+  expect(result.output).toContain('[Cut at 5 MB.]');
+  expect(result.output.length).toBeLessThan(6 * 1024 * 1024);
+  expect(result.output.length).toBeGreaterThan(5 * 1024 * 1024 - 100);
+}, 30_000);
+
+test('a response that never ends is given up on when the timeout fires', async () => {
+  const started = Date.now();
+  const result = await fetchUrl(`${base}/hang`);
+  const took = Date.now() - started;
+  expect(took).toBeGreaterThan(29_000);
+  expect(took).toBeLessThan(40_000);
+  expect(result.output).toContain(`${base}/hang`);
+}, 45_000);

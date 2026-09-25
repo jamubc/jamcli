@@ -233,3 +233,37 @@ test('! runs its text literally, without expanding @ references', async () => {
     await runtime.close();
   }
 });
+
+test('in default mode web_fetch asks, and a domain rule allows that host and still asks for another', async () => {
+  const page = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('hello page', { headers: { 'content-type': 'text/plain' } }) });
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8'));
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, permissions: { allow: ['web_fetch(domain:127.0.0.1)'] } }));
+  try {
+    const runtime = await start({});
+    try {
+      const asked: string[] = [];
+      server.enqueue(
+        { toolCalls: [{ id: 'w1', name: 'web_fetch', arguments: { url: `http://127.0.0.1:${page.port}/a` } }] },
+        { text: 'one' },
+        { toolCalls: [{ id: 'w2', name: 'web_fetch', arguments: { url: `http://localhost:${page.port}/b` } }] },
+        { text: 'two' }
+      );
+      const results: string[] = [];
+      const watch = (event: AgentEvent) => {
+        if (event.type === 'approval_request') {
+          asked.push(event.call.name);
+          event.decide({ allow: true });
+        }
+        if (event.type === 'tool_result') results.push(event.result.output);
+      };
+      await runtime.run('first', watch);
+      await runtime.run('second', watch);
+      expect(asked).toEqual(['web_fetch']);
+      expect(results[0]).toContain('hello page');
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    page.stop(true);
+  }
+}, 30_000);

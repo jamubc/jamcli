@@ -3,11 +3,11 @@
 **Description:** Large responses and hanging responses have no tests.
 
 **Acceptance criteria:**
-- [ ] Fixture serves over 5 MB; uncapped `readCapped` turns it red (or asserts bounded memory)
-- [ ] Fixture never ends; missing timeout turns it red (hang killed per probe timeout)
+- [x] Fixture serves over 5 MB; uncapped `readCapped` turns it red (or asserts bounded memory)
+- [x] Fixture never ends; missing timeout turns it red (hang killed per probe timeout)
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/tools/__tests__/webFetch.test.ts`
+- [x] Tests pass: `bun test src/core/tools/__tests__/webFetch.test.ts`
 
 **Dependencies:** None
 
@@ -22,11 +22,11 @@
 **Description:** `web_fetch` as a network tool needs an engine-level test.
 
 **Acceptance criteria:**
-- [ ] In `default` mode the engine asks for `web_fetch`; `policy: read` turns it red
-- [ ] `web_fetch(domain:...)` allow rule permits the matching call and still asks otherwise
+- [x] In `default` mode the engine asks for `web_fetch`; `policy: read` turns it red
+- [x] `web_fetch(domain:...)` allow rule permits the matching call and still asks otherwise
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/tools/__tests__/webFetch.test.ts src/core/runtime/__tests__/permissions.test.ts`
+- [x] Tests pass: `bun test src/core/tools/__tests__/webFetch.test.ts src/core/runtime/__tests__/permissions.test.ts`
 
 **Dependencies:** Task 1
 
@@ -37,7 +37,7 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-2
-- [ ] Caught probes re-run: cross-host redirect, file scheme, isText PNG, script strip
+- [x] Caught probes re-run: cross-host redirect, file scheme, isText PNG, script strip
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 481-501)
