@@ -1,19 +1,19 @@
-import fs from 'fs';
-import { pathExists, readJson } from '../utils/fsx.js';
 import path from 'node:path';
-import { subprocessEnv } from '../core/sandbox/env.js';
+import { Readable, Writable } from 'node:stream';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
-  ACP_PROTOCOL_VERSION,
-  decodeMessage,
-  encodeMessage,
-  permissionOptions,
-  type AcpConfigOption,
-  type JsonRpcId,
-  type JsonRpcMessage,
+  ClientSideConnection,
+  ndJsonStream,
+  PROTOCOL_VERSION,
+  type InitializeResponse,
   type PermissionOption,
-  type PermissionOutcome,
-} from '../acp/protocol.js';
+  type RequestPermissionOutcome,
+  type SessionConfigOption,
+  type SessionUpdate,
+  type ToolCallUpdate,
+} from '@agentclientprotocol/sdk';
+import { pathExists, readJson } from '../utils/fsx.js';
+import { subprocessEnv } from '../core/sandbox/env.js';
 
 /**
  * A Zed-compatible agent configuration: a command, its arguments, and an
@@ -30,30 +30,25 @@ export interface AcpAgentConfig {
   cwd?: string;
 }
 
-export interface AcpInitializeResult {
-  protocolVersion: number;
-  agentCapabilities?: Record<string, unknown>;
-  agentInfo?: { name: string; version: string };
-  authMethods?: { id: string; name?: string }[];
-}
+export type AcpInitializeResult = InitializeResponse;
 
 export interface AcpSessionInfo {
   sessionId: string;
-  configOptions: AcpConfigOption[];
+  configOptions: SessionConfigOption[];
 }
 
 export interface AcpPermissionRequest {
   sessionId: string;
-  toolCall: { toolCallId?: string; title?: string; kind?: string; rawInput?: unknown };
+  toolCall: ToolCallUpdate;
   options: PermissionOption[];
 }
 
-export type PermissionHandler = (
-  request: AcpPermissionRequest
-) => Promise<PermissionOutcome> | PermissionOutcome;
+export type PermissionOutcome = RequestPermissionOutcome;
+
+export type PermissionHandler = (request: AcpPermissionRequest) => Promise<PermissionOutcome> | PermissionOutcome;
 
 export interface AcpPromptOptions {
-  onUpdate?: (update: any) => void;
+  onUpdate?: (update: SessionUpdate) => void;
   onPermission?: PermissionHandler;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -63,30 +58,22 @@ export interface AcpPromptResult {
   stopReason: string;
 }
 
-interface PendingRequest {
-  resolve: (value: any) => void;
-  reject: (error: Error) => void;
-}
-
 /**
- * A client for the Agent Client Protocol. It starts an ACP-speaking agent as a
- * subprocess and drives initialize, session/new, session/prompt, session/cancel,
- * the session/update stream, and the session/request_permission round trip.
- * When no permission handler is supplied, a request is denied by default.
+ * A client for the Agent Client Protocol, on the official SDK. It starts an ACP agent as
+ * a subprocess with the minimal environment and drives a session. A permission request
+ * with no handler is cancelled, which denies it. The agent is not offered JamCLI's file
+ * system or terminals: it works with its own, outside JamCLI's permissions, as any
+ * program the person runs.
  */
 export class AcpClient {
-  private readonly config: AcpAgentConfig;
   private child?: ChildProcessWithoutNullStreams;
-  private nextId = 1;
-  private readonly pending = new Map<JsonRpcId, PendingRequest>();
-  private buffer = '';
-  private updateHandler?: (update: any) => void;
+  private connection?: ClientSideConnection;
+  private exited?: Promise<Error>;
+  private updateHandler?: (update: SessionUpdate) => void;
   private permissionHandler?: PermissionHandler;
   private stderrText = '';
 
-  constructor(config: AcpAgentConfig) {
-    this.config = config;
-  }
+  constructor(private readonly config: AcpAgentConfig) {}
 
   get stderr(): string {
     return this.stderrText;
@@ -99,34 +86,32 @@ export class AcpClient {
       env: subprocessEnv(process.env, { passthrough: this.config.env_passthrough, extra: this.config.env }),
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as ChildProcessWithoutNullStreams;
-
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => this.onChunk(chunk));
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
       this.stderrText += chunk;
     });
-    child.on('error', (error) => this.failAll(error));
-    child.on('exit', (code) => this.failAll(new Error(`ACP agent exited with code ${code}`)));
-
+    this.exited = new Promise<Error>((resolve) => {
+      child.on('error', (error) => resolve(error));
+      child.on('exit', (code) => resolve(new Error(`ACP agent exited with code ${code}`)));
+    });
     this.child = child;
-
-    return this.request<AcpInitializeResult>(
-      'initialize',
-      {
-        protocolVersion: ACP_PROTOCOL_VERSION,
-        clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } },
-      },
-      timeoutMs
+    const stream = ndJsonStream(Writable.toWeb(child.stdin) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout) as unknown as ReadableStream<Uint8Array>);
+    this.connection = new ClientSideConnection(
+      () => ({
+        requestPermission: async (params) => ({
+          outcome: this.permissionHandler
+            ? await this.permissionHandler({ sessionId: params.sessionId, toolCall: params.toolCall, options: params.options })
+            : { outcome: 'cancelled' },
+        }),
+        sessionUpdate: async (params) => this.updateHandler?.(params.update),
+      }),
+      stream
     );
+    return this.within(this.connection.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} }), 'initialize', timeoutMs);
   }
 
-  async newSession(cwd: string, mcpServers: unknown[] = [], timeoutMs = 15000): Promise<AcpSessionInfo> {
-    const result = await this.request<AcpSessionInfo>(
-      'session/new',
-      { cwd: path.resolve(cwd), mcpServers },
-      timeoutMs
-    );
+  async newSession(cwd: string, mcpServers: any[] = [], timeoutMs = 15000): Promise<AcpSessionInfo> {
+    const result = await this.within(this.live().newSession({ cwd: path.resolve(cwd), mcpServers }), 'session/new', timeoutMs);
     return { sessionId: result.sessionId, configOptions: result.configOptions ?? [] };
   }
 
@@ -136,12 +121,8 @@ export class AcpClient {
     const onAbort = () => this.cancel(sessionId);
     options.signal?.addEventListener('abort', onAbort);
     try {
-      const result = await this.request<{ stopReason?: string }>(
-        'session/prompt',
-        { sessionId, prompt: [{ type: 'text', text }] },
-        options.timeoutMs ?? 600000
-      );
-      return { stopReason: result?.stopReason ?? 'end_turn' };
+      const result = await this.within(this.live().prompt({ sessionId, prompt: [{ type: 'text', text }] }), 'session/prompt', options.timeoutMs ?? 600000);
+      return { stopReason: result.stopReason ?? 'end_turn' };
     } finally {
       options.signal?.removeEventListener('abort', onAbort);
       this.updateHandler = undefined;
@@ -150,131 +131,41 @@ export class AcpClient {
   }
 
   cancel(sessionId: string): void {
-    if (!this.child) return;
-    this.send({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId } });
+    void this.connection?.cancel({ sessionId }).catch(() => {});
   }
 
   async stop(): Promise<void> {
     const child = this.child;
     this.child = undefined;
+    this.connection = undefined;
     if (!child) return;
-    this.failAll(new Error('ACP client stopped'));
     try {
       child.stdin.end();
     } catch {
       // The pipe may already be closed.
     }
     child.kill();
-    await new Promise<void>((resolve) => {
-      if (child.exitCode !== null || child.signalCode !== null) {
-        resolve();
-        return;
-      }
-      child.once('exit', () => resolve());
-      setTimeout(resolve, 2000);
+    await Promise.race([this.exited, new Promise((resolve) => setTimeout(resolve, 2000))]);
+  }
+
+  private live(): ClientSideConnection {
+    if (!this.connection) throw new Error('ACP agent is not running');
+    return this.connection;
+  }
+
+  /** A request that fails when it takes too long or the agent exits first. */
+  private async within<T>(request: Promise<T>, method: string, timeoutMs: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${method} timed out after ${timeoutMs}ms`)), timeoutMs);
     });
-  }
-
-  private request<T>(method: string, params: unknown, timeoutMs: number): Promise<T> {
-    const id = this.nextId++;
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`${method} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-      this.pending.set(id, {
-        resolve: (value) => {
-          clearTimeout(timer);
-          resolve(value as T);
-        },
-        reject: (error) => {
-          clearTimeout(timer);
-          reject(error);
-        },
-      });
-      this.send({ jsonrpc: '2.0', id, method, params });
+    const gone = this.exited!.then((error) => {
+      throw error;
     });
-  }
-
-  private send(message: JsonRpcMessage): void {
-    if (!this.child || !this.child.stdin.writable) {
-      throw new Error('ACP agent is not running');
-    }
-    this.child.stdin.write(encodeMessage(message));
-  }
-
-  private onChunk(chunk: string): void {
-    this.buffer += chunk;
-    const lines = this.buffer.split('\n');
-    this.buffer = lines.pop() ?? '';
-    for (const line of lines) this.handleLine(line);
-  }
-
-  private handleLine(line: string): void {
-    const message = decodeMessage(line);
-    if (!message) return;
-
-    if ('method' in message && 'id' in message) {
-      void this.handleServerRequest(message.method, message.id, message.params);
-      return;
-    }
-    if ('method' in message) {
-      if (message.method === 'session/update') {
-        const params = (message.params && typeof message.params === 'object' ? message.params : {}) as {
-          update?: unknown;
-        };
-        this.updateHandler?.(params.update);
-      }
-      return;
-    }
-
-    const id = message.id as JsonRpcId;
-    const pending = this.pending.get(id);
-    if (!pending) return;
-    this.pending.delete(id);
-    if (message.error) {
-      pending.reject(new Error(message.error.message));
-    } else {
-      pending.resolve(message.result);
-    }
-  }
-
-  private async handleServerRequest(method: string, id: JsonRpcId, params: unknown): Promise<void> {
-    const data = (params && typeof params === 'object' ? params : {}) as Record<string, any>;
     try {
-      if (method === 'session/request_permission') {
-        const options = Array.isArray(data.options) ? (data.options as PermissionOption[]) : permissionOptions();
-        const request: AcpPermissionRequest = {
-          sessionId: String(data.sessionId ?? ''),
-          toolCall: data.toolCall ?? {},
-          options,
-        };
-        const outcome: PermissionOutcome = this.permissionHandler
-          ? await this.permissionHandler(request)
-          : { outcome: 'cancelled' };
-        this.send({ jsonrpc: '2.0', id, result: { outcome } });
-        return;
-      }
-      if (method === 'fs/read_text_file') {
-        const content = await fs.promises.readFile(String(data.path), 'utf8');
-        this.send({ jsonrpc: '2.0', id, result: { content } });
-        return;
-      }
-      if (method === 'fs/write_text_file') {
-        await fs.promises.writeFile(String(data.path), String(data.content ?? ''), 'utf8');
-        this.send({ jsonrpc: '2.0', id, result: {} });
-        return;
-      }
-      this.send({ jsonrpc: '2.0', id, error: { code: -32601, message: `Unsupported method: ${method}` } });
-    } catch (error: any) {
-      this.send({ jsonrpc: '2.0', id, error: { code: -32000, message: error?.message || String(error) } });
-    }
-  }
-
-  private failAll(error: Error): void {
-    for (const [id, pending] of this.pending) {
-      this.pending.delete(id);
-      pending.reject(error);
+      return await Promise.race([request, late, gone]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 }
@@ -314,9 +205,7 @@ export const delegateToAgent = async (
       timeoutMs: options.timeoutMs,
       onPermission: options.onPermission,
       onUpdate: (update) => {
-        if (update && update.sessionUpdate === 'agent_message_chunk') {
-          chunks.push(String(update.content?.text ?? ''));
-        }
+        if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') chunks.push(update.content.text);
         options.onUpdate?.(update);
       },
     });
