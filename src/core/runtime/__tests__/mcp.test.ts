@@ -292,3 +292,73 @@ test('past the threshold, MCP tools are found with search_tools and offered from
     await runtime.close();
   }
 }, 30_000);
+
+test('at the threshold MCP tools stay direct, and past it the built-ins stay listed', async () => {
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8'));
+  const names = (body: any) => (body.tools ?? []).map((tool: any) => tool.function.name);
+
+  // Four MCP tools against a threshold of four: 4 > 4 is false, so nothing is held back.
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, tool_search: { threshold: 4 } }));
+  const exact = await start({});
+  try {
+    server.enqueue({ text: 'direct' });
+    await exact.run('hello', () => {});
+    const offered = names(server.completions().at(-1)!.body);
+    expect(offered).toContain('modern__echo');
+    expect(offered).not.toContain('search_tools');
+  } finally {
+    await exact.close();
+  }
+
+  // One past it: MCP tools are held back, and the built-ins are not.
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, tool_search: { threshold: 3 } }));
+  const past = await start({});
+  try {
+    server.enqueue({ text: 'deferred' });
+    await past.run('hello', () => {});
+    const offered = names(server.completions().at(-1)!.body);
+    expect(offered).toContain('search_tools');
+    expect(offered).toContain('read_file');
+    expect(offered.filter((name: string) => name.startsWith('modern__'))).toEqual([]);
+  } finally {
+    await past.close();
+  }
+}, 30_000);
+
+test('a loaded tool survives a mode switch', async () => {
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8'));
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, tool_search: { threshold: 2 } }));
+  const runtime = await start({});
+  try {
+    server.enqueue(
+      { toolCalls: [{ id: 's1', name: 'search_tools', arguments: { query: 'echo' } }] },
+      { text: 'one' },
+      { text: 'two' }
+    );
+    await runtime.run('find echo', () => {});
+    expect(runtime.setPermissionMode('accept-edits')).toBeUndefined();
+    await runtime.run('after the switch', () => {});
+    const names = (body: any) => (body.tools ?? []).map((tool: any) => tool.function.name);
+    expect(names(server.completions().at(-1)!.body)).toContain('modern__echo');
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);
+
+test('a tool denied by a rule is not offered through search_tools', async () => {
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8'));
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, tool_search: { threshold: 2 }, permissions: { deny: ['modern__echo'] } }));
+  const runtime = await start({});
+  try {
+    server.enqueue(
+      { toolCalls: [{ id: 's1', name: 'search_tools', arguments: { query: 'echo' } }] },
+      { text: 'nothing to load' }
+    );
+    const results: ToolResult[] = [];
+    await runtime.run('find echo', (event) => event.type === 'tool_result' && results.push(event.result));
+    expect(results[0].output).toContain('No tool that is not listed yet matches "echo"');
+    expect(results[0].output).not.toContain('modern__echo');
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);

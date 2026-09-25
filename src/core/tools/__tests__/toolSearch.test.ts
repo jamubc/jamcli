@@ -25,3 +25,35 @@ test('the tool loads what it finds, or exact names after select:', async () => {
   expect(none.output).toBe('No tool that is not listed yet matches "weather". 3 tools are held back.');
   expect(loaded).toHaveLength(1);
 });
+
+test('select: matches whole names, so a prefix of another name loads only itself', async () => {
+  const prefixed = [
+    { name: 'github__create', description: 'Create a repository.', server: 'github' },
+    { name: 'github__create_issue', description: 'Open an issue.', server: 'github' },
+  ];
+  const loaded: string[][] = [];
+  const tool = toolSearchTool({ deferred: () => prefixed, load: (names) => loaded.push(names) });
+  await tool.runner({ query: 'select:github__create' }, {} as any);
+  expect(loaded).toEqual([['github__create']]);
+});
+
+test('a name word outranks a description word', () => {
+  expect(
+    searchTools(
+      [
+        { name: 'a_tool', description: 'Does alpha things.' },
+        { name: 'alpha_tool', description: 'Does something.' },
+      ],
+      'alpha'
+    ).map((tool) => tool.name)
+  ).toEqual(['alpha_tool', 'a_tool']);
+});
+
+test('the limit is clamped at 20', async () => {
+  const many = Array.from({ length: 25 }, (_, index) => ({ name: `bulk__tool_${index + 1}`, description: 'A bulk tool.', server: 'bulk' }));
+  const loaded: string[][] = [];
+  const tool = toolSearchTool({ deferred: () => many, load: (names) => loaded.push(names) });
+  const found = await tool.runner({ query: 'bulk', limit: 50 }, {} as any);
+  expect(loaded[0]).toHaveLength(20);
+  expect(found.metadata).toMatchObject({ loaded: 20 });
+});

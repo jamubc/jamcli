@@ -3,11 +3,11 @@
 **Description:** `select:` must match exact names, and `limit` must clamp at 20.
 
 **Acceptance criteria:**
-- [ ] Two tools where one name is a prefix of the other; prefix match turns test red, exact match passes
-- [ ] Request over 20 returns at most 20; removing `Math.min(..., 20)` turns it red
+- [x] Two tools where one name is a prefix of the other; prefix match turns test red, exact match passes
+- [x] Request over 20 returns at most 20; removing `Math.min(..., 20)` turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/tools/__tests__/toolSearch.test.ts`
+- [x] Tests pass: `bun test src/core/tools/__tests__/toolSearch.test.ts`
 
 **Dependencies:** None
 
@@ -22,11 +22,11 @@
 **Description:** The deferred-loading threshold and built-in visibility need edge tests.
 
 **Acceptance criteria:**
-- [ ] Case at exactly the threshold (`mcpServers.size` vs `searchThreshold`) distinguishes `>` from `>=`
-- [ ] First request still contains `read_file` when MCP tools are deferred; hiding built-ins turns it red
+- [x] Case at exactly the threshold (`mcpServers.size` vs `searchThreshold`) distinguishes `>` from `>=`
+- [x] First request still contains `read_file` when MCP tools are deferred; hiding built-ins turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/runtime/__tests__/mcp.test.ts`
+- [x] Tests pass: `bun test src/core/runtime/__tests__/mcp.test.ts`
 
 **Dependencies:** Task 1
 
@@ -41,11 +41,11 @@
 **Description:** Loaded tools must survive a mode switch, and denied tools must not be loadable.
 
 **Acceptance criteria:**
-- [ ] Load a tool, switch mode via `reassemble`, assert tool still loaded
-- [ ] Tool denied by rule is not loadable via `search_tools`; consulting `permissions.offers` is proven by probe
+- [x] Load a tool, switch mode via `reassemble`, assert tool still loaded
+- [x] Tool denied by rule is not loadable via `search_tools`; consulting `permissions.offers` is proven by probe
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/runtime/__tests__/mcp.test.ts src/core/permissions/__tests__/engine.test.ts`
+- [x] Tests pass: `bun test src/core/runtime/__tests__/mcp.test.ts src/core/permissions/__tests__/engine.test.ts`
 
 **Dependencies:** Task 2
 
@@ -56,8 +56,8 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-3
-- [ ] Caught probes still red when broken: name scoring, zero-score filter, `definitions.push` in `load`
-- [ ] Four gates pass
+- [x] Caught probes still red when broken: name scoring, zero-score filter, `definitions.push` in `load`
+- [x] Four gates pass
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 175-206)
