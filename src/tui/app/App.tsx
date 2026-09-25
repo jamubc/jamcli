@@ -13,8 +13,9 @@ import { createSyntaxStyle } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
 import { customCommands } from './custom.js';
 import { askToTrustHooks } from './extensions.js';
+import { answerElicitation } from './elicit.js';
 import { Palette } from './Palette.js';
-import { Picker, filterItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
+import { Picker, shownItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
 import { MotionContext, PlainContext, THEMES, ThemeContext, framed, type Theme } from './theme.js';
 import { keysFor, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
@@ -263,6 +264,9 @@ export function App(props: AppProps) {
     keys: keys.bindings,
   });
 
+  // An MCP server's request for input is asked in an overlay, with the context as it is then.
+  controller.onElicitation = (event) => answerElicitation(context(), event);
+
   /** Search what the person has sent before, and put the chosen message in the composer. */
   const openHistory = () =>
     pick({
@@ -363,10 +367,13 @@ export function App(props: AppProps) {
     if (open) {
       // The overlay takes every key, including the Enter that closes it and hands focus back.
       key.preventDefault();
-      const shown = open.items ? filterItems(open.items, open.filter) : [];
+      const shown = open.items ? shownItems(open.items, open.filter, open.request.freeText) : [];
       const last = Math.max(0, shown.length - 1);
       const step = { down: 1, up: -1, pagedown: PICKER_ROWS, pageup: -PICKER_ROWS }[key.name as 'down'];
-      if (key.name === 'escape') setOverlay(undefined);
+      if (key.name === 'escape') {
+        setOverlay(undefined);
+        open.request.dismissed?.();
+      }
       else if (step) setOverlay({ ...open, index: Math.min(Math.max(0, open.index + step), last) });
       else if (key.name === 'return') {
         const item = shown[open.index];
@@ -495,6 +502,7 @@ export function App(props: AppProps) {
                     hint={overlay.current.request.hint}
                     filter={overlay.current.filter}
                     selected={overlay.current.index}
+                    {...(overlay.current.request.freeText !== undefined ? { freeText: overlay.current.request.freeText } : {})}
                   />
                 ) : matches ? (
                   <Palette matches={matches} selected={palette.current.index} />

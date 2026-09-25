@@ -1,3 +1,4 @@
+import type { ElicitationAnswer, ElicitationRequest } from './mcp/connect.js';
 export interface TokenUsage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -164,6 +165,11 @@ export type AgentEvent =
       request?: ApprovalRequest;
     }
   | { type: 'turn_end'; status: RunStatus }
+  /**
+   * An MCP server asks the person for input during a call: a form, or a page to open.
+   * Only the interface answers; other surfaces decline.
+   */
+  | { type: 'elicitation_request'; id: string; request: ElicitationRequest; respond: (answer: ElicitationAnswer) => void }
   /** A message the engine appended to the conversation: the prompt, a reply, or a tool result. */
   | { type: 'message'; message: ChatMessage }
   /** How an approval request was answered. */

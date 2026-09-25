@@ -65,6 +65,9 @@ export class SessionController {
     private readonly dispatch: (action: ViewAction) => void
   ) {}
 
+  /** Asks the person what an MCP server asked for; the interface sets it. */
+  onElicitation?: (event: Extract<AgentEvent, { type: 'elicitation_request' }>) => void;
+
   get running(): boolean {
     return this.busy;
   }
@@ -96,6 +99,12 @@ export class SessionController {
         text,
         (event: AgentEvent) => {
           if (event.type === 'approval_request') this.decisions.set(event.call.id, event.decide);
+          if (event.type === 'elicitation_request') {
+            // With nobody set to ask, the server hears no rather than waiting forever.
+            if (this.onElicitation) this.onElicitation(event);
+            else event.respond({ action: 'decline' });
+            return;
+          }
           this.dispatch({ type: 'event', event });
         },
         turn

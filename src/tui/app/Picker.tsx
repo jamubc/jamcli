@@ -26,6 +26,19 @@ export interface PickRequest {
   /** A line above the hint: something to know, such as a provider that could not be asked. */
   note?: string;
   choose(item: PickItem): void | Promise<void>;
+  /**
+   * Take what the person types as the answer: the first row is the typed text, labelled
+   * with this, and the other choices are shown whole rather than filtered.
+   */
+  freeText?: string;
+  /** Called when Escape closes the list without a choice. */
+  dismissed?(): void;
+}
+
+/** The rows the list shows for a filter: the matching choices, or the typed text first. */
+export function shownItems(items: PickItem[], filter: string, freeText?: string): PickItem[] {
+  if (freeText === undefined) return filterItems(items, filter);
+  return [{ key: '__typed__', label: filter || '(type the answer)', detail: freeText, value: filter }, ...items];
 }
 
 /** How many choices the overlay shows at once. */
@@ -45,13 +58,13 @@ export function filterItems(items: PickItem[], filter: string): PickItem[] {
  * An overlay over the composer: a title, a filter the person types into, and the
  * matching choices, the chosen one marked with a word as well as a color.
  */
-export function Picker(props: { title: string; items: PickItem[] | undefined; note?: string; empty: string; hint?: string; filter: string; selected: number }) {
+export function Picker(props: { title: string; items: PickItem[] | undefined; note?: string; empty: string; hint?: string; filter: string; selected: number; freeText?: string }) {
   const theme = useTheme();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   const room = Math.max(20, columns - 4);
   const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
-  const shown = props.items ? filterItems(props.items, props.filter) : undefined;
+  const shown = props.items ? shownItems(props.items, props.filter, props.freeText) : undefined;
   const start = shown ? Math.min(Math.max(0, props.selected - PICKER_ROWS + 1), Math.max(0, shown.length - PICKER_ROWS)) : 0;
   const visible = shown?.slice(start, start + PICKER_ROWS) ?? [];
   const width = Math.min(48, Math.max(0, ...visible.map((item) => item.label.length + (item.current ? ' (in use)'.length : 0))));
