@@ -93,9 +93,6 @@ interface PromptSelection {
 /** A composer line that starts with a slash and has no space yet is a command being named. */
 const naming = (draft: string) => draft.startsWith('/') && !/\s/.test(draft);
 
-/** Commands the design names that arrive with later work. Typing one says so rather than calling it unknown. */
-const LATER = new Set(['workflows']);
-
 export function App(props: AppProps) {
   const { runtime: first, projectRoot, onExit, openSession: open, commands: extra = [], theme: startTheme = THEMES.dark, screenReader = false } = props;
   const reducedMotion = screenReader || Boolean(props.reducedMotion);
@@ -304,7 +301,7 @@ export function App(props: AppProps) {
     const command = findCommand(commands, parsed.name);
     // A custom command's line is shown as the message it sends.
     if (!options.quiet && command?.source !== 'user' && command?.source !== 'project' && command?.source !== 'mcp') dispatch({ type: 'command', text: line });
-    if (!command) return say('warn', LATER.has(parsed.name) ? `/${parsed.name} is not available yet.` : `/${parsed.name} is not a command. /help lists them.`);
+    if (!command) return say('warn', `/${parsed.name} is not a command. /help lists them.`);
     try {
       await command.run(context(), parsed.args);
     } catch (error: any) {

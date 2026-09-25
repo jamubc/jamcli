@@ -66,7 +66,7 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('/zz is not a command. /help lists them.'));
     await send(setup, '/workflows');
-    await frameWith(setup, (frame) => frame.includes('/workflows is not available yet.'));
+    await frameWith(setup, (frame) => frame.includes('No workflows. Add YAML or JSON files to .jamcli/workflows/.'));
     // A slash command never reaches the model.
     expect(context.server.completions()).toHaveLength(0);
   } finally {

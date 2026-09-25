@@ -362,6 +362,11 @@ export const runCli = async (argv: string[]): Promise<number> => {
     return runPluginCommand(parsed.pluginCommand, projectRoot);
   }
 
+  if (parsed.workflowCommand) {
+    const { runWorkflowCommand } = await import('./cli/workflow.js');
+    return runWorkflowCommand(parsed.workflowCommand, projectRoot);
+  }
+
   if (parsed.doctor) {
     const { runDoctorCommand } = await import('./cli/doctor.js');
     return runDoctorCommand(parsed.doctor, projectRoot);

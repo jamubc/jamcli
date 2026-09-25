@@ -24,6 +24,7 @@ import { diff } from './review.js';
 import { commit } from './commit.js';
 import { pr } from './pr.js';
 import { commandsList, hooksCommand, plugins, skills } from './extensions.js';
+import { workflowsCommand } from './workflows.js';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
@@ -615,6 +616,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   skills,
   commandsList,
   plugins,
+  workflowsCommand,
   hooksCommand,
   mcp,
   config,
