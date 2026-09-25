@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/react */
 import path from 'path';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { useKeyboard, useRenderer } from '@opentui/react';
+import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
+import { fitPhrase, isMicro, microPhrase, microSetting } from './micro.js';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { initialView, reduceView, type ViewState } from '../state/view.js';
@@ -47,6 +48,8 @@ export interface AppProps {
   firstRun?: boolean;
   /** The working indicator's spinner and colors. Defaults to the classic spinner with subtle words. */
   statusStyle?: StatusStyleDefinition;
+  /** Micro status mode: `auto` below 11 rows or 41 columns, `always`, or `never`. Defaults to `JAMCLI_MICRO`, then `auto`. */
+  micro?: 'auto' | 'always' | 'never';
   /** Hears every event and each session opened, for the ACP observer endpoint. */
   observer?: Pick<ObserverHub, 'event' | 'attach'>;
 }
@@ -95,7 +98,11 @@ const naming = (draft: string) => draft.startsWith('/') && !/\s/.test(draft);
 
 export function App(props: AppProps) {
   const { runtime: first, projectRoot, onExit, openSession: open, commands: extra = [], theme: startTheme = THEMES.dark, screenReader = false } = props;
-  const reducedMotion = screenReader || Boolean(props.reducedMotion);
+  // Tiled too small to read, the interface shows one static phrase; the full view stays
+  // mounted underneath, hidden, so restoring the size restores it as it was.
+  const size = useTerminalDimensions();
+  const micro = isMicro(props.micro ?? microSetting(process.env.JAMCLI_MICRO), size);
+  const reducedMotion = screenReader || Boolean(props.reducedMotion) || micro;
   const keys = useMemo(() => props.keys ?? loadKeybindings(), [props.keys]);
   const bound = (action: KeyAction, key: KeyLike) => matchesAction(keys.bindings, action, key);
   const [showTodos, setShowTodos] = useState(false);
@@ -522,7 +529,12 @@ export function App(props: AppProps) {
     <ThemeContext.Provider value={theme}>
       <PlainContext.Provider value={plain}>
         <MotionContext.Provider value={reducedMotion}>
-          <box flexDirection="column" width="100%" height="100%">
+          {micro ? (
+            <box height={1} width="100%">
+              <text fg={state.approvals.length ? theme.warn : theme.text}>{fitPhrase(microPhrase(state), Math.max(1, size.width))}</text>
+            </box>
+          ) : null}
+          <box flexDirection="column" width="100%" height="100%" visible={!micro}>
             <box height={1} flexShrink={0}>
               <text fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
             </box>
