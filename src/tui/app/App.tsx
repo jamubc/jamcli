@@ -368,6 +368,8 @@ export function App(props: AppProps) {
     composer.current?.setText('');
     setPalette({ draft: '', index: 0 });
     if (line.startsWith('/')) return void runCommand(line);
+    // `!` runs what follows as a shell command, under the same permissions as the model's.
+    if (text.startsWith('!') && text.slice(1).trim()) return void controller.submit(text.slice(1).trim(), { shell: true, display: text });
     void controller.submit(text);
   };
 

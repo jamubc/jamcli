@@ -107,3 +107,26 @@ test('jamcli -p runs a custom command by name, and other text starting with a sl
   expect(await jam('/tmp is full')).toEqual({ out: 'noted\n', code: 0 });
   expect(server.completions().at(-1)!.body.messages.at(-1).content).toBe('/tmp is full');
 }, 20_000);
+
+test('a command typed after ! runs under the session\'s permissions without the model, and the next turn reads its output', async () => {
+  const runtime = await start({ allowTools: ['run_command'] });
+  const before = server.completions().length;
+  const events: AgentEvent[] = [];
+  const ran = await runtime.run('echo hello from the shell', (event) => events.push(event), { shell: true });
+  expect(ran.status).toBe('ok');
+  expect(server.completions().length).toBe(before);
+  const results = events.flatMap((event) => (event.type === 'tool_result' ? [event.result] : []));
+  expect(results.map((result) => [result.tool, result.status])).toEqual([['run_command', 'ok']]);
+
+  server.enqueue({ text: 'seen' });
+  await runtime.run('what did it print?');
+  expect(JSON.stringify(server.completions().at(-1)!.body.messages)).toContain('hello from the shell');
+  await runtime.close();
+
+  // Without a grant, the person is asked like for any command, and a no leaves it unrun.
+  const asking = await start();
+  const denied = await asking.run('touch made.txt', (event) => event.type === 'approval_request' && event.decide({ allow: false }), { shell: true });
+  expect(denied).toMatchObject({ status: 'refused', error: 'The command was not run.' });
+  expect(fs.existsSync(path.join(root, 'made.txt'))).toBe(false);
+  await asking.close();
+});

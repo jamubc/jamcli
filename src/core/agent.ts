@@ -126,7 +126,7 @@ export class CoreAgent implements Agent {
     this.running.get(sessionId)?.abort();
   }
 
-  async run(session: JamSession, prompt: string, onEvent: (e: AgentEvent) => void): Promise<RunResult> {
+  async run(session: JamSession, prompt: string, onEvent: (e: AgentEvent) => void, options: { shell?: boolean } = {}): Promise<RunResult> {
     const controller = new AbortController();
     const external = this.options.signal;
     const relay = () => controller.abort();
@@ -134,7 +134,7 @@ export class CoreAgent implements Agent {
     external?.addEventListener('abort', relay, { once: true });
     this.running.set(session.id, controller);
     try {
-      return await this.turn(session, prompt, onEvent, controller.signal);
+      return await (options.shell ? this.shell(session, prompt, onEvent, controller.signal) : this.turn(session, prompt, onEvent, controller.signal));
     } finally {
       external?.removeEventListener('abort', relay);
       if (this.running.get(session.id) === controller) this.running.delete(session.id);
@@ -147,6 +147,44 @@ export class CoreAgent implements Agent {
     const buffer = new HeadTailBuffer(this.truncationLimit);
     buffer.push(text);
     return buffer.toString();
+  }
+
+  /**
+   * A command the person typed after `!`: run as the model's `run_command` would be, so
+   * the permission engine, the sandbox, hooks, and checkpoints apply, and kept in the
+   * conversation with its output, so the model can read it on the next turn. No model is asked.
+   */
+  private async shell(session: JamSession, command: string, emit: (e: AgentEvent) => void, signal: AbortSignal): Promise<RunResult> {
+    const { dispatcher, hooks } = this.options;
+    const finish = (status: RunStatus, working: JamSession, error?: string): RunResult => {
+      emit({ type: 'turn_end', status });
+      return { status, sessionId: session.id, response: '', turns: 0, usage: { ...working.usage }, session: working, ...(error ? { error } : {}) };
+    };
+    emit({ type: 'turn_start', prompt: `!${command}` });
+    if (!dispatcher) {
+      emit({ type: 'notice', level: 'error', message: 'This session has no tools, so the command was not run.' });
+      return finish('error', session);
+    }
+    const call: ToolCall = { id: `shell-${Date.now().toString(36)}`, name: 'run_command', arguments: { command } };
+    const batch = await executeBatch([call], {
+      dispatcher,
+      emit,
+      signal,
+      projectRoot: session.projectRoot,
+      session,
+      hooks,
+      redact: this.redact,
+      ...(this.options.beforeChange ? { beforeChange: this.options.beforeChange } : {}),
+      ...(this.options.afterChange ? { afterChange: this.options.afterChange } : {}),
+    });
+    const [result] = batch.results;
+    const status = result.status ?? (result.success ? 'ok' : 'error');
+    const said = status === 'denied' ? 'It was not run.' : status === 'ok' ? 'Its output:' : `It ended with status ${status}. Its output:`;
+    const message = userMessage(`[I ran a command myself: ${command}]\n${said}${status === 'denied' ? '' : `\n\`\`\`\n${this.truncate(result.output)}\n\`\`\``}`);
+    const working = appendMessages(session, [message]);
+    emit({ type: 'message', message });
+    if (signal.aborted) return finish('cancelled', working);
+    return status === 'denied' ? finish('refused', working, 'The command was not run.') : finish('ok', working);
   }
 
   private async turn(
