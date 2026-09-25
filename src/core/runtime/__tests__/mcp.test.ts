@@ -158,3 +158,27 @@ test('a server\'s prompts and resources are listed, a prompt is rendered, and @s
     await runtime.close();
   }
 }, 30_000);
+
+test('past the threshold, MCP tools are found with search_tools and offered from the next step', async () => {
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8'));
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, tool_search: { threshold: 2 } }));
+  const runtime = await start({ allowTools: ['modern__echo'] });
+  try {
+    server.enqueue(
+      { toolCalls: [{ id: 's1', name: 'search_tools', arguments: { query: 'echo' } }] },
+      { toolCalls: [{ id: 'e1', name: 'modern__echo', arguments: { text: 'hi' } }] },
+      { text: 'done' }
+    );
+    const results: ToolResult[] = [];
+    await runtime.run('say hi', (event) => event.type === 'tool_result' && results.push(event.result));
+    const names = (body: any) => (body.tools ?? []).map((tool: any) => tool.function.name);
+    const [first, second] = server.completions().slice(-3);
+    expect(names(first.body)).toContain('search_tools');
+    expect(names(first.body).filter((name: string) => name.startsWith('modern__'))).toEqual([]);
+    expect(names(second.body)).toContain('modern__echo');
+    expect(names(second.body)).not.toContain('modern__deploy');
+    expect(results.map((result) => result.output)).toEqual([expect.stringContaining('- modern__echo (MCP server modern)'), 'echo:hi']);
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);

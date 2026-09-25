@@ -29,6 +29,7 @@ import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type Mo
 import { expandReferences } from './references.js';
 import { loadSkills, skillsPromptText, type Skill } from '../ext/skills.js';
 import { skillTool } from '../tools/skill.js';
+import { DEFAULT_TOOL_SEARCH_THRESHOLD, toolSearchTool } from '../tools/toolSearch.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
@@ -374,6 +375,29 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
             })()
           : undefined));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
+  // Past a threshold, MCP tools are offered through search_tools rather than in every request.
+  const searchThreshold = config.tool_search?.threshold ?? DEFAULT_TOOL_SEARCH_THRESHOLD;
+  const loadedTools = new Set<string>();
+  const searching = Boolean(mcpServers && searchThreshold > 0 && mcpServers.size > searchThreshold);
+  if (searching) {
+    registry.register(
+      toolSearchTool({
+        deferred: () =>
+          toolSet.summaries
+            .filter((tool) => tool.source === 'mcp' && !loadedTools.has(tool.name))
+            .map((tool) => ({ name: tool.name, description: tool.description, ...(tool.server ? { server: tool.server } : {}) })),
+        load: (names) => {
+          for (const name of names) {
+            if (loadedTools.has(name)) continue;
+            loadedTools.add(name);
+            // Added to the running turn's list too, so the next request carries it.
+            const tool = toolSet.summaries.find((entry) => entry.name === name);
+            if (tool) toolSet.definitions.push({ type: 'function', function: { name, description: tool.description, parameters: tool.parameters as Record<string, unknown> } });
+          }
+        },
+      })
+    );
+  }
   /** The servers that are on, for `@server:uri` references and `/server:prompt` commands. */
   const enabledServers = async () => (mcp ? (await mcp.listServers()).filter((server) => server.enabled !== false) : []);
   const resourceReader =
@@ -448,6 +472,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       mcpServers,
       permissions,
       grantProject,
+      ...(searching ? { deferred: (name: string) => Boolean(mcpServers?.has(name)) && !loadedTools.has(name) } : {}),
       ...(options.dryRun ? { dryRun: recordDryRun } : {}),
       descriptions: taskTool
         ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }

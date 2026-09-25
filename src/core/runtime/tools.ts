@@ -106,6 +106,8 @@ export interface ToolSetOptions {
   permissions: PermissionEngine;
   /** Tool names that came from MCP servers, mapped to their server. */
   mcpServers?: Map<string, string>;
+  /** Tools that run when called but whose schemas are held back until `search_tools` loads them. */
+  deferred?: (name: string) => boolean;
   /** Descriptions to offer instead of a tool's own, such as `task` listing the categories. */
   descriptions?: Record<string, string>;
   /** The context every call runs with, less what each call supplies. */
@@ -147,7 +149,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
       ...(server ? { server } : {}),
     };
   });
-  const definitions: ToolDefinition[] = summaries.map((tool) => ({
+  const definitions: ToolDefinition[] = summaries.filter((tool) => !options.deferred?.(tool.name)).map((tool) => ({
     type: 'function',
     function: { name: tool.name, description: tool.description, parameters: tool.parameters as Record<string, unknown> },
   }));

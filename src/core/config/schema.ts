@@ -124,6 +124,11 @@ export const ConfigFileSchema = z
     permissions: PermissionSettingsSchema,
     sandbox: SandboxSettingsSchema,
     agent_loop: AgentLoopSchema,
+    tool_search: z
+      .strictObject({
+        threshold: nonNegativeInt().describe('Offer MCP tools through search_tools once the servers bring more than this many. 0 always sends them all. Defaults to 40.'),
+      })
+      .partial(),
     context: z
       .strictObject({
         auto_compact: z.boolean().describe('Summarize older turns when a request nears the model\'s window. On by default.'),

@@ -137,6 +137,8 @@ export interface Config {
   git?: GitSettings;
   /** Commands run at lifecycle events (D17). */
   hooks?: HookSettings;
+  /** When MCP tools are found through `search_tools` instead of sent with every request. */
+  tool_search?: { threshold?: number };
 }
 
 export type ThemeName = 'dark' | 'light' | 'high-contrast' | 'monochrome';
