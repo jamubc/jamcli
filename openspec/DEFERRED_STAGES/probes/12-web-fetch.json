@@ -1,0 +1,59 @@
+[
+  {
+    "name": "12a a large response is not capped",
+    "file": "src/core/tools/webFetch.ts",
+    "old": "    if (size + value.byteLength > MAX_BYTES) {",
+    "new": "    if (false) {",
+    "tests": ["src/core/tools/__tests__/webFetch.test.ts"]
+  },
+  {
+    "name": "12b the fetch has no timeout",
+    "file": "src/core/tools/webFetch.ts",
+    "old": "  const timeout = AbortSignal.timeout(TIMEOUT_MS);",
+    "new": "  const timeout = new AbortController().signal;",
+    "tests": ["src/core/tools/__tests__/webFetch.test.ts"],
+    "timeout": 90
+  },
+  {
+    "name": "12d web_fetch is offered as a read tool",
+    "file": "src/core/tools/webFetch.ts",
+    "old": "  policy: 'network',",
+    "new": "  policy: 'read',",
+    "tests": ["src/core/tools/__tests__/webFetch.test.ts"]
+  },
+  {
+    "name": "12f a fetched URL names no domain subject",
+    "file": "src/core/permissions/subjects.ts",
+    "old": "      return { subjects: [{ kind: 'domain', value: new URL(args.url).hostname }] };",
+    "new": "      return { subjects: [] };",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "12g a redirect to another host is followed (already caught before)",
+    "file": "src/core/tools/webFetch.ts",
+    "old": "      if (next.host !== url.host) {",
+    "new": "      if (false) {",
+    "tests": ["src/core/tools/__tests__/webFetch.test.ts"]
+  },
+  {
+    "name": "12h file URLs are fetched (already caught before)",
+    "file": "src/core/tools/webFetch.ts",
+    "old": "  if (url.protocol !== 'http:' && url.protocol !== 'https:') return { output: `Refused: only http and https URLs are fetched, not ${url.protocol}` };",
+    "new": "  if (false) return { output: `Refused: only http and https URLs are fetched, not ${url.protocol}` };",
+    "tests": ["src/core/tools/__tests__/webFetch.test.ts"]
+  },
+  {
+    "name": "12i every content type is text (already caught before)",
+    "file": "src/core/tools/webFetch.ts",
+    "old": "const isText = (type: string) => /^text\\/|[/+](json|xml|javascript|ecmascript|yaml|x-yaml|markdown)\\b/.test(type) || type === '';",
+    "new": "const isText = () => true;",
+    "tests": ["src/core/tools/__tests__/webFetch.test.ts"]
+  },
+  {
+    "name": "12j script contents are kept in the text (already caught before)",
+    "file": "src/core/tools/webFetch.ts",
+    "old": "    .replace(/<(script|style|noscript|template|svg|head)\\b[\\s\\S]*?<\\/\\1\\s*>/gi, '')",
+    "new": "    .replace(/<(style|noscript|template|svg|head)\\b[\\s\\S]*?<\\/\\1\\s*>/gi, '')",
+    "tests": ["src/core/tools/__tests__/webFetch.test.ts"]
+  }
+]

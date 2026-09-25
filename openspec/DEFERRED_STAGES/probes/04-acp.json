@@ -1,0 +1,100 @@
+[
+  {
+    "name": "04a allow-always forgets the session scope",
+    "file": "src/acp/server.ts",
+    "old": "      else if (chosen?.kind === 'allow_always') decision = { allow: true, scope: 'session' };",
+    "new": "      else if (chosen?.kind === 'allow_always') decision = { allow: true };",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04b reject-always is treated as allow",
+    "file": "src/acp/server.ts",
+    "old": "      if (chosen?.kind === 'allow_once') decision = { allow: true };",
+    "new": "      if (chosen?.kind === 'allow_once' || chosen?.kind === 'reject_always') decision = { allow: true };",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04c a failed permission request is allowed anyway",
+    "file": "src/acp/server.ts",
+    "old": "    } catch {\n      // The editor went away or answered with an error: the call does not run.\n    }",
+    "new": "    } catch {\n      decision = { allow: true };\n    }",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04d commands are announced before the session/new reply",
+    "file": "src/acp/server.ts",
+    "old": "        // After the reply, so the client knows the session the list belongs to.\n        setTimeout(() => void announceCommands(controller), 0);",
+    "new": "        await announceCommands(controller);",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04e the update queue is not flushed before the prompt reply",
+    "file": "src/acp/server.ts",
+    "old": "        await queue;\n        return { stopReason: stopReasonFor(result.status) };",
+    "new": "        return { stopReason: stopReasonFor(result.status) };",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04f resource_link blocks are dropped from the prompt",
+    "file": "src/acp/server.ts",
+    "old": "    else if (block.type === 'resource_link') context.push(`Linked: [${block.name}](${block.uri})`);\n",
+    "new": "",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04g tool output past the limit is not cut",
+    "file": "src/acp/updates.ts",
+    "old": "text(output.length > OUTPUT_LIMIT ? `${output.slice(0, OUTPUT_LIMIT)}\\n[${output.length - OUTPUT_LIMIT} more characters]` : output)",
+    "new": "text(output)",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04h pathsOf ignores the files in a unified patch",
+    "file": "src/acp/updates.ts",
+    "old": "    try {\n      for (const entry of parsePatch(args.patch)) {\n        for (const name of [entry.oldFileName, entry.newFileName]) {\n          const trimmed = name?.split('\\t')[0].trim().replace(/^[ab]\\//, '');\n          if (trimmed && trimmed !== '/dev/null') found.push(trimmed);\n        }\n      }\n    } catch {",
+    "new": "    try {\n    } catch {",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04i the client offers file system capabilities",
+    "file": "src/services/AcpClient.ts",
+    "old": "clientCapabilities: {}",
+    "new": "clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } }",
+    "tests": ["src/services/__tests__/acpClient.test.ts"]
+  },
+  {
+    "name": "04j a prompt ignores the agent exiting",
+    "file": "src/services/AcpClient.ts",
+    "old": "    const gone = this.exited!.then((error) => {\n      throw error;\n    });",
+    "new": "    const gone = new Promise<never>(() => {});",
+    "tests": ["src/services/__tests__/acpClient.test.ts"]
+  },
+  {
+    "name": "04k the agent gets the whole environment (already caught before)",
+    "file": "src/services/AcpClient.ts",
+    "old": "      env: subprocessEnv(process.env, { passthrough: this.config.env_passthrough, extra: this.config.env }),",
+    "new": "      env: { ...process.env, ...(this.config.env ?? {}) },",
+    "tests": ["src/services/__tests__/acpClient.test.ts"]
+  },
+  {
+    "name": "04l session/load replays after the reply (already caught before)",
+    "file": "src/acp/server.ts",
+    "old": "        for (const item of mapper.replay(controller.history?.() ?? [])) await update(controller.id, item);",
+    "new": "        setTimeout(() => { for (const item of mapper.replay(controller.history?.() ?? [])) void update(controller.id, item); }, 0);",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04m bypass is offered as a mode (already caught before)",
+    "file": "src/acp/session.ts",
+    "old": "  availableModes: PERMISSION_MODES.filter((mode) => mode !== 'bypass').map((mode) => ({ id: mode, ...MODE_TEXT[mode] })),",
+    "new": "  availableModes: PERMISSION_MODES.map((mode) => ({ id: mode, ...MODE_TEXT[mode] })),",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  },
+  {
+    "name": "04n a refused mode switch is ignored (already caught before)",
+    "file": "src/acp/server.ts",
+    "old": "        if (refusal) throw RequestError.invalidParams(undefined, refusal);",
+    "new": "        if (false) throw RequestError.invalidParams(undefined, refusal);",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  }
+]

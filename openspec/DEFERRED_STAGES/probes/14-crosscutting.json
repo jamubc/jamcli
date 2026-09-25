@@ -1,0 +1,37 @@
+[
+  {
+    "name": "14a a workflow tool step runs in bypass instead of through the engine",
+    "file": "src/core/workflows/runners.ts",
+    "old": "    async tool(name, args, signal) {\n      const runtime = await open();",
+    "new": "    async tool(name, args, signal) {\n      const runtime = await open({ bypassPermissions: true });",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "14b a plugin MCP server is started without its wrapper",
+    "file": "src/core/plugins/runtime.ts",
+    "old": "      const wrapped = sandbox.wrap([command, ...(server.args ?? [])].map(shellQuote).join(' '), { cwd: plugin.dir, env });",
+    "new": "      const wrapped = { file: command, args: server.args ?? [] };",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "14c a plugin process gets the whole process environment",
+    "file": "src/core/runtime/index.ts",
+    "old": "        const parts = pluginParts(loaded.plugins, { projectRoot, sandboxSettings, envFor: (passthrough) => envFor(passthrough) });",
+    "new": "        const parts = pluginParts(loaded.plugins, { projectRoot, sandboxSettings, envFor: () => ({ ...process.env } as Record<string, string>) });",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "14d diagnostics after an edit are not redacted",
+    "file": "src/core/runtime/index.ts",
+    "old": "          if (errors.length) reports.push(...errors.slice(0, 20).map((item) => redact(formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item))));",
+    "new": "          if (errors.length) reports.push(...errors.slice(0, 20).map((item) => formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item)));",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "14e tool output is not redacted at the dispatcher (already caught before)",
+    "file": "src/core/tools/dispatch.ts",
+    "old": "      output: redact(`${result.output ?? ''}${added}`),",
+    "new": "      output: `${result.output ?? ''}${added}`,",
+    "tests": ["src/core/runtime/__tests__/runtime.test.ts"]
+  }
+]

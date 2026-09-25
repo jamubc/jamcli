@@ -1,0 +1,9 @@
+[
+  {
+    "name": "20a a web_fetch title drops the URL",
+    "file": "src/acp/updates.ts",
+    "old": "  if (call.name === 'web_fetch' && typeof args.url === 'string') return `web_fetch ${args.url}`;\n",
+    "new": "",
+    "tests": ["src/acp/__tests__/features.test.ts"]
+  }
+]

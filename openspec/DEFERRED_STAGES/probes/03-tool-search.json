@@ -1,0 +1,65 @@
+[
+  {
+    "name": "03a select: matches by prefix instead of whole name",
+    "file": "src/core/tools/toolSearch.ts",
+    "old": ".flatMap((name) => deferred.filter((tool) => tool.name === name))",
+    "new": ".flatMap((name) => deferred.filter((tool) => tool.name.startsWith(name)))",
+    "tests": ["src/core/tools/__tests__/toolSearch.test.ts"]
+  },
+  {
+    "name": "03b the limit is not clamped at 20",
+    "file": "src/core/tools/toolSearch.ts",
+    "old": "Math.min(Math.floor(args.limit), 20)",
+    "new": "Math.floor(args.limit)",
+    "tests": ["src/core/tools/__tests__/toolSearch.test.ts"]
+  },
+  {
+    "name": "03c name hits score like description hits (already caught before)",
+    "file": "src/core/tools/toolSearch.ts",
+    "old": "      if (name.has(word)) score += 3;",
+    "new": "      if (name.has(word)) score += 1;",
+    "tests": ["src/core/tools/__tests__/toolSearch.test.ts"]
+  },
+  {
+    "name": "03d zero-score tools are returned (already caught before)",
+    "file": "src/core/tools/toolSearch.ts",
+    "old": "    .filter((entry) => entry.score > 0)",
+    "new": "    .filter(() => true)",
+    "tests": ["src/core/tools/__tests__/toolSearch.test.ts"]
+  },
+  {
+    "name": "03e deferred loading starts at the threshold, not past it",
+    "file": "src/core/runtime/index.ts",
+    "old": "mcpServers.size > searchThreshold",
+    "new": "mcpServers.size >= searchThreshold",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "03f built-in tools are deferred too",
+    "file": "src/core/runtime/index.ts",
+    "old": "...(searching ? { deferred: (name: string) => Boolean(mcpServers?.has(name)) && !loadedTools.has(name) } : {})",
+    "new": "...(searching ? { deferred: () => true } : {})",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "03g a loaded tool appears only after the next rebuild (already caught before)",
+    "file": "src/core/runtime/index.ts",
+    "old": "            if (tool) toolSet.definitions.push({ type: 'function', function: { name, description: tool.description, parameters: tool.parameters as Record<string, unknown> } });\n",
+    "new": "",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "03h a mode switch forgets the loaded tools",
+    "file": "src/core/runtime/index.ts",
+    "old": "  const reassemble = () => {\n    toolSet = buildTools();",
+    "new": "  const reassemble = () => {\n    loadedTools.clear();\n    toolSet = buildTools();",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "03i deferred tools ignore the permission engine",
+    "file": "src/core/runtime/index.ts",
+    "old": "        deferred: () =>\n          toolSet.summaries\n            .filter((tool) => tool.source === 'mcp' && !loadedTools.has(tool.name))",
+    "new": "        deferred: () =>\n          registry.visible()\n            .filter((tool) => mcpServers!.has(tool.name) && !loadedTools.has(tool.name))",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  }
+]

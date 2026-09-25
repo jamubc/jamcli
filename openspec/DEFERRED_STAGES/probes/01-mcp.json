@@ -1,0 +1,177 @@
+[
+  {
+    "name": "01a unknown-server guard dropped, so @nobody:x://y is read as a resource",
+    "file": "src/core/runtime/references.ts",
+    "old": "      if (!servers.has(match[1])) continue;\n",
+    "new": "",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01b valid resource token also left in the path list",
+    "file": "src/core/runtime/references.ts",
+    "old": "      paths = paths.split(match[0]).join('');\n",
+    "new": "",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01c resource text not redacted",
+    "file": "src/core/runtime/references.ts",
+    "old": "fenced(redact(await resources.read(match[1], match[2])))",
+    "new": "fenced(await resources.read(match[1], match[2]))",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01d duplicate resource not deduped",
+    "file": "src/core/runtime/references.ts",
+    "old": "      if (seen.has(match[0])) continue;\n",
+    "new": "",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01e failing resource read throws out of expandReferences",
+    "file": "src/core/runtime/references.ts",
+    "old": "        notices.push(`Could not include ${match[0]}: ${error?.message ?? error}`);",
+    "new": "        throw error;",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01f undeclared name=value is dropped instead of staying positional",
+    "file": "src/core/mcp/prompts.ts",
+    "old": "    if (named && declared.has(named[1])) args[named[1]] = named[2];\n    else positional.push(word);",
+    "new": "    if (named) {\n      if (declared.has(named[1])) args[named[1]] = named[2];\n    } else positional.push(word);",
+    "tests": ["src/core/mcp/__tests__/prompts.test.ts"]
+  },
+  {
+    "name": "01g last open argument no longer takes the rest",
+    "file": "src/core/mcp/prompts.ts",
+    "old": "    if (index < positional.length) args[argument.name] = index === open.length - 1 ? positional.slice(index).join(' ') : positional[index];",
+    "new": "      if (index < positional.length) args[argument.name] = positional[index];",
+    "tests": ["src/core/mcp/__tests__/prompts.test.ts"]
+  },
+  {
+    "name": "01h quotes no longer keep spaces",
+    "file": "src/core/mcp/prompts.ts",
+    "old": "  for (const match of text.matchAll(/\"([^\"]*)\"|'([^']*)'|(\\S+)/g)) words.push(match[1] ?? match[2] ?? match[3]);",
+    "new": "  for (const match of text.matchAll(/(\\S+)/g)) words.push(match[1]);",
+    "tests": ["src/core/mcp/__tests__/prompts.test.ts"]
+  },
+  {
+    "name": "01i missing lists optional arguments too",
+    "file": "src/core/mcp/prompts.ts",
+    "old": "  const missing = prompt.arguments.filter((argument) => argument.required && !(argument.name in args)).map((argument) => argument.name);",
+    "new": "  const missing = prompt.arguments.filter((argument) => !(argument.name in args)).map((argument) => argument.name);",
+    "tests": ["src/core/mcp/__tests__/prompts.test.ts"]
+  },
+  {
+    "name": "01j prompt hint swaps angle and square brackets",
+    "file": "src/core/mcp/prompts.ts",
+    "old": "(argument.required ? `<${argument.name}>` : `[${argument.name}]`)",
+    "new": "(argument.required ? `[${argument.name}]` : `<${argument.name}>`)",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx", "src/core/mcp/__tests__/prompts.test.ts"]
+  },
+  {
+    "name": "01k one failing server rejects the whole prompts listing",
+    "file": "src/core/runtime/index.ts",
+    "old": "      const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerPrompts!(server).catch(() => [])));",
+    "new": "      const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerPrompts!(server)));",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01l one failing server rejects the whole resources listing",
+    "file": "src/core/runtime/index.ts",
+    "old": "      const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerResources!(server).catch(() => [])));",
+    "new": "      const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerResources!(server)));",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01m readServerResource drops the binary part",
+    "file": "src/services/McpManager.ts",
+    "old": "      .map((part: any) => (typeof part.text === 'string' ? part.text : `[${part.mimeType ?? 'binary'} content of ${String(part.blob ?? '').length} bytes of base64]`))",
+    "new": "      .filter((part: any) => typeof part.text === 'string')\n      .map((part: any) => part.text)",
+    "tests": ["src/core/runtime/__tests__/mcp.test.ts"]
+  },
+  {
+    "name": "01n a /server:prompt does not label its turn",
+    "file": "src/core/ext/commandTurn.ts",
+    "old": "    return { prompt: await runtime.mcpPrompt(prompt.serverId, prompt.name, args), turn: { label: `/${match[1]}` } };",
+    "new": "    return { prompt: await runtime.mcpPrompt(prompt.serverId, prompt.name, args), turn: {} };",
+    "tests": ["src/core/ext/__tests__/commandTurn.test.ts"]
+  },
+  {
+    "name": "01o the /server:prompt match is case sensitive",
+    "file": "src/core/ext/commandTurn.ts",
+    "old": "find((entry) => `${entry.serverId}:${entry.name}`.toLowerCase() === match[1].toLowerCase())",
+    "new": "find((entry) => `${entry.serverId}:${entry.name}` === match[1])",
+    "tests": ["src/core/ext/__tests__/commandTurn.test.ts", "src/cli/__tests__/headless.test.ts"]
+  },
+  {
+    "name": "01p a prompt with a missing argument is sent anyway",
+    "file": "src/core/ext/commandTurn.ts",
+    "old": "    if (missing.length) throw new Error(`/${match[1]} needs ${missing.join(' and ')}.`);\n",
+    "new": "",
+    "tests": ["src/core/ext/__tests__/commandTurn.test.ts", "src/cli/__tests__/headless.test.ts"]
+  },
+  {
+    "name": "01q a path that matches no prompt crashes instead of passing through",
+    "file": "src/core/ext/commandTurn.ts",
+    "old": "    if (!prompt) return { prompt: text, turn: {} };\n",
+    "new": "",
+    "tests": ["src/core/ext/__tests__/commandTurn.test.ts", "src/cli/__tests__/headless.test.ts"]
+  },
+  {
+    "name": "01r a failing resource listing rejects reference candidates",
+    "file": "src/tui/app/references.ts",
+    "old": "runtime.mcpResources().catch(() => [])",
+    "new": "runtime.mcpResources()",
+    "tests": ["src/tui/app/__tests__/references.test.ts"]
+  },
+  {
+    "name": "01s an email address opens reference completion",
+    "file": "src/tui/app/references.ts",
+    "old": "/(?:^|\\s)@(\\S*)$/",
+    "new": "/@(\\S*)$/",
+    "tests": ["src/tui/app/__tests__/references.test.ts", "src/tui/app/__tests__/composer.test.tsx"]
+  },
+  {
+    "name": "01t starts matches are no longer kept ahead of contains matches",
+    "file": "src/tui/app/references.ts",
+    "old": "  return [...starts.sort(byLength), ...contains.sort(byLength)].slice(0, limit);",
+    "new": "  return [...starts, ...contains].sort(byLength).slice(0, limit);",
+    "tests": ["src/tui/app/__tests__/references.test.ts"]
+  },
+  {
+    "name": "01u matches are sorted by name, not shortest first",
+    "file": "src/tui/app/references.ts",
+    "old": "  const byLength = (a: ReferenceItem, b: ReferenceItem) => a.text.length - b.text.length || a.text.localeCompare(b.text);",
+    "new": "  const byLength = (a: ReferenceItem, b: ReferenceItem) => a.text.localeCompare(b.text);",
+    "tests": ["src/tui/app/__tests__/references.test.ts"]
+  },
+  {
+    "name": "01v completing a directory appends a space too",
+    "file": "src/tui/app/references.ts",
+    "old": "@${item.text}${item.text.endsWith('/') ? '' : ' '}",
+    "new": "@${item.text} ",
+    "tests": ["src/tui/app/__tests__/references.test.ts", "src/tui/app/__tests__/composer.test.tsx"]
+  },
+  {
+    "name": "01w Enter on an open reference list sends instead of completing",
+    "file": "src/tui/app/App.tsx",
+    "old": "    const referenced = referencesFor(typed)?.[palette.current.index];\n    if (referenced) return completeWith(referenced);\n",
+    "new": "",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx"]
+  },
+  {
+    "name": "01x Escape does not close the reference list",
+    "file": "src/tui/app/App.tsx",
+    "old": "      if (key.name === 'tab' && !key.shift) {\n        key.preventDefault();\n        const chosen = referenced[palette.current.index];\n        if (chosen) completeWith(chosen);\n        return;\n      }\n      if (key.name === 'escape') {\n        key.preventDefault();\n        return setPalette({ draft, index: 0, closed: draft });\n      }",
+    "new": "      if (key.name === 'tab' && !key.shift) {\n        key.preventDefault();\n        const chosen = referenced[palette.current.index];\n        if (chosen) completeWith(chosen);\n        return;\n      }",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx"]
+  },
+  {
+    "name": "01y a /server:prompt with a missing argument is sent anyway",
+    "file": "src/tui/app/custom.ts",
+    "old": "      if (missing.length) return ctx.notice('warn', `/${name} needs ${missing.join(' and ')}: /${name} ${promptHint(prompt)}`);\n",
+    "new": "",
+    "tests": ["src/tui/app/__tests__/custom.test.tsx"]
+  }
+]

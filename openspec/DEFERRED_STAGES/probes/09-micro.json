@@ -1,0 +1,44 @@
+[
+  {
+    "name": "09a a waiting call is shown as error when an error is present",
+    "file": "src/tui/app/micro.ts",
+    "old": "  if (state.approvals.length || state.status.phase === 'waiting') return { words: ['need', 'input'], key: 1 };\n  const lastUser = state.rows.map((row) => row.kind).lastIndexOf('user');\n  const sinceTurn = lastUser >= 0 ? state.rows.slice(lastUser + 1) : [];\n  if (sinceTurn.some((row) => row.kind === 'notice' && row.level === 'error')) return { words: ['error'], key: 0 };",
+    "new": "  const lastUser = state.rows.map((row) => row.kind).lastIndexOf('user');\n  const sinceTurn = lastUser >= 0 ? state.rows.slice(lastUser + 1) : [];\n  if (sinceTurn.some((row) => row.kind === 'notice' && row.level === 'error')) return { words: ['error'], key: 0 };\n  if (state.approvals.length || state.status.phase === 'waiting') return { words: ['need', 'input'], key: 1 };",
+    "tests": ["src/tui/app/__tests__/micro.test.tsx"]
+  },
+  {
+    "name": "09b an error from an earlier turn still shows",
+    "file": "src/tui/app/micro.ts",
+    "old": "  const sinceTurn = lastUser >= 0 ? state.rows.slice(lastUser + 1) : [];",
+    "new": "  const sinceTurn = state.rows;",
+    "tests": ["src/tui/app/__tests__/micro.test.tsx"]
+  },
+  {
+    "name": "09c an unknown JAMCLI_MICRO value means always",
+    "file": "src/tui/app/micro.ts",
+    "old": "export const microSetting = (value: string | undefined): MicroSetting => (value === 'always' || value === 'never' ? value : 'auto');",
+    "new": "export const microSetting = (value: string | undefined): MicroSetting => (value === 'never' ? 'never' : 'always');",
+    "tests": ["src/tui/app/__tests__/micro.test.tsx"]
+  },
+  {
+    "name": "09d the micro size boundary is strict (already caught before)",
+    "file": "src/tui/app/micro.ts",
+    "old": "  setting === 'always' || (setting === 'auto' && (size.height <= MICRO_ROWS || size.width <= MICRO_COLUMNS));",
+    "new": "  setting === 'always' || (setting === 'auto' && (size.height < MICRO_ROWS || size.width < MICRO_COLUMNS));",
+    "tests": ["src/tui/app/__tests__/micro.test.tsx"]
+  },
+  {
+    "name": "09e fitPhrase always keeps the first word (already caught before)",
+    "file": "src/tui/app/micro.ts",
+    "old": "  const key = phrase.words[phrase.key];",
+    "new": "  const key = phrase.words[0];",
+    "tests": ["src/tui/app/__tests__/micro.test.tsx"]
+  },
+  {
+    "name": "09g the full view is visible in micro mode (already caught before)",
+    "file": "src/tui/app/App.tsx",
+    "old": "          <box flexDirection=\"column\" width=\"100%\" height=\"100%\" visible={!micro}>",
+    "new": "          <box flexDirection=\"column\" width=\"100%\" height=\"100%\" visible={true}>",
+    "tests": ["src/tui/app/__tests__/micro.test.tsx"]
+  }
+]

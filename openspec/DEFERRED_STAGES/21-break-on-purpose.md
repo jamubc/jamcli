@@ -12,9 +12,12 @@ After each module in `00-plan.md` lands its code and tests, prove the tests noti
 - At 19 archive: confirm every gap marked in DEFERRED is either caught or has a written reason. Unproven tests stay marked unproven.
 
 ## Acceptance for Stage 21
-- [ ] Every module checkpoint includes its probe run output (caught list).
-- [ ] Every survivor has a new test or a written equivalent-mutant reason stored with the module.
-- [ ] Archive does not claim proven tests until their probes ran.
+- [x] Every module checkpoint includes its probe run output (caught list).
+  - The probe files and their results are stored in `openspec/DEFERRED_STAGES/probes/` with `RESULTS.md`. Each run happened before its module's checkpoint was marked green.
+- [x] Every survivor has a new test or a written equivalent-mutant reason stored with the module.
+  - See `probes/RESULTS.md`: 09's forced reducedMotion is the one equivalent mutant; 11's wrap probe and the hostile sandbox probes are environment-limited, with their reasons in the module files.
+- [x] Archive does not claim proven tests until their probes ran.
+  - Modules 01 through 18 and 20 ran their probes. Tests built before this work that are not named in a probe file stay unproven; the original lists for modules 03, 08, and 10 ran at their own checkpoints.
 
 ## Dependencies
 None. Runs after the code it probes. Do not block planning or implementation on this file.

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "16a a # note appends without asking",
+    "file": "src/tui/app/App.tsx",
+    "old": "        choose: (item) => {\n          if (item.key === 'yes') void controller.submit(`#${note}`, { display: `#${note}`, tool: call });\n        },",
+    "new": "        choose: () => {\n          void controller.submit(`#${note}`, { display: `#${note}`, tool: call });\n        },",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx"]
+  },
+  {
+    "name": "16b a # note clobbers AGENTS.md instead of appending",
+    "file": "src/tui/app/note.ts",
+    "old": "  return unique\n    ? { name: 'edit', arguments: { path: file, find_string: last, replace_string: `${last}\\n${note}` } }\n    : { name: 'write_file', arguments: { path: file, content: next } };",
+    "new": "  return { name: 'write_file', arguments: { path: file, content: `${note}\\n` } };",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx"]
+  }
+]

@@ -1,0 +1,79 @@
+[
+  {
+    "name": "02a long ! output is not truncated for the model",
+    "file": "src/core/agent.ts",
+    "old": "this.truncate(result.output)",
+    "new": "result.output",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02b a stopped ! command reports ok",
+    "file": "src/core/agent.ts",
+    "old": "    if (signal.aborted) return finish('cancelled', working, result.output);",
+    "new": "    if (false) return finish('cancelled', working, result.output);",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02c pre_tool hooks do not see a ! command",
+    "file": "src/core/agent.ts",
+    "old": "      session,\n      hooks,\n      redact: this.redact,",
+    "new": "      session,\n      redact: this.redact,",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02d a ! command that changes a file takes no checkpoint",
+    "file": "src/core/agent.ts",
+    "old": "      ...(this.options.beforeChange ? { beforeChange: this.options.beforeChange } : {}),\n      ...(this.options.afterChange ? { afterChange: this.options.afterChange } : {}),\n",
+    "new": "",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02e a ! command needs a model provider",
+    "file": "src/core/runtime/index.ts",
+    "old": "if (!provider && !turn.shell && !turn.tool) {",
+    "new": "if (!provider) {",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02f shell text is expanded as references",
+    "file": "src/core/runtime/index.ts",
+    "old": "const expanded = turn.shell || turn.tool ? { prompt: input, notices: [] } : await expandReferences(input, cwd, redact, resourceReader);",
+    "new": "const expanded = turn.tool ? { prompt: input, notices: [] } : await expandReferences(input, cwd, redact, resourceReader);",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02g a lone ! runs an empty command",
+    "file": "src/tui/app/App.tsx",
+    "old": "if (text.startsWith('!') && text.slice(1).trim()) return void controller.submit(text.slice(1).trim(), { shell: true, display: text });",
+    "new": "if (text.startsWith('!')) return void controller.submit(text.slice(1).trim(), { shell: true, display: text });",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx"]
+  },
+  {
+    "name": "02h permissions are not consulted for a ! command (already caught before)",
+    "file": "src/core/tools/dispatch.ts",
+    "old": "    const verdict = decide(i);",
+    "new": "    const verdict = { decision: 'allow' as const };",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02i a denied ! command reports ok (already caught before)",
+    "file": "src/core/agent.ts",
+    "old": "    if (status === 'denied') return finish('refused', working, '', `${tool.name === 'run_command' ? 'The command' : tool.name} was not run.`);",
+    "new": "    if (false) return finish('refused', working, '', `${tool.name === 'run_command' ? 'The command' : tool.name} was not run.`);",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02j the ! command output is not kept for the next turn (already caught before)",
+    "file": "src/core/agent.ts",
+    "old": "    const working = appendMessages(session, [message]);",
+    "new": "    const working = session;",
+    "tests": ["src/core/runtime/__tests__/turns.test.ts"]
+  },
+  {
+    "name": "02k a ! command is sent to the model (already caught before)",
+    "file": "src/tui/app/App.tsx",
+    "old": "    if (text.startsWith('!') && text.slice(1).trim()) return void controller.submit(text.slice(1).trim(), { shell: true, display: text });\n",
+    "new": "",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx"]
+  }
+]

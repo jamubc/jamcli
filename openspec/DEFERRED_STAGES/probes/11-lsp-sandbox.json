@@ -1,0 +1,16 @@
+[
+  {
+    "name": "11b the runtime gives language servers the process environment",
+    "file": "src/core/runtime/index.ts",
+    "old": "  const lsp = options.parent || config.lsp?.enabled === false ? undefined : new LspManager(workRoot, config.lsp ?? {}, envFor(), sandbox.kind === 'none' ? undefined : sandbox.wrap);",
+    "new": "  const lsp = options.parent || config.lsp?.enabled === false ? undefined : new LspManager(workRoot, config.lsp ?? {}, process.env, sandbox.kind === 'none' ? undefined : sandbox.wrap);",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "11c the manager starts a language server with the process environment",
+    "file": "src/core/lsp/manager.ts",
+    "old": "      started = LspClient.start({ ...(wrapped ? { command: wrapped.file, args: wrapped.args } : server), env: this.env }, this.root);",
+    "new": "      started = LspClient.start({ ...(wrapped ? { command: wrapped.file, args: wrapped.args } : server), env: process.env }, this.root);",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  }
+]

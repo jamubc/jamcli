@@ -1,0 +1,37 @@
+[
+  {
+    "name": "10a a copy with no consent record is trusted anyway",
+    "file": "src/core/plugins/lock.ts",
+    "old": "  if (readConsents()[consentKey(plugin.scope, projectRoot, plugin.name)] !== consentDigest(plugin)) return 'it was not installed with your consent on this machine, as the lockfile describes it';",
+    "new": "  if (false) return 'it was not installed with your consent on this machine, as the lockfile describes it';",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "10b the consent digest ignores permissions",
+    "file": "src/core/plugins/lock.ts",
+    "old": "  crypto.createHash('sha256').update(JSON.stringify([plugin.integrity, plugin.permissions, path.resolve(plugin.dir)])).digest('hex');",
+    "new": "  crypto.createHash('sha256').update(JSON.stringify([plugin.integrity, path.resolve(plugin.dir)])).digest('hex');",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "10c removing a plugin keeps its consent",
+    "file": "src/core/plugins/lock.ts",
+    "old": "export function forgetConsent(scope: PluginScope, projectRoot: string, name: string): void {\n  const data = readConsents();\n  delete data[consentKey(scope, projectRoot, name)];",
+    "new": "export function forgetConsent(scope: PluginScope, projectRoot: string, name: string): void {\n  const data = readConsents();",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "10d the consent file is written with the default mode",
+    "file": "src/core/plugins/lock.ts",
+    "old": "  fs.writeFileSync(consentFile(), `${JSON.stringify(data, null, 2)}\\n`, { mode: 0o600 });",
+    "new": "  fs.writeFileSync(consentFile(), `${JSON.stringify(data, null, 2)}\\n`);",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "10e the location check is skipped (already caught before)",
+    "file": "src/core/plugins/lock.ts",
+    "old": "  if (!insidePluginsDir(plugin.dir)) return `its files are at ${plugin.dir}, outside ${pluginsDir()}`;",
+    "new": "  if (false) return `its files are at ${plugin.dir}, outside ${pluginsDir()}`;",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  }
+]

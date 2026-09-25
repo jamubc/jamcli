@@ -1,0 +1,58 @@
+[
+  {
+    "name": "05a the socket is created under the default umask",
+    "file": "src/tui/observer.ts",
+    "old": "  const mask = process.umask(0o177);",
+    "new": "  const mask = process.umask(0o022);",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  },
+  {
+    "name": "05b a slow client is never dropped",
+    "file": "src/tui/observer.ts",
+    "old": "        if (socket.writableLength > SLOW_CLIENT_BYTES) {",
+    "new": "        if (false) {",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  },
+  {
+    "name": "05c attach keeps the old watchers after a session is replaced",
+    "file": "src/tui/observer.ts",
+    "old": "      for (const watcher of watchers) {\n        watcher.send({ sessionUpdate: 'session_info_update', _meta: { jamcli: { replacedBy: next.sessionId, from } } });\n        watchers.delete(watcher);\n      }",
+    "new": "      for (const watcher of watchers) {\n        watcher.send({ sessionUpdate: 'session_info_update', _meta: { jamcli: { replacedBy: next.sessionId, from } } });\n      }",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  },
+  {
+    "name": "05d tap hears only turn_start and turn_end",
+    "file": "src/tui/app/controller.ts",
+    "old": "          this.tap?.(event);",
+    "new": "          if (event.type === 'turn_start' || event.type === 'turn_end') this.tap?.(event);",
+    "tests": ["src/tui/app/__tests__/composer.test.tsx"]
+  },
+  {
+    "name": "05e a live socket is stolen (already caught before)",
+    "file": "src/tui/observer.ts",
+    "old": "    if (live) throw new Error(`${socketPath} is in use by another process.`);",
+    "new": "    if (false) throw new Error(`${socketPath} is in use by another process.`);",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  },
+  {
+    "name": "05f session/new is allowed on the observer (already caught before)",
+    "file": "src/tui/observer.ts",
+    "old": "        newSession: async () => {\n          throw RequestError.invalidRequest(undefined, 'This endpoint observes the interface\\'s session; load it with session/load.');\n        },",
+    "new": "        newSession: async () => ({ sessionId: runtime.sessionId }),",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  },
+  {
+    "name": "05g need input is never reported (already caught before)",
+    "file": "src/tui/observer.ts",
+    "old": "        if (event.type === 'approval_request') setState('requires_action');",
+    "new": "        if (false) setState('requires_action');",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  },
+  {
+    "name": "05h prompts are accepted on the observer (already caught before)",
+    "file": "src/tui/observer.ts",
+    "old": "        prompt: async () => {\n          throw RequestError.invalidRequest(undefined, 'This endpoint only observes: prompts are typed in the interface.');\n        },",
+    "new": "        prompt: async () => ({ stopReason: 'end_turn' as const }),",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  }
+]

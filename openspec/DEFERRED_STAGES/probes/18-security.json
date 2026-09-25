@@ -1,0 +1,16 @@
+[
+  {
+    "name": "18a the observer binds in a directory others can write",
+    "file": "src/tui/observer.ts",
+    "old": "    const mode = fs.statSync(directory).mode & 0o777;\n    if (mode & 0o022) {\n      throw new Error(`${directory} is writable by others (mode ${mode.toString(8)}), so the observer socket would not be private. Put it in a directory only you can write, such as one under the state directory.`);\n    }",
+    "new": "    const mode = fs.statSync(directory).mode & 0o777;\n    if (false) {\n      throw new Error(`${directory} is writable by others (mode ${mode.toString(8)}), so the observer socket would not be private. Put it in a directory only you can write, such as one under the state directory.`);\n    }",
+    "tests": ["src/tui/__tests__/observer.test.ts"]
+  },
+  {
+    "name": "18b an agent step may raise the session mode",
+    "file": "src/core/workflows/runners.ts",
+    "old": "      const ranks: Record<string, number> = { plan: 0, default: 1, 'accept-edits': 2, auto: 3, bypass: 4 };\n      // A project workflow may ask for a lower mode than the session, never a higher one.\n      const sessionMode = options.runtime?.permissions?.mode ?? 'default';\n      const capped = spec.mode && (ranks[spec.mode] ?? 99) <= (ranks[sessionMode] ?? 1) ? spec.mode : undefined;\n      const runtime = await open({ ...(model ? { model } : {}), ...(capped ? { permissions: { ...options.runtime?.permissions, mode: capped } } : {}) });",
+    "new": "      const runtime = await open({ ...(model ? { model } : {}), ...(spec.mode ? { permissions: { ...options.runtime?.permissions, mode: spec.mode } } : {}) });",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  }
+]

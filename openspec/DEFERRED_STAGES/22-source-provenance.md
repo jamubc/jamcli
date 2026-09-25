@@ -108,16 +108,42 @@ Many probes in Part 1 guard security paths and are unproven until they run.
 
 DEFERRED.md may be deleted when all of these are true:
 
-- [ ] This file exists with sections 1 to 5 intact.
-- [ ] `00-plan.md` lists this file in Phase 4.
-- [ ] Grep for hashes finds them here: `46c4fcb`, `9087d23`, `a0f1bff`,
+- [x] This file exists with sections 1 to 5 intact.
+- [x] `00-plan.md` lists this file in Phase 4.
+- [x] Grep for hashes finds them here: `46c4fcb`, `9087d23`, `a0f1bff`,
   `7268f91`, `8c1bade`, `7612e2b`, `36b6570`, `fdf6c9d`, `9eb27d2`,
   `cec4b48`, `b79f4a4`, `a158925`, `8f78615`, `74aa7b6`, `bc62c1a`,
   `e01cf10`, `9bc0c2a`, `5282c51`, `2dcefaf`, `8fa95e3`.
-- [ ] Grep for `5282c51` full table finds section 3.
-- [ ] No module depends on DEFERRED.md at runtime; `21-break-on-purpose.md`
+- [x] Grep for `5282c51` full table finds section 3.
+- [x] No module depends on DEFERRED.md at runtime; `21-break-on-purpose.md`
   references its How to run a probe only as history, with the full rules copied
   here.
+
+Checked 2026-09-25. The file itself is deleted at archive time (module 19), once
+sections 1 to 5 and the additions below have landed.
+
+## 7. Additions after this file was written (2026-09-25)
+
+- Performance re-measured on macOS 27.0 arm64: `bun run bench -- --enforce` exits 0 with
+  `--version` 12.7/60 ms, headless 54/150 ms, grep 371.9/500 ms; first frame, keystroke,
+  and memory are measured on Linux only. The old table in section 3 stays as history.
+- 12.2 fixed additions: the observer refuses a socket path in a directory others can
+  write (`src/tui/observer.ts`, test `src/tui/__tests__/observer.test.ts`, probe 18a
+  caught); a workflow agent step's mode is capped at the session's
+  (`src/core/workflows/runners.ts`, test `src/core/workflows/__tests__/workflows.test.ts`,
+  probe 18b caught).
+- 12.2 recorded gaps: the project MCP trust gate (needs the owner: it changes behavior for
+  existing projects) and the git hook digest (plan in
+  `18-stage12-perf-security-ci.md`); per-host network in `17-unfinished-stages.md`.
+- 12.3: the staged workflows are landed at `.github/workflows/` and a `security-scan` job
+  adds `bun audit` and a secret scan (D22). The first CI run awaits the owner's push.
+- 12.4 and 12.5: the twelve documentation pages are written and the conformance check is
+  final; see `19-stage12-docs-release-archive.md`.
+- 12.7: the live Ollama run is recorded in `openspec/changes/rehaul-jamcli/tasks.md`.
+- 16: the `#` note is built (`src/tui/app/note.ts`, `App.tsx`), with probes 16a/16b
+  caught, and 12.8 is closed with `JAMCLI_MICRO` as the override.
+- Every module's probe file and its results are preserved in
+  `openspec/DEFERRED_STAGES/probes/`.
 
 ## Dependencies
 None. Informational only. Update alongside any module that changes a hash,

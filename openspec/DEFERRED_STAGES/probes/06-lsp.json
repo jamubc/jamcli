@@ -1,0 +1,86 @@
+[
+  {
+    "name": "06a a synced file is opened again instead of changed",
+    "file": "src/core/lsp/client.ts",
+    "old": "    if (version === 1) this.connection.notify('textDocument/didOpen', { textDocument: { uri, languageId, version, text } });\n    else this.connection.notify('textDocument/didChange', { textDocument: { uri, version }, contentChanges: [{ text }] });",
+    "new": "    this.connection.notify('textDocument/didOpen', { textDocument: { uri, languageId, version, text } });",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06b diagnostics are returned without waiting for a newer report",
+    "file": "src/core/lsp/client.ts",
+    "old": "    if (!fresh()) {",
+    "new": "    if (false) {",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06c the workspace/configuration handler is dropped",
+    "file": "src/core/lsp/client.ts",
+    "old": "    connection.onRequest('workspace/configuration', (params: { items?: unknown[] }) => (params?.items ?? []).map(() => null));\n",
+    "new": "",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06d a server that ignores shutdown is never killed",
+    "file": "src/core/lsp/client.ts",
+    "old": "      const timer = setTimeout(() => {\n        this.child.kill('SIGKILL');\n        resolve();\n      }, 1000);",
+    "new": "      const timer = setTimeout(() => {\n        resolve();\n      }, 1000);",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06e a server that failed to start stays cached",
+    "file": "src/core/lsp/manager.ts",
+    "old": "      started.catch(() => this.running.delete(name));",
+    "new": "      started.catch(() => undefined);",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06f warnings are reported to the model too",
+    "file": "src/core/runtime/index.ts",
+    "old": "          const errors = diagnostics.filter((item) => (item.severity ?? 1) === 1);",
+    "new": "          const errors = diagnostics;",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06g apply_patch files are skipped by the diagnostics handler",
+    "file": "src/core/runtime/index.ts",
+    "old": "        const files: string[] =\n          call.name === 'apply_patch'\n            ? ((result.metadata?.files as { path: string; op?: string }[] | undefined) ?? []).filter((file) => file.op !== 'delete').map((file) => file.path)\n            : typeof call.arguments?.path === 'string'\n              ? [call.arguments.path]\n              : [];",
+    "new": "        const files: string[] = typeof call.arguments?.path === 'string' ? [call.arguments.path] : [];",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06h the diagnostic list is not capped at 20",
+    "file": "src/core/runtime/index.ts",
+    "old": "          if (errors.length) reports.push(...errors.slice(0, 20).map((item) => formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item)));",
+    "new": "          if (errors.length) reports.push(...errors.map((item) => formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item)));",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06i a server is looked up on the process PATH (already caught before)",
+    "file": "src/core/lsp/manager.ts",
+    "old": "Boolean(Bun.which(command, { PATH: env.PATH ?? '' }))",
+    "new": "Boolean(Bun.which(command, { PATH: env.PATH || process.env.PATH || '' }))",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06j where shows absolute paths (already caught before)",
+    "file": "src/core/lsp/manager.ts",
+    "old": "    return `${shown && !shown.startsWith('..') ? shown : file}:${range.start.line + 1}:${range.start.character + 1}`;",
+    "new": "    return `${file}:${range.start.line + 1}:${range.start.character + 1}`;",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06k the lsp tool does not refuse paths outside the project (already caught before)",
+    "file": "src/core/tools/lsp.ts",
+    "old": "        absolute = resolveProjectPath(context.projectRoot, String(args.path ?? ''));",
+    "new": "        absolute = path.resolve(context.projectRoot, String(args.path ?? ''));",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  },
+  {
+    "name": "06l line numbers are not converted to 0-based (already caught before)",
+    "file": "src/core/tools/lsp.ts",
+    "old": "      const line = Math.max(0, Number(args.line ?? 1) - 1);",
+    "new": "      const line = Math.max(0, Number(args.line ?? 1));",
+    "tests": ["src/core/lsp/__tests__/lsp.test.ts"]
+  }
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "name": "08a lookup follows inherited properties",
+    "file": "src/core/workflows/expr.ts",
+    "old": "    if (value === null || value === undefined || typeof value !== 'object' || !Object.prototype.hasOwnProperty.call(value, part)) return null;",
+    "new": "    if (value === null || value === undefined || typeof value !== 'object') return null;",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08b the running line is appended after the step starts",
+    "file": "src/core/workflows/engine.ts",
+    "old": "  const set = (id: string, status: StepStatus, output = steps[id].output) => {\n    steps[id] = { status, output };\n    append(file, { type: 'step', id, status, output, at: new Date().toISOString() });",
+    "new": "  const set = (id: string, status: StepStatus, output = steps[id].output) => {\n    steps[id] = { status, output };\n    if (status !== 'running') append(file, { type: 'step', id, status, output, at: new Date().toISOString() });",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08c a cancelled step is not retried on resume",
+    "file": "src/core/workflows/engine.ts",
+    "old": "    for (const state of Object.values(steps)) if (state.status === 'running' || state.status === 'cancelled') ((state.status = 'pending'), (state.output = ''));",
+    "new": "    for (const state of Object.values(steps)) if (state.status === 'running') ((state.status = 'pending'), (state.output = ''));",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08d a workflow auto-approves calls when nobody can answer",
+    "file": "src/core/workflows/runners.ts",
+    "old": "      else event.decide({ allow: false, by: 'mode', feedback: `a workflow run with nobody to ask cannot approve it, and ${reason}. Pass --allow-tool ${event.call.name} to allow it.` });",
+    "new": "      else event.decide({ allow: true });",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08e workflows nest one level deeper",
+    "file": "src/core/workflows/runners.ts",
+    "old": "const MAX_DEPTH = 5;",
+    "new": "const MAX_DEPTH = 6;",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08f a commit message of agent is committed literally",
+    "file": "src/core/workflows/runners.ts",
+    "old": "      if (message.trim() === 'agent') {",
+    "new": "      if (false) {",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08g a cron line quotes nothing",
+    "file": "src/core/workflows/triggers.ts",
+    "old": "  `${Object.values(parseCron(cron)).join(' ')} cd ${quote(projectRoot)} && ${quote(jamcli)} workflow run ${quote(workflow)} --headless ${marker(projectRoot, workflow)}`;",
+    "new": "  `${Object.values(parseCron(cron)).join(' ')} cd ${projectRoot} && ${jamcli} workflow run ${workflow} --headless ${marker(projectRoot, workflow)}`;",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08h an unknown character is accepted by the tokenizer (already caught before)",
+    "file": "src/core/workflows/expr.ts",
+    "old": "    throw new Error(`unexpected \"${rest[0]}\" at column ${i + 1}`);",
+    "new": "    tokens.push({ kind: 'path', value: rest[0] });",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08i and is evaluated as or (already caught before)",
+    "file": "src/core/workflows/expr.ts",
+    "old": "      left = { kind: 'binary', op: 'and', left, right: not() };",
+    "new": "      left = { kind: 'binary', op: 'or', left, right: not() };",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08j the cycle search is skipped (already caught before)",
+    "file": "src/core/workflows/schema.ts",
+    "old": "    if (state.get(id) === 'visiting') throw new Error(`${file}: the steps form a cycle: ${[...trail.slice(trail.indexOf(id)), id].join(' -> ')}.`);",
+    "new": "    if (false) throw new Error(`${file}: the steps form a cycle: ${[...trail.slice(trail.indexOf(id)), id].join(' -> ')}.`);",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08k templates may name any step, not only ancestors (already caught before)",
+    "file": "src/core/workflows/schema.ts",
+    "old": "    if (root === 'steps' && name && ancestors(step.id).has(name) && (!field || ['output', 'status'].includes(field))) return;",
+    "new": "    if (root === 'steps' && name && (!field || ['output', 'status'].includes(field))) return;",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08l the concurrency cap is lifted (already caught before)",
+    "file": "src/core/workflows/schema.ts",
+    "old": "  concurrency: z.number().int().min(1).max(4).default(1),",
+    "new": "  concurrency: z.number().int().min(1).default(1),",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08m a step whose need failed still runs (already caught before)",
+    "file": "src/core/workflows/engine.ts",
+    "old": "    if (broken.length && !step.continue_on_error) return set(step.id, 'failed', `It needs ${broken.join(', ')}, which did not succeed.`);",
+    "new": "    if (false) return set(step.id, 'failed', `It needs ${broken.join(', ')}, which did not succeed.`);",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08n a step cut off while running stays running on resume (already caught before)",
+    "file": "src/core/workflows/engine.ts",
+    "old": "    for (const state of Object.values(steps)) if (state.status === 'running' || state.status === 'cancelled') ((state.status = 'pending'), (state.output = ''));",
+    "new": "    for (const state of Object.values(steps)) if (state.status === 'cancelled') ((state.status = 'pending'), (state.output = ''));",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08o a foreign git hook is overwritten (already caught before)",
+    "file": "src/core/workflows/triggers.ts",
+    "old": "  if (fs.existsSync(file) && !fs.readFileSync(file, 'utf8').includes(MARK)) throw new Error(`${file} exists and was not written by JamCLI, so it is left as it is.`);",
+    "new": "  if (false) throw new Error(`${file} exists and was not written by JamCLI, so it is left as it is.`);",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "08p replacing a schedule keeps the old line (already caught before)",
+    "file": "src/core/workflows/triggers.ts",
+    "old": "  const kept = current.split('\\n').filter((entry) => entry.trim() && !entry.endsWith(marker(projectRoot, workflow)));",
+    "new": "  const kept = current.split('\\n').filter((entry) => entry.trim());",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  }
+]

@@ -1,0 +1,93 @@
+[
+  {
+    "name": "07a integrity hashes contents only, so a rename keeps the hash",
+    "file": "src/core/plugins/lock.ts",
+    "old": "    hash.update(file.split(path.sep).join('/'));\n    hash.update('\\0');\n    hash.update(crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, file))).digest());",
+    "new": "    hash.update(crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, file))).digest());",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07b a plugin may contain symbolic links",
+    "file": "src/core/plugins/lock.ts",
+    "old": "      if (entry.isSymbolicLink()) throw new Error(`${path.relative(base, full)} is a symbolic link, which a plugin may not contain.`);",
+    "new": "      if (false) throw new Error(`${path.relative(base, full)} is a symbolic link, which a plugin may not contain.`);",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07c plugin hooks go through the project trust gate",
+    "file": "src/core/runtime/index.ts",
+    "old": "    if (!pluginHookList.length) continue;",
+    "new": "    if (!pluginHookList.length || !projectHooksTrusted) continue;",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07d installed plugins are not verified at session start",
+    "file": "src/core/runtime/index.ts",
+    "old": "  if (!options.parent && installedPlugins(projectRoot).length) {",
+    "new": "  if (false && !options.parent && installedPlugins(projectRoot).length) {",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07e a plugin that runs unsandboxed says nothing",
+    "file": "src/core/plugins/runtime.ts",
+    "old": "    if (sandbox.kind === 'none' && (hooks.length || plugin.manifest.contributes?.mcpServers)) {",
+    "new": "    if (false) {",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07f plugin install --scope always installs for the user",
+    "file": "src/cli/plugin.ts",
+    "old": "  const scope = (scopeAt >= 0 ? args[scopeAt + 1] : 'user') as PluginScope;",
+    "new": "  const scope = 'user' as PluginScope;",
+    "tests": ["src/cli/__tests__/plugin.test.ts"]
+  },
+  {
+    "name": "07g a manifest path may contain .. (already caught before)",
+    "file": "src/core/plugins/manifest.ts",
+    "old": "  .refine((value) => !path.isAbsolute(value) && !value.split(/[\\\\/]/).includes('..'), 'must be a path inside the plugin');",
+    "new": "  .refine((value) => !path.isAbsolute(value), 'must be a path inside the plugin');",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07h the JamCLI version range is not checked (already caught before)",
+    "file": "src/core/plugins/manifest.ts",
+    "old": "  if (manifest.engines?.jamcli && !semver.satisfies(version, manifest.engines.jamcli, { includePrerelease: true })) {",
+    "new": "  if (false) {",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07i a wider filesystem permission is not part of widened (already caught before)",
+    "file": "src/core/plugins/manifest.ts",
+    "old": "  if (next.filesystem === 'project' && before.filesystem !== 'project') added.push('files: may write the project');\n",
+    "new": "",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07j verify reports a changed plugin but leaves it on (already caught before)",
+    "file": "src/core/plugins/lock.ts",
+    "old": "        lock.plugins[plugin.name] = { ...plugin, enabled: false, disabledReason: 'integrity' };\n        changed = true;",
+    "new": "        changed = true;",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07k install ignores a refusal (already caught before)",
+    "file": "src/core/plugins/store.ts",
+    "old": "      if (!agreed) throw new Error(`${manifest.name} was not installed: consent was not given.`);",
+    "new": "      if (false) throw new Error(`${manifest.name} was not installed: consent was not given.`);",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07l a copy keeps the .git directory (already caught before)",
+    "file": "src/core/plugins/store.ts",
+    "old": "    fs.cpSync(from, dir, { recursive: true, filter: (item) => path.basename(item) !== '.git' });",
+    "new": "    fs.cpSync(from, dir, { recursive: true });",
+    "tests": ["src/core/plugins/__tests__/plugins.test.ts"]
+  },
+  {
+    "name": "07m --yes is ignored without a terminal (already caught before)",
+    "file": "src/cli/plugin.ts",
+    "old": "  if (yes) return true;",
+    "new": "  if (false) return true;",
+    "tests": ["src/cli/__tests__/plugin.test.ts"]
+  }
+]

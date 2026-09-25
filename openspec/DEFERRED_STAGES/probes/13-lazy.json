@@ -1,0 +1,9 @@
+[
+  {
+    "name": "13a the ACP SDK is imported at the top of AcpClient",
+    "file": "src/services/AcpClient.ts",
+    "old": "import path from 'node:path';\nimport { Readable, Writable } from 'node:stream';",
+    "new": "import path from 'node:path';\nimport '@agentclientprotocol/sdk';\nimport { Readable, Writable } from 'node:stream';",
+    "tests": ["src/cli/__tests__/lazy.test.ts"]
+  }
+]

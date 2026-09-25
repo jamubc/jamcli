@@ -1,0 +1,16 @@
+[
+  {
+    "name": "17a an agent step category takes the first model without falling back",
+    "file": "src/core/workflows/runners.ts",
+    "old": "        const config = loadConfig({ projectRoot: options.projectRoot }).config;\n        const route = await resolveRoute({ registry: config.api_registry, categories: categoriesOf(config), category: spec.category });\n        if (!route) return { ok: false, output: `There is no category ${spec.category}.` };\n        if (!route.model) return { ok: false, output: route.notes.join(' ') };\n        model = route.model;",
+    "new": "        const chain = categoriesOf(loadConfig({ projectRoot: options.projectRoot }).config)[spec.category];\n        if (!chain?.length) return { ok: false, output: `There is no category ${spec.category}.` };\n        model = chain[0].model;",
+    "tests": ["src/core/workflows/__tests__/workflows.test.ts"]
+  },
+  {
+    "name": "17b the status line does not count language servers",
+    "file": "src/tui/app/format.ts",
+    "old": "  if (status.lspServers) parts.push(`LSP ${status.lspServers}`);\n",
+    "new": "",
+    "tests": ["src/tui/app/__tests__/format.test.ts"]
+  }
+]
