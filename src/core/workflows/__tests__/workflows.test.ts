@@ -344,3 +344,16 @@ test('a workflow tool step goes through the permission engine', async () => {
   expect(out.join('\n')).toContain('ended: failed');
   expect(fs.existsSync(path.join(root, 'made.txt'))).toBe(false);
 }, 30_000);
+
+test('an agent step category falls back along the chain like delegation', async () => {
+  project();
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false }, categories: { quick: [{ model: 'openai:gpt-5' }, { model: 'ollama:fake-model' }] } })
+  );
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'categorized.yaml'), ['name: categorized', 'steps:', '  - id: ask', '    agent: { category: quick, prompt: "say hi" }', ''].join('\n'));
+  provider.enqueue({ text: 'hi there' });
+  const { code } = await runWorkflow(['run', 'categorized', '--headless']);
+  expect(code).toBe(0);
+  expect(provider.completions().at(-1)!.body.model).toBe('fake-model');
+}, 30_000);

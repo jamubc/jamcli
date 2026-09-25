@@ -1,6 +1,7 @@
 import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime/index.js';
 import { loadConfig } from '../config/load.js';
 import { categoriesOf } from '../runtime/children.js';
+import { resolveRoute } from '../routing/resolve.js';
 import { commitChanges } from '../git/commit.js';
 import type { AgentEvent, RunResult } from '../types.js';
 import { executeWorkflow, type StepOutcome, type StepRunners } from './engine.js';
@@ -58,9 +59,11 @@ export function runtimeRunners(options: RuntimeRunnerOptions): StepRunners {
       const spec = step.agent!;
       let model = spec.model;
       if (!model && spec.category) {
-        const chain = categoriesOf(loadConfig({ projectRoot: options.projectRoot }).config)[spec.category];
-        if (!chain?.length) return { ok: false, output: `There is no category ${spec.category}.` };
-        model = chain[0].model;
+        const config = loadConfig({ projectRoot: options.projectRoot }).config;
+        const route = await resolveRoute({ registry: config.api_registry, categories: categoriesOf(config), category: spec.category });
+        if (!route) return { ok: false, output: `There is no category ${spec.category}.` };
+        if (!route.model) return { ok: false, output: route.notes.join(' ') };
+        model = route.model;
       }
       const runtime = await open({ ...(model ? { model } : {}), ...(spec.mode ? { permissions: { ...options.runtime?.permissions, mode: spec.mode } } : {}) });
       return within(runtime, signal, () => runtime.run(prompt, handler(step.id), { label: `step ${step.id}`, ...(spec.allowed_tools ? { allowedTools: spec.allowed_tools } : {}) }));
