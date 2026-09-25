@@ -1141,6 +1141,15 @@ git state.
 **Why.** Both are plain files, so they are safe to share. The skills format is an open
 standard that other CLIs read, so the owner's skills are portable in both directions.
 
+As built (8.1, 8.2), a command's `allowed-tools` narrows the turn, as a skill's does,
+rather than allowing ahead as Claude Code's does: a file in a repository must not be able
+to grant itself a permission. Narrowing is enforced by the permission engine, so a call a
+narrowing lets through is still decided as any other, and a narrowing inside another keeps
+only what both allow. Other agents' tool names in `allowed-tools`, such as `Bash(git:*)`
+and `Read`, are read as JamCLI's. Skills are found in `.jamcli/skills/` before
+`.agents/skills/` before the user's, and the `skill` tool is offered only when there are
+skills.
+
 ### D17. User hooks
 
 Configuration maps events to commands:
@@ -1179,6 +1188,17 @@ The in-process hook bus stays as the internal mechanism, and user hooks subscrib
 
 **Why.** The protocol mirrors Claude Code's and Codex's hook contracts closely enough that
 existing guard scripts work with small changes, and it keeps JamCLI's own surface small.
+
+As built (8.3), a hook's allow answers only what the mode alone would have asked: an ask
+rule, a command the policy cannot see into, or a commit still asks. A `stop` hook that
+blocks, or denies, sends its reason to the model as the next message and the loop goes
+on, bounded by the step limit, with `stop_hook_active` set for the hook to see. A
+`pre_compact` hook cannot stop a compaction, which may be what lets the turn go on; its
+context is added to the summary's instructions. Plain standard output, not JSON, is
+context for `session_start` and `user_prompt_submit`, as it is in Claude Code. The trust
+for a project's hooks is a digest of them kept in the state directory, outside any
+repository; the project and local configuration files both need it, since either can be
+committed.
 
 ### D18. Plugins
 
