@@ -204,6 +204,81 @@ then run the probe.
   - **gap**: a tool denied by a rule must not be loadable. `search_tools` reads
     `toolSet.summaries`, which is already filtered, but no test proves it.
 
+### 9.3 ACP on the SDK (`a0f1bff`, `7268f91`)
+
+`src/acp/server.ts`:
+
+- **break**: offer `bypass` in `acpModes` (`src/acp/session.ts`).
+  - **caught by**: `features.test.ts`, which lists the modes.
+- **break**: `setMode` refusal ignored (always `{}`).
+  - **caught by**: `features.test.ts`, which expects an error for `bypass`.
+- **break**: `allow_always` mapped to `{ allow: true }` without `scope: 'session'`.
+  - **gap**: no test answers "allow always" and then checks that a second call does not ask.
+- **break**: `reject-always` treated as allow (compare `kind` wrongly).
+  - **gap**: only `reject-once` is tested.
+- **break**: `ask` catch swallowing an error but allowing the call.
+  - **gap**: no test makes `requestPermission` fail (client answers with an error).
+- **break**: replay after the `loadSession` reply instead of before it.
+  - **caught by**: `features.test.ts`, which slices the messages before the reply.
+- **break** `promptText`: drop `resource_link` blocks.
+  - **gap**: only an embedded resource is tested.
+- **break**: send `available_commands_update` before the `session/new` reply.
+  - **gap**: the test does not check the order.
+- **break**: `queue` in `agent()` not awaited before the prompt reply, so the last updates
+  arrive after `end_turn`.
+  - **gap**: no test checks that every update precedes the reply.
+
+`src/acp/updates.ts`:
+
+- **break** `toolKind`: map `edit` to `other`.
+  - **caught by**: `runtime.test.ts` and `observer.test.ts`, which expect `kind: 'edit'`.
+- **break** `diffContent`: skip `reversePatch`, so `oldText` equals `newText`.
+  - **caught by**: `features.test.ts`, which expects `oldText: 'old\n'`.
+- **break**: the `OUTPUT_LIMIT` cut.
+  - **gap**: no test streams a long output.
+- **break** `planOf`: every status becomes `pending`.
+  - **caught by**: `features.test.ts`.
+- **break** `pathsOf` for `apply_patch`.
+  - **gap**: no ACP test uses `apply_patch`.
+
+`src/services/AcpClient.ts`:
+
+- **break**: offer `fs` capabilities again in `initialize`.
+  - **gap**: no test asserts the client capabilities are empty. The fake agent should
+    record them in `_meta` like `envNames`.
+- **break** `within`: ignore the agent exiting.
+  - **gap**: no test kills the fake agent mid-prompt.
+- **break**: `subprocessEnv` replaced by `process.env`.
+  - **caught by**: `acpClient.test.ts` "an external agent gets no provider key...".
+
+### 9.3a ACP observer (`8c1bade`)
+
+`src/tui/observer.ts`:
+
+- **break**: drop `process.umask(0o177)` and the `chmodSync`.
+  - **caught by**: `observer.test.ts`, which checks the mode is 0600 (the chmod alone
+    keeps it green; the umask needs a check made during listen, which is a **gap**).
+- **break**: remove the live-socket probe, so a second interface steals the path.
+  - **caught by**: `observer.test.ts` "...is in use by another process".
+- **break** `SLOW_CLIENT_BYTES`: never drop.
+  - **gap**: no test has a client that stops reading. Pause the socket and push a large
+    output through a turn.
+- **break**: `newSession` or `prompt` allowed.
+  - **caught by**: `observer.test.ts`.
+- **break**: `setState('requires_action')` removed.
+  - **caught by**: `observer.test.ts`, whose need-input wait times out.
+- **break**: `attach` keeps the old watchers after `/clear`.
+  - **gap**: the interface test checks `attach` is called, not what an attached observer
+    receives afterwards.
+- **break** `event`: let a watcher's `send` throw into the interface (remove the `try`).
+  - **gap**: `send` already swallows errors, so the `try` is a second guard with no test.
+
+`src/tui/app/controller.ts` and `App.tsx`:
+
+- **break**: call `tap` after `dispatch`, or only for some events.
+  - **caught by**: partly, in `composer.test.tsx`, which checks `turn_start` and
+    `turn_end` only.
+
 ### Probes to repeat once later stages land
 
 These areas were probed in their own tasks, but the unfinished stages below add new paths
@@ -269,10 +344,14 @@ copy once the unit closes), what is missing, and what finishing it needs.
 
 (Updated as the unit closes. An item leaves this list when its task is checked.)
 
-- **9.3** ACP on the official SDK: `session/load`, `session/set_mode`, plans, available
-  commands, diffs, the editor's file system and terminals, and schema validation. Also
-  moving the ACP client to the SDK.
-- **9.3a** The ACP observer for a running interface.
+- **9.3, the editor's file system and terminals.** ACP lets an editor offer
+  `fs/read_text_file`, `fs/write_text_file`, and `terminal/*`, so an agent reads unsaved
+  buffers and runs commands in the editor's terminal. JamCLI's tools still use the disk
+  and their own processes.
+  - To finish: give `ToolContext` optional `readText`, `writeText`, and `terminal`
+    functions, set them in `src/acp/session.ts` from the client's capabilities, and use
+    them in `read_file`, `edit`, `write_file`, and `run_command`. The permission engine
+    and checkpoints must still apply, so this goes below the dispatcher.
 - **9.4** The LSP client and the `lsp` tool.
 - **9.5** `docs/conformance.md`.
 - **Stage 10**: plugins (10.1 to 10.5).
