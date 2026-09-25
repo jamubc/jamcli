@@ -20,7 +20,7 @@ const quote = (value: string) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, 
  * the last matching rule wins. The network is denied unless allowed.
  */
 export function seatbeltProfile(options: SeatbeltOptions): string {
-  const writable = [options.projectRoot, ...(options.writable ?? []).map((dir) => expandHome(dir, options.home)), '/private/tmp'];
+  const writable = [...(options.readOnlyProject ? [] : [options.projectRoot]), ...(options.writable ?? []).map((dir) => expandHome(dir, options.home)), '/private/tmp'];
   if (options.tmpdir) writable.push(options.tmpdir);
   const writableRules = [...new Set(writable.filter((dir) => fs.existsSync(dir)).map(realDirectory))].map((dir) => `  (subpath ${quote(dir)})`);
   const hidden = existingHidden(options.hidden, options.home).map((entry) =>

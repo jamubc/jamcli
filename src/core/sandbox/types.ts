@@ -16,6 +16,10 @@ export interface SandboxSettings {
   env?: EnvPolicy;
   /** Variables passed to every process by name, even when they look like credentials. */
   env_passthrough?: string[];
+  /** Not a setting: a plugin that did not ask to write the project gets it read-only. */
+  readOnlyProject?: boolean;
+  /** Not a setting: directories bound read-only, such as a plugin's own, which may sit under /tmp. */
+  readable?: string[];
 }
 
 export interface Sandbox {

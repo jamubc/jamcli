@@ -29,9 +29,14 @@ export function bwrapArgs(options: BwrapOptions, command: string, cwd: string, e
   if (fs.existsSync('/run')) args.push('--tmpfs', '/run');
   if (options.network && fs.existsSync('/run/systemd/resolve')) args.push('--ro-bind', '/run/systemd/resolve', '/run/systemd/resolve');
   if (isRealDirectory('/var/run')) args.push('--tmpfs', '/var/run');
-  const writable = [options.projectRoot, ...(options.writable ?? []).map((dir) => expandHome(dir, options.home))];
+  const writable = [...(options.readOnlyProject ? [] : [options.projectRoot]), ...(options.writable ?? []).map((dir) => expandHome(dir, options.home))];
   for (const dir of new Set(writable.map(realDirectory))) {
     if (fs.existsSync(dir)) args.push('--bind', dir, dir);
+  }
+  // Read-only, but visible even under the private /tmp.
+  const readable = [...(options.readOnlyProject ? [options.projectRoot] : []), ...(options.readable ?? [])];
+  for (const dir of new Set(readable.map(realDirectory))) {
+    if (fs.existsSync(dir)) args.push('--ro-bind', dir, dir);
   }
   const agent = env.SSH_AUTH_SOCK ? [env.SSH_AUTH_SOCK] : [];
   for (const hidden of existingHidden([...(options.hidden ?? []), ...agent], options.home)) {
