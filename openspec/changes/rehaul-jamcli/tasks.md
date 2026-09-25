@@ -707,11 +707,18 @@ cover headless, ACP, and delegation.
 
 ## Stage 10: Plugins
 
-- [ ] 10.1 Add `semver` in its own commit. The manifest schema and validation (D18). Files: `src/core/plugins/manifest.ts`, tests.
-- [ ] 10.2 Install, lockfile, integrity hash, and consent. Files: `src/core/plugins/install.ts`, `src/cli/plugin.ts`, tests with a local git fixture.
-- [ ] 10.3 The lifecycle: `list`, `enable`, `disable`, `update` (with a permission difference), `remove`, and `verify`.
-- [ ] 10.4 Contribution loading: commands, skills, hooks, and MCP servers, sandboxed with declared permissions.
-- [ ] 10.5 Hostile plugin tests: a network attempt, an environment leak, a write outside the project, and a tampered file failing `verify`.
+- [x] 10.1 Add `semver` in its own commit. The manifest schema and validation (D18). Files: `src/core/plugins/manifest.ts`, tests.
+  - **Verification**: `jamcli-plugin.json` is checked with zod, every problem named by field: the name, a semantic version, an `engines.jamcli` range checked against this version, host names for `network`, variable names for `env`, `filesystem` of `none` or `project`, and contribution paths that stay inside the plugin and exist.
+- [x] 10.2 Install, lockfile, integrity hash, and consent. Files: `src/core/plugins/store.ts` (the plan named `install.ts`), `src/cli/plugin.ts`, tests with a local git fixture.
+  - **Verification**: `jamcli plugin install <path | git-url[#ref]> [--scope user|project] [--yes]` copies a path or clones at a ref (recording the commit, without `.git`), refuses symbolic links, hashes the sorted files and their contents (`sha256-...`), and shows each command, skill, hook, MCP server, and permission before asking. Without consent nothing is stored; with nobody to ask and no `--yes`, nothing is installed. The copy goes to `~/.local/share/jamcli/plugins/<name>/<version>/` (`JAMCLI_DATA_DIR` overrides), and `plugins.lock.json` at the scope records the source, commit, integrity, permissions, and time of consent.
+- [x] 10.3 The lifecycle: `list`, `enable`, `disable`, `update` (with a permission difference), `remove`, and `verify`.
+  - **Verification**: `update` installs again from the recorded source, keeping the consent when nothing more is asked and asking again, with the difference, when it is. `verify` hashes every installed copy; a mismatch turns the plugin off (`disabledReason: integrity`), `enable` refuses it, and every session start runs the same check. `/plugins` in the interface lists them.
+- [x] 10.4 Contribution loading: commands, skills, hooks, and MCP servers, sandboxed with declared permissions.
+  - **Verification**: commands load as `/plugin:name` everywhere custom commands do (interface, `-p`, ACP), and skills after the person's own. Hooks run without the project trust prompt, since installing was the consent, and MCP servers are added as `<plugin>-<id>`. Each plugin's processes run in a sandbox of their own: the network only when it declared a host, the project read-only unless it declared `filesystem: project`, its own directory readable, and the session's minimal environment plus only the variables it named. Where no sandbox works, the session says the plugin runs unsandboxed.
+- [x] 10.5 Hostile plugin tests: a network attempt, an environment leak, a write outside the project, and a tampered file failing `verify`.
+  - **Verification**: a plugin's `user_prompt_submit` hook tries each inside bubblewrap and reports what happened to the model: the network is blocked, an undeclared secret is absent while a declared variable arrives, and writes outside the project and into the read-only project both fail. A changed file fails `verify` and turns the plugin off.
+  - Tests: 5 (the manifest, install and consent, git and the lifecycle, the hostile plugin, a plugin's MCP server reaching the model). Probes deferred to `openspec/DEFERRED.md`.
+  - Delta, recorded: declared network hosts cannot be enforced one by one, since bubblewrap has the network on or off; a plugin that declares any host gets the network. Recorded in `openspec/DEFERRED.md`.
 
 ## Stage 11: Workflows
 
