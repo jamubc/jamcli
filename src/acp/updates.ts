@@ -32,6 +32,16 @@ const pathsOf = (call: ToolCall): string[] => {
   const found = [args.path, args.file_path, args.file, ...(Array.isArray(args.paths) ? args.paths : [])].filter((value): value is string => typeof value === 'string' && value.length > 0);
   if (call.name === 'apply_patch' && typeof args.patch === 'string') {
     for (const match of args.patch.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)) found.push(match[1].trim());
+    try {
+      for (const entry of parsePatch(args.patch)) {
+        for (const name of [entry.oldFileName, entry.newFileName]) {
+          const trimmed = name?.split('\t')[0].trim().replace(/^[ab]\//, '');
+          if (trimmed && trimmed !== '/dev/null') found.push(trimmed);
+        }
+      }
+    } catch {
+      // A patch that does not parse will fail when it is applied too.
+    }
   }
   return [...new Set(found)];
 };
