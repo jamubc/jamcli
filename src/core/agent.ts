@@ -126,7 +126,12 @@ export class CoreAgent implements Agent {
     this.running.get(sessionId)?.abort();
   }
 
-  async run(session: JamSession, prompt: string, onEvent: (e: AgentEvent) => void, options: { shell?: boolean } = {}): Promise<RunResult> {
+  async run(
+    session: JamSession,
+    prompt: string,
+    onEvent: (e: AgentEvent) => void,
+    options: { shell?: boolean; tool?: { name: string; arguments: Record<string, unknown> } } = {}
+  ): Promise<RunResult> {
     const controller = new AbortController();
     const external = this.options.signal;
     const relay = () => controller.abort();
@@ -134,7 +139,9 @@ export class CoreAgent implements Agent {
     external?.addEventListener('abort', relay, { once: true });
     this.running.set(session.id, controller);
     try {
-      return await (options.shell ? this.shell(session, prompt, onEvent, controller.signal) : this.turn(session, prompt, onEvent, controller.signal));
+      if (options.shell) return await this.direct(session, { name: 'run_command', arguments: { command: prompt } }, `!${prompt}`, `I ran a command myself: ${prompt}`, onEvent, controller.signal);
+      if (options.tool) return await this.direct(session, options.tool, prompt || options.tool.name, `I called ${options.tool.name} myself`, onEvent, controller.signal);
+      return await this.turn(session, prompt, onEvent, controller.signal);
     } finally {
       external?.removeEventListener('abort', relay);
       if (this.running.get(session.id) === controller) this.running.delete(session.id);
@@ -150,22 +157,30 @@ export class CoreAgent implements Agent {
   }
 
   /**
-   * A command the person typed after `!`: run as the model's `run_command` would be, so
-   * the permission engine, the sandbox, hooks, and checkpoints apply, and kept in the
-   * conversation with its output, so the model can read it on the next turn. No model is asked.
+   * One tool call the person made, with no model: a command typed after `!`, or a
+   * workflow's `run` or `tool` step. It runs as the model's call would, so the permission
+   * engine, the sandbox, hooks, and checkpoints apply, and it is kept in the conversation
+   * with its output, so the model can read it on the next turn. The reply is the output.
    */
-  private async shell(session: JamSession, command: string, emit: (e: AgentEvent) => void, signal: AbortSignal): Promise<RunResult> {
+  private async direct(
+    session: JamSession,
+    tool: { name: string; arguments: Record<string, unknown> },
+    shown: string,
+    said: string,
+    emit: (e: AgentEvent) => void,
+    signal: AbortSignal
+  ): Promise<RunResult> {
     const { dispatcher, hooks } = this.options;
-    const finish = (status: RunStatus, working: JamSession, error?: string): RunResult => {
+    const finish = (status: RunStatus, working: JamSession, response = '', error?: string): RunResult => {
       emit({ type: 'turn_end', status });
-      return { status, sessionId: session.id, response: '', turns: 0, usage: { ...working.usage }, session: working, ...(error ? { error } : {}) };
+      return { status, sessionId: session.id, response, turns: 0, usage: { ...working.usage }, session: working, ...(error ? { error } : {}) };
     };
-    emit({ type: 'turn_start', prompt: `!${command}` });
+    emit({ type: 'turn_start', prompt: shown });
     if (!dispatcher) {
-      emit({ type: 'notice', level: 'error', message: 'This session has no tools, so the command was not run.' });
+      emit({ type: 'notice', level: 'error', message: `This session has no tools, so ${tool.name} was not run.` });
       return finish('error', session);
     }
-    const call: ToolCall = { id: `shell-${Date.now().toString(36)}`, name: 'run_command', arguments: { command } };
+    const call: ToolCall = { id: `direct-${Date.now().toString(36)}`, name: tool.name, arguments: tool.arguments };
     const batch = await executeBatch([call], {
       dispatcher,
       emit,
@@ -179,12 +194,13 @@ export class CoreAgent implements Agent {
     });
     const [result] = batch.results;
     const status = result.status ?? (result.success ? 'ok' : 'error');
-    const said = status === 'denied' ? 'It was not run.' : status === 'ok' ? 'Its output:' : `It ended with status ${status}. Its output:`;
-    const message = userMessage(`[I ran a command myself: ${command}]\n${said}${status === 'denied' ? '' : `\n\`\`\`\n${this.truncate(result.output)}\n\`\`\``}`);
+    const outcome = status === 'denied' ? 'It was not run.' : status === 'ok' ? 'Its output:' : `It ended with status ${status}. Its output:`;
+    const message = userMessage(`[${said}]\n${outcome}${status === 'denied' ? '' : `\n\`\`\`\n${this.truncate(result.output)}\n\`\`\``}`);
     const working = appendMessages(session, [message]);
     emit({ type: 'message', message });
-    if (signal.aborted) return finish('cancelled', working);
-    return status === 'denied' ? finish('refused', working, 'The command was not run.') : finish('ok', working);
+    if (signal.aborted) return finish('cancelled', working, result.output);
+    if (status === 'denied') return finish('refused', working, '', `${tool.name === 'run_command' ? 'The command' : tool.name} was not run.`);
+    return status === 'ok' ? finish('ok', working, result.output) : finish('error', working, result.output, `${tool.name === 'run_command' ? 'The command' : tool.name} ended with status ${status}.`);
   }
 
   private async turn(

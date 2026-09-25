@@ -122,6 +122,8 @@ export interface RunOptions {
   label?: string;
   /** The input is a command the person typed after `!`: run it as `run_command`, without the model. */
   shell?: boolean;
+  /** Call this tool once, without the model, as a workflow's `tool` step does. The input is what the log shows. */
+  tool?: { name: string; arguments: Record<string, unknown> };
 }
 
 export interface ContextUsage {
@@ -1016,19 +1018,19 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         await Promise.all([modelReady, trustReady]);
         for (const message of pending.splice(0)) emit({ type: 'notice', level: 'warn', message });
         // A command typed after `!` needs no model, and its text is not a prompt to expand.
-        if (!provider && !turn.shell) {
+        if (!provider && !turn.shell && !turn.tool) {
           const error = providerError ?? 'No model provider is configured for this session.';
           emit({ type: 'notice', level: 'error', message: error });
           return { status: 'error', sessionId: log.id, response: '', turns: 0, usage: { ...session.usage }, error, session };
         }
-        const expanded = turn.shell ? { prompt: input, notices: [] } : await expandReferences(input, cwd, redact, resourceReader);
+        const expanded = turn.shell || turn.tool ? { prompt: input, notices: [] } : await expandReferences(input, cwd, redact, resourceReader);
         for (const message of expanded.notices) emit({ type: 'notice', level: 'warn', message });
         turns += 1;
         turnAgent = agent;
         observation?.startTurn(expanded.prompt);
         let result: RunResult | undefined;
         try {
-          result = await turnAgent.run(session, expanded.prompt, emit, turn.shell ? { shell: true } : {});
+          result = await turnAgent.run(session, expanded.prompt, emit, turn.shell ? { shell: true } : turn.tool ? { tool: turn.tool } : {});
         } catch (error) {
           observation?.endTurn(undefined, error);
           throw error;
