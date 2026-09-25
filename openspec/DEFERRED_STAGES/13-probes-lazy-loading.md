@@ -3,12 +3,12 @@
 **Description:** Headless startup regression is only caught by `bun run bench`, not by `bun test`.
 
 **Acceptance criteria:**
-- [ ] Test imports `src/cli.ts` and asserts the ACP SDK module was not loaded
-- [ ] Top-level SDK import in `src/services/AcpClient.ts` turns it red
+- [x] Test imports `src/cli.ts` and asserts the ACP SDK module was not loaded
+- [x] Top-level SDK import in `src/services/AcpClient.ts` turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/cli/__tests__/lazy.test.ts`
-- [ ] Manual check: `bun run bench` headless startup still within budget
+- [x] Tests pass: `bun test src/cli/__tests__/lazy.test.ts`
+- [x] Manual check: `bun run bench` headless startup still within budget
 
 **Dependencies:** None
 
@@ -24,12 +24,12 @@
 **Description:** Missing `--loader .scm:text` in `scripts/compile.ts` is only caught by the staged release smoke test.
 
 **Acceptance criteria:**
-- [ ] Local test or documented manual step proves `.scm` text loads from the built output
-- [ ] Until automated, record as local gap owned by `18-stage12-perf-security-ci.md`
+- [x] Local test or documented manual step proves `.scm` text loads from the built output
+- [x] Until automated, record as local gap owned by `18-stage12-perf-security-ci.md`
 
 **Verification:**
-- [ ] Tests pass: `bun test src/cli/__tests__/lazy.test.ts`
-- [ ] Manual check: `bun run compile` plus `--version` smoke on Linux binary
+- [x] Tests pass: `bun test src/cli/__tests__/lazy.test.ts`
+- [x] Manual check: `bun run compile` plus `--version` smoke on Linux binary
 
 **Dependencies:** Task 1
 
@@ -39,7 +39,7 @@
 **Estimated scope:** Small: 1-2 files
 
 ## Checkpoint: After Tasks 1-2
-- [ ] Bench budgets reviewed for headless startup impact
+- [x] Bench budgets reviewed for headless startup impact
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 502-511)
