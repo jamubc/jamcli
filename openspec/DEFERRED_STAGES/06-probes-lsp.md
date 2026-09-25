@@ -3,12 +3,12 @@
 **Description:** `didOpen` repeat behavior, config handler, and shutdown kill need stronger fakes.
 
 **Acceptance criteria:**
-- [ ] Fake refuses second `didOpen` for same file; always-`didOpen` turns test red
-- [ ] Fake waits for `workspace/configuration` answer; dropping handler turns it red
-- [ ] Fake that ignores `shutdown` gets killed on `stop`; never-kill turns it red
+- [x] Fake refuses second `didOpen` for same file; always-`didOpen` turns test red
+- [x] Fake waits for `workspace/configuration` answer; dropping handler turns it red
+- [x] Fake that ignores `shutdown` gets killed on `stop`; never-kill turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/lsp/__tests__/lsp.test.ts`
+- [x] Tests pass: `bun test src/core/lsp/__tests__/lsp.test.ts`
 
 **Dependencies:** None
 
@@ -23,13 +23,13 @@
 **Description:** Failed-start retry and post-edit diagnostics for patch and warnings need coverage.
 
 **Acceptance criteria:**
-- [ ] Server that fails once then works starts on retry; cached-failure turns it red
-- [ ] Fake reports warnings; handler reports errors only (warnings skipped) proven by probe
-- [ ] After `apply_patch`, changed files errors reach the model (today only `edit` tested)
-- [ ] 20-line cap asserted with a long diagnostic list
+- [x] Server that fails once then works starts on retry; cached-failure turns it red
+- [x] Fake reports warnings; handler reports errors only (warnings skipped) proven by probe
+- [x] After `apply_patch`, changed files errors reach the model (today only `edit` tested)
+- [x] 20-line cap asserted with a long diagnostic list
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/lsp/__tests__/lsp.test.ts src/core/runtime/__tests__/index.test.ts`
+- [x] Tests pass: `bun test src/core/lsp/__tests__/lsp.test.ts src/core/runtime/__tests__/index.test.ts`
 
 **Dependencies:** Task 1
 
@@ -41,8 +41,8 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-2
-- [ ] Caught probes re-run: PATH fallback, `where` relative paths, `resolveProjectPath`, 1-based conversion, delayed diagnostics
-- [ ] Smoke against pyright still passes where installed
+- [x] Caught probes re-run: PATH fallback, `where` relative paths, `resolveProjectPath`, 1-based conversion, delayed diagnostics
+- [x] Smoke against pyright still passes where installed
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 282-321)
