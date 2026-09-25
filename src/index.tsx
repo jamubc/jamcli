@@ -16,6 +16,8 @@ const HEADLESS_INTENTS = new Set([
   'config',
   'auth',
   'acp',
+  'skill',
+  'hooks',
   '--help',
   '-h',
   '--output-format',

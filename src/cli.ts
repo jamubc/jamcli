@@ -50,6 +50,9 @@ export interface ParsedArgs {
   /** `jamcli auth`, likewise. */
   authCommand?: { action?: AuthAction; args: string[] };
   audit: boolean;
+  /** `jamcli skill` and `jamcli hooks`, with their own arguments. */
+  skillCommand?: string[];
+  hooksCommand?: string[];
   /** `jamcli doctor`, with its own arguments. */
   doctor?: string[];
   acp: boolean;
@@ -184,6 +187,15 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       parsed.doctor = argv.slice(i + 1);
       return parsed;
     }
+    if (token === 'skill' || token === 'hooks') {
+      const words: string[] = [];
+      for (let k = i + 1; k < argv.length; k += 1) {
+        if (argv[k] === '--cwd') parsed.cwd = argv[++k];
+        else words.push(argv[k]);
+      }
+      parsed[token === 'skill' ? 'skillCommand' : 'hooksCommand'] = words;
+      return parsed;
+    }
     if (token === 'sessions') {
       const action = argv[i + 1];
       if (SESSIONS_ACTIONS.includes(action as SessionsAction)) {
@@ -263,6 +275,8 @@ export const USAGE = `Usage: jamcli [options]
   jamcli auth set|get|remove|list|login   Store provider keys in the keychain, or sign in to OpenRouter
   jamcli mcp add|list|test|remove   Manage MCP servers in .jamcli/mcp.json
   jamcli acp                   Serve the Agent Client Protocol over stdio
+  jamcli skill list            List the skills the model can load, and any that could not be read
+  jamcli hooks [list|trust]    List the configured hooks, or trust this project's as they are
 
   --help                       Show this help
   --version, -v                Show the version (-v alone)`;
@@ -327,6 +341,16 @@ export const runCli = async (argv: string[]): Promise<number> => {
 
   if (parsed.audit) {
     return runAuditCli();
+  }
+
+  if (parsed.skillCommand) {
+    const { runSkillCommand } = await import('./cli/extensions.js');
+    return runSkillCommand(parsed.skillCommand, projectRoot);
+  }
+
+  if (parsed.hooksCommand) {
+    const { runHooksCommand } = await import('./cli/extensions.js');
+    return runHooksCommand(parsed.hooksCommand, projectRoot);
   }
 
   if (parsed.doctor) {
