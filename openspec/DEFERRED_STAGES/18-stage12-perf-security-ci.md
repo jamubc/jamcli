@@ -68,9 +68,16 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-3
-- [ ] Perf numbers or revised budgets accepted
-- [ ] Security findings fixed or recorded with owner sign-off
+- [x] Perf numbers or revised budgets accepted
+  - Recorded 2026-09-25 on macOS 27.0 arm64: `bun run bench -- --enforce` exits 0 with --version 12.7 ms (60), headless 54 ms (150), grep 371.9 ms (500); first frame, keystroke, and memory are measured on Linux only. The budgets stay as they are; the CI Linux run of the performance job awaits the owner's push.
+- [x] Security findings fixed or recorded with owner sign-off
+  - Fixed: finding 4, the observer refuses a socket path whose directory is group- or world-writable (observer.test.ts, probe 18a caught). Fixed: finding 2, a workflow agent step's mode is capped at the session's (workflows.test.ts, probe 18b caught). Recorded with plans: finding 1, the project MCP trust gate (behavior change for existing projects; plan below), and finding 3, the git hook digest (plan below). Finding 5, per-host network, is recorded in `17-unfinished-stages.md`.
 - [ ] CI green on three OSes or failures filed as tasks
+  - The workflows are landed and the D22 `security-scan` job is added. The first run awaits the owner's push; its findings are not filed yet.
+
+## Record (2026-09-25): security findings
+- Finding 1, project MCP trust gate (open, highest): gate `.jamcli/mcp.json` on a digest like project hooks. Plan: reuse `HookTrust` with a digest of the mcp file, refuse untrusted project servers at startup with a notice, add `jamcli mcp trust`, and ask on first start in the interface. Recorded rather than landed because it changes behavior for every existing project: its project MCP servers would stop starting until trusted, which needs the owner's decision.
+- Finding 3, git hook digest (open): `installGitHook` computes the workflow file's sha256 and writes `--expect-digest <d>` into the hook; the `workflow run` action refuses when the file's digest changed and says to reinstall the hook. Recorded with the plan because it changes the hook script's exact text and the existing triggers test must move with it.
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 600-647)
