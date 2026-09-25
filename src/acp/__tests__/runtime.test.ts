@@ -114,7 +114,7 @@ test('write tools are offered, asked about in the editor, and each call keeps it
   const pending = client.request('session/prompt', prompt(sessionId, 'edit @a.txt'));
   await waitFor(() => client.messages.some((message) => message.method === 'session/request_permission'));
   const permission = client.messages.find((message) => message.method === 'session/request_permission');
-  expect(permission.params.toolCall).toMatchObject({ toolCallId: 'e1', title: 'edit' });
+  expect(permission.params.toolCall).toMatchObject({ toolCallId: 'e1', title: 'edit a.txt', kind: 'edit', status: 'pending', locations: [{ path: path.join(root, 'a.txt') }] });
   client.answer(permission.id, 'allow-once');
   expect((await pending).result.stopReason).toBe('end_turn');
 

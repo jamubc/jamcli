@@ -12,7 +12,7 @@ const approvableController = (): AcpSessionController => ({
   cwd: '/tmp/project',
   model: 'test-model',
   profile: 'default',
-  configOptions: [{ id: 'model', name: 'Model', category: 'model', currentValue: 'test-model' }],
+  configOptions: [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'test-model', options: [{ value: 'test-model', name: 'test-model' }] }],
   async run(_prompt: string, onEvent: (event: AgentEvent) => void): Promise<RunResult> {
     onEvent({ type: 'text', delta: 'hello ' });
     onEvent({ type: 'tool_call', call: { id: 'call-1', name: 'write_file', arguments: { path: 'a.txt' } } });
@@ -200,7 +200,8 @@ test('an unknown session is reported as a JSON-RPC error', async () => {
   input.end();
 
   const error = messages.find((message) => message.id === 5);
-  expect(error.error.code).toBe(-32001);
+  // ACP's resource-not-found code.
+  expect(error.error.code).toBe(-32002);
 });
 
 test('sessions are closed when the client disconnects', async () => {

@@ -1,35 +1,27 @@
-import type { AgentEvent } from '../core/types.js';
 import {
-  ACP_PROTOCOL_VERSION,
-  decodeMessage,
-  encodeMessage,
-  isApprovalOutcome,
-  isNotification,
-  isRequest,
-  messageChunk,
-  permissionOptions,
-  stopReasonFor,
-  thoughtChunk,
-  toolCallStatusUpdate,
-  toolCallUpdate,
-  type JsonRpcId,
-  type JsonRpcMessage,
-  type JsonRpcNotification,
-  type JsonRpcRequest,
-  type JsonRpcResponse,
-  type PermissionOutcome,
+  AgentSideConnection,
+  ndJsonStream,
+  PROTOCOL_VERSION,
+  RequestError,
+  type Agent,
+  type ContentBlock,
+  type PermissionOption,
   type SessionUpdate,
-} from './protocol.js';
+} from '@agentclientprotocol/sdk';
+import type { AgentEvent, ApprovalDecision } from '../core/types.js';
 import { createAcpSession, type AcpSessionController, type CreateAcpSessionOptions } from './session.js';
+import { stopReasonFor, toolKind, toolLocations, toolTitle, UpdateMapper } from './updates.js';
 import { JAMCLI_VERSION } from '../core/version.js';
 
 export interface AcpNewSessionRequest {
   cwd: string;
   mcpServers?: unknown[];
+  /** Continue this recorded session: `session/load`. */
+  sessionId?: string;
 }
 
 export interface AcpServerOptions {
-  input: AsyncIterable<Buffer | string>;
+  input: AsyncIterable<Buffer | string | Uint8Array>;
   output: NodeJS.WritableStream;
   error?: NodeJS.WritableStream;
   projectRoot: string;
@@ -40,245 +32,211 @@ export interface AcpServerOptions {
   sessionOptions?: Partial<CreateAcpSessionOptions>;
 }
 
-interface PendingPermission {
-  sessionId: string;
-  resolve: (message: JsonRpcMessage) => void;
-}
-
-const paramsOf = (value: unknown): Record<string, any> =>
-  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, any>) : {};
-
-const extractPromptText = (prompt: unknown): string => {
-  if (typeof prompt === 'string') return prompt;
-  if (Array.isArray(prompt)) {
-    return prompt
-      .map((block: any) => (block && typeof block === 'object' && block.type === 'text' ? String(block.text ?? '') : ''))
-      .join('');
-  }
-  return '';
-};
+export const PERMISSION_OPTIONS: PermissionOption[] = [
+  { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+  { optionId: 'allow-always', name: 'Allow for this session', kind: 'allow_always' },
+  { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+  { optionId: 'reject-always', name: 'Reject, and say so', kind: 'reject_always' },
+];
 
 /**
- * Agent Client Protocol server. It reads line-delimited JSON-RPC from stdin,
- * drives the core agent, and streams session/update notifications back. A
- * state-changing tool is mapped onto a session/request_permission exchange.
+ * The prompt's blocks as a turn takes them: what was typed, where a `/command` is read,
+ * and the context the editor attached, added after it: embedded resources quoted, links named.
+ */
+export function promptText(blocks: ContentBlock[]): { text: string; context: string } {
+  const typed: string[] = [];
+  const context: string[] = [];
+  for (const block of blocks) {
+    if (block.type === 'text') typed.push(block.text);
+    else if (block.type === 'resource' && 'text' in block.resource) context.push(`Resource ${block.resource.uri}:\n\`\`\`\n${block.resource.text}\n\`\`\``);
+    else if (block.type === 'resource_link') context.push(`Linked: [${block.name}](${block.uri})`);
+  }
+  return { text: typed.join(''), context: context.join('\n\n') };
+}
+
+const readable = (input: AsyncIterable<Buffer | string | Uint8Array>): ReadableStream<Uint8Array> => {
+  const iterator = input[Symbol.asyncIterator]();
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await iterator.next();
+      if (next.done) controller.close();
+      else controller.enqueue(typeof next.value === 'string' ? encoder.encode(next.value) : new Uint8Array(next.value));
+    },
+  });
+};
+
+const writable = (output: NodeJS.WritableStream): WritableStream<Uint8Array> =>
+  new WritableStream<Uint8Array>({
+    write: (chunk) => new Promise<void>((resolve, reject) => output.write(chunk, (error) => (error ? reject(error) : resolve()))),
+  });
+
+/**
+ * The Agent Client Protocol server, on the official SDK: the SDK frames, validates, and
+ * routes messages; this maps them onto runtimes. A call that asks is sent to the editor as
+ * `session/request_permission`.
  */
 export class AcpServer {
-  private readonly options: AcpServerOptions;
-  private readonly sessions = new Map<string, AcpSessionController>();
-  private readonly pending = new Map<JsonRpcId, PendingPermission>();
-  private nextId = 1000;
-  private buffer = '';
+  private readonly sessions = new Map<string, { controller: AcpSessionController; mapper: UpdateMapper }>();
 
-  constructor(options: AcpServerOptions) {
-    this.options = options;
-  }
+  constructor(private readonly options: AcpServerOptions) {}
 
   async start(): Promise<void> {
-    for await (const chunk of this.options.input) {
-      this.buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-      const lines = this.buffer.split('\n');
-      this.buffer = lines.pop() ?? '';
-      for (const line of lines) this.processLine(line);
-    }
-    if (this.buffer.trim()) this.processLine(this.buffer);
+    const stream = ndJsonStream(writable(this.options.output), readable(this.options.input));
+    const connection = new AgentSideConnection((client) => this.agent(client), stream);
+    await connection.closed;
     // The client has gone: stop every session's servers and background work.
-    await Promise.allSettled([...this.sessions.values()].map((session) => session.close?.()));
+    await Promise.allSettled([...this.sessions.values()].map((entry) => entry.controller.close?.()));
     this.sessions.clear();
   }
 
-  private processLine(line: string): void {
-    const message = decodeMessage(line);
-    if (!message) return;
-    if (isRequest(message)) {
-      void this.handleRequest(message);
-      return;
-    }
-    if (isNotification(message)) {
-      this.handleNotification(message);
-      return;
-    }
-    this.handleResponse(message);
-  }
-
-  private async handleRequest(request: JsonRpcRequest): Promise<void> {
-    const params = paramsOf(request.params);
-    switch (request.method) {
-      case 'initialize':
-        this.respond(request.id, this.initializeResult());
-        return;
-      case 'session/new':
-        await this.handleNewSession(request.id, params);
-        return;
-      case 'session/prompt':
-        await this.handlePrompt(request.id, params);
-        return;
-      case 'session/cancel':
-        this.cancelSession(params.sessionId);
-        this.respond(request.id, {});
-        return;
-      default:
-        this.respondError(request.id, -32601, `Method not found: ${request.method}`);
-    }
-  }
-
-  private handleNotification(message: JsonRpcNotification): void {
-    if (message.method === 'session/cancel') {
-      this.cancelSession(paramsOf(message.params).sessionId);
-    }
-  }
-
-  private handleResponse(message: JsonRpcResponse): void {
-    if (message.id === null || message.id === undefined) return;
-    const pending = this.pending.get(message.id);
-    if (!pending) return;
-    this.pending.delete(message.id);
-    pending.resolve(message);
-  }
-
-  private initializeResult() {
-    return {
-      protocolVersion: ACP_PROTOCOL_VERSION,
-      agentCapabilities: {
-        loadSession: false,
-        promptCapabilities: { image: false, audio: false, embeddedContext: false },
-      },
-      agentInfo: this.options.agentInfo ?? { name: 'jamcli', version: JAMCLI_VERSION },
-      authMethods: [],
-    };
-  }
-
-  private async handleNewSession(id: JsonRpcId, params: Record<string, any>): Promise<void> {
-    const cwd = typeof params.cwd === 'string' && params.cwd ? params.cwd : this.options.projectRoot;
-    try {
-      const session = await this.createSession({
-        cwd,
-        mcpServers: Array.isArray(params.mcpServers) ? params.mcpServers : [],
-      });
-      this.sessions.set(session.id, session);
-      this.respond(id, { sessionId: session.id, configOptions: session.configOptions });
-    } catch (error: any) {
-      this.respondError(id, -32000, `Failed to create session: ${error?.message || error}`);
-    }
-  }
-
-  private createSession(request: AcpNewSessionRequest): Promise<AcpSessionController> {
+  private open(request: AcpNewSessionRequest): Promise<AcpSessionController> {
     if (this.options.createSession) return this.options.createSession(request);
     return createAcpSession({
       projectRoot: this.options.projectRoot,
       cwd: request.cwd,
+      ...(request.sessionId ? { sessionId: request.sessionId } : {}),
       ...this.options.sessionOptions,
     });
   }
 
-  private async handlePrompt(id: JsonRpcId, params: Record<string, any>): Promise<void> {
-    const session = this.sessions.get(String(params.sessionId));
-    if (!session) {
-      this.respondError(id, -32001, `Unknown session: ${String(params.sessionId)}`);
-      return;
-    }
-    try {
-      const result = await session.run(extractPromptText(params.prompt), (event) => this.dispatchEvent(session, event));
-      this.respond(id, { stopReason: stopReasonFor(result.status) });
-    } catch (error: any) {
-      this.respondError(id, -32000, `Prompt failed: ${error?.message || error}`);
-    }
+  private session(sessionId: string) {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) throw RequestError.resourceNotFound(sessionId);
+    return entry;
   }
 
-  private dispatchEvent(session: AcpSessionController, event: AgentEvent): void {
-    switch (event.type) {
-      case 'text':
-        this.notifyUpdate(session.id, messageChunk(event.delta));
-        return;
-      case 'reasoning':
-        this.notifyUpdate(session.id, thoughtChunk(event.delta));
-        return;
-      case 'tool_call':
-        this.notifyUpdate(session.id, toolCallUpdate(event.call));
-        return;
-      case 'tool_result':
-        this.notifyUpdate(
-          session.id,
-          toolCallStatusUpdate(event.result.callId ?? event.result.tool, event.result.success ? 'completed' : 'failed')
-        );
-        return;
-      case 'notice':
-        this.notifyUpdate(session.id, messageChunk(`${event.message}\n`));
-        return;
-      case 'usage':
-        return;
-      case 'approval_request':
-        void this.requestPermission(session, event.call).then((approved) => event.decide(approved));
-        return;
-    }
-  }
+  private agent(client: AgentSideConnection): Agent {
+    // Updates go out in order: each waits for the one before it.
+    let queue = Promise.resolve();
+    const update = (sessionId: string, update: SessionUpdate) => {
+      queue = queue.then(() => client.sessionUpdate({ sessionId, update })).catch(() => {});
+      return queue;
+    };
+    const announceCommands = async (controller: AcpSessionController) => {
+      const commands = (await controller.commands?.().catch(() => [])) ?? [];
+      if (commands.length) await update(controller.id, { sessionUpdate: 'available_commands_update', availableCommands: commands });
+    };
+    const register = (controller: AcpSessionController, cwd: string) => {
+      this.sessions.set(controller.id, { controller, mapper: new UpdateMapper(cwd) });
+    };
 
-  private requestPermission(
-    session: AcpSessionController,
-    call: { id: string; name: string; arguments?: Record<string, any> }
-  ): Promise<boolean> {
-    const options = permissionOptions();
-    const id = this.nextId++;
-    return new Promise<boolean>((resolve) => {
-      this.pending.set(id, {
-        sessionId: session.id,
-        resolve: (message) => {
-          let outcome: PermissionOutcome | undefined;
-          if ('error' in message && message.error) {
-            outcome = { outcome: 'cancelled' };
-          } else if ('result' in message) {
-            // The client replies with { outcome: { outcome, optionId? } }.
-            const result = message.result as { outcome?: PermissionOutcome } | undefined;
-            outcome = result?.outcome;
+    return {
+      initialize: async () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentCapabilities: {
+          loadSession: true,
+          promptCapabilities: { image: false, audio: false, embeddedContext: true },
+        },
+        agentInfo: this.options.agentInfo ?? { name: 'jamcli', version: JAMCLI_VERSION },
+        authMethods: [],
+      }),
+
+      authenticate: async () => ({}),
+
+      newSession: async (params) => {
+        const cwd = params.cwd || this.options.projectRoot;
+        let controller: AcpSessionController;
+        try {
+          controller = await this.open({ cwd, mcpServers: params.mcpServers ?? [] });
+        } catch (error: any) {
+          throw RequestError.internalError(undefined, `Failed to create session: ${error?.message || error}`);
+        }
+        register(controller, cwd);
+        // After the reply, so the client knows the session the list belongs to.
+        setTimeout(() => void announceCommands(controller), 0);
+        return { sessionId: controller.id, configOptions: controller.configOptions, ...(controller.modes ? { modes: controller.modes } : {}) };
+      },
+
+      loadSession: async (params) => {
+        const cwd = params.cwd || this.options.projectRoot;
+        let controller: AcpSessionController;
+        try {
+          controller = await this.open({ cwd, mcpServers: params.mcpServers ?? [], sessionId: params.sessionId });
+        } catch (error: any) {
+          throw RequestError.resourceNotFound(`${params.sessionId}: ${error?.message || error}`);
+        }
+        register(controller, cwd);
+        const mapper = this.sessions.get(controller.id)!.mapper;
+        // The conversation is replayed before the reply, as the protocol asks.
+        for (const item of mapper.replay(controller.history?.() ?? [])) await update(controller.id, item);
+        setTimeout(() => void announceCommands(controller), 0);
+        return { configOptions: controller.configOptions, ...(controller.modes ? { modes: controller.modes } : {}) };
+      },
+
+      setSessionMode: async (params) => {
+        const { controller } = this.session(params.sessionId);
+        const refusal = controller.setMode ? controller.setMode(params.modeId) : 'This session has no modes.';
+        if (refusal) throw RequestError.invalidParams(undefined, refusal);
+        await update(controller.id, { sessionUpdate: 'current_mode_update', currentModeId: params.modeId });
+        return {};
+      },
+
+      setSessionConfigOption: async (params) => {
+        const { controller } = this.session(params.sessionId);
+        if (params.configId !== 'model' || typeof params.value !== 'string' || !controller.setModel) {
+          throw RequestError.invalidParams(undefined, `There is no setting ${params.configId} to change.`);
+        }
+        try {
+          controller.setModel(params.value);
+        } catch (error: any) {
+          throw RequestError.invalidParams(undefined, error?.message ?? String(error));
+        }
+        return { configOptions: controller.configOptions };
+      },
+
+      prompt: async (params) => {
+        const { controller, mapper } = this.session(params.sessionId);
+        const { text, context } = promptText(params.prompt);
+        let expanded: { prompt: string; turn: object } = { prompt: text, turn: {} };
+        try {
+          expanded = (await controller.expand?.(text)) ?? expanded;
+        } catch (error: any) {
+          throw RequestError.invalidParams(undefined, error?.message ?? String(error));
+        }
+        const onEvent = (event: AgentEvent) => {
+          if (event.type === 'approval_request') {
+            void this.ask(client, controller.id, mapper, event);
+            return;
           }
-          resolve(isApprovalOutcome(outcome, options));
-        },
-      });
-      this.write({
-        jsonrpc: '2.0',
-        id,
-        method: 'session/request_permission',
-        params: {
-          sessionId: session.id,
-          toolCall: {
-            toolCallId: call.id,
-            title: call.name,
-            kind: 'other',
-            status: 'pending',
-            rawInput: call.arguments ?? {},
-            locations: [],
-          },
-          options,
-        },
-      });
-    });
+          for (const item of mapper.map(event)) void update(controller.id, item);
+        };
+        const result = await controller.run(context ? `${expanded.prompt}\n\n${context}` : expanded.prompt, onEvent, expanded.turn);
+        await queue;
+        return { stopReason: stopReasonFor(result.status) };
+      },
+
+      cancel: async (params) => {
+        this.sessions.get(params.sessionId)?.controller.cancel();
+      },
+    };
   }
 
-  private cancelSession(sessionId: unknown): void {
-    const id = String(sessionId ?? '');
-    const session = this.sessions.get(id);
-    if (session) session.cancel();
-    for (const [requestId, pending] of this.pending) {
-      if (pending.sessionId !== id) continue;
-      this.pending.delete(requestId);
-      pending.resolve({ jsonrpc: '2.0', id: requestId, error: { code: -32000, message: 'cancelled' } });
+  /** Ask the editor about a call. A cancelled or failed request denies it. */
+  private async ask(client: AgentSideConnection, sessionId: string, mapper: UpdateMapper, event: Extract<AgentEvent, { type: 'approval_request' }>): Promise<void> {
+    const root = mapper.root;
+    let decision: ApprovalDecision = { allow: false, feedback: 'The editor did not answer.' };
+    try {
+      const answer = await client.requestPermission({
+        sessionId,
+        toolCall: {
+          toolCallId: event.call.id,
+          title: toolTitle(event.call),
+          kind: toolKind(event.call.name),
+          status: 'pending',
+          rawInput: event.call.arguments ?? {},
+          locations: toolLocations(event.call, root),
+        },
+        options: PERMISSION_OPTIONS,
+      });
+      const chosen = answer.outcome.outcome === 'selected' ? PERMISSION_OPTIONS.find((option) => option.optionId === (answer.outcome as { optionId: string }).optionId) : undefined;
+      if (chosen?.kind === 'allow_once') decision = { allow: true };
+      else if (chosen?.kind === 'allow_always') decision = { allow: true, scope: 'session' };
+      else decision = { allow: false, ...(answer.outcome.outcome === 'cancelled' ? { feedback: 'The editor cancelled the request.' } : {}) };
+    } catch {
+      // The editor went away or answered with an error: the call does not run.
     }
-  }
-
-  private respond(id: JsonRpcId, result: unknown): void {
-    this.write({ jsonrpc: '2.0', id, result });
-  }
-
-  private respondError(id: JsonRpcId | null, code: number, message: string): void {
-    this.write({ jsonrpc: '2.0', id, error: { code, message } });
-  }
-
-  private notifyUpdate(sessionId: string, update: SessionUpdate): void {
-    this.write({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update } });
-  }
-
-  private write(message: JsonRpcMessage): void {
-    this.options.output.write(encodeMessage(message));
+    event.decide(decision);
   }
 }
 
