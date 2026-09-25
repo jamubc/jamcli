@@ -23,12 +23,12 @@ import { rewind, undo } from './rewind.js';
 import { diff } from './review.js';
 import { commit } from './commit.js';
 import { pr } from './pr.js';
-import { commandsList, hooksCommand, skills } from './extensions.js';
+import { commandsList, hooksCommand, plugins, skills } from './extensions.js';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
 /** Where a command comes from. The palette shows a custom command's source. */
-export type CommandSource = 'built-in' | 'user' | 'project' | 'mcp';
+export type CommandSource = 'built-in' | 'user' | 'project' | 'plugin' | 'mcp';
 
 /** A session to open in place of the current one. */
 export interface SessionChoice {
@@ -614,6 +614,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   tools,
   skills,
   commandsList,
+  plugins,
   hooksCommand,
   mcp,
   config,

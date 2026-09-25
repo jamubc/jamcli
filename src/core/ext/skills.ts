@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { userConfigDir } from '../../utils/paths.js';
 import { listOf, parseFrontMatter, toolRuleText } from './frontmatter.js';
+import { pluginSkillDirs } from '../plugins/load.js';
 
 /**
  * Agent Skills (D16): a directory holding `SKILL.md`, whose front matter gives the
@@ -10,7 +11,7 @@ import { listOf, parseFrontMatter, toolRuleText } from './frontmatter.js';
  * and the bundled files when the model asks for one.
  */
 
-export type SkillScope = 'user' | 'project';
+export type SkillScope = 'user' | 'project' | 'plugin';
 
 export interface Skill {
   name: string;
@@ -40,6 +41,8 @@ export function skillDirs(projectRoot: string): { scope: SkillScope; dir: string
     { scope: 'project', dir: path.join(projectRoot, '.jamcli', 'skills') },
     { scope: 'project', dir: path.join(projectRoot, '.agents', 'skills') },
     { scope: 'user', dir: path.join(userConfigDir(), 'skills') },
+    // Last, so a person's own skill of the same name wins.
+    ...pluginSkillDirs(projectRoot).map((dir) => ({ scope: 'plugin' as const, dir })),
   ];
 }
 

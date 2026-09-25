@@ -18,6 +18,8 @@ const HEADLESS_INTENTS = new Set([
   'acp',
   'skill',
   'hooks',
+  'plugin',
+  'workflow',
   '--help',
   '-h',
   '--output-format',

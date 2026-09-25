@@ -53,6 +53,8 @@ export interface ParsedArgs {
   /** `jamcli skill` and `jamcli hooks`, with their own arguments. */
   skillCommand?: string[];
   hooksCommand?: string[];
+  pluginCommand?: string[];
+  workflowCommand?: string[];
   /** `jamcli doctor`, with its own arguments. */
   doctor?: string[];
   acp: boolean;
@@ -187,13 +189,13 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       parsed.doctor = argv.slice(i + 1);
       return parsed;
     }
-    if (token === 'skill' || token === 'hooks') {
+    if (token === 'skill' || token === 'hooks' || token === 'plugin' || token === 'workflow') {
       const words: string[] = [];
       for (let k = i + 1; k < argv.length; k += 1) {
         if (argv[k] === '--cwd') parsed.cwd = argv[++k];
         else words.push(argv[k]);
       }
-      parsed[token === 'skill' ? 'skillCommand' : 'hooksCommand'] = words;
+      parsed[`${token}Command` as 'skillCommand' | 'hooksCommand' | 'pluginCommand' | 'workflowCommand'] = words;
       return parsed;
     }
     if (token === 'sessions') {
@@ -277,6 +279,8 @@ export const USAGE = `Usage: jamcli [options]
   jamcli acp                   Serve the Agent Client Protocol over stdio
   jamcli skill list            List the skills the model can load, and any that could not be read
   jamcli hooks [list|trust]    List the configured hooks, or trust this project's as they are
+  jamcli plugin install|list|enable|disable|update|remove|verify   Manage plugins, with consent to what each may reach
+  jamcli workflow run|list|resume|approve|hook|schedule   Run workflows from .jamcli/workflows
 
   --help                       Show this help
   --version, -v                Show the version (-v alone)`;
@@ -351,6 +355,11 @@ export const runCli = async (argv: string[]): Promise<number> => {
   if (parsed.hooksCommand) {
     const { runHooksCommand } = await import('./cli/extensions.js');
     return runHooksCommand(parsed.hooksCommand, projectRoot);
+  }
+
+  if (parsed.pluginCommand) {
+    const { runPluginCommand } = await import('./cli/plugin.js');
+    return runPluginCommand(parsed.pluginCommand, projectRoot);
   }
 
   if (parsed.doctor) {

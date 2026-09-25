@@ -31,6 +31,9 @@ import { loadSkills, skillsPromptText, type Skill } from '../ext/skills.js';
 import { skillTool } from '../tools/skill.js';
 import { DEFAULT_TOOL_SEARCH_THRESHOLD, toolSearchTool } from '../tools/toolSearch.js';
 import { formatDiagnostic, LspManager } from '../lsp/manager.js';
+import { verifyPlugins } from '../plugins/store.js';
+import { loadPlugins } from '../plugins/load.js';
+import { pluginParts } from '../plugins/runtime.js';
 import { lspTool } from '../tools/lsp.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
@@ -349,9 +352,19 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       })
     );
   }
+  // Plugins: each installed copy is hashed again, and one that changed is turned off.
+  if (!options.parent) {
+    for (const result of verifyPlugins(projectRoot)) {
+      if (!result.ok) notices.push(`Plugin ${result.name} is off: ${result.problem}. Install it again to use it.`);
+    }
+  }
+  const loadedPlugins = loadPlugins(projectRoot);
+  notices.push(...loadedPlugins.problems);
+  const plugins = pluginParts(loadedPlugins.plugins, { projectRoot, sandboxSettings, envFor: (passthrough) => envFor(passthrough) });
+  notices.push(...plugins.notices);
   // The MCP client is loaded only when a server is configured: it is the heaviest import a
   // session would otherwise make for nothing.
-  const serversConfigured = (mcpConfig.servers ?? []).some((server) => server.enabled !== false);
+  const serversConfigured = (mcpConfig.servers ?? []).some((server) => server.enabled !== false) || plugins.servers.length > 0;
   const mcp: McpSource | undefined =
     options.mcp === false
       ? undefined
@@ -373,6 +386,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
                 // A signed-in HTTP server's tokens come from the credential store; signing in is `jamcli mcp login`.
                 authFor: (server) => (transportKind(server) === 'http' ? new StoredOAuthProvider(server, (store ??= detectStore(env))) : undefined),
                 elicit: (request) => elicitFromSurface(request),
+                extraServers: plugins.servers,
               });
             })()
           : undefined));
@@ -539,6 +553,20 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       },
     });
   subscribe(hookCommands.filter((hook) => !needsTrust(hook) || projectHooksTrusted));
+  // A plugin's hooks were consented to at install, and run in the plugin's own sandbox.
+  for (const { plugin, sandbox: pluginSandbox, env: pluginEnv, hooks: pluginHookList } of plugins.processes) {
+    if (!pluginHookList.length) continue;
+    subscribeHooks(hooks, {
+      hooks: pluginHookList,
+      base: { projectRoot, cwd: workRoot, surface: options.surface },
+      matches: (matcher, call) => permissions.matches(matcher, call),
+      context: () => ({
+        cwd: workRoot,
+        env: { ...pluginEnv, JAMCLI_PROJECT_DIR: projectRoot, JAMCLI_SESSION_ID: log.id, JAMCLI_PLUGIN_DIR: plugin.dir },
+        ...(pluginSandbox.kind === 'none' ? {} : { wrap: pluginSandbox.wrap }),
+      }),
+    });
+  }
   if (!projectHooksTrusted) {
     const count = projectHooks.filter((hook) => hook.enabled !== false).length;
     notices.push(`This project configures ${count} hook${count === 1 ? '' : 's'} not yet trusted, so ${count === 1 ? 'it does' : 'they do'} not run. Review them with /hooks, or trust them with jamcli hooks trust.`);

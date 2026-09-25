@@ -13,6 +13,8 @@ type McpManagerOptions = {
   elicit?: (request: ElicitationRequest) => Promise<ElicitationAnswer>;
   /** How an HTTP server that asks for sign-in is signed in to, if it can be. */
   authFor?: (server: McpServerConfig) => OAuthClientProvider | undefined;
+  /** Servers beyond the configured ones, such as those plugins bring. */
+  extraServers?: McpServerConfig[];
 };
 
 /** A server's prompt, which becomes `/server:name`. */
@@ -70,7 +72,7 @@ export class McpManager {
   }
 
   async listServers(): Promise<McpServerConfig[]> {
-    return this.configService.listMcpServers();
+    return [...(await this.configService.listMcpServers()), ...(this.options.extraServers ?? [])];
   }
 
   async upsertServer(server: McpServerConfig): Promise<McpServerConfig[]> {

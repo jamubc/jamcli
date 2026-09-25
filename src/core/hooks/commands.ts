@@ -17,7 +17,7 @@ export const USER_HOOK_EVENTS = ['session_start', 'user_prompt_submit', 'pre_too
 export type UserHookEvent = (typeof USER_HOOK_EVENTS)[number];
 
 /** Where a hook was configured. The project's and the local file's need the person's trust. */
-export type HookScope = 'user' | 'project' | 'local' | 'env';
+export type HookScope = 'user' | 'project' | 'local' | 'env' | 'plugin';
 
 export interface HookSetting {
   /** For tool events, a rule such as `run_command(git push*)` or `edit`; absent matches every call. */

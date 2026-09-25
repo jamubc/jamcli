@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { userConfigDir } from '../../utils/paths.js';
 import { listOf, parseFrontMatter, toolRuleText } from './frontmatter.js';
+import { pluginCommandDirs } from '../plugins/load.js';
 
 /**
  * Custom commands (D16): Markdown files in `~/.config/jamcli/commands/` and
@@ -9,7 +10,7 @@ import { listOf, parseFrontMatter, toolRuleText } from './frontmatter.js';
  * `/git:log`. A project command shadows a user command of the same name.
  */
 
-export type CommandScope = 'user' | 'project';
+export type CommandScope = 'user' | 'project' | 'plugin';
 
 export interface CustomCommand {
   /** Without the slash: `review`, or `git:log` for a file in a subdirectory. */
@@ -35,8 +36,10 @@ export interface LoadedCommands {
 
 const NAME = /^[a-z0-9][a-z0-9_.-]*$/;
 
-export function commandDirs(projectRoot: string): { scope: CommandScope; dir: string }[] {
+export function commandDirs(projectRoot: string): { scope: CommandScope; dir: string; prefix?: string[] }[] {
   return [
+    // A plugin's commands are named under it, as `/plugin:name`, so none shadows another.
+    ...pluginCommandDirs(projectRoot).map(({ plugin, dir }) => ({ scope: 'plugin' as const, dir, prefix: [plugin] })),
     { scope: 'user', dir: path.join(userConfigDir(), 'commands') },
     { scope: 'project', dir: path.join(projectRoot, '.jamcli', 'commands') },
   ];
@@ -86,8 +89,8 @@ export function loadCommands(projectRoot: string, reserved: string[] = []): Load
   const byName = new Map<string, CustomCommand>();
   const shadowed: CustomCommand[] = [];
   const problems: string[] = [];
-  for (const { scope, dir } of commandDirs(projectRoot)) {
-    for (const { file, parts } of markdownFiles(dir)) {
+  for (const { scope, dir, prefix } of commandDirs(projectRoot)) {
+    for (const { file, parts } of markdownFiles(dir, prefix ?? [])) {
       const read = readCommand(file, parts, scope);
       if ('problem' in read) {
         problems.push(read.problem);

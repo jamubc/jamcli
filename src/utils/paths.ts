@@ -36,6 +36,11 @@ export function userConfigDir(): string {
   return path.join(base, 'jamcli');
 }
 
+/** The data directory, for installed plugins, `~/.local/share/jamcli`. JAMCLI_DATA_DIR overrides it. */
+export function userDataDir(): string {
+  return process.env.JAMCLI_DATA_DIR || jamcliPaths.data;
+}
+
 /** The cache directory, for what JamCLI can fetch again, such as model metadata. JAMCLI_CACHE_DIR overrides it. */
 export function userCacheDir(): string {
   return process.env.JAMCLI_CACHE_DIR || jamcliPaths.cache;
