@@ -22,6 +22,10 @@ export interface McpSource {
   listServers(): Promise<McpServerConfig[]>;
   listServerTools(server: McpServerConfig): Promise<McpToolDescriptor[]>;
   callServerTool(descriptor: McpToolDescriptor, args: Record<string, any>): Promise<{ output: string; isError?: boolean }>;
+  listServerPrompts?(server: McpServerConfig): Promise<{ serverId: string; name: string; description?: string; arguments: { name: string; description?: string; required?: boolean }[] }[]>;
+  getServerPrompt?(serverId: string, name: string, args: Record<string, string>): Promise<string>;
+  listServerResources?(server: McpServerConfig): Promise<{ serverId: string; uri: string; name: string; description?: string; mimeType?: string }[]>;
+  readServerResource?(serverId: string, uri: string): Promise<string>;
   close?(): Promise<void>;
 }
 

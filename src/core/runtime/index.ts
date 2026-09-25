@@ -98,6 +98,14 @@ export interface RuntimeOptions {
   observer?: { observer: Observer; parentSpan?: Span };
 }
 
+/** An MCP server's prompt. */
+export interface McpPrompt {
+  serverId: string;
+  name: string;
+  description?: string;
+  arguments: { name: string; description?: string; required?: boolean }[];
+}
+
 /** How one turn differs from the session's, as a custom command's front matter asks. */
 export interface RunOptions {
   /** Run this turn on this model, then return to the session's. */
@@ -157,6 +165,12 @@ export interface Runtime {
   readonly notices: string[];
   /** The skills found, which the system prompt lists and the skill tool loads. */
   readonly skills: Skill[];
+  /** The prompts the MCP servers offer, each of which becomes `/server:name`. */
+  mcpPrompts(): Promise<McpPrompt[]>;
+  /** A server's prompt, filled in, as the text of one message. */
+  mcpPrompt(serverId: string, name: string, args: Record<string, string>): Promise<string>;
+  /** The resources the MCP servers offer, each of which can be referred to as `@server:uri`. */
+  mcpResources(): Promise<{ serverId: string; uri: string; name: string; description?: string }[]>;
   /** The configured hooks, and whether the project's are trusted to run. */
   hooks(): { hooks: HookCommand[]; projectTrusted: boolean };
   /** Trust the project's hooks as they are now, for this and later sessions, and start running them. */
@@ -358,6 +372,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
             })()
           : undefined));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
+  /** The servers that are on, for `@server:uri` references and `/server:prompt` commands. */
+  const enabledServers = async () => (mcp ? (await mcp.listServers()).filter((server) => server.enabled !== false) : []);
+  const resourceReader =
+    mcp?.readServerResource && {
+      servers: async () => (await enabledServers()).map((server) => server.id),
+      read: (server: string, uri: string) => mcp.readServerResource!(server, uri),
+    };
   const depth = options.parent ? options.parent.depth : 0;
 
   const sandbox = options.sandbox ?? detectSandbox({ projectRoot, settings: sandboxSettings });
@@ -743,6 +764,20 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   return {
     skills: skillSet.skills,
+    async mcpPrompts() {
+      if (!mcp?.listServerPrompts) return [];
+      const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerPrompts!(server).catch(() => [])));
+      return lists.flat();
+    },
+    async mcpPrompt(serverId, name, args) {
+      if (!mcp?.getServerPrompt) throw new Error('No MCP server offers prompts here.');
+      return mcp.getServerPrompt(serverId, name, args);
+    },
+    async mcpResources() {
+      if (!mcp?.listServerResources) return [];
+      const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerResources!(server).catch(() => [])));
+      return lists.flat();
+    },
     hooks: () => ({ hooks: hookCommands, projectTrusted: projectHooksTrusted }),
     trustProjectHooks() {
       if (projectHooksTrusted) return;
@@ -901,7 +936,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           emit({ type: 'notice', level: 'error', message: error });
           return { status: 'error', sessionId: log.id, response: '', turns: 0, usage: { ...session.usage }, error, session };
         }
-        const expanded = await expandReferences(input, cwd, redact);
+        const expanded = await expandReferences(input, cwd, redact, resourceReader);
         for (const message of expanded.notices) emit({ type: 'notice', level: 'warn', message });
         turns += 1;
         turnAgent = agent;

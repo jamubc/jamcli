@@ -11,10 +11,11 @@ import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
-import { customCommands } from './custom.js';
+import { customCommands, slashCommandForPrompt } from './custom.js';
 import { askToTrustHooks } from './extensions.js';
 import { answerElicitation } from './elicit.js';
-import { Palette } from './Palette.js';
+import { Palette, ReferencePalette } from './Palette.js';
+import { completeReference, matchReferences, referenceCandidates, referenceToken, type ReferenceItem } from './references.js';
 import { Picker, shownItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
 import { MotionContext, PlainContext, THEMES, ThemeContext, framed, type Theme } from './theme.js';
 import { keysFor, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
@@ -108,7 +109,20 @@ export function App(props: AppProps) {
   const controller = useMemo(() => new SessionController(runtime, dispatch), [runtime]);
   // Custom commands are read again with each session, so a file added meanwhile is found.
   const custom = useMemo(() => customCommands(projectRoot, BUILTIN_COMMANDS), [projectRoot, runtime]);
-  const commands = useMemo(() => [...BUILTIN_COMMANDS, ...custom.commands, ...extra], [custom, extra]);
+  // MCP prompts arrive once the servers answer; the palette gains them then.
+  const [promptCommands, setPromptCommands] = useState<SlashCommand[]>([]);
+  useEffect(() => {
+    let current = true;
+    setPromptCommands([]);
+    runtime.mcpPrompts().then(
+      (prompts) => current && setPromptCommands(prompts.map(slashCommandForPrompt).filter((command) => !BUILTIN_COMMANDS.some((builtIn) => builtIn.name === command.name))),
+      () => undefined
+    );
+    return () => {
+      current = false;
+    };
+  }, [runtime]);
+  const commands = useMemo(() => [...BUILTIN_COMMANDS, ...custom.commands, ...promptCommands, ...extra], [custom, promptCommands, extra]);
   const composer = useRef<TextareaRenderable | null>(null);
   const transcript = useRef<ScrollBoxRenderable | null>(null);
   /** How many of the latest rows are drawn; it starts over with each session. */
@@ -285,7 +299,7 @@ export function App(props: AppProps) {
     if (!parsed) return;
     const command = findCommand(commands, parsed.name);
     // A custom command's line is shown as the message it sends.
-    if (!options.quiet && command?.source !== 'user' && command?.source !== 'project') dispatch({ type: 'command', text: line });
+    if (!options.quiet && command?.source !== 'user' && command?.source !== 'project' && command?.source !== 'mcp') dispatch({ type: 'command', text: line });
     if (!command) return say('warn', LATER.has(parsed.name) ? `/${parsed.name} is not available yet.` : `/${parsed.name} is not a command. /help lists them.`);
     try {
       await command.run(context(), parsed.args);
@@ -311,16 +325,42 @@ export function App(props: AppProps) {
     setPaletteView(next);
   };
   const matchesFor = (draft: string) => (naming(draft) && palette.current.closed !== draft ? matchCommands(commands, draft) : undefined);
+  /** What `@` can name, read once per session when the first `@` is typed. */
+  const [referenceItems, setReferenceItems] = useState<ReferenceItem[] | undefined>(undefined);
+  const referencesLoading = useRef(false);
+  useEffect(() => {
+    setReferenceItems(undefined);
+    referencesLoading.current = false;
+  }, [runtime]);
+  const referencesFor = (draft: string) => {
+    const token = referenceToken(draft);
+    if (token === undefined || naming(draft) || palette.current.closed === draft) return undefined;
+    return matchReferences(referenceItems ?? [], token);
+  };
   const onDraft = () => {
     const draft = composer.current?.plainText ?? '';
     if (draft !== palette.current.draft) setPalette({ draft, index: 0, closed: palette.current.closed === draft ? draft : undefined });
+    if (referenceToken(draft) !== undefined && !referenceItems && !referencesLoading.current) {
+      referencesLoading.current = true;
+      void referenceCandidates(runtime).then(setReferenceItems, () => setReferenceItems([]));
+    }
   };
   const matches = matchesFor(palette.current.draft);
+  const referenceMatches = matches ? undefined : referencesFor(palette.current.draft);
+  const completeWith = (item: ReferenceItem) => {
+    const next = completeReference(composer.current?.plainText ?? '', item);
+    composer.current?.setText(next);
+    composer.current?.gotoBufferEnd();
+    setPalette({ draft: next, index: 0 });
+  };
 
   const submit = () => {
     const typed = composer.current?.plainText ?? '';
     const text = typed.trim();
     if (!text) return;
+    // Enter on an `@` word still being typed completes it rather than sending.
+    const referenced = referencesFor(typed)?.[palette.current.index];
+    if (referenced) return completeWith(referenced);
     // Enter on a name still being typed runs the chosen match.
     const listed = matchesFor(typed);
     const chosen = listed?.[palette.current.index];
@@ -405,6 +445,24 @@ export function App(props: AppProps) {
           composer.current?.setText(`/${chosen.name} `);
           composer.current?.gotoBufferEnd();
         }
+        return;
+      }
+      if (key.name === 'escape') {
+        key.preventDefault();
+        return setPalette({ draft, index: 0, closed: draft });
+      }
+    }
+    const referenced = listed ? undefined : referencesFor(draft);
+    if (referenced) {
+      const moves = key.name === 'down' ? 1 : key.name === 'up' ? -1 : 0;
+      if (moves) {
+        key.preventDefault();
+        return setPalette({ ...palette.current, draft, index: Math.min(Math.max(0, palette.current.index + moves), Math.max(0, referenced.length - 1)) });
+      }
+      if (key.name === 'tab' && !key.shift) {
+        key.preventDefault();
+        const chosen = referenced[palette.current.index];
+        if (chosen) completeWith(chosen);
         return;
       }
       if (key.name === 'escape') {
@@ -506,6 +564,8 @@ export function App(props: AppProps) {
                   />
                 ) : matches ? (
                   <Palette matches={matches} selected={palette.current.index} />
+                ) : referenceMatches ? (
+                  <ReferencePalette matches={referenceMatches} selected={palette.current.index} loading={!referenceItems} />
                 ) : null}
                 {showTodos ? <TodoPanel todos={state.todos} plain={plain} colors={theme} /> : null}
                 <box {...framed(plain, theme.border)} paddingLeft={0} paddingRight={0} flexShrink={0} height={plain ? 3 : 5}>

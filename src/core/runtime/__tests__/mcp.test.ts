@@ -138,3 +138,23 @@ test('a signed-in HTTP server is reached with its stored tokens; without them th
     fake.stop();
   }
 }, 30_000);
+
+test('a server\'s prompts and resources are listed, a prompt is rendered, and @server:uri puts a resource in the prompt', async () => {
+  const runtime = await start({});
+  try {
+    expect(await runtime.mcpPrompts()).toEqual([expect.objectContaining({ serverId: 'modern', name: 'review', arguments: [expect.objectContaining({ name: 'file', required: true }), expect.objectContaining({ name: 'focus' })] })]);
+    expect(await runtime.mcpPrompt('modern', 'review', { file: 'a.ts' })).toContain('Review a.ts');
+    expect(await runtime.mcpResources()).toEqual([expect.objectContaining({ serverId: 'modern', uri: 'docs://readme' })]);
+
+    server.enqueue({ text: 'read it' });
+    const notices: string[] = [];
+    await runtime.run('summarize @modern:docs://readme and @nobody:x://y', (event) => event.type === 'notice' && notices.push(event.message));
+    const sent = JSON.stringify(server.completions().at(-1)!.body.messages);
+    expect(sent).toContain('Resource docs://readme from MCP server modern');
+    expect(sent).toContain('README: build with bun.');
+    // A name that is not a server stays a path, and says it could not be read.
+    expect(notices.some((notice) => notice.includes('@nobody:x://y'))).toBe(true);
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);

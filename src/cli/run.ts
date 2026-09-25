@@ -1,5 +1,6 @@
-import { createRuntime, type DryRunEntry, type RunOptions, type RuntimeOptions } from '../core/runtime/index.js';
+import { createRuntime, type DryRunEntry, type RunOptions, type Runtime, type RuntimeOptions } from '../core/runtime/index.js';
 import { expandCommand, loadCommands } from '../core/ext/commands.js';
+import { promptArguments } from '../core/mcp/prompts.js';
 import type { AgentEvent, RunResult } from '../core/types.js';
 import type { SpendSummary } from '../core/catalog/cost.js';
 
@@ -74,8 +75,8 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   });
   const permissionDenials: PermissionDenial[] = [];
   const notices: HeadlessResult['notices'] = [];
-  const { prompt, turn } = customCommandTurn(options.prompt, options.projectRoot);
   try {
+    const { prompt, turn } = await customCommandTurn(options.prompt, options.projectRoot, runtime);
     const result = await runtime.run(prompt, (event) => {
       if (event.type === 'approval_request') {
         const reason = event.request?.reason ?? 'this tool asks before it runs';
@@ -111,11 +112,18 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
  * its front matter's model and tools. Any other text, a path such as `/tmp` included, is
  * sent as written.
  */
-function customCommandTurn(text: string, projectRoot: string): { prompt: string; turn: RunOptions } {
+async function customCommandTurn(text: string, projectRoot: string, runtime: Runtime): Promise<{ prompt: string; turn: RunOptions }> {
   const match = /^\/(\S+)\s*([\s\S]*)$/.exec(text.trim());
   if (!match) return { prompt: text, turn: {} };
   const command = loadCommands(projectRoot).commands.find((entry) => entry.name === match[1].toLowerCase());
-  if (!command) return { prompt: text, turn: {} };
+  if (!command) {
+    // `/server:prompt` names an MCP server's prompt.
+    const prompt = match[1].includes(':') ? (await runtime.mcpPrompts()).find((entry) => `${entry.serverId}:${entry.name}`.toLowerCase() === match[1].toLowerCase()) : undefined;
+    if (!prompt) return { prompt: text, turn: {} };
+    const { args, missing } = promptArguments(prompt, match[2]);
+    if (missing.length) throw new Error(`/${match[1]} needs ${missing.join(' and ')}.`);
+    return { prompt: await runtime.mcpPrompt(prompt.serverId, prompt.name, args), turn: { label: `/${match[1]}` } };
+  }
   return {
     prompt: expandCommand(command, match[2]),
     turn: { label: `/${command.name}`, ...(command.model ? { model: command.model } : {}), ...(command.allowedTools ? { allowedTools: command.allowedTools } : {}) },

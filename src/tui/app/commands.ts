@@ -28,7 +28,7 @@ import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
 /** Where a command comes from. The palette shows a custom command's source. */
-export type CommandSource = 'built-in' | 'user' | 'project';
+export type CommandSource = 'built-in' | 'user' | 'project' | 'mcp';
 
 /** A session to open in place of the current one. */
 export interface SessionChoice {

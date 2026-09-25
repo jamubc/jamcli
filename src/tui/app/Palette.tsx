@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from '@opentui/react';
 import type { SlashCommand } from './commands.js';
+import type { ReferenceItem } from './references.js';
 import { framed, usePlain, useTheme } from './theme.js';
 
 /** How many matches the palette shows at once. */
@@ -39,6 +40,34 @@ export function Palette({ matches, selected }: { matches: SlashCommand[]; select
         })
       )}
       <text fg={colors.dim}>{`${matches.length > PALETTE_ROWS ? `${selected + 1} of ${matches.length} · ` : ''}Up and Down choose · Tab completes · Enter runs · Escape closes`}</text>
+    </box>
+  );
+}
+
+/** What `@` could name, shown above the composer as a word is typed after it. */
+export function ReferencePalette({ matches, selected, loading }: { matches: ReferenceItem[]; selected: number; loading: boolean }) {
+  const colors = useTheme();
+  const plain = usePlain();
+  const { width: columns } = useTerminalDimensions();
+  const room = Math.max(20, columns - 4);
+  const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
+  const start = Math.min(Math.max(0, selected - PALETTE_ROWS + 1), Math.max(0, matches.length - PALETTE_ROWS));
+  const shown = matches.slice(start, start + PALETTE_ROWS);
+  const width = Math.min(48, Math.max(0, ...shown.map((item) => item.text.length + 1)));
+  return (
+    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
+      {plain ? <text fg={colors.text}>{`References matching: ${matches.length}`}</text> : null}
+      {loading ? <text fg={colors.dim}>Looking…</text> : matches.length === 0 ? <text fg={colors.dim}>Nothing in the project or the MCP resources matches that.</text> : null}
+      {shown.map((item, index) => {
+        const chosen = start + index === selected;
+        const head = `@${item.text}`;
+        return (
+          <text key={item.text} fg={chosen ? colors.accent : colors.text}>
+            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head.length >= width ? `${head} ` : head.padEnd(width + 1)} ${item.detail}`)}
+          </text>
+        );
+      })}
+      <text fg={colors.dim}>Up and Down choose · Tab or Enter completes · Escape closes</text>
     </box>
   );
 }
