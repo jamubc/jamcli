@@ -88,9 +88,19 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-4
-- [ ] Docs complete with no broken links
+- [x] Docs complete with no broken links
+  - The twelve pages are written (`docs/CHANGELOG.md`, `migration.md`, `interface.md`, `providers.md`, `hooks.md`, `commands-and-skills.md`, `sessions.md`, `plugins.md`, `workflows.md`, `protocols.md`, `headless.md`, `security.md`); `conformance.md` is brought to its final check; every relative link resolves (checked with a script over `docs/` and `README.md`).
 - [ ] Release artifacts reproducible
+  - Locally `bun run compile darwin-arm64` builds and `--version` prints 2.0.0 (module 13). Building all five targets needs every platform's native library (`bun install --os='*' --cpu='*'`), and the Linux x64 `--version` smoke needs Linux. The staged `release.yml` runs the SBOM, provenance, and draft release, and the CI `e2e` job compiles linux-x64 and smokes it; all of it awaits the owner's push and tag.
 - [ ] Unit archived, next unit unblocked
+  - The archive waits on the release steps above: apply the change's deltas to `openspec/specs/jamcli/spec.md`, move the change to the archive, run `openspec validate --all --strict`, update `SEQUENCE.md` and `AGENTS.md`'s Known state, and record in the archived `tasks.md` what DEFERRED still lists. Nothing else blocks it.
+
+## Record (2026-09-25): what module 19 did and what it waits on
+- 12.4: all ten missing pages written, plus `migration.md` and `CHANGELOG.md`; `conformance.md` updated (MCP/ACP references, the OpenAI Responses row as will-not-do, SARIF as not implemented, SemVer as implemented, SBOM/provenance as staged); `architecture.md` already described the built layers.
+- 12.5: `docs/CHANGELOG.md` carries the 2.0.0 entry and `docs/migration.md` the 1.x to 2.0.0 moves, so the staged release job finds its notes.
+- 12.6: awaits the owner's push and tag; see the checkpoint.
+- 12.7: already run and recorded in `tasks.md` (module 15).
+- 12.9: awaits the release steps; the deletion checklist for `DEFERRED.md` is verified in `22-source-provenance.md`, and the file itself is deleted at archive time.
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 648-703)
