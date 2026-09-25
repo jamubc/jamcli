@@ -344,6 +344,58 @@
       },
       "additionalProperties": false
     },
+    "lsp": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "The lsp tool and diagnostics after edits. On by default, for the servers that are installed."
+        },
+        "diagnostics_after_edit": {
+          "type": "boolean",
+          "description": "Tell the model about errors the language server finds in a file it just changed. On by default."
+        },
+        "servers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "minLength": 1
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "extensions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "File extensions it serves, without the dot."
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command",
+              "extensions"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Language servers by name. A name used by a default (typescript, python, go, rust) replaces it."
+        }
+      },
+      "additionalProperties": false
+    },
     "tool_search": {
       "type": "object",
       "properties": {

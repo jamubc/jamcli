@@ -1,3 +1,4 @@
+import type { LspSettings } from '../core/lsp/manager.js';
 import type { HookSettings } from '../core/hooks/commands.js';
 import type { McpServerConfig } from './mcp.js';
 import type { PermissionSettings } from '../core/permissions/config.js';
@@ -139,6 +140,8 @@ export interface Config {
   hooks?: HookSettings;
   /** When MCP tools are found through `search_tools` instead of sent with every request. */
   tool_search?: { threshold?: number };
+  /** Language servers: the `lsp` tool and the errors reported after edits. */
+  lsp?: LspSettings;
 }
 
 export type ThemeName = 'dark' | 'light' | 'high-contrast' | 'monochrome';

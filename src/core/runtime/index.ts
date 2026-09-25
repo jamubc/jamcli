@@ -30,6 +30,8 @@ import { expandReferences } from './references.js';
 import { loadSkills, skillsPromptText, type Skill } from '../ext/skills.js';
 import { skillTool } from '../tools/skill.js';
 import { DEFAULT_TOOL_SEARCH_THRESHOLD, toolSearchTool } from '../tools/toolSearch.js';
+import { formatDiagnostic, LspManager } from '../lsp/manager.js';
+import { lspTool } from '../tools/lsp.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
@@ -410,6 +412,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const sandbox = options.sandbox ?? detectSandbox({ projectRoot, settings: sandboxSettings });
   // Inside bubblewrap, /tmp is the sandbox's own, so a temporary directory elsewhere would not exist.
   const commandEnv = { ...envFor(), ...(sandbox.kind === 'bwrap' ? { TMPDIR: '/tmp' } : {}) };
+  // Language servers run with the same minimal environment, each started when first needed.
+  // A delegated run has none, so a task does not start a second copy of each server.
+  const lsp = options.parent || config.lsp?.enabled === false ? undefined : new LspManager(workRoot, config.lsp ?? {}, envFor());
+  if (lsp?.available.length) registry.register(lspTool(lsp));
 
   let permissions: PermissionEngine;
   if (options.parent) {
@@ -492,6 +498,29 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   const rules = applyRules(loadRules(workRoot, cwd), undefined);
   const hooks: HookBus = createHookBus({ onRun: (run) => observation?.hookRun(run) });
+  // After an edit, the model reads the errors the language server finds in what it changed.
+  if (lsp?.available.length && config.lsp?.diagnostics_after_edit !== false) {
+    hooks.on(
+      'post_tool',
+      async ({ call, result }) => {
+        if (!result.success || !['edit', 'write_file', 'apply_patch'].includes(call.name)) return undefined;
+        const files: string[] =
+          call.name === 'apply_patch'
+            ? ((result.metadata?.files as { path: string; op?: string }[] | undefined) ?? []).filter((file) => file.op !== 'delete').map((file) => file.path)
+            : typeof call.arguments?.path === 'string'
+              ? [call.arguments.path]
+              : [];
+        const reports: string[] = [];
+        for (const file of files.filter((file) => lsp.serves(file))) {
+          const { diagnostics } = await lsp.diagnostics(path.resolve(workRoot, file), 3000).catch(() => ({ diagnostics: [] }));
+          const errors = diagnostics.filter((item) => (item.severity ?? 1) === 1);
+          if (errors.length) reports.push(...errors.slice(0, 20).map((item) => formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item)));
+        }
+        return reports.length ? { context: [`The language server reports errors after this change:\n${reports.join('\n')}`] } : undefined;
+      },
+      'language server diagnostics'
+    );
+  }
   // The configuration's hooks subscribe to the bus. A project's run only once the person
   // trusts them, since opening a repository must not run its code.
   const hookCommands = hooksFromLayers(settings.layers);
@@ -1060,6 +1089,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     async close() {
       await hookVerdict(hooks, 'session_end', { session, status: 'closed', turns });
       await mcp?.close?.();
+      await lsp?.close();
       await observation?.close('closed');
     },
   };

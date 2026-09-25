@@ -124,6 +124,23 @@ export const ConfigFileSchema = z
     permissions: PermissionSettingsSchema,
     sandbox: SandboxSettingsSchema,
     agent_loop: AgentLoopSchema,
+    lsp: z
+      .strictObject({
+        enabled: z.boolean().describe('The lsp tool and diagnostics after edits. On by default, for the servers that are installed.'),
+        diagnostics_after_edit: z.boolean().describe('Tell the model about errors the language server finds in a file it just changed. On by default.'),
+        servers: z
+          .record(
+            z.string(),
+            z.strictObject({
+              command: z.string().min(1),
+              args: z.array(z.string()).optional(),
+              extensions: z.array(z.string().min(1)).describe('File extensions it serves, without the dot.'),
+              enabled: z.boolean().optional(),
+            })
+          )
+          .describe('Language servers by name. A name used by a default (typescript, python, go, rust) replaces it.'),
+      })
+      .partial(),
     tool_search: z
       .strictObject({
         threshold: nonNegativeInt().describe('Offer MCP tools through search_tools once the servers bring more than this many. 0 always sends them all. Defaults to 40.'),
