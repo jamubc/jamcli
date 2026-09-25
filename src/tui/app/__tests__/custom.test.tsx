@@ -2,6 +2,8 @@ import { expect, test } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
 import { frameWith, interfaceHarness } from './harness.js';
+import { slashCommandForPrompt } from '../custom.js';
+import type { CommandContext } from '../commands.js';
 
 const { context, open } = interfaceHarness();
 
@@ -41,3 +43,22 @@ test('custom commands show their source in the palette, and run as the message t
     await close();
   }
 }, 20_000);
+
+test('a /server:prompt missing a required argument says what it needs and sends nothing', async () => {
+  const notices: string[] = [];
+  const sent: string[] = [];
+  const command = slashCommandForPrompt({ serverId: 'modern', name: 'review', description: 'Review a file.', arguments: [{ name: 'file', required: true }, { name: 'focus' }] });
+  const ctx = {
+    running: false,
+    notice: (level: string, message: string) => void notices.push(`${level}: ${message}`),
+    runtime: {
+      mcpPrompt: async () => {
+        throw new Error('should not be called');
+      },
+    },
+    send: (text: string) => void sent.push(text),
+  } as unknown as CommandContext;
+  await command.run(ctx, '');
+  expect(notices).toEqual(['warn: /modern:review needs file: /modern:review <file> [focus]']);
+  expect(sent).toEqual([]);
+});

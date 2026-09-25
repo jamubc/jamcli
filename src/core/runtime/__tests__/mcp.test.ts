@@ -144,7 +144,7 @@ test('a server\'s prompts and resources are listed, a prompt is rendered, and @s
   try {
     expect(await runtime.mcpPrompts()).toEqual([expect.objectContaining({ serverId: 'modern', name: 'review', arguments: [expect.objectContaining({ name: 'file', required: true }), expect.objectContaining({ name: 'focus' })] })]);
     expect(await runtime.mcpPrompt('modern', 'review', { file: 'a.ts' })).toContain('Review a.ts');
-    expect(await runtime.mcpResources()).toEqual([expect.objectContaining({ serverId: 'modern', uri: 'docs://readme' })]);
+    expect(await runtime.mcpResources()).toEqual(expect.arrayContaining([expect.objectContaining({ serverId: 'modern', uri: 'docs://readme' })]));
 
     server.enqueue({ text: 'read it' });
     const notices: string[] = [];
@@ -154,6 +154,116 @@ test('a server\'s prompts and resources are listed, a prompt is rendered, and @s
     expect(sent).toContain('README: build with bun.');
     // A name that is not a server stays a path, and says it could not be read.
     expect(notices.some((notice) => notice.includes('@nobody:x://y'))).toBe(true);
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);
+
+test('an unknown server name reads as a path, with the path resolver\'s exact notice', async () => {
+  const runtime = await start({});
+  try {
+    server.enqueue({ text: 'noted' });
+    const notices: string[] = [];
+    await runtime.run('open @nobody:x://y', (event) => event.type === 'notice' && notices.push(event.message));
+    // The exact reason the path resolver gives, which a resource read would replace.
+    const reason = await fs.promises.stat(path.join(root, 'nobody:x://y')).then(
+      () => 'unexpectedly found',
+      (error: Error) => error.message
+    );
+    expect(notices.filter((notice) => notice.includes('@nobody:x://y'))).toEqual([`Could not include @nobody:x://y: ${reason}`]);
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);
+
+test('a valid resource leaves no notice at all', async () => {
+  const runtime = await start({});
+  try {
+    server.enqueue({ text: 'noted' });
+    const notices: string[] = [];
+    await runtime.run('summarize @modern:docs://readme', (event) => event.type === 'notice' && notices.push(event.message));
+    expect(notices).toEqual([]);
+    expect(JSON.stringify(server.completions().at(-1)!.body.messages)).toContain('Resource docs://readme from MCP server modern');
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);
+
+test('resource text is redacted like file content', async () => {
+  const secret = 'probe-secret-value-1234';
+  const savedSecret = process.env.JAMCLI_PROBE_SECRET;
+  process.env.JAMCLI_PROBE_SECRET = secret;
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'mcp.json'),
+    JSON.stringify({ servers: [{ id: 'modern', command: 'bun', args: [FIXTURE], enabled: true, env: { JAMCLI_PROBE_SECRET: secret } }] })
+  );
+  const runtime = await start({ env: { ...process.env, JAMCLI_PROBE_SECRET: secret } });
+  try {
+    server.enqueue({ text: 'noted' });
+    await runtime.run('read @modern:probe://secret', () => {});
+    const sent = JSON.stringify(server.completions().at(-1)!.body.messages);
+    expect(sent).toContain('[redacted:JAMCLI_PROBE_SECRET]');
+    expect(sent).not.toContain(secret);
+  } finally {
+    await runtime.close();
+    if (savedSecret === undefined) delete process.env.JAMCLI_PROBE_SECRET;
+    else process.env.JAMCLI_PROBE_SECRET = savedSecret;
+  }
+}, 30_000);
+
+test('the same resource referenced twice is included once', async () => {
+  const runtime = await start({});
+  try {
+    server.enqueue({ text: 'noted' });
+    await runtime.run('read @modern:docs://readme and @modern:docs://readme', () => {});
+    const sent = JSON.stringify(server.completions().at(-1)!.body.messages);
+    expect(sent.split('README: build with bun.').length - 1).toBe(1);
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);
+
+test('a resource that fails to read becomes a notice, not a thrown error', async () => {
+  const runtime = await start({});
+  try {
+    server.enqueue({ text: 'noted' });
+    const notices: string[] = [];
+    await runtime.run('read @modern:probe://broken', (event) => event.type === 'notice' && notices.push(event.message));
+    const relevant = notices.filter((notice) => notice.includes('@modern:probe://broken'));
+    expect(relevant).toHaveLength(1);
+    expect(relevant[0]).toContain('Could not include @modern:probe://broken');
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);
+
+test('a resource with text and binary parts returns both, the binary part by description', async () => {
+  const runtime = await start({});
+  try {
+    server.enqueue({ text: 'noted' });
+    await runtime.run('read @modern:probe://mixed', () => {});
+    const sent = JSON.stringify(server.completions().at(-1)!.body.messages);
+    expect(sent).toContain('first part');
+    expect(sent).toContain('image/png content of 12 bytes of base64');
+  } finally {
+    await runtime.close();
+  }
+}, 30_000);
+
+test('a server that will not start does not hide another server\'s prompts and resources', async () => {
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'mcp.json'),
+    JSON.stringify({
+      servers: [
+        { id: 'modern', command: 'bun', args: [FIXTURE], enabled: true },
+        { id: 'broken', command: 'bun', args: ['--version'], enabled: true },
+      ],
+    })
+  );
+  const runtime = await start({});
+  try {
+    expect((await runtime.mcpPrompts()).map((entry) => `${entry.serverId}:${entry.name}`)).toContain('modern:review');
+    expect((await runtime.mcpResources()).map((entry) => `${entry.serverId}:${entry.uri}`)).toContain('modern:docs://readme');
   } finally {
     await runtime.close();
   }

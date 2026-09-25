@@ -68,3 +68,89 @@ test('with an observer attached, it hears the turn\'s events and each session op
     await close();
   }
 }, 20_000);
+
+test('an email in the composer is sent, not completed as a reference', async () => {
+  fs.writeFileSync(path.join(context.root, 'b.ts'), 'export {};\n');
+  context.server.enqueue({ text: 'Sent as typed.' });
+  const { setup, close } = await open({}, { size: { width: 110, height: 40 } });
+  try {
+    await setup.mockInput.typeText('mail a@b');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Sent as typed.'), 5_000);
+    expect(context.server.completions().at(-1)!.body.messages.at(-1).content).toBe('mail a@b');
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('Enter completes the open reference list instead of sending', async () => {
+  fs.writeFileSync(path.join(context.root, 'src.ts'), 'export {};\n');
+  context.server.enqueue({ text: 'Sent the file.' });
+  const { setup, close } = await open({}, { size: { width: 110, height: 40 } });
+  try {
+    await setup.mockInput.typeText('@src');
+    await frameWith(setup, (frame) => frame.includes('@src.ts'), 5_000);
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('@src.ts '), 2_000);
+    expect(context.server.completions().length).toBe(0);
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Sent the file.'), 5_000);
+    expect(context.server.completions().at(-1)!.body.messages.at(-1).content).toContain('File src.ts');
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('Escape closes the reference list, so Enter sends what was typed', async () => {
+  fs.mkdirSync(path.join(context.root, 'src'));
+  fs.writeFileSync(path.join(context.root, 'src', 'a.ts'), 'export {};\n');
+  context.server.enqueue({ text: 'Sent the text.' });
+  const { setup, close } = await open({}, { size: { width: 110, height: 40 } });
+  try {
+    await setup.mockInput.typeText('@src');
+    await frameWith(setup, (frame) => frame.includes('src/a.ts'), 5_000);
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => !frame.includes('Tab or Enter completes'), 2_000);
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Sent the text.'), 5_000);
+    expect(context.server.completions().at(-1)!.body.messages.at(-1).content).toBe('@src');
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('completing a directory leaves the cursor inside it', async () => {
+  fs.mkdirSync(path.join(context.root, 'src'));
+  fs.writeFileSync(path.join(context.root, 'src', 'a.ts'), 'export {};\n');
+  context.server.enqueue({ text: 'Sent the file.' });
+  const { setup, close } = await open({}, { size: { width: 110, height: 40 } });
+  try {
+    await setup.mockInput.typeText('@src');
+    await frameWith(setup, (frame) => frame.includes('src/a.ts'), 5_000);
+    setup.mockInput.pressTab();
+    await setup.mockInput.typeText('a');
+    await frameWith(setup, (frame) => frame.includes('@src/a.ts'), 2_000);
+    setup.mockInput.pressTab();
+    await frameWith(setup, (frame) => frame.includes('@src/a.ts '), 2_000);
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Sent the file.'), 5_000);
+    expect(context.server.completions().at(-1)!.body.messages.at(-1).content).toContain('File src/a.ts');
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('a server whose resource listing fails still leaves file completion working', async () => {
+  fs.mkdirSync(path.join(context.root, 'src'));
+  fs.writeFileSync(path.join(context.root, 'src', 'a.ts'), 'export {};\n');
+  fs.mkdirSync(path.join(context.root, '.jamcli'), { recursive: true });
+  fs.writeFileSync(path.join(context.root, '.jamcli', 'mcp.json'), JSON.stringify({ servers: [{ id: 'broken', command: 'bun', args: ['--version'], enabled: true }] }));
+  const { setup, close } = await open({ mcp: undefined, env }, { size: { width: 110, height: 40 } });
+  try {
+    await setup.mockInput.typeText('@src');
+    const frame = await frameWith(setup, (shown) => shown.includes('src/a.ts'), 10_000);
+    expect(frame).toContain('@src/');
+  } finally {
+    await close();
+  }
+}, 30_000);

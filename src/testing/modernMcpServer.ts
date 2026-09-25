@@ -42,6 +42,20 @@ export function modernServer(): McpServer {
   server.registerResource('readme', 'docs://readme', { description: 'The project readme.', mimeType: 'text/plain' }, async (uri) => ({
     contents: [{ uri: uri.href, text: 'README: build with bun.' }],
   }));
+  // Carries a credential from the environment, so tests can prove resource text is redacted.
+  server.registerResource('secret', 'probe://secret', { description: 'A resource carrying a credential.', mimeType: 'text/plain' }, async (uri) => ({
+    contents: [{ uri: uri.href, text: `DEPLOY_TOKEN=${process.env.JAMCLI_PROBE_SECRET ?? 'unset'}` }],
+  }));
+  server.registerResource('broken', 'probe://broken', { description: 'A resource whose read always fails.', mimeType: 'text/plain' }, async () => {
+    throw new Error('the broken resource cannot be read');
+  });
+  // Returns text and binary parts together, so tests can prove both reach the prompt.
+  server.registerResource('mixed', 'probe://mixed', { description: 'A resource with text and binary parts.' }, async (uri) => ({
+    contents: [
+      { uri: uri.href, text: 'first part' },
+      { uri: uri.href, blob: Buffer.from('png-bytes').toString('base64'), mimeType: 'image/png' },
+    ],
+  }));
   return server;
 }
 

@@ -6,6 +6,7 @@ import { startFakeProvider, type FakeProviderServer } from '../../testing/fakePr
 import { SessionLog } from '../../core/transcript/index.js';
 
 const ENTRY = path.join(import.meta.dir, '../../index.tsx');
+const MCP_FIXTURE = path.join(import.meta.dir, '../../testing/modernMcpServer.ts');
 
 let server: FakeProviderServer;
 let root: string;
@@ -257,3 +258,37 @@ test('the result and the stream report what the session cost, with an unknown pr
   const unknown = lastLine((await jam(['-p', 'hi', '--model', 'openai:mystery', '--output-format', 'json'])).out);
   expect(unknown).toMatchObject({ total_cost_usd: null, unpriced_requests: 1, model_usage: { 'openai:mystery': { cost_usd: null, unpriced_requests: 1 } } });
 });
+
+/** An MCP server configured for the child, alongside the fake model. */
+const withMcp = () => {
+  fs.writeFileSync(path.join(root, '.jamcli', 'mcp.json'), JSON.stringify({ servers: [{ id: 'modern', command: 'bun', args: [MCP_FIXTURE], enabled: true }] }));
+};
+
+test('jamcli -p runs a /server:prompt, matched without case, and sends the rendered prompt', async () => {
+  withMcp();
+  server.enqueue({ text: 'Reviewed.' });
+  const { out, code } = await jam(['-p', '/MODERN:Review a.ts', '--output-format', 'json']);
+  expect(code).toBe(0);
+  expect(lastLine(out)).toMatchObject({ type: 'result', status: 'ok', response: 'Reviewed.' });
+  const user = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'user');
+  expect(user.content).toBe('Review a.ts.');
+}, 30_000);
+
+test('a /server:prompt missing a required argument fails the run before the model is called', async () => {
+  withMcp();
+  const before = server.completions().length;
+  const { err, code } = await jam(['-p', '/modern:review', '--output-format', 'json']);
+  expect(code).toBe(1);
+  expect(err).toContain('/modern:review needs file.');
+  expect(server.completions().length).toBe(before);
+}, 30_000);
+
+test('a path such as /tmp/x is sent as written even with MCP servers configured', async () => {
+  withMcp();
+  server.enqueue({ text: 'Noted.' });
+  const { out, code } = await jam(['-p', '/tmp/x', '--output-format', 'json']);
+  expect(code).toBe(0);
+  expect(lastLine(out).response).toBe('Noted.');
+  const user = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'user');
+  expect(user.content).toBe('/tmp/x');
+}, 30_000);
