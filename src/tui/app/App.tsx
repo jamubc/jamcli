@@ -12,6 +12,7 @@ import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/s
 import { createSyntaxStyle } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
 import { customCommands } from './custom.js';
+import { askToTrustHooks } from './extensions.js';
 import { Palette } from './Palette.js';
 import { Picker, filterItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
 import { MotionContext, PlainContext, THEMES, ThemeContext, framed, type Theme } from './theme.js';
@@ -88,7 +89,7 @@ interface PromptSelection {
 const naming = (draft: string) => draft.startsWith('/') && !/\s/.test(draft);
 
 /** Commands the design names that arrive with later work. Typing one says so rather than calling it unknown. */
-const LATER = new Set(['skills', 'hooks', 'plugins', 'workflows']);
+const LATER = new Set(['plugins', 'workflows']);
 
 export function App(props: AppProps) {
   const { runtime: first, projectRoot, onExit, openSession: open, commands: extra = [], theme: startTheme = THEMES.dark, screenReader = false } = props;
@@ -291,6 +292,8 @@ export function App(props: AppProps) {
   // A first run opens setup, once, on the session it started with.
   useEffect(() => {
     if (props.firstRun) void runCommand('/setup', { quiet: true });
+    // A project's hooks are asked about once, before they can run; setup goes first.
+    else if (!runtime.hooks().projectTrusted) askToTrustHooks(context());
   }, []);
 
   /**

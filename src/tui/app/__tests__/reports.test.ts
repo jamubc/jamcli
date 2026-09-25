@@ -14,7 +14,7 @@ test('a command line splits into its name and the rest, and words keep what quot
 
 test('a typed prefix lists names that start with it first, then names that contain it, and aliases count', () => {
   const names = (typed: string) => matchCommands(BUILTIN_COMMANDS, typed).map((command) => command.name);
-  expect(names('/co')).toEqual(['context', 'cost', 'compact', 'commit', 'config', 'copy']);
+  expect(names('/co')).toEqual(['context', 'cost', 'compact', 'commit', 'commands', 'config', 'copy']);
   expect(names('/ex')).toEqual(['export', 'exit', 'context']);
   expect(names('/qu')).toEqual(['exit']);
   expect(names('/ost')).toEqual(['cost']);
@@ -22,12 +22,12 @@ test('a typed prefix lists names that start with it first, then names that conta
   expect(findCommand(BUILTIN_COMMANDS, 'quit')?.name).toBe('exit');
   expect(findCommand(BUILTIN_COMMANDS, 'new')?.name).toBe('clear');
   expect(findCommand(BUILTIN_COMMANDS, 'undo')?.name).toBe('undo');
-  expect(findCommand(BUILTIN_COMMANDS, 'skills')).toBeUndefined();
+  expect(findCommand(BUILTIN_COMMANDS, 'plugins')).toBeUndefined();
 });
 
 test('the palette reaches every command the interface has today', () => {
   const names = BUILTIN_COMMANDS.map((command) => command.name);
-  for (const name of ['help', 'model', 'mode', 'permissions', 'context', 'cost', 'compact', 'clear', 'resume', 'fork', 'undo', 'rewind', 'tools', 'mcp', 'config', 'copy', 'profile', 'categories', 'doctor', 'export', 'exit']) {
+  for (const name of ['help', 'model', 'mode', 'permissions', 'context', 'cost', 'compact', 'clear', 'resume', 'fork', 'undo', 'rewind', 'tools', 'skills', 'commands', 'hooks', 'mcp', 'config', 'copy', 'profile', 'categories', 'doctor', 'export', 'exit']) {
     expect(names).toContain(name);
   }
   expect(new Set(names).size).toBe(names.length);

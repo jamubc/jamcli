@@ -65,8 +65,8 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
     await frameWith(setup, (frame) => !frame.includes('No command starts with that.'));
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('/zz is not a command. /help lists them.'));
-    await send(setup, '/skills');
-    await frameWith(setup, (frame) => frame.includes('/skills is not available yet.'));
+    await send(setup, '/plugins');
+    await frameWith(setup, (frame) => frame.includes('/plugins is not available yet.'));
     // A slash command never reaches the model.
     expect(context.server.completions()).toHaveLength(0);
   } finally {

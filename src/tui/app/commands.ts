@@ -23,6 +23,7 @@ import { rewind, undo } from './rewind.js';
 import { diff } from './review.js';
 import { commit } from './commit.js';
 import { pr } from './pr.js';
+import { commandsList, hooksCommand, skills } from './extensions.js';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
@@ -611,6 +612,9 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   commit,
   pr,
   tools,
+  skills,
+  commandsList,
+  hooksCommand,
   mcp,
   config,
   copy,
