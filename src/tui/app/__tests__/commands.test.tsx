@@ -222,7 +222,7 @@ test('/tools, /mcp, /categories, and /doctor report, and /config reads and chang
   try {
     await turn(setup, 'hello', 'Hi.');
     await send(setup, '/tools');
-    const tools = await frameWith(setup, (frame) => frame.includes('tools offered to the model'));
+    const tools = await frameWith(setup, (frame) => frame.includes('- read_file (read):'));
     expect(tools).toContain('- read_file (read):');
     await send(setup, '/mcp');
     await frameWith(setup, (frame) => frame.includes('No MCP servers configured.'));

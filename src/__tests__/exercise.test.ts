@@ -104,7 +104,7 @@ test('a session through every command, as a person meets it', async () => {
   await command('/permissions', 'Mode: default.');
   await command('/context', 'Compaction starts at');
   await command('/cost', 'This session:');
-  await command('/tools', 'tools offered to the model');
+  await command('/tools', '- read_file (read):');
   await command('/mcp', 'No MCP servers configured.');
   await command('/categories', 'Model categories (defaults):');
   // With no profile files, it says where they would go: here, the user directory in use.

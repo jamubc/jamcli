@@ -10,6 +10,7 @@ import { APPLY_PATCH_TOOL } from './patch.js';
 import { READ_FILE_TOOL } from './read_file.js';
 import { TASK_TOOLS } from './task.js';
 import { TODO_TOOLS } from './todo.js';
+import { WEB_FETCH_TOOL } from './webFetch.js';
 import { WRITE_FILE_TOOL } from './write_file.js';
 
 /** Every built-in tool, one per job, plus the hidden aliases that keep older names working. */
@@ -24,6 +25,7 @@ export const BUILTIN_TOOLS: RegisteredTool[] = [
   ...TODO_TOOLS,
   ...GIT_TOOLS,
   GIT_COMMIT_TOOL,
+  WEB_FETCH_TOOL,
   ...TASK_TOOLS,
   ...ACP_TOOLS,
   ...ALIAS_TOOLS,
