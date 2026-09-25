@@ -26,6 +26,8 @@ import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type Sand
 import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
+import { loadSkills, skillsPromptText, type Skill } from '../ext/skills.js';
+import { skillTool } from '../tools/skill.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
@@ -151,6 +153,8 @@ export interface Runtime {
   readonly session: JamSession;
   /** Problems found while assembling, also reported as notices by the first turn. */
   readonly notices: string[];
+  /** The skills found, which the system prompt lists and the skill tool loads. */
+  readonly skills: Skill[];
   readonly permissionMode: PermissionMode;
   /** Where commands run: `bwrap`, `seatbelt`, or `none`, with the reason. */
   readonly sandbox: { kind: SandboxKind; reason: string };
@@ -276,6 +280,26 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     });
 
   const registry = createBuiltinRegistry();
+  // Skills are listed by name and description; the skill tool loads one when asked.
+  const skillSet = loadSkills(projectRoot);
+  notices.push(...skillSet.problems.map((problem) => `A skill was not loaded: ${problem}`));
+  if (skillSet.skills.length) {
+    registry.register(
+      skillTool({
+        skills: skillSet.skills,
+        activate: (skill) => {
+          if (!skill.allowedTools) return undefined;
+          const label = `the skill ${skill.name}`;
+          const rules = skill.allowedTools.flatMap((text) => {
+            const parsed = parseRule(text, 'allow', 'session', `${label} allowed-tools`);
+            return 'rule' in parsed ? [parsed.rule] : [];
+          });
+          permissions.narrow(rules, label);
+          return `While this skill is active, until this turn ends, only these tools may run: ${permissions.narrowed?.rules.map((rule) => rule.text).join(', ') || 'none'}.`;
+        },
+      })
+    );
+  }
   // The MCP client is loaded only when a server is configured: it is the heaviest import a
   // session would otherwise make for nothing.
   const serversConfigured = (mcpConfig.servers ?? []).some((server) => server.enabled !== false);
@@ -384,7 +408,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   if (trust.note) notices.push(trust.note);
   if (trust.provider && trust.choice) trust.provider = observed(trust.provider, trust.choice.provider, 'trust');
   const buildPrompt = () =>
-    buildRuntimePrompt({ profile, rulesText: rulesPromptText(rules), tools: toolSet.summaries, projectRoot: workRoot, cwd, mode: permissions.mode });
+    buildRuntimePrompt({
+      profile,
+      rulesText: [rulesPromptText(rules), toolSet.summaries.some((tool) => tool.name === 'skill') ? skillsPromptText(skillSet.skills) : undefined].filter(Boolean).join('\n\n'),
+      tools: toolSet.summaries,
+      projectRoot: workRoot,
+      cwd,
+      mode: permissions.mode,
+    });
   let systemPrompt = buildPrompt();
 
   let choice = resolveModel(options.model ?? config.model, profile, config.api_registry);
@@ -630,6 +661,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   };
 
   return {
+    skills: skillSet.skills,
     get sessionId() {
       return log.id;
     },
