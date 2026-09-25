@@ -722,11 +722,17 @@ cover headless, ACP, and delegation.
 
 ## Stage 11: Workflows
 
-- [ ] 11.1 The workflow schema, graph validation, and expression grammar (D19). Files: `src/core/workflows/`, tests.
-- [ ] 11.2 The engine: step states, concurrency cap, `continue_on_error`, the run log, and resume.
-- [ ] 11.3 Step kinds: `agent`, `run`, `tool`, `approval`, `commit`, and `workflow`.
-- [ ] 11.4 Triggers: `run`, `hook install`, and `schedule` for crontab, launchd, and Windows tasks, each tested by the file it writes.
-- [ ] 11.5 Surface it: `/workflows`, approval prompts in the interface, and `jamcli workflow approve`.
+- [x] 11.1 The workflow schema, graph validation, and expression grammar (D19). Files: `src/core/workflows/`, tests.
+  - **Verification**: `.jamcli/workflows/` and `~/.config/jamcli/workflows/` hold YAML or JSON files, the project's winning a shared name. On load: unique step ids, `needs` naming steps, no cycle (named in the error), exactly one step kind, a concurrency of 1 to 4, conditions that parse, and templates and conditions naming only inputs or the status and output of steps the step depends on. Inputs are typed, defaulted, and required as declared. Conditions use their own parser: paths, literals, comparisons, `and`, `or`, `not`, and parentheses, so a condition such as `process.exit()` is a parse error, not code.
+- [x] 11.2 The engine: step states, concurrency cap, `continue_on_error`, the run log, and resume.
+  - **Verification**: steps move through `pending`, `running`, and `ok`, `failed`, `skipped`, `waiting`, or `cancelled`. Ready steps start in file order up to the concurrency; a failed or cancelled need fails a step unless it sets `continue_on_error`; a false `when` skips it. Every change is appended to `.jamcli/workflows/runs/<run-id>.jsonl` before anything else happens, so `resume` rebuilds the state, applies recorded approvals, and runs a step cut off while running again.
+- [x] 11.3 Step kinds: `agent`, `run`, `tool`, `approval`, `commit`, and `workflow`.
+  - **Verification**: `agent` runs a turn in its own session on the `workflow` surface, with the step's model or category, mode, and narrowed tools; `run` and `tool` make one call without the model through the same path as `!`, so rules, the sandbox, hooks, and checkpoints apply (a refactor of 9.2's `!`: any single tool call, whose reply is the output). Headless, a call that asks is denied unless `--allow-tool` names it. `approval` asks in the interface and waits headless. `commit` uses 7.4's path with the given message, or a drafted one for `message: agent`, and the person's identity. `workflow` runs another, nested at most 5 deep.
+- [x] 11.4 Triggers: `run`, `hook install`, and `schedule` for crontab, launchd, and Windows tasks, each tested by the file it writes.
+  - **Verification**: `jamcli workflow hook install <git-hook> <name>` writes a marked script that runs the workflow headless, and leaves a hook it did not write alone. `schedule <name> --cron` writes a marked crontab line (replacing an earlier one), a launchd agent with `StartCalendarInterval` (single numbers only), or a Task Scheduler XML (daily or weekly only), then loads it; `unschedule` and `schedules` manage them. There is no daemon.
+- [x] 11.5 Surface it: `/workflows`, approval prompts in the interface, and `jamcli workflow approve`.
+  - **Verification**: `jamcli workflow list|run|resume|approve [--reject]`, and `/workflows` with `run <name> input=value`, `approve`, and `reject`, whose approval steps and asking calls open the picker. The interface's list of commands for later work is gone, since nothing is left on it.
+  - Tests: 6 (the grammar, load-time checks, the engine's order and failures, approval and resume and a cut-off step, a real run through runtimes ending in a commit after `approve`, and every trigger's file). Probes deferred to `openspec/DEFERRED.md`.
 
 ## Stage 12: Hardening, documentation, release
 

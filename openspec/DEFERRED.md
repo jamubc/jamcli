@@ -370,6 +370,65 @@ The runtime's post-tool handler (`src/core/runtime/index.ts`):
 - **break** `--scope`: always `user`.
   - **gap**: the command-line tests install for the user only.
 
+### Stage 11 workflows (`9eb27d2`, `cec4b48`, `b79f4a4`)
+
+`src/core/workflows/expr.ts`:
+
+- **break**: accept an unknown character in `tokenize` instead of throwing.
+  - **caught by**: `workflows.test.ts`, which expects `a; b` to fail.
+- **break**: `and` evaluated as `or`.
+  - **caught by**: the grammar test.
+- **break** `lookup`: follow inherited properties (drop `hasOwnProperty`).
+  - **gap**: no test reads `inputs.constructor` or `__proto__`.
+
+`src/core/workflows/schema.ts`:
+
+- **break**: skip the cycle search.
+  - **caught by**: the load-time test.
+- **break** `checkPath`: allow any step, not only ancestors.
+  - **caught by**: the load-time test.
+- **break**: the concurrency cap of 4.
+  - **caught by**: the load-time test (9 is refused).
+
+`src/core/workflows/engine.ts`:
+
+- **break**: ignore `concurrency` (start every ready step).
+  - **caught by**: the engine test, which expects a peak of 2.
+- **break**: run a step whose need failed.
+  - **caught by**: the engine test (`e` must not run).
+- **break**: on resume, keep `running` steps as they are.
+  - **caught by**: the resume test's cut-off run.
+- **break**: append to the log after the step starts rather than before.
+  - **gap**: no test kills the process between the two.
+- **break**: a `cancelled` step is not retried on resume.
+  - **gap**: resume after a cancel is not tested.
+
+`src/core/workflows/runners.ts`:
+
+- **break**: approve asking calls when nobody can answer (`allow: true`).
+  - **gap**: the real-run test passes `--allow-tool run_command`, so nothing asks. Add a
+    run step with no rule and expect it to fail.
+- **break**: the agent step ignores `mode`.
+  - **gap**: the real run's plan step makes no call; give it an edit and expect a refusal.
+- **break**: nested depth unlimited.
+  - **gap**: no test nests workflows.
+- **break**: `commit` with `message: agent` skips drafting.
+  - **gap**: only a given message is tested.
+
+`src/core/workflows/triggers.ts`:
+
+- **break**: overwrite a foreign git hook.
+  - **caught by**: the trigger test.
+- **break** `editCrontab`: keep the old line when replacing.
+  - **caught by**: the trigger test, which expects two lines after two schedules.
+- **break**: quote nothing in `cronLine`.
+  - **caught by**: the trigger test's exact line (a path with a quote in it is a **gap**).
+
+`src/tui/app/workflows.ts`:
+
+- **gap, all of it**: `/workflows run` with a picker approval has no interface test; only
+  the empty list is tested.
+
 ### Probes to repeat once later stages land
 
 These areas were probed in their own tasks, but the unfinished stages below add new paths
@@ -453,7 +512,11 @@ copy once the unit closes), what is missing, and what finishing it needs.
   network namespace with its own resolver.
 - **Stage 10, consent in the interface.** Installing is on the command line only; `/plugins`
   lists. An interface flow to install, update, and remove would reuse the same consent text.
-- **Stage 11**: workflows (11.1 to 11.5).
+- **Stage 11, what was left out of workflows.** Schedules take single numbers on macOS
+  and daily or weekly times on Windows; ranges and steps work only in crontab. Neither the
+  launchd nor the Windows path has run on its system (see 3.7 for the same limit on
+  macOS). An agent step's `category` takes the chain's first model and does not fall
+  back along it as delegation does.
 - **Stage 12**: 12.1 to 12.9.
 - **`openspec/project.md`**: the tech stack still says tsup. The build moved to
   `bun build` in 6.13.
