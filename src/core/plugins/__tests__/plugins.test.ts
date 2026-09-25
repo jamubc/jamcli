@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { readManifest, widened, permissionsOf } from '../manifest.js';
-import { installPlugin, installedPlugins, integrityOf, readLock, removePlugin, setPluginEnabled, updatePlugin, verifyPlugins, type ConsentRequest } from '../store.js';
+import { installPlugin, installedPlugins, integrityOf, readLock, removePlugin, setPluginEnabled, updatePlugin, verifyPlugins, enabledPlugins, trustProblem, type ConsentRequest } from '../store.js';
 import { loadCommands } from '../../ext/commands.js';
 import { loadSkills } from '../../ext/skills.js';
 import { createRuntime } from '../../runtime/index.js';
@@ -305,3 +305,37 @@ test('a plugin that runs without a sandbox says so', async () => {
     await runtime.close();
   }
 }, 20_000);
+
+test('an installed copy with no consent record does not load, and says consent is missing', async () => {
+  const installed = await installPlugin(makePlugin('unconsented'), { scope: 'user', projectRoot: project, consent: agree() });
+  expect(trustProblem({ ...installed, scope: 'user' }, project)).toBeUndefined();
+  fs.rmSync(path.join(process.env.JAMCLI_STATE_DIR!, 'plugin-consents.json'), { force: true });
+  expect(trustProblem({ ...installed, scope: 'user' }, project)).toContain('was not installed with your consent');
+  expect(enabledPlugins(project).some((plugin) => plugin.name === 'unconsented')).toBe(false);
+  expect(loadCommands(project).commands.some((command) => command.name === 'unconsented:hello')).toBe(false);
+});
+
+test('a lockfile permission changed after consent stops the plugin loading', async () => {
+  const installed = await installPlugin(makePlugin('swapped', { permissions: { env: ['SAFE_TOKEN'] } }), { scope: 'user', projectRoot: project, consent: agree() });
+  expect(enabledPlugins(project).some((plugin) => plugin.name === 'swapped')).toBe(true);
+  const file = path.join(base, 'config', 'plugins.lock.json');
+  const lock = JSON.parse(fs.readFileSync(file, 'utf8'));
+  lock.plugins.swapped.permissions = { network: ['evil.example'], env: ['SAFE_TOKEN'], filesystem: 'none' };
+  fs.writeFileSync(file, JSON.stringify(lock));
+  expect(trustProblem({ ...lock.plugins.swapped, scope: 'user' }, project)).toContain('was not installed with your consent');
+  expect(enabledPlugins(project).some((plugin) => plugin.name === 'swapped')).toBe(false);
+  expect(installed.integrity).toBe(lock.plugins.swapped.integrity);
+});
+
+test('removing a plugin forgets its consent, so planting it again needs a fresh one', async () => {
+  const dir = makePlugin('forgotten');
+  const installed = await installPlugin(dir, { scope: 'user', projectRoot: project, consent: agree() });
+  removePlugin('forgotten', project);
+  fs.writeFileSync(path.join(base, 'config', 'plugins.lock.json'), JSON.stringify({ version: 1, plugins: { forgotten: { ...installed, enabled: true } } }));
+  expect(trustProblem({ ...installed, scope: 'user' }, project)).toContain('was not installed with your consent');
+});
+
+test('the consent file is readable only by its owner', async () => {
+  await installPlugin(makePlugin('moded'), { scope: 'user', projectRoot: project, consent: agree() });
+  expect(fs.statSync(path.join(process.env.JAMCLI_STATE_DIR!, 'plugin-consents.json')).mode & 0o777).toBe(0o600);
+});

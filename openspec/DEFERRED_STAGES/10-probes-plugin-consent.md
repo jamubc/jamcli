@@ -3,11 +3,11 @@
 **Description:** planted-lockfile test fails on directory check first, hiding digest bugs.
 
 **Acceptance criteria:**
-- [ ] Case with `dir` inside `pluginsDir()` but no consent record fails on digest comparison
-- [ ] Editing lockfile permissions after consent is detected; leaving `permissions` out of digest turns it red
+- [x] Case with `dir` inside `pluginsDir()` but no consent record fails on digest comparison
+- [x] Editing lockfile permissions after consent is detected; leaving `permissions` out of digest turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/plugins/__tests__/plugins.test.ts`
+- [x] Tests pass: `bun test src/core/plugins/__tests__/plugins.test.ts`
 
 **Dependencies:** None
 
@@ -21,11 +21,11 @@
 **Description:** Re-plant after remove and consent file mode need proof.
 
 **Acceptance criteria:**
-- [ ] Remove then plant same name requires fresh consent; no-op `forgetConsent` turns it red
-- [ ] Consent file mode is `0600`; writing without mode turns it red
+- [x] Remove then plant same name requires fresh consent; no-op `forgetConsent` turns it red
+- [x] Consent file mode is `0600`; writing without mode turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/plugins/__tests__/lock.test.ts src/core/plugins/__tests__/plugins.test.ts`
+- [x] Tests pass: `bun test src/core/plugins/__tests__/lock.test.ts src/core/plugins/__tests__/plugins.test.ts`
 
 **Dependencies:** Task 1
 
@@ -35,7 +35,7 @@
 **Estimated scope:** Small: 1-2 files
 
 ## Checkpoint: After Tasks 1-2
-- [ ] Caught probe re-run: `insidePluginsDir` skip still red when broken
+- [x] Caught probe re-run: `insidePluginsDir` skip still red when broken
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 454-470)
