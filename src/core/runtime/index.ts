@@ -436,7 +436,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const commandEnv = { ...envFor(), ...(sandbox.kind === 'bwrap' ? { TMPDIR: '/tmp' } : {}) };
   // Language servers run with the same minimal environment, each started when first needed.
   // A delegated run has none, so a task does not start a second copy of each server.
-  const lsp = options.parent || config.lsp?.enabled === false ? undefined : new LspManager(workRoot, config.lsp ?? {}, envFor());
+  const lsp = options.parent || config.lsp?.enabled === false ? undefined : new LspManager(workRoot, config.lsp ?? {}, envFor(), sandbox.kind === 'none' ? undefined : sandbox.wrap);
   if (lsp?.available.length) registry.register(lspTool(lsp));
 
   let permissions: PermissionEngine;

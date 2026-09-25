@@ -57,7 +57,7 @@ test('after an edit, the model reads the errors the language server finds, and a
   fs.mkdirSync(path.join(root, '.jamcli', 'profiles'), { recursive: true });
   fs.writeFileSync(
     path.join(root, '.jamcli', 'config.json'),
-    JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false }, lsp: { servers: { fake, missing: { command: 'no-such-language-server', extensions: ['zz'] } } } })
+    JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, lsp: { servers: { fake, missing: { command: 'no-such-language-server', extensions: ['zz'] } } } })
   );
   fs.writeFileSync(path.join(root, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_model: 'fake-model' }));
   const runtime = await createRuntime({ projectRoot: root, surface: 'headless', mcp: false, env, allowTools: ['edit'] });

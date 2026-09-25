@@ -64,7 +64,12 @@ export class LspManager {
   constructor(
     private readonly root: string,
     settings: LspSettings,
-    private readonly env: Record<string, string | undefined>
+    private readonly env: Record<string, string | undefined>,
+    /**
+     * The session's sandbox. Some servers run the project's code (rust-analyzer runs build
+     * scripts), so they run where commands do.
+     */
+    private readonly wrap?: (command: string, options: { cwd: string; env: Record<string, string> }) => { file: string; args: string[] }
   ) {
     const merged = { ...DEFAULT_LSP_SERVERS, ...(settings.servers ?? {}) };
     this.servers = Object.entries(merged).filter(([, server]) => server.enabled !== false && installed(server.command, env));
@@ -91,7 +96,9 @@ export class LspManager {
     const [name, server] = found;
     let started = this.running.get(name);
     if (!started) {
-      started = LspClient.start({ ...server, env: this.env }, this.root);
+      const quote = (value: string) => (/^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`);
+      const wrapped = this.wrap?.([server.command, ...(server.args ?? [])].map(quote).join(' '), { cwd: this.root, env: this.env as Record<string, string> });
+      started = LspClient.start({ ...(wrapped ? { command: wrapped.file, args: wrapped.args } : server), env: this.env }, this.root);
       this.running.set(name, started);
       // A server that fails to start is tried again on the next request.
       started.catch(() => this.running.delete(name));
