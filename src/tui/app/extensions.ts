@@ -3,7 +3,6 @@ import { loadCommands } from '../../core/ext/commands.js';
 import { loadSkills } from '../../core/ext/skills.js';
 import { needsTrust } from '../../core/hooks/commands.js';
 import type { CommandContext, SlashCommand } from './commands.js';
-import { runPluginCommand } from '../../cli/plugin.js';
 
 export const skills: SlashCommand = {
   name: 'skills',
@@ -20,7 +19,9 @@ export const plugins: SlashCommand = {
   source: 'built-in',
   run(ctx) {
     const lines: string[] = [];
-    void runPluginCommand(['list'], ctx.projectRoot, { out: (line) => lines.push(line), err: (line) => lines.push(line) }).then(() =>
+    void import('../../cli/plugin.js')
+      .then(({ runPluginCommand }) => runPluginCommand(['list'], ctx.projectRoot, { out: (line) => lines.push(line), err: (line) => lines.push(line) }))
+      .then(() =>
       ctx.show([...lines, '', 'Install, update, or remove plugins with jamcli plugin; changes load with the next session.'].join('\n'))
     );
   },

@@ -1,5 +1,4 @@
 import type { CommandContext, SlashCommand } from './commands.js';
-import { runWorkflowCommand } from '../../cli/workflow.js';
 
 /** A yes-or-no question in the picker; Escape answers no. */
 const askIn = (ctx: CommandContext) => (question: string) =>
@@ -41,6 +40,9 @@ export const workflowsCommand: SlashCommand = {
         : action === 'approve' || action === 'reject'
           ? ['approve', rest[0] ?? '', rest[1] ?? '', ...(action === 'reject' ? ['--reject'] : [])]
           : ['list'];
-    void runWorkflowCommand(command, ctx.projectRoot, { io }).then(() => ctx.show(lines.join('\n')));
+    // Loaded when used, so the interface starts without the workflow engine.
+    void import('../../cli/workflow.js')
+      .then(({ runWorkflowCommand }) => runWorkflowCommand(command, ctx.projectRoot, { io }))
+      .then(() => ctx.show(lines.join('\n')));
   },
 };

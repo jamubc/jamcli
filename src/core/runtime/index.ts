@@ -31,9 +31,8 @@ import { loadSkills, skillsPromptText, type Skill } from '../ext/skills.js';
 import { skillTool } from '../tools/skill.js';
 import { DEFAULT_TOOL_SEARCH_THRESHOLD, toolSearchTool } from '../tools/toolSearch.js';
 import { formatDiagnostic, LspManager } from '../lsp/manager.js';
-import { verifyPlugins } from '../plugins/store.js';
-import { loadPlugins } from '../plugins/load.js';
-import { pluginParts } from '../plugins/runtime.js';
+import { enabledPlugins, installedPlugins, verifyPlugins } from '../plugins/lock.js';
+import type { PluginParts } from '../plugins/runtime.js';
 import { lspTool } from '../tools/lsp.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
@@ -354,16 +353,23 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       })
     );
   }
-  // Plugins: each installed copy is hashed again, and one that changed is turned off.
-  if (!options.parent) {
+  // Plugins: each installed copy is hashed again, and one that changed is turned off. The
+  // code that loads them is imported only when one is on, so a session without any pays nothing.
+  if (!options.parent && installedPlugins(projectRoot).length) {
     for (const result of verifyPlugins(projectRoot)) {
       if (!result.ok) notices.push(`Plugin ${result.name} is off: ${result.problem}. Install it again to use it.`);
     }
   }
-  const loadedPlugins = loadPlugins(projectRoot);
-  notices.push(...loadedPlugins.problems);
-  const plugins = pluginParts(loadedPlugins.plugins, { projectRoot, sandboxSettings, envFor: (passthrough) => envFor(passthrough) });
-  notices.push(...plugins.notices);
+  const plugins: PluginParts = enabledPlugins(projectRoot).length
+    ? await (async () => {
+        const { loadPlugins, pluginParts } = await import('../plugins/runtime.js');
+        const loaded = loadPlugins(projectRoot);
+        notices.push(...loaded.problems);
+        const parts = pluginParts(loaded.plugins, { projectRoot, sandboxSettings, envFor: (passthrough) => envFor(passthrough) });
+        notices.push(...parts.notices);
+        return parts;
+      })()
+    : { processes: [], servers: [], notices: [] };
   // The MCP client is loaded only when a server is configured: it is the heaviest import a
   // session would otherwise make for nothing.
   const serversConfigured = (mcpConfig.servers ?? []).some((server) => server.enabled !== false) || plugins.servers.length > 0;

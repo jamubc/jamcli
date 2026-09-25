@@ -40,11 +40,9 @@ const ManifestSchema = z.strictObject({
 
 export type PluginManifest = z.infer<typeof ManifestSchema>;
 
-export interface PluginPermissions {
-  network: string[];
-  env: string[];
-  filesystem: 'none' | 'project';
-}
+import type { PluginPermissions } from './lock.js';
+
+export type { PluginPermissions };
 
 /** What a plugin may reach, with the defaults filled in: nothing unless it asks. */
 export const permissionsOf = (manifest: PluginManifest): PluginPermissions => ({

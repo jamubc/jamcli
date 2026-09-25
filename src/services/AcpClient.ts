@@ -1,16 +1,14 @@
 import path from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import {
+import type {
   ClientSideConnection,
-  ndJsonStream,
-  PROTOCOL_VERSION,
-  type InitializeResponse,
-  type PermissionOption,
-  type RequestPermissionOutcome,
-  type SessionConfigOption,
-  type SessionUpdate,
-  type ToolCallUpdate,
+  InitializeResponse,
+  PermissionOption,
+  RequestPermissionOutcome,
+  SessionConfigOption,
+  SessionUpdate,
+  ToolCallUpdate,
 } from '@agentclientprotocol/sdk';
 import { pathExists, readJson } from '../utils/fsx.js';
 import { subprocessEnv } from '../core/sandbox/env.js';
@@ -95,6 +93,8 @@ export class AcpClient {
       child.on('exit', (code) => resolve(new Error(`ACP agent exited with code ${code}`)));
     });
     this.child = child;
+    // The SDK is loaded when an agent is started, not with every session that offers delegation.
+    const { ClientSideConnection, ndJsonStream, PROTOCOL_VERSION } = await import('@agentclientprotocol/sdk');
     const stream = ndJsonStream(Writable.toWeb(child.stdin) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout) as unknown as ReadableStream<Uint8Array>);
     this.connection = new ClientSideConnection(
       () => ({
