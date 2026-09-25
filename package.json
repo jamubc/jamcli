@@ -12,7 +12,8 @@
     "dev": "bun --watch src/index.tsx",
     "test": "bun test",
     "config-schema": "bun src/core/config/writeSchema.ts",
-    "bench": "bun scripts/bench/run.ts"
+    "bench": "bun scripts/bench/run.ts",
+    "compile": "bun scripts/compile.ts"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.5.0",
