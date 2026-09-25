@@ -2,83 +2,71 @@ import { ConfigService } from './ConfigService.js';
 import type { McpServerConfig, McpToolDescriptor } from '../types/mcp.js';
 import { listVisibleTools } from '../core/tools/index.js';
 import { subprocessEnv } from '../core/sandbox/env.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import type { OAuthClientProvider, Transport } from '@modelcontextprotocol/client';
+import { connectMcp, contentText, createTransport, transportKind, type ElicitationAnswer, type ElicitationRequest, type McpConnection } from '../core/mcp/connect.js';
 
 type McpManagerOptions = {
   configService?: ConfigService;
   /** The environment a stdio server starts with. Defaults to JamCLI's, without credentials. */
   envFor?: (server: McpServerConfig) => Record<string, string>;
+  /** Answers a server's request for input; declined when absent. */
+  elicit?: (request: ElicitationRequest) => Promise<ElicitationAnswer>;
+  /** How an HTTP server that asks for sign-in is signed in to, if it can be. */
+  authFor?: (server: McpServerConfig) => OAuthClientProvider | undefined;
 };
 
-/** The shape cached per connected server. */
-type McpConnection = {
-  server: McpServerConfig;
-  client: Client;
-  transport: Transport;
-  tools?: McpToolDescriptor[];
-};
+/** A server's prompt, which becomes `/server:name`. */
+export interface McpPromptDescriptor {
+  serverId: string;
+  name: string;
+  description?: string;
+  arguments: { name: string; description?: string; required?: boolean }[];
+}
+
+/** A server's resource, which becomes an `@server:uri` reference. */
+export interface McpResourceDescriptor {
+  serverId: string;
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+}
 
 /** Optional seams used by tests to avoid a live server. */
 export interface McpTransportOverrides {
   fetch?: (url: string | URL, init?: RequestInit) => Promise<Response>;
 }
 
-/**
- * Resolve which transport a server entry uses. stdio stays the default when
- * nothing is declared, so an entry with only a command behaves as it always
- * has. A URL-only entry is treated as HTTP even when the field is absent.
- */
-export const resolveTransportKind = (server: McpServerConfig): 'stdio' | 'http' => {
-  if (server.transport === 'http' || server.transport === 'sse') return 'http';
-  if (!server.transport && !!server.url && !server.command) return 'http';
-  return 'stdio';
-};
+/** stdio stays the default; an entry with only a URL is HTTP. */
+export const resolveTransportKind = transportKind;
 
 /** A server gets JamCLI's environment without credentials, plus what its entry declares. */
 export const serverEnv = (server: McpServerConfig): Record<string, string> =>
   subprocessEnv(process.env, { passthrough: server.env_passthrough, extra: server.env });
 
-/**
- * Build the SDK transport for a server entry. Exported so the transport choice
- * can be exercised without spawning a process or opening a socket.
- */
+/** Build the transport for a server entry, without starting it. */
 export const createClientTransport = (
   server: McpServerConfig,
   overrides: McpTransportOverrides = {},
   env: Record<string, string> = serverEnv(server)
-): Transport => {
-  const kind = resolveTransportKind(server);
-  if (kind === 'http') {
-    if (!server.url) {
-      throw new Error(`MCP server ${server.id} declares an HTTP transport without a url.`);
-    }
-    return new StreamableHTTPClientTransport(new URL(server.url), {
-      ...(server.headers ? { requestInit: { headers: server.headers } } : {}),
-      ...(overrides.fetch ? { fetch: overrides.fetch } : {}),
-    });
-  }
-
-  return new StdioClientTransport({
-    command: server.command,
-    args: server.args || [],
-    env,
-    cwd: server.cwd || process.cwd(),
-  });
-};
+): Transport => createTransport(server, { env, ...(overrides.fetch ? { fetch: overrides.fetch } : {}) });
 
 export class McpManager {
   private configService: ConfigService;
-  private connections: Map<string, McpConnection> = new Map();
+  private connections: Map<string, McpConnection & { tools?: McpToolDescriptor[] }> = new Map();
+  private connecting: Map<string, Promise<McpConnection>> = new Map();
   private toolIndex: Map<string, McpToolDescriptor> = new Map();
 
   private envFor: (server: McpServerConfig) => Record<string, string>;
 
-  constructor(options: McpManagerOptions = {}) {
+  constructor(private readonly options: McpManagerOptions = {}) {
     this.configService = options.configService || new ConfigService();
     this.envFor = options.envFor ?? serverEnv;
+  }
+
+  /** Which protocol revision each connected server speaks. */
+  describeEras(): { id: string; era: 'modern' | 'legacy'; protocolVersion: string }[] {
+    return [...this.connections.values()].map((connection) => ({ id: connection.server.id, era: connection.era, protocolVersion: connection.protocolVersion }));
   }
 
   async listServers(): Promise<McpServerConfig[]> {
@@ -171,13 +159,13 @@ export class McpManager {
     }
 
     const connection = await this.getConnection(server);
-    const result = await connection.client.callTool({
+    const result: any = await connection.client.callTool({
       name: descriptor.nativeName || descriptor.name,
       arguments: args || {},
     });
 
-    const output = this.formatToolContent(result?.content);
-    return { output, raw: result };
+    const output = contentText(result?.content);
+    return { output: result?.isError ? `The server reported an error: ${output}` : output, raw: result };
   }
 
   async listServerTools(server: McpServerConfig, opts: { refresh?: boolean } = {}): Promise<McpToolDescriptor[]> {
@@ -197,6 +185,48 @@ export class McpManager {
     }
 
     return tools;
+  }
+
+  /** A server's prompts, or none when it offers no prompts. */
+  async listServerPrompts(server: McpServerConfig): Promise<McpPromptDescriptor[]> {
+    const connection = await this.getConnection(server);
+    if (!connection.client.getServerCapabilities()?.prompts) return [];
+    const { prompts } = await connection.client.listPrompts();
+    return prompts.map((prompt: any) => ({ serverId: server.id, name: prompt.name, ...(prompt.description ? { description: prompt.description } : {}), arguments: prompt.arguments ?? [] }));
+  }
+
+  /** A prompt's messages as the text of one message to send. */
+  async getServerPrompt(serverId: string, name: string, args: Record<string, string>): Promise<string> {
+    const server = (await this.listServers()).find((entry) => entry.id === serverId);
+    if (!server) throw new Error(`No MCP server ${serverId}.`);
+    const connection = await this.getConnection(server);
+    const result: any = await connection.client.getPrompt({ name, arguments: args });
+    return (result.messages ?? []).map((message: any) => contentText([message.content])).join('\n\n');
+  }
+
+  /** A server's resources, or none when it offers no resources. */
+  async listServerResources(server: McpServerConfig): Promise<McpResourceDescriptor[]> {
+    const connection = await this.getConnection(server);
+    if (!connection.client.getServerCapabilities()?.resources) return [];
+    const { resources } = await connection.client.listResources();
+    return resources.map((resource: any) => ({
+      serverId: server.id,
+      uri: resource.uri,
+      name: resource.name ?? resource.uri,
+      ...(resource.description ? { description: resource.description } : {}),
+      ...(resource.mimeType ? { mimeType: resource.mimeType } : {}),
+    }));
+  }
+
+  /** A resource's contents as text; binary parts are described, not included. */
+  async readServerResource(serverId: string, uri: string): Promise<string> {
+    const server = (await this.listServers()).find((entry) => entry.id === serverId);
+    if (!server) throw new Error(`No MCP server ${serverId}.`);
+    const connection = await this.getConnection(server);
+    const result: any = await connection.client.readResource({ uri });
+    return (result.contents ?? [])
+      .map((part: any) => (typeof part.text === 'string' ? part.text : `[${part.mimeType ?? 'binary'} content of ${String(part.blob ?? '').length} bytes of base64]`))
+      .join('\n');
   }
 
   async describeServers(): Promise<string> {
@@ -254,26 +284,27 @@ export class McpManager {
     return matches;
   }
 
-  private async getConnection(server: McpServerConfig): Promise<McpConnection> {
+  /** One connection per server, shared by every caller, made once even when asked for together. */
+  private async getConnection(server: McpServerConfig): Promise<McpConnection & { tools?: McpToolDescriptor[] }> {
     const existing = this.connections.get(server.id);
     if (existing) return existing;
-
-    const transport = createClientTransport(server, {}, this.envFor(server));
-
-    const client = new Client(
-      {
-        name: 'jamcli',
-        version: '1.0.0',
-      },
-      {
-        capabilities: {},
-      }
-    );
-
-    await client.connect(transport);
-    const connection: McpConnection = { server, client, transport };
-    this.connections.set(server.id, connection);
-    return connection;
+    let pending = this.connecting.get(server.id);
+    if (!pending) {
+      const auth = this.options.authFor?.(server);
+      pending = connectMcp(server, {
+        env: this.envFor(server),
+        ...(this.options.elicit ? { elicit: this.options.elicit } : {}),
+        ...(auth ? { authProvider: auth } : {}),
+      });
+      this.connecting.set(server.id, pending);
+    }
+    try {
+      const connection = await pending;
+      this.connections.set(server.id, connection);
+      return connection;
+    } finally {
+      this.connecting.delete(server.id);
+    }
   }
 
   private mapToolDescriptor(server: McpServerConfig, tool: any): McpToolDescriptor {
@@ -288,22 +319,5 @@ export class McpManager {
       serverTitle: server.title,
       annotations: tool.annotations,
     };
-  }
-
-  private formatToolContent(content: any): string {
-    if (!content) return '<empty>';
-    if (Array.isArray(content)) {
-      return content
-        .map((entry: any) => {
-          if (entry?.type === 'text' && typeof entry.text === 'string') {
-            return entry.text;
-          }
-          if (typeof entry === 'string') return entry;
-          return JSON.stringify(entry);
-        })
-        .join('\n');
-    }
-    if (typeof content === 'string') return content;
-    return JSON.stringify(content);
   }
 }

@@ -1,7 +1,6 @@
 import { test, expect } from 'bun:test';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { createClientTransport, resolveTransportKind } from '../McpManager.js';
 import type { McpServerConfig } from '../../types/mcp.js';
 
@@ -41,6 +40,10 @@ test('an http server round-trips initialize and tools/list over the streamable t
     const headers = Object.fromEntries(new Headers(init?.headers).entries());
     const body = JSON.parse(String(init?.body));
     seen.push({ method, url: String(url), headers, body });
+    // A 2025 server does not know the 2026 probe, and says so.
+    if (body.method === 'server/discover') {
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: 'Method not found' } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
 
     if (body.method === 'initialize') {
       return new Response(
@@ -72,7 +75,7 @@ test('an http server round-trips initialize and tools/list over the streamable t
   const transport = createClientTransport(httpServer, { fetch: stubFetch });
   expect(transport).toBeInstanceOf(StreamableHTTPClientTransport);
 
-  const client = new Client({ name: 'jamcli-test', version: '1.0.0' }, { capabilities: {} });
+  const client = new Client({ name: 'jamcli-test', version: '1.0.0' }, { capabilities: {}, versionNegotiation: { mode: 'auto' } });
   await client.connect(transport);
   const tools = await client.listTools();
   await client.close();
