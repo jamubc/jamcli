@@ -17,6 +17,9 @@ bun run build
 that raises it is not a checkpoint.
 
 Each new test is shown able to fail with a mutation probe before it counts as evidence.
+On 2026-09-25, during 9.2, the owner suspended that rule so the features can be finished
+first. Every probe owed from then on is listed in `openspec/DEFERRED.md`, with the work
+this unit leaves unfinished.
 Line references describe the tree when the change opened.
 
 ## Stage 1: Foundations
@@ -659,7 +662,9 @@ cover headless, ACP, and delegation.
 
 ## Stage 9: Protocol adapters
 
-- [ ] 9.1 The JSON-RPC layer with both framings. Files: `src/core/protocols/jsonrpc/`, property tests.
+- [x] 9.1 The JSON-RPC layer with both framings. Files: `src/core/protocols/jsonrpc/`, property tests.
+  - **Verification**: `JsonRpcConnection` sends requests with a timeout and a cancel signal, answers requests and notifications by method, returns `-32601` for an unknown method, and rejects everything pending when closed. Newline framing (ACP, MCP stdio) and `Content-Length` framing (LSP) both count bytes, not characters, and survive a message split at any byte, including inside a multibyte character and inside a header. Property tests cut random messages at random points in both framings.
+  - 13 mutation probes, each turning a test red. One showed a redundant carriage-return strip, which was removed.
 - [ ] 9.2 MCP v2. Add `@modelcontextprotocol/client` in its own commit, then:
   - negotiation, with the fallback path documented if needed;
   - OAuth with PKCE, the issuer check, and keychain tokens;
