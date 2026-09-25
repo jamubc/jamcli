@@ -2,7 +2,7 @@ import path from 'path';
 import os from 'os';
 import type { ApprovalBy, PolicyClass, ToolCall } from '../types.js';
 import { MODE_DEFAULTS, modeRefusal, type ModeDefault, type PermissionMode } from './modes.js';
-import { patternMatches, toolMatches, type Decision, type Rule, type RuleScope, type Subject } from './rules.js';
+import { parseRule, patternMatches, toolMatches, type Decision, type Rule, type RuleScope, type Subject } from './rules.js';
 import { subjectsOf } from './subjects.js';
 import { grantedRules } from './grants.js';
 
@@ -120,6 +120,20 @@ export class PermissionEngine {
     // Keep the entries of the new list that the earlier one already covers.
     const kept = rules.filter((rule) => earlier.some((before) => toolMatches(before, [rule.tool]) && (!before.pattern || before.pattern === rule.pattern)));
     this.narrowing = { rules: kept, label: `${this.narrowing.label} and ${label}` };
+  }
+
+  /**
+   * Whether a call is one `text`, written as a rule, names: its tool, under any of the
+   * tool's names, and every path, command, or domain the call touches. Hook matchers use it.
+   */
+  matches(text: string, call: ToolCall): boolean {
+    const parsed = parseRule(text, 'allow', 'session', 'a matcher');
+    if ('error' in parsed) return false;
+    const names = this.options.namesOf(call.name);
+    if (!toolMatches(parsed.rule, names)) return false;
+    const { subjects } = subjectsOf(call, names[0], this.options.projectRoot);
+    const targets: (Subject | undefined)[] = subjects.length ? subjects : [undefined];
+    return targets.every((subject) => patternMatches(parsed.rule, subject));
   }
 
   /** What narrows the tools now, if anything. */

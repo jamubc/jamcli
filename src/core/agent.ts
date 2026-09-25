@@ -7,7 +7,7 @@ import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
 import { requestCost } from './catalog/cost.js';
 import type { ModelPrice } from './catalog/types.js';
 import { KEEP_SHARE, compact, estimateRequest, isContextOverflow, type ContextBudget, type TokenCounter } from './context/index.js';
-import { emitHookEvent, type HookBus } from './hooks/index.js';
+import { emitHookEvent, hookVerdict, type HookBus } from './hooks/index.js';
 import type { AgentLoopConfig } from '../types/config.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
 import { createRedactor, type Redactor } from './redact.js';
@@ -171,6 +171,15 @@ export class CoreAgent implements Agent {
     }
 
     emit({ type: 'turn_start', prompt });
+    // A user_prompt_submit hook may stop the prompt, or add context the model reads with it.
+    if (prompt) {
+      const submitted = await hookVerdict(hooks, 'user_prompt_submit', { session: working, prompt }, emit);
+      if (submitted.block !== undefined) {
+        emit({ type: 'notice', level: 'warn', code: 'hook_blocked', message: `A user_prompt_submit hook stopped this prompt: ${submitted.block}` });
+        return finish('refused', '', 0);
+      }
+      prompt = submitted.context.length ? `${prompt}\n\n${submitted.context.join('\n')}` : prompt;
+    }
     if (prompt) record(userMessage(prompt));
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
@@ -178,6 +187,8 @@ export class CoreAgent implements Agent {
     const turnPrompt = prompt || [...working.messages].reverse().find((m) => m.role === 'user')?.content || '';
     let usedCalls = 0;
     let steps = 0;
+    /** Whether a stop hook has already asked for more this turn, which the hook is told. */
+    let stopHookActive = false;
     const context = this.options.context;
     let compactable = context?.auto !== false && context?.proactive !== false;
 
@@ -281,6 +292,14 @@ export class CoreAgent implements Agent {
           record(userMessage('[Your last tool call had no tool name and was ignored. Name the tool you want to call.]'));
           continue;
         }
+        // A stop hook may ask the model to carry on, with its reason as the next message.
+        const stop = await hookVerdict(hooks, 'stop', { session: working, response: step.text, stopHookActive }, emit);
+        const carryOn = stop.block ?? (stop.decision === 'deny' ? (stop.reason ?? 'a stop hook asked for more') : undefined);
+        if (carryOn !== undefined && !signal.aborted) {
+          stopHookActive = true;
+          record(userMessage(`[A stop hook asks you to continue: ${carryOn}]`));
+          continue;
+        }
         return finish('ok', step.text, steps);
       }
 
@@ -308,7 +327,11 @@ export class CoreAgent implements Agent {
       }
       const results = screened.results;
       for (let i = 0; i < calls.length; i += 1) {
-        const output = this.truncate(results[i].output);
+        let output = this.truncate(results[i].output);
+        // A post_tool hook may add context, or, exiting 2, a reason the model reads; the call has run either way.
+        const after = await hookVerdict(hooks, 'post_tool', { session: working, call: calls[i], result: results[i], output }, emit);
+        const added = [...after.context, ...(after.block !== undefined ? [`A post_tool hook says: ${after.block}`] : [])];
+        if (added.length) output = `${output}\n\n${added.join('\n')}`;
         record({
           role: 'tool',
           content: output,
@@ -317,7 +340,6 @@ export class CoreAgent implements Agent {
           toolStatus: results[i].status ?? (results[i].success ? 'ok' : 'error'),
           timestamp: Date.now(),
         });
-        await emitHookEvent(hooks, 'post_tool', { session: working, call: calls[i], result: results[i], output }, emit);
       }
 
       if (signal.aborted) return finish('cancelled', step.text, steps);
@@ -355,6 +377,11 @@ export class CoreAgent implements Agent {
     const context = this.options.context;
     const provider = this.options.provider;
     if (!context || !provider) return { session: working, compacted: false };
+    // A pre_compact hook cannot stop a compaction, which may be what lets the turn go on,
+    // but what it adds is kept in the summary's instructions.
+    const asked = await hookVerdict(this.options.hooks, 'pre_compact', { session: working, trigger, ...(focus ? { focus } : {}) }, emit);
+    if (asked.block !== undefined) emit({ type: 'notice', level: 'warn', code: 'hook_failed', message: `A pre_compact hook cannot stop a compaction, so it went ahead: ${asked.block}` });
+    if (asked.context.length) focus = [focus, ...asked.context].filter(Boolean).join('\n');
     const before = this.countContext(working.messages);
     const started = Date.now();
     const result = await compact({

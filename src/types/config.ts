@@ -1,3 +1,4 @@
+import type { HookSettings } from '../core/hooks/commands.js';
 import type { McpServerConfig } from './mcp.js';
 import type { PermissionSettings } from '../core/permissions/config.js';
 import type { SandboxSettings } from '../core/sandbox/types.js';
@@ -134,6 +135,8 @@ export interface Config {
   /** How the interface looks and moves. */
   ui?: UiSettings;
   git?: GitSettings;
+  /** Commands run at lifecycle events (D17). */
+  hooks?: HookSettings;
 }
 
 export type ThemeName = 'dark' | 'light' | 'high-contrast' | 'monochrome';

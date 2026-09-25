@@ -155,6 +155,24 @@ export const ConfigFileSchema = z
         include_content: z.boolean().describe('Put prompts, outputs, tool arguments, and tool results on spans. Off by default.'),
       })
       .partial(),
+    hooks: z
+      .strictObject(
+        Object.fromEntries(
+          ['session_start', 'user_prompt_submit', 'pre_tool', 'post_tool', 'stop', 'pre_compact', 'notification', 'session_end'].map((event) => [
+            event,
+            z.array(
+              z.strictObject({
+                matcher: z.string().optional().describe('For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.'),
+                command: z.string().min(1).describe('Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input.'),
+                timeout_ms: positiveInt().optional().describe('Stop it and report a failure after this long. Defaults to 30000.'),
+                enabled: z.boolean().optional().describe('false keeps it here without running it.'),
+              })
+            ),
+          ])
+        ) as Record<string, z.ZodArray<z.ZodObject<any>>>
+      )
+      .partial()
+      .describe('Commands run at lifecycle events. Exit 0 continues, exit 2 blocks with standard error as the reason. A project\'s hooks run only once trusted.'),
     git: z
       .strictObject({
         attribution: z.string().describe('A trailer added to every commit JamCLI makes, such as "Co-authored-by: ...". Off by default: commits carry only your own identity.'),

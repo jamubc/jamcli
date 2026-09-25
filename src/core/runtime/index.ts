@@ -8,7 +8,8 @@ import { createSession } from '../state.js';
 import { createChatProvider, listConfiguredProviders } from '../providers/factory.js';
 import { isListableProvider, prefixSetNow, type ChatProvider } from '../providers/types.js';
 import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
-import { createHookBus, emitHookEvent, type HookBus } from '../hooks/index.js';
+import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
+import { HookTrust, hooksDigest, hooksFromLayers, needsTrust, subscribeHooks, type HookCommand } from '../hooks/commands.js';
 import { createRedactor } from '../redact.js';
 import { SessionLog, TranscriptRecorder, ensureProjectStateDir } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
@@ -155,6 +156,10 @@ export interface Runtime {
   readonly notices: string[];
   /** The skills found, which the system prompt lists and the skill tool loads. */
   readonly skills: Skill[];
+  /** The configured hooks, and whether the project's are trusted to run. */
+  hooks(): { hooks: HookCommand[]; projectTrusted: boolean };
+  /** Trust the project's hooks as they are now, for this and later sessions, and start running them. */
+  trustProjectHooks(): void;
   readonly permissionMode: PermissionMode;
   /** Where commands run: `bwrap`, `seatbelt`, or `none`, with the reason. */
   readonly sandbox: { kind: SandboxKind; reason: string };
@@ -401,6 +406,30 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   const rules = applyRules(loadRules(workRoot, cwd), undefined);
   const hooks: HookBus = createHookBus({ onRun: (run) => observation?.hookRun(run) });
+  // The configuration's hooks subscribe to the bus. A project's run only once the person
+  // trusts them, since opening a repository must not run its code.
+  const hookCommands = hooksFromLayers(settings.layers);
+  const hookTrust = new HookTrust();
+  const hookDigest = hooksDigest(hookCommands);
+  const projectHooks = hookCommands.filter(needsTrust);
+  let projectHooksTrusted = !projectHooks.length || hookTrust.isTrusted(projectRoot, hookDigest);
+  const subscribe = (list: HookCommand[]) =>
+    subscribeHooks(hooks, {
+      hooks: list,
+      base: { projectRoot, cwd: workRoot, surface: options.surface },
+      matches: (matcher, call) => permissions.matches(matcher, call),
+      context: () => {
+        const hookEnv = { ...envFor(), JAMCLI_PROJECT_DIR: projectRoot, JAMCLI_SESSION_ID: log.id };
+        return { cwd: workRoot, env: hookEnv, ...(sandbox.kind === 'none' ? {} : { wrap: sandbox.wrap }) };
+      },
+    });
+  subscribe(hookCommands.filter((hook) => !needsTrust(hook) || projectHooksTrusted));
+  if (!projectHooksTrusted) {
+    const count = projectHooks.filter((hook) => hook.enabled !== false).length;
+    notices.push(`This project configures ${count} hook${count === 1 ? '' : 's'} not yet trusted, so ${count === 1 ? 'it does' : 'they do'} not run. Review them with /hooks, or trust them with jamcli hooks trust.`);
+  }
+  /** What session_start hooks add to the system prompt. */
+  let hookContext: string[] = [];
   /** A provider whose requests are timed and logged under the current turn. */
   const observed = (target: ChatProvider, name: string, purpose?: string) =>
     instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose, includeContent });
@@ -410,7 +439,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const buildPrompt = () =>
     buildRuntimePrompt({
       profile,
-      rulesText: [rulesPromptText(rules), toolSet.summaries.some((tool) => tool.name === 'skill') ? skillsPromptText(skillSet.skills) : undefined].filter(Boolean).join('\n\n'),
+      rulesText: [
+        rulesPromptText(rules),
+        toolSet.summaries.some((tool) => tool.name === 'skill') ? skillsPromptText(skillSet.skills) : undefined,
+        hookContext.length ? hookContext.join('\n') : undefined,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
       tools: toolSet.summaries,
       projectRoot: workRoot,
       cwd,
@@ -605,7 +640,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     parent: options.observer?.parentSpan,
     includeContent,
   });
-  await emitHookEvent(hooks, 'session_start', { session, profile: config.active_profile });
+  {
+    const started = await hookVerdict(hooks, 'session_start', { session, profile: config.active_profile, source: options.sessionId ? 'resume' : 'new' }, (event) => {
+      if (event.type === 'notice') notices.push(event.message);
+    });
+    if (started.context.length) {
+      hookContext = started.context;
+      reassemble();
+    }
+  }
 
   const pending = [...notices];
   let running = false;
@@ -662,6 +705,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   return {
     skills: skillSet.skills,
+    hooks: () => ({ hooks: hookCommands, projectTrusted: projectHooksTrusted }),
+    trustProjectHooks() {
+      if (projectHooksTrusted) return;
+      hookTrust.trust(projectRoot, hookDigest);
+      projectHooksTrusted = true;
+      subscribe(projectHooks);
+    },
     get sessionId() {
       return log.id;
     },
@@ -782,6 +832,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         recorder.handle(event);
         observation?.event(event);
         onEvent?.(event);
+        // Notification hooks hear when the person is wanted; they never hold the turn up.
+        if (event.type === 'approval_request') {
+          void hookVerdict(hooks, 'notification', { session, message: `JamCLI asks to run ${event.call.name}.`, level: 'info' }, onEvent);
+        }
       };
       emitting = emit;
       let restoreModel: string | undefined;
@@ -902,7 +956,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     complete: completeOnce,
 
     async close() {
-      await emitHookEvent(hooks, 'session_end', { session, status: 'closed', turns });
+      await hookVerdict(hooks, 'session_end', { session, status: 'closed', turns });
       await mcp?.close?.();
       await observation?.close('closed');
     },

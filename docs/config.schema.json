@@ -459,6 +459,261 @@
       },
       "additionalProperties": false
     },
+    "hooks": {
+      "type": "object",
+      "properties": {
+        "session_start": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "user_prompt_submit": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "pre_tool": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "post_tool": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "stop": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "pre_compact": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "notification": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "session_end": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "matcher": {
+                "description": "For pre_tool and post_tool: a rule such as run_command(git push*) or edit. Every call when absent.",
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Run with /bin/sh (cmd.exe on Windows), reading the event as JSON on standard input."
+              },
+              "timeout_ms": {
+                "description": "Stop it and report a failure after this long. Defaults to 30000.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "enabled": {
+                "description": "false keeps it here without running it.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Commands run at lifecycle events. Exit 0 continues, exit 2 blocks with standard error as the reason. A project's hooks run only once trusted."
+    },
     "git": {
       "type": "object",
       "properties": {

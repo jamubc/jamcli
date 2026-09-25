@@ -12,7 +12,9 @@ import type {
 } from '../types.js';
 import { readDecision } from '../types.js';
 import { buildApprovalRequest } from '../approval.js';
-import { emitHookEvent, type HookBus } from '../hooks/index.js';
+import { hookVerdict, type HookBus, type HookVerdict } from '../hooks/index.js';
+import { validateAgainstSchema } from './registry.js';
+import type { JsonSchema } from '../../types/tools.js';
 import type { NestedApproval } from '../delegation/types.js';
 
 export interface DispatchableTool {
@@ -113,14 +115,35 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
   let denial: BatchOutcome['denial'];
   let stopped: 'denied' | 'cancelled' | undefined;
 
-  const announce = async (call: ToolCall) => {
+  /**
+   * Each call as the pre_tool hooks leave it, with their verdict. The hooks run once per
+   * call, before it is decided; replacement arguments are checked against the tool's
+   * schema, and the call is announced as it will run.
+   */
+  const hooked = new Map<number, { call: ToolCall; verdict: HookVerdict }>();
+  const announce = async (index: number) => {
+    const known = hooked.get(index);
+    if (known) return known;
+    const original = calls[index];
+    let verdict = await hookVerdict(ctx.hooks, 'pre_tool', { session: ctx.session, call: original }, ctx.emit);
+    let call = original;
+    if (verdict.updatedInput && verdict.block === undefined && verdict.decision !== 'deny') {
+      const schema = ctx.dispatcher.listTools().find((tool) => tool.name === original.name)?.parameters as JsonSchema | undefined;
+      const checked = validateAgainstSchema(schema, verdict.updatedInput);
+      if (checked.valid) call = { ...original, arguments: verdict.updatedInput };
+      else verdict = { ...verdict, block: `it replaced the arguments with ones the tool does not take (${checked.errors.join('; ')})` };
+    }
     ctx.emit({ type: 'tool_call', call });
-    await emitHookEvent(ctx.hooks, 'pre_tool', { session: ctx.session, call }, ctx.emit);
+    if (call !== original) ctx.emit({ type: 'notice', level: 'info', message: `A pre_tool hook changed the arguments of ${call.name} (${call.id}).` });
+    const entry = { call, verdict };
+    hooked.set(index, entry);
+    return entry;
   };
 
   const redact = ctx.redact ?? ((text: string) => text);
 
-  const perform = async (call: ToolCall): Promise<ToolResult> => {
+  const perform = async (index: number): Promise<ToolResult> => {
+    const { call, verdict: hook } = hooked.get(index)!;
     const started = Date.now();
     let result: ToolResult;
     try {
@@ -138,9 +161,11 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       result = resultFor(call, cancelled ? 'cancelled' : 'error', `Tool ${call.name} failed: ${error?.message ?? error}`, Date.now() - started);
     }
     const status = result.status ?? (result.success ? 'ok' : 'error');
+    // What a pre_tool hook adds reaches the model with the call's result.
+    const added = hook.context.length ? `\n\n${hook.context.join('\n')}` : '';
     const settled: ToolResult = {
       ...result,
-      output: redact(result.output ?? ''),
+      output: redact(`${result.output ?? ''}${added}`),
       tool: call.name,
       callId: call.id,
       status,
@@ -168,7 +193,24 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
   };
   let changing = false;
 
-  const readOnly = (call: ToolCall) => Boolean(ctx.dispatcher.isReadOnly?.(call.name)) && verdictOf(call).decision === 'allow';
+  /**
+   * A call's decision with its pre_tool hooks' as one more rule source, deny first: a
+   * block or a deny from a hook denies; a deny from a rule or the mode stands; a hook
+   * asking asks; a hook allowing answers only what the mode alone would have asked.
+   */
+  const decide = (index: number): DispatchVerdict => {
+    const { call, verdict: hook } = hooked.get(index)!;
+    const why = (text: string, reason?: string) => (reason ? `${text}: ${reason}` : text);
+    if (hook.block !== undefined) return { decision: 'deny', by: 'hook', reason: why('a pre_tool hook blocked it', hook.block) };
+    if (hook.decision === 'deny') return { decision: 'deny', by: 'hook', reason: why('a pre_tool hook denied it', hook.reason) };
+    const verdict = verdictOf(call);
+    if (verdict.decision === 'deny') return verdict;
+    if (hook.decision === 'ask') return { decision: 'ask', by: 'hook', reason: why('a pre_tool hook asks first', hook.reason) };
+    if (hook.decision === 'allow' && verdict.decision === 'ask' && verdict.by === 'mode') return { decision: 'allow', by: 'hook', reason: why('a pre_tool hook allowed it', hook.reason) };
+    return verdict;
+  };
+
+  const readOnly = (index: number) => Boolean(ctx.dispatcher.isReadOnly?.(calls[index].name)) && decide(index).decision === 'allow';
 
   /** Reads and the agent's own plan are not decisions worth recording; everything else is. */
   const recorded = (call: ToolCall) => {
@@ -219,14 +261,16 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       continue;
     }
 
-    if (readOnly(call)) {
+    await announce(i);
+    if (readOnly(i)) {
       const group: number[] = [];
-      for (let j = i; j < calls.length && readOnly(calls[j]); j += 1) {
+      for (let j = i; j < calls.length; j += 1) {
         if (remaining !== undefined && group.length >= remaining) break;
+        await announce(j);
+        if (!readOnly(j)) break;
         group.push(j);
       }
-      for (const index of group) await announce(calls[index]);
-      const done = await Promise.all(group.map((index) => perform(calls[index])));
+      const done = await Promise.all(group.map((index) => perform(index)));
       group.forEach((index, k) => settle(index, done[k]));
       ran += group.length;
       if (remaining !== undefined) remaining -= group.length;
@@ -234,8 +278,8 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       continue;
     }
 
-    await announce(call);
-    const verdict = verdictOf(call);
+    const current = hooked.get(i)!.call;
+    const verdict = decide(i);
     if (verdict.decision === 'deny') {
       // A rule or the mode said no. The model hears why, and the rest of the step goes on.
       ctx.emit({
@@ -255,7 +299,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       continue;
     }
     if (verdict.decision === 'ask') {
-      const decision = await waitForDecision(call, undefined, verdict.reason);
+      const decision = await waitForDecision(current, undefined, verdict.reason);
       if (decision === 'cancelled') {
         stopped = 'cancelled';
         continue;
@@ -289,7 +333,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         i += 1;
         continue;
       }
-      if (read.scope !== 'once') ctx.dispatcher.grant?.(call, read.scope, read.pattern);
+      if (read.scope !== 'once') ctx.dispatcher.grant?.(current, read.scope, read.pattern);
     } else if (verdict.by && recorded(call)) {
       ctx.emit({
         type: 'approval_decision',
@@ -302,11 +346,11 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         ...(verdict.reason ? { reason: verdict.reason } : {}),
       });
     }
-    if (!changing && changes(call)) {
+    if (!changing && changes(current)) {
       changing = true;
-      await ctx.beforeChange?.(call).catch(() => undefined);
+      await ctx.beforeChange?.(current).catch(() => undefined);
     }
-    settle(i, await perform(call));
+    settle(i, await perform(i));
     ran += 1;
     if (remaining !== undefined) remaining -= 1;
     i += 1;
