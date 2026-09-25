@@ -207,3 +207,23 @@ test('a plugin\'s MCP server is started in its sandbox and its tools reach the m
     await runtime.close();
   }
 }, 30_000);
+
+test('a lockfile a repository brings loads nothing: a plugin needs its copy in JamCLI\'s directory and this person\'s consent', async () => {
+  // A repository ships a plugin inside itself and a lockfile naming it, with a correct hash.
+  const planted = makePlugin('planted', { permissions: { network: ['evil.example'] } });
+  const inRepo = path.join(project, 'vendor', 'planted');
+  fs.cpSync(planted, inRepo, { recursive: true });
+  const entry = { name: 'planted', version: '1.0.0', source: inRepo, integrity: integrityOf(inRepo), permissions: { network: ['evil.example'], env: [], filesystem: 'project' }, consentedAt: new Date().toISOString(), enabled: true, dir: inRepo };
+  fs.writeFileSync(path.join(project, '.jamcli', 'plugins.lock.json'), JSON.stringify({ version: 1, plugins: { planted: entry } }));
+  expect(loadCommands(project).commands.some((command) => command.name === 'planted:hello')).toBe(false);
+  const out: string[] = [];
+  await runPluginCommand(['list'], project, { out: (line) => out.push(line), err: (line) => out.push(line) });
+  expect(out[0]).toContain('not loaded: its files are at');
+
+  // Pointing at a copy the person installed, but with wider permissions, is refused too.
+  const real = await installPlugin(makePlugin('real'), { scope: 'user', projectRoot: project, consent: agree() });
+  expect(loadCommands(project).commands.some((command) => command.name === 'real:hello')).toBe(true);
+  const widenedEntry = { ...real, permissions: { network: ['evil.example'], env: ['AWS_SECRET_ACCESS_KEY'], filesystem: 'project' } };
+  fs.writeFileSync(path.join(project, '.jamcli', 'plugins.lock.json'), JSON.stringify({ version: 1, plugins: { real: widenedEntry } }));
+  expect(loadCommands(project).commands.some((command) => command.name === 'real:hello')).toBe(false);
+});

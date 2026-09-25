@@ -1,5 +1,5 @@
 import readline from 'readline';
-import { installPlugin, installedPlugins, removePlugin, setPluginEnabled, updatePlugin, verifyPlugins, type ConsentRequest, type PluginScope } from '../core/plugins/store.js';
+import { installPlugin, installedPlugins, removePlugin, setPluginEnabled, trustProblem, updatePlugin, verifyPlugins, type ConsentRequest, type PluginScope } from '../core/plugins/store.js';
 import { describePermissions } from '../core/plugins/manifest.js';
 
 export interface PluginIo {
@@ -63,7 +63,8 @@ export async function runPluginCommand(args: string[], projectRoot: string, io: 
         const plugins = installedPlugins(projectRoot);
         if (!plugins.length) io.out('No plugins are installed. Install one with jamcli plugin install <path | git-url>.');
         for (const plugin of plugins) {
-          const state = plugin.enabled ? 'on' : `off${plugin.disabledReason === 'integrity' ? ', its files changed' : ''}`;
+          const untrusted = trustProblem(plugin, projectRoot);
+          const state = untrusted ? `not loaded: ${untrusted}` : plugin.enabled ? 'on' : `off${plugin.disabledReason === 'integrity' ? ', its files changed' : ''}`;
           io.out(`${plugin.name} ${plugin.version} (${plugin.scope}, ${state}) from ${plugin.source}${plugin.commit ? ` at ${plugin.commit.slice(0, 12)}` : ''}`);
           io.out(`  ${describePermissions(plugin.permissions).join('; ')}`);
         }

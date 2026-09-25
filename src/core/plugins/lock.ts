@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { userConfigDir, userDataDir } from '../../utils/paths.js';
+import { getStateDir, userConfigDir, userDataDir } from '../../utils/paths.js';
 
 /**
  * The plugin lockfiles and the installed copies' integrity: what every session start reads,
@@ -71,8 +71,53 @@ export function installedPlugins(projectRoot: string): (LockedPlugin & { scope: 
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** The plugins whose contributions load: enabled, and installed where the lockfile says. */
-export const enabledPlugins = (projectRoot: string) => installedPlugins(projectRoot).filter((plugin) => plugin.enabled && fs.existsSync(plugin.dir));
+/**
+ * Consent lives outside the project, in the person's state directory: a repository could
+ * commit its own `.jamcli/plugins.lock.json`, naming a directory inside itself with a
+ * matching hash, so a lockfile alone proves nothing about what this person agreed to.
+ */
+const consentFile = () => path.join(getStateDir(), 'plugin-consents.json');
+const consentKey = (scope: PluginScope, projectRoot: string, name: string) => `${scope}:${scope === 'user' ? '' : path.resolve(projectRoot)}:${name}`;
+const consentDigest = (plugin: Pick<LockedPlugin, 'integrity' | 'permissions' | 'dir'>) =>
+  crypto.createHash('sha256').update(JSON.stringify([plugin.integrity, plugin.permissions, path.resolve(plugin.dir)])).digest('hex');
+
+function readConsents(): Record<string, string> {
+  try {
+    const data = JSON.parse(fs.readFileSync(consentFile(), 'utf8'));
+    return data && typeof data === 'object' ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Record that the person agreed to this plugin, as it is, with these permissions. */
+export function recordConsent(scope: PluginScope, projectRoot: string, plugin: LockedPlugin): void {
+  const data = { ...readConsents(), [consentKey(scope, projectRoot, plugin.name)]: consentDigest(plugin) };
+  fs.mkdirSync(path.dirname(consentFile()), { recursive: true });
+  fs.writeFileSync(consentFile(), `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+}
+
+export function forgetConsent(scope: PluginScope, projectRoot: string, name: string): void {
+  const data = readConsents();
+  delete data[consentKey(scope, projectRoot, name)];
+  if (fs.existsSync(consentFile())) fs.writeFileSync(consentFile(), `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+}
+
+const insidePluginsDir = (dir: string) => {
+  const relative = path.relative(path.resolve(pluginsDir()), path.resolve(dir));
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+};
+
+/** Why an entry does not load, or nothing when it may: its copy in JamCLI's plugin directory, consented to here. */
+export function trustProblem(plugin: LockedPlugin & { scope: PluginScope }, projectRoot: string): string | undefined {
+  if (!insidePluginsDir(plugin.dir)) return `its files are at ${plugin.dir}, outside ${pluginsDir()}`;
+  if (readConsents()[consentKey(plugin.scope, projectRoot, plugin.name)] !== consentDigest(plugin)) return 'it was not installed with your consent on this machine, as the lockfile describes it';
+  return undefined;
+}
+
+/** The plugins whose contributions load: enabled, installed by JamCLI, and consented to by this person. */
+export const enabledPlugins = (projectRoot: string) =>
+  installedPlugins(projectRoot).filter((plugin) => plugin.enabled && fs.existsSync(plugin.dir) && !trustProblem(plugin, projectRoot));
 
 const files = (dir: string, base = dir): string[] =>
   fs

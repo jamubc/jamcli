@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { describeContributions, describePermissions, permissionsOf, readManifest, widened, type PluginManifest, type PluginPermissions } from './manifest.js';
-import { integrityOf, pluginsDir, readLock, writeLock, type LockedPlugin, type LockFile, type PluginScope } from './lock.js';
+import { forgetConsent, integrityOf, pluginsDir, readLock, recordConsent, writeLock, type LockedPlugin, type LockFile, type PluginScope } from './lock.js';
 
 export * from './lock.js';
 
@@ -96,6 +96,7 @@ export async function installPlugin(source: string, options: InstallOptions): Pr
     };
     lock.plugins[manifest.name] = entry;
     writeLock(options.scope, options.projectRoot, lock);
+    recordConsent(options.scope, options.projectRoot, entry);
     if (before && before.dir !== target) fs.rmSync(before.dir, { recursive: true, force: true });
     return entry;
   } finally {
@@ -133,6 +134,7 @@ export function removePlugin(name: string, projectRoot: string): LockedPlugin {
   const { scope, lock, plugin } = find(name, projectRoot);
   delete lock.plugins[name];
   writeLock(scope, projectRoot, lock);
-  fs.rmSync(plugin.dir, { recursive: true, force: true });
+  forgetConsent(scope, projectRoot, name);
+  if (plugin.dir.startsWith(pluginsDir())) fs.rmSync(plugin.dir, { recursive: true, force: true });
   return plugin;
 }
