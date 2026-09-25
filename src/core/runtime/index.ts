@@ -536,7 +536,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         for (const file of files.filter((file) => lsp.serves(file))) {
           const { diagnostics } = await lsp.diagnostics(path.resolve(workRoot, file), 3000).catch(() => ({ diagnostics: [] }));
           const errors = diagnostics.filter((item) => (item.severity ?? 1) === 1);
-          if (errors.length) reports.push(...errors.slice(0, 20).map((item) => formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item)));
+          if (errors.length) reports.push(...errors.slice(0, 20).map((item) => redact(formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item))));
         }
         return reports.length ? { context: [`The language server reports errors after this change:\n${reports.join('\n')}`] } : undefined;
       },
