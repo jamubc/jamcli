@@ -3,11 +3,11 @@
 **Description:** The umask window during listen and the slow-client drop have no tests.
 
 **Acceptance criteria:**
-- [ ] Test checks mode during listen (umask path), not just after chmod; dropping `umask(0o177)` turns it red
-- [ ] Paused socket plus large turn output triggers drop past `SLOW_CLIENT_BYTES`; never-drop turns it red
+- [x] Test checks mode during listen (umask path), not just after chmod; dropping `umask(0o177)` turns it red
+- [x] Paused socket plus large turn output triggers drop past `SLOW_CLIENT_BYTES`; never-drop turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/tui/__tests__/observer.test.ts`
+- [x] Tests pass: `bun test src/tui/__tests__/observer.test.ts`
 
 **Dependencies:** None
 
@@ -22,12 +22,12 @@
 **Description:** Observer attach after session replace and watcher send failures need proof.
 
 **Acceptance criteria:**
-- [ ] After `/clear`, attached observer receives only the new session after re-attach; keeping old watchers turns it red
-- [ ] Watcher `send` throwing does not throw into the interface; removing `try` turns it red (or document as equivalent if `send` already swallows)
-- [ ] `tap` ordering and coverage beyond `turn_start`/`turn_end` asserted
+- [x] After `/clear`, attached observer receives only the new session after re-attach; keeping old watchers turns it red
+- [x] Watcher `send` throwing does not throw into the interface; removing `try` turns it red (or document as equivalent if `send` already swallows)
+- [x] `tap` ordering and coverage beyond `turn_start`/`turn_end` asserted
 
 **Verification:**
-- [ ] Tests pass: `bun test src/tui/__tests__/observer.test.ts src/tui/__tests__/composer.test.tsx`
+- [x] Tests pass: `bun test src/tui/__tests__/observer.test.ts src/tui/__tests__/composer.test.tsx`
 
 **Dependencies:** Task 1
 
@@ -39,8 +39,8 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-2
-- [ ] Caught probes re-run: live-socket steal, newSession/prompt refused, requires_action timeout
-- [ ] Kill-client-mid-turn leaves interface running with no lost output
+- [x] Caught probes re-run: live-socket steal, newSession/prompt refused, requires_action timeout
+- [x] Kill-client-mid-turn leaves interface running with no lost output
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 254-281)

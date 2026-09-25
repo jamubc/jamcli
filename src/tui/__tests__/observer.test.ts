@@ -131,3 +131,60 @@ test('a client that dies mid-turn leaves the turn running to its end, and a relo
   expect(again.updates().filter((update) => update.sessionUpdate === 'user_message_chunk').map((update) => update.content.text)).toEqual(['say something']);
   again.socket.destroy();
 });
+
+test('the socket is user-private from the moment it exists, before any chmod', async () => {
+  const socketPath = path.join(root, 'window.sock');
+  const original = fs.chmodSync;
+  const seen: number[] = [];
+  (fs as any).chmodSync = (target: string, mode: number) => {
+    seen.push(fs.statSync(target).mode & 0o777);
+    return original.call(fs, target, mode);
+  };
+  try {
+    const second = await startObserver(socketPath, runtime);
+    await second.close();
+  } finally {
+    (fs as any).chmodSync = original;
+  }
+  expect(seen).toEqual([0o600]);
+});
+
+test('a client that stops reading is dropped once its backlog passes the limit', async () => {
+  const client = await observe();
+  await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
+  await client.request('session/load', { sessionId: runtime.sessionId, cwd: root, mcpServers: [] });
+  client.socket.pause();
+  // A turn's output larger than the limit, written while the client does not read.
+  hub.event({ type: 'text', delta: 'x'.repeat(2_000_000) } as AgentEvent);
+  hub.event({ type: 'turn_end', status: 'ok' } as AgentEvent);
+  client.socket.resume();
+  await waitFor(() => client.socket.destroyed, 10_000);
+  expect(client.socket.destroyed).toBe(true);
+}, 30_000);
+
+test('after a session is replaced the old watcher hears the replacement, then nothing until it loads the new session', async () => {
+  const client = await observe();
+  await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
+  await client.request('session/load', { sessionId: runtime.sessionId, cwd: root, mcpServers: [] });
+
+  const next = await createRuntime({ projectRoot: root, surface: 'tui', mcp: false });
+  try {
+    hub.attach(next);
+    await waitFor(() => client.updates().some((update) => update.sessionUpdate === 'session_info_update'));
+    const info = client.updates().find((update) => update.sessionUpdate === 'session_info_update');
+    expect(info._meta.jamcli).toEqual({ replacedBy: next.sessionId, from: runtime.sessionId });
+
+    // No watcher is attached to the new session yet, so its events reach nobody.
+    hub.event({ type: 'turn_start', prompt: 'on the new session' } as AgentEvent);
+    await Bun.sleep(150);
+    expect(client.updates().some((update) => update.sessionUpdate === 'state_update' && update.state === 'running')).toBe(false);
+
+    // Loading it moves the watcher to the new session.
+    expect((await client.request('session/load', { sessionId: next.sessionId, cwd: root, mcpServers: [] })).error).toBeUndefined();
+    hub.event({ type: 'turn_start', prompt: 'on the new session' } as AgentEvent);
+    await waitFor(() => client.updates().some((update) => update.sessionUpdate === 'state_update' && update.state === 'running'));
+  } finally {
+    await next.close();
+    client.socket.destroy();
+  }
+}, 20_000);

@@ -168,3 +168,19 @@ test('a lone ! is sent as text, not run as an empty command', async () => {
     await close();
   }
 }, 20_000);
+
+test('the observer hears every event of a turn, in order', async () => {
+  const events: string[] = [];
+  const observer = { event: (event: { type: string }) => void events.push(event.type), attach: () => undefined };
+  context.server.enqueue({ toolCalls: [{ id: 'g1', name: 'glob', arguments: { pattern: '*.txt' } }] }, { text: 'Found it.' });
+  const { setup, close } = await open({}, { size: { width: 110, height: 40 }, observer: observer as any });
+  try {
+    await setup.mockInput.typeText('list files');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Found it.'), 5_000);
+    const heard = events.filter((type) => ['turn_start', 'tool_call', 'tool_result', 'text', 'turn_end'].includes(type));
+    expect(heard.filter((type, index) => type !== heard[index - 1])).toEqual(['turn_start', 'tool_call', 'tool_result', 'text', 'turn_end']);
+  } finally {
+    await close();
+  }
+}, 20_000);
