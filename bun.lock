@@ -6,7 +6,6 @@
       "name": "jamcli",
       "dependencies": {
         "@modelcontextprotocol/client": "^2.1.0",
-        "@modelcontextprotocol/sdk": "^1.22.0",
         "@opentui/core": "0.5.12",
         "@opentui/react": "0.5.12",
         "diff": "^5.2.0",
@@ -17,6 +16,7 @@
         "zod": "^4.6.5",
       },
       "devDependencies": {
+        "@modelcontextprotocol/sdk": "^1.22.0",
         "@modelcontextprotocol/server": "^2.1.0",
         "@types/bun": "latest",
         "@types/diff": "^5.0.9",
