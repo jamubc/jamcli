@@ -42,7 +42,7 @@ const hiddenNow = () => {
 };
 /** In probe mode, one extra diagnostic says what this process can see. */
 const probeDiagnostic = () =>
-  probing ? [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, severity: 1, message: `env=${process.env.JAMCLI_PROBE_ONLY ?? 'absent'} hidden=${hiddenNow()}`, source: 'probe' }] : [];
+  probing ? [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, severity: 1, message: `env=${process.env.JAMCLI_PROBE_ONLY ?? 'absent'} hidden=${hiddenNow()} secret=sk-probe-1234567890`, source: 'probe' }] : [];
 const publish = (uri: string) => {
   const found = (word: string, severity: number) =>
     lines(uri).flatMap((line, index) => {

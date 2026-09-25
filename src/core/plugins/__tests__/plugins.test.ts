@@ -8,6 +8,7 @@ import { installPlugin, installedPlugins, integrityOf, readLock, removePlugin, s
 import { loadCommands } from '../../ext/commands.js';
 import { loadSkills } from '../../ext/skills.js';
 import { createRuntime } from '../../runtime/index.js';
+import { loadPlugins, pluginParts } from '../runtime.js';
 import { detectSandbox } from '../../sandbox/detect.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 import { runPluginCommand } from '../../../cli/plugin.js';
@@ -247,7 +248,7 @@ test('a plugin with a symbolic link is refused, and the link is never followed',
 
 test('a plugin hook runs even when the project\'s own hooks are untrusted', async () => {
   const pluginHook = path.join(base, 'plugin-hook.js');
-  fs.writeFileSync(pluginHook, `console.log(JSON.stringify({ additional_context: 'from the plugin hook' }));\n`);
+  fs.writeFileSync(pluginHook, `console.log(JSON.stringify({ additional_context: 'from the plugin hook; undeclared ' + (process.env.ACME_UNDECLARED ?? 'absent') }));\n`);
   const projectHook = path.join(base, 'project-hook.js');
   fs.writeFileSync(projectHook, `console.log(JSON.stringify({ additional_context: 'from the project hook' }));\n`);
   const dir = makePlugin('hooky', {}, {
@@ -259,16 +260,25 @@ test('a plugin hook runs even when the project\'s own hooks are untrusted', asyn
     JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false }, hooks: { user_prompt_submit: [{ command: `${process.execPath} ${projectHook}` }] } })
   );
   fs.writeFileSync(path.join(project, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_model: 'fake-model' }));
-  const runtime = await createRuntime({ projectRoot: project, surface: 'headless', mcp: false, env: { PATH: process.env.PATH, HOME: process.env.HOME } });
+  const previousSecret = process.env.ACME_UNDECLARED;
+  process.env.ACME_UNDECLARED = 'sk-undeclared-value';
   try {
-    provider.enqueue({ text: 'ok' });
-    await runtime.run('hello');
-    const sent = JSON.stringify(provider.completions().at(-1)!.body.messages);
-    expect(sent).toContain('from the plugin hook');
-    expect(sent).not.toContain('from the project hook');
-    expect(runtime.notices.join('\n')).toContain('not yet trusted');
+    const runtime = await createRuntime({ projectRoot: project, surface: 'headless', mcp: false, env: { PATH: process.env.PATH, HOME: process.env.HOME } });
+    try {
+      provider.enqueue({ text: 'ok' });
+      await runtime.run('hello');
+      const sent = JSON.stringify(provider.completions().at(-1)!.body.messages);
+      expect(sent).toContain('from the plugin hook');
+      expect(sent).toContain('undeclared absent');
+      expect(sent).not.toContain('from the project hook');
+      expect(sent).not.toContain('sk-undeclared-value');
+      expect(runtime.notices.join('\n')).toContain('not yet trusted');
+    } finally {
+      await runtime.close();
+    }
   } finally {
-    await runtime.close();
+    if (previousSecret === undefined) delete process.env.ACME_UNDECLARED;
+    else process.env.ACME_UNDECLARED = previousSecret;
   }
 }, 20_000);
 
@@ -338,4 +348,16 @@ test('removing a plugin forgets its consent, so planting it again needs a fresh 
 test('the consent file is readable only by its owner', async () => {
   await installPlugin(makePlugin('moded'), { scope: 'user', projectRoot: project, consent: agree() });
   expect(fs.statSync(path.join(process.env.JAMCLI_STATE_DIR!, 'plugin-consents.json')).mode & 0o777).toBe(0o600);
+});
+
+const pluggableSandbox = detectSandbox({ projectRoot: os.tmpdir(), settings: {} }).kind !== 'none';
+
+test.skipIf(!pluggableSandbox)('a plugin MCP server is started through the sandbox wrapper', async () => {
+  const dir = makePlugin('wrapped', { contributes: { mcpServers: { acme: { command: process.execPath, args: ['-e', 'return'] } } } });
+  await installPlugin(dir, { scope: 'user', projectRoot: project, consent: agree() });
+  const { plugins } = loadPlugins(project);
+  const parts = pluginParts(plugins, { projectRoot: project, sandboxSettings: {}, envFor: () => ({}) });
+  const server = parts.servers.find((entry) => entry.id === 'wrapped-acme')!;
+  expect(server.command).not.toBe(process.execPath);
+  expect(parts.notices).toEqual([]);
 });

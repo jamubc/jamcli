@@ -240,3 +240,22 @@ test('a language server gets the session environment, not the process one', asyn
     else process.env.JAMCLI_PROBE_ONLY = previous;
   }
 }, 20_000);
+
+test('a credential in a diagnostic after an edit is redacted before the model reads it', async () => {
+  fs.mkdirSync(path.join(root, '.jamcli', 'profiles'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false }, lsp: { servers: { probe: { command: process.execPath, args: [FAKE, 'probe'], extensions: ['fk'] } } } })
+  );
+  fs.writeFileSync(path.join(root, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_model: 'fake-model' }));
+  const runtime = await createRuntime({ projectRoot: root, surface: 'headless', mcp: false, env: { ...env, LSP_LEAK_SECRET: 'sk-probe-1234567890' }, allowTools: ['edit'] });
+  try {
+    provider.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'main.fk', find_string: '  greet()', replace_string: '  greet() // touched' } }] }, { text: 'Done.' });
+    await runtime.run('touch it');
+    const tool = provider.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
+    expect(tool.content).toContain('[redacted:LSP_LEAK_SECRET]');
+    expect(tool.content).not.toContain('sk-probe-1234567890');
+  } finally {
+    await runtime.close();
+  }
+}, 20_000);

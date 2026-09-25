@@ -5,11 +5,11 @@ Re-run the original probes from their tasks and extend them to the new callers n
 **Description:** Plugin commands and hooks plus workflow `tool` steps call tools outside a turn.
 
 **Acceptance criteria:**
-- [ ] Each new caller goes through `decide`, `offers`, `narrow` with deny first
-- [ ] Probe: bypass the engine for plugin sources only, assert red
+- [x] Each new caller goes through `decide`, `offers`, `narrow` with deny first
+- [x] Probe: bypass the engine for plugin sources only, assert red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/permissions/__tests__/engine.test.ts src/core/plugins/__tests__/ src/core/workflows/__tests__/`
+- [x] Tests pass: `bun test src/core/permissions/__tests__/engine.test.ts src/core/plugins/__tests__/ src/core/workflows/__tests__/`
 
 **Dependencies:** `07-probes-plugins.md`, `08-probes-workflows.md`
 
@@ -25,10 +25,10 @@ Re-run the original probes from their tasks and extend them to the new callers n
 **Description:** Plugin MCP servers and hooks must run wrapped.
 
 **Acceptance criteria:**
-- [ ] Probe: drop wrap for plugin sources only, assert red
+- [x] Probe: drop wrap for plugin sources only, assert red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/sandbox/__tests__/ src/core/plugins/__tests__/`
+- [x] Tests pass: `bun test src/core/sandbox/__tests__/ src/core/plugins/__tests__/`
 
 **Dependencies:** Task 1
 
@@ -43,10 +43,10 @@ Re-run the original probes from their tasks and extend them to the new callers n
 **Description:** Workflow logs, ACP updates, LSP diagnostics are new outputs since the original redaction probes.
 
 **Acceptance criteria:**
-- [ ] Probe: skip `redact` on each new output, assert red per output
+- [x] Probe: skip `redact` on each new output, assert red per output
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/__tests__/redact.test.ts src/core/workflows/__tests__/ src/acp/__tests__/ src/core/lsp/__tests__/`
+- [x] Tests pass: `bun test src/core/__tests__/redact.test.ts src/core/workflows/__tests__/ src/acp/__tests__/ src/core/lsp/__tests__/`
 
 **Dependencies:** Task 1
 
@@ -62,11 +62,11 @@ Re-run the original probes from their tasks and extend them to the new callers n
 **Description:** Plugin processes need the credential filter, and plugin hooks need digest consent.
 
 **Acceptance criteria:**
-- [ ] Probe: pass `process.env` whole to a plugin process, assert red
-- [ ] Probe: accept a changed plugin hook digest, assert red
+- [x] Probe: pass `process.env` whole to a plugin process, assert red
+- [x] Probe: accept a changed plugin hook digest, assert red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/sandbox/__tests__/env.test.ts src/core/plugins/__tests__/`
+- [x] Tests pass: `bun test src/core/sandbox/__tests__/env.test.ts src/core/plugins/__tests__/`
 
 **Dependencies:** Task 1
 
@@ -78,8 +78,8 @@ Re-run the original probes from their tasks and extend them to the new callers n
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-4
-- [ ] Original probe lists from tasks 3.x, 8.x, 10.x re-run green
-- [ ] New caller matrix recorded in the module that owns the caller
+- [x] Original probe lists from tasks 3.x, 8.x, 10.x re-run green
+- [x] New caller matrix recorded in the module that owns the caller
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 512-530)

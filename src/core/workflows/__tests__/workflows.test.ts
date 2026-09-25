@@ -335,3 +335,12 @@ test('a cron line quotes a path that contains a quote', () => {
   const line = cronLine('0 9 * * *', odd, 'fix', '/usr/local/bin/jamcli');
   expect(line).toBe(`0 9 * * * cd '${odd.replace(/'/g, `'\\''`)}' && '/usr/local/bin/jamcli' workflow run 'fix' --headless # jamcli-workflow ${odd} fix`);
 });
+
+test('a workflow tool step goes through the permission engine', async () => {
+  project();
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'tool.yaml'), ['name: tool', 'steps:', '  - id: shell', '    tool: { name: run_command, arguments: { command: "touch made.txt" } }', ''].join('\n'));
+  const { out, code } = await runWorkflow(['run', 'tool', '--headless']);
+  expect(code).toBe(1);
+  expect(out.join('\n')).toContain('ended: failed');
+  expect(fs.existsSync(path.join(root, 'made.txt'))).toBe(false);
+}, 30_000);
