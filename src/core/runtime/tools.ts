@@ -21,7 +21,7 @@ export interface ToolSummary {
 export interface McpSource {
   listServers(): Promise<McpServerConfig[]>;
   listServerTools(server: McpServerConfig): Promise<McpToolDescriptor[]>;
-  callServerTool(descriptor: McpToolDescriptor, args: Record<string, any>): Promise<{ output: string }>;
+  callServerTool(descriptor: McpToolDescriptor, args: Record<string, any>): Promise<{ output: string; isError?: boolean }>;
   close?(): Promise<void>;
 }
 
@@ -51,7 +51,10 @@ const mcpTool = (descriptor: McpToolDescriptor, source: McpSource): RegisteredTo
   description: descriptor.description || `${descriptor.nativeName ?? descriptor.name} from MCP server ${descriptor.serverId}`,
   inputSchema: descriptor.inputSchema ?? { type: 'object', additionalProperties: true },
   policy: descriptor.annotations?.readOnlyHint ? 'read' : 'execute',
-  runner: async (args) => ({ output: (await source.callServerTool(descriptor, args)).output }),
+  runner: async (args) => {
+    const result = await source.callServerTool(descriptor, args);
+    return { output: result.output, ...(result.isError ? { status: 'error' as const } : {}) };
+  },
 });
 
 /** Register every enabled server's tools. A server that fails is reported and skipped. */

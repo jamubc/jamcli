@@ -149,7 +149,7 @@ export class McpManager {
     return [...builtin, ...discovered];
   }
 
-  async callServerTool(descriptor: McpToolDescriptor, args: Record<string, any>): Promise<{ output: string; raw?: any }> {
+  async callServerTool(descriptor: McpToolDescriptor, args: Record<string, any>): Promise<{ output: string; isError?: boolean; raw?: any }> {
     if (!descriptor.serverId) {
       throw new Error('MCP tool is missing server id');
     }
@@ -165,7 +165,7 @@ export class McpManager {
     });
 
     const output = contentText(result?.content);
-    return { output: result?.isError ? `The server reported an error: ${output}` : output, raw: result };
+    return { output: result?.isError ? `The server reported an error: ${output}` : output, ...(result?.isError ? { isError: true } : {}), raw: result };
   }
 
   async listServerTools(server: McpServerConfig, opts: { refresh?: boolean } = {}): Promise<McpToolDescriptor[]> {

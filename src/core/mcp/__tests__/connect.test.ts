@@ -23,7 +23,7 @@ test('a 2.x server is spoken to on 2026-07-28, over stdio and HTTP', async () =>
     try {
       expect({ era: connection.era, version: connection.protocolVersion }).toEqual({ era: 'modern', version: '2026-07-28' });
       const tools = await connection.client.listTools();
-      expect(tools.tools.map((tool) => tool.name).sort()).toEqual(['deploy', 'echo', 'peek']);
+      expect(tools.tools.map((tool) => tool.name).sort()).toEqual(['deploy', 'echo', 'fail', 'peek']);
       expect(tools.tools.find((tool) => tool.name === 'peek')?.annotations?.readOnlyHint).toBe(true);
       const echoed = await connection.client.callTool({ name: 'echo', arguments: { text: 'hi' } });
       expect(contentText(echoed.content)).toBe('echo:hi');

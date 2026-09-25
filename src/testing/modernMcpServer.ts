@@ -4,14 +4,15 @@ import * as z from 'zod/v4';
 
 /**
  * A 2.x MCP server for tests, speaking the 2026-07-28 revision and serving 2025 clients
- * too: a tool, a read-only tool, a tool that asks the person for input, a prompt, and a
- * resource. Run it to serve stdio, or import `modernHttpHandler` to serve HTTP.
+ * too: a tool, a read-only tool, a tool that fails, a tool that asks the person for input,
+ * a prompt, and a resource. Run it to serve stdio, or import `modernHttpHandler` to serve HTTP.
  */
 export function modernServer(): McpServer {
   const server = new McpServer({ name: 'modern-fixture', version: '2.0.0' });
   server.registerTool('echo', { description: 'Echo the text back.', inputSchema: z.object({ text: z.string() }) }, async ({ text }) => ({
     content: [{ type: 'text' as const, text: `echo:${text}` }],
   }));
+  server.registerTool('fail', { description: 'Always fails.' }, async () => ({ content: [{ type: 'text' as const, text: 'boom' }], isError: true }));
   server.registerTool('peek', { description: 'Read something, changing nothing.', annotations: { readOnlyHint: true } }, async () => ({
     content: [{ type: 'text' as const, text: 'peeked' }],
   }));
@@ -32,7 +33,7 @@ export function modernServer(): McpServer {
         return inputRequired({ inputRequests: { where: inputRequired.elicit(request) } });
       }
     }
-    const text = answer.action !== 'accept' ? `not deployed: ${answer.action}` : `deployed to ${answer.content?.env}${answer.content?.confirm ? ', confirmed' : ''}`;
+    const text = answer.action !== 'accept' ? `not deployed: ${answer.action}` : `deployed to ${answer.content?.env}${answer.content?.confirm === true ? ', confirmed' : ''}`;
     return { content: [{ type: 'text' as const, text }] };
   });
   server.registerPrompt('review', { description: 'Review a file.', argsSchema: z.object({ file: z.string(), focus: z.string().optional() }) }, ({ file, focus }) => ({
