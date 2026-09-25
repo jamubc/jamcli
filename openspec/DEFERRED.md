@@ -429,6 +429,86 @@ The runtime's post-tool handler (`src/core/runtime/index.ts`):
 - **gap, all of it**: `/workflows run` with a picker approval has no interface test; only
   the empty list is tested.
 
+### 12.8 Micro status mode (`a158925`)
+
+`src/tui/app/micro.ts`:
+
+- **break** `isMicro`: `<` instead of `<=` for `MICRO_ROWS` or `MICRO_COLUMNS`.
+  - **caught by**: `micro.test.tsx`, which checks 80 by 10, 40 by 30, and 41 by 11.
+- **break** `microPhrase`: check `error` before `need input`.
+  - **gap**: no test holds an approval and an error notice at once.
+- **break**: drop the `lastUser` slice, so an error from an earlier turn still shows.
+  - **gap**.
+- **break** `fitPhrase`: return the first word instead of `words[key]`.
+  - **caught by**: `micro.test.tsx`, which expects `input` at width 6.
+- **break** `microSetting`: treat an unknown value as `always`.
+  - **gap**.
+
+`src/tui/app/App.tsx`:
+
+- **break**: keep a timer running in micro mode (drop the forced `reducedMotion`).
+  - **caught by**: `micro.test.tsx`'s two identical captures over an idle interval.
+- **break**: unmount the full view instead of `visible={!micro}`.
+  - **caught by**: `micro.test.tsx`, which restores the size and expects the state intact.
+
+### Plugin consent outside the project (`8f78615`)
+
+`src/core/plugins/lock.ts`:
+
+- **break** `trustProblem`: skip the `insidePluginsDir` check.
+  - **caught by**: `plugins.test.ts`, the planted-lockfile test (the planted entry points
+    inside the repository).
+- **break** `trustProblem`: skip the consent digest comparison.
+  - **gap**: the planted test fails on the directory check first. Add a case whose `dir`
+    is inside `pluginsDir()` but that has no consent record.
+- **break** `consentDigest`: leave `permissions` out of the digest.
+  - **gap**: no test edits a lockfile's permissions after consent.
+- **break** `forgetConsent`: do nothing.
+  - **gap**: no test removes and then plants the same name.
+- **break** `recordConsent`: write without `mode: 0o600`.
+  - **gap**: no test checks the file's mode.
+
+### Language servers in the sandbox (`74aa7b6`)
+
+`src/core/lsp/manager.ts` and `src/core/runtime/index.ts`:
+
+- **break**: pass `undefined` for `wrap` whatever the sandbox kind.
+  - **gap**: `lsp.test.ts` runs the fake server without a sandbox. Add a bwrap test in
+    which the fake server tries to read a hidden path, as the hostile plugin test does.
+- **break**: pass the process environment instead of `envFor()`.
+  - **gap**, as above.
+
+### `web_fetch` (`bc62c1a`)
+
+`src/core/tools/webFetch.ts`:
+
+- **break**: follow a redirect to another host (drop the `next.host !== url.host` check).
+  - **caught by**: `webFetch.test.ts` "a redirect to another host is reported".
+- **break**: allow `file:` URLs.
+  - **caught by**: `webFetch.test.ts` "binary content, other schemes...".
+- **break** `isText`: return true for every type.
+  - **caught by**: the same test (the PNG case).
+- **break** `readCapped`: no cap.
+  - **gap**: no test serves more than 5 MB.
+- **break**: drop the timeout.
+  - **gap**: no test serves a response that never ends.
+- **break** `htmlToText`: keep `<script>` contents.
+  - **caught by**: `webFetch.test.ts` "HTML comes back as readable text".
+- **break**: change `policy: 'network'` to `'read'`.
+  - **caught by**: `webFetch.test.ts` "it is a network tool". That the engine then asks
+    in `default` mode, and that `web_fetch(domain:...)` allows, has no end-to-end test:
+    a **gap**.
+
+### Lazy loading and the compiled binary (`e01cf10`, `9bc0c2a`)
+
+- **break**: import `@agentclientprotocol/sdk` at the top of `src/services/AcpClient.ts`
+  again.
+  - **caught by**: only `bun run bench` (headless startup), which is not a test. A
+    **gap**: add a test that imports `src/cli.ts` and checks the SDK module was not loaded.
+- **break** `scripts/compile.ts`: leave out `--loader .scm:text`.
+  - **caught by**: nothing in `bun test`. The compiled binary's `--version` smoke test in
+    the staged workflows would catch a load failure. A **gap** locally.
+
 ### Probes to repeat once later stages land
 
 These areas were probed in their own tasks, but the unfinished stages below add new paths
@@ -492,7 +572,7 @@ copy once the unit closes), what is missing, and what finishing it needs.
 
 ### Stages not finished in this unit
 
-(Updated as the unit closes. An item leaves this list when its task is checked.)
+(An item leaves this list when its task is checked.)
 
 - **9.3, the editor's file system and terminals.** ACP lets an editor offer
   `fs/read_text_file`, `fs/write_text_file`, and `terminal/*`, so an agent reads unsaved
@@ -502,10 +582,9 @@ copy once the unit closes), what is missing, and what finishing it needs.
     functions, set them in `src/acp/session.ts` from the client's capabilities, and use
     them in `read_file`, `edit`, `write_file`, and `run_command`. The permission engine
     and checkpoints must still apply, so this goes below the dispatcher.
-- **9.4, the rest of LSP.** A delegated task gets no language server, the status line
-  does not count servers (D14 lists "MCP and LSP counts"), and servers run outside the
-  sandbox, with the minimal environment only. Workspace symbols, rename, and code actions
-  are not used.
+- **9.4, the rest of LSP.** A delegated task gets no language server. The status line
+  does not count servers (D14 lists "MCP and LSP counts"). Workspace symbols, rename, and
+  code actions are not used. (Servers now run in the session's sandbox: `74aa7b6`.)
 - **Stage 10, per-host network.** A plugin's `permissions.network` lists hosts, but the
   sandbox has the network on or off; any declared host turns it on. Finishing it needs a
   filtering proxy the sandbox routes through (as Claude Code's sandbox does), or a
@@ -517,6 +596,127 @@ copy once the unit closes), what is missing, and what finishing it needs.
   launchd nor the Windows path has run on its system (see 3.7 for the same limit on
   macOS). An agent step's `category` takes the chain's first model and does not fall
   back along it as delegation does.
-- **Stage 12**: 12.1 to 12.9.
+
+### Stage 12: where each task stands
+
+None of 12.1 to 12.9 is checked in `tasks.md`. What was done, and what is left:
+
+- **12.1 Performance budgets: not met here.** Medians on the build machine, after
+  `e01cf10` made the ACP SDK, plugin checks, and the workflow engine load only when used:
+
+  | Measure | Now | At `5282c51` (this session's start) | Budget |
+  |---|---|---|---|
+  | `--version` | 22.5 ms | | 60 ms |
+  | Headless startup | 168.2 ms | 176 ms | 150 ms |
+  | First frame | 381.1 ms | 388 ms | 250 ms |
+  | Keystroke | 7.1 ms | | 16 ms |
+  | Memory | 151.9 MB | 151.6 MB | 150 MB |
+
+  The later stages add nothing measurable, so the overage is this machine or older
+  work. To finish: run the staged `performance` job (`bun run bench -- --enforce`) on a
+  CI Linux runner. If it is still over, profile the first frame (OpenTUI's native load)
+  and headless startup, or bring the budgets to the owner.
+- **12.2 Security review: done as a review, with findings open.**
+  - Fixed: the ACP client no longer offers the editor file system to other agents
+    (`7268f91`); a lockfile committed to a repository can no longer load a plugin, since
+    consent lives in the state directory and the copy must be JamCLI's own (`8f78615`);
+    language servers run in the sandbox with the session's environment (`74aa7b6`).
+  - Open, highest first:
+    1. **Project MCP servers have no trust gate** (predates this unit, high). A cloned
+       repository's `.jamcli/mcp.json` starts its commands when JamCLI opens. Fix: gate
+       them on the same digest as project hooks (`trusted-hooks.json`, `jamcli hooks
+       trust`), and ask on first start in the interface.
+    2. **A project workflow's agent step may set `mode: auto`**, so a repository raises
+       the mode of its own steps. Fix: cap a step's mode at the session's, or require the
+       workflow file to be trusted as hooks are.
+    3. **An installed git hook runs whatever the workflow file says now.** Editing the
+       workflow changes what the hook runs with no review. Fix: record the file's digest
+       at `hook install` and refuse to run when it changed.
+    4. **The observer socket** (`JAMCLI_ACP_ENDPOINT=unix:<path>`) may be placed in a
+       shared directory, with a window between checking the path and binding it. Fix:
+       refuse a path whose directory is writable by others, or always bind inside a 0700
+       directory under the state directory.
+    5. **Plugin network access is not per host** (stage 10 above).
+  - The review read the diff; it was not a line-by-line audit. Many probes in Part 1
+    guard security paths and are unproven until they run.
+- **12.3 CI: staged, never run.** `openspec/changes/rehaul-jamcli/workflows/ci.yml` and
+  `release.yml` could not be pushed (see 1.1).
+  - To finish: copy them into `.github/workflows/` and fix what their first run finds.
+    Windows and macOS have never run the gates.
+  - Missing from the staged security job, against design D22: secret scanning,
+    dependency review, and `bun audit`.
+- **12.4 Documentation: part written.**
+  - Written: `README.md`, `docs/getting-started.md`, `docs/configuration.md`,
+    `docs/permissions.md`, `docs/tools.md`, and `docs/feature-matrix.md` in its final
+    state.
+  - Not written: `docs/providers.md`, `sessions.md`, `commands-and-skills.md`,
+    `hooks.md`, `plugins.md`, `workflows.md`, `protocols.md` (MCP, ACP, the observer,
+    LSP), `headless.md`, `interface.md` (keys, the composer's `@` and `!`, micro mode),
+    and `security.md`. The written pages already link to these names, so those links
+    are broken until the pages exist.
+  - Not updated: `docs/conformance.md` needs its final check, and
+    `docs/architecture.md` describes the plan, not what was built.
+  - Where the facts are, so they need not be found again: every flag and subcommand in
+    `jamcli --help`; the headless output in `src/cli.ts` (`resultToJson`,
+    `eventToJson`); the hook protocol in `src/core/hooks/commands.ts`; the workflow
+    format in `src/core/workflows/schema.ts` and `expr.ts`, with a full example in
+    `src/core/workflows/__tests__/workflows.test.ts`; the plugin manifest in
+    `src/core/plugins/manifest.ts`; commands in `src/core/ext/commands.ts` and skills
+    in `skills.ts`; keys in `src/tui/app/keys.ts`; providers and their default
+    endpoints in `src/core/providers/factory.ts`; the observer in
+    `src/tui/observer.ts`; micro mode in `src/tui/app/micro.ts`.
+- **12.5 `docs/migration.md` and `docs/CHANGELOG.md`: not written.** The staged release
+  job uses `docs/CHANGELOG.md` as the release notes, so a tagged release fails until it
+  exists. The migration page should cover:
+  - `jamcli config migrate` for 1.x tool settings in `.jamcli/mcp.json`;
+  - the legacy keys still read (`telemetry`, `context_management`, `general`,
+    `available_models`);
+  - version 1 history, which still loads and resumes;
+  - keys moved out of project files into the keychain (`jamcli auth set`);
+  - the permission modes that replace per-tool approval;
+  - the `list_files` and `search_code` aliases;
+  - the Ink interface's removal.
+- **12.6 Release: built, not published.**
+  - `bun run compile` built all five targets here once. Their checksums came from an
+    earlier commit, so they are stale and are not recorded. The Linux x64 binary passed
+    its `--version` smoke test.
+  - The staged release job adds a CycloneDX SBOM, build provenance, and a draft release
+    (`2dcefaf`). None of it has run.
+  - The version is now 2.0.0 (`8fa95e3`), because the configuration and history
+    formats changed. **Owner decision**: confirm the number. Pushing the tag is the
+    owner's action.
+- **12.7 The live local check: not run.** Ollama is not available in the build
+  environment. With the network off and Ollama the only provider, confirm model listing,
+  a tool-using turn, an edit with approval, and a command, then record where it ran.
+  Check `PULL_CANDIDATES` at the same time (see above).
+- **12.8 Micro status mode: built** (`a158925`), and its tests pass. **Owner decision**:
+  the request asked for a `ui.micro` setting, but that needs
+  `src/core/config/schema.ts`, and the acceptance says no file under `src/core/`
+  changes. The override is the `JAMCLI_MICRO` environment variable (`auto`, `always`,
+  `never`) instead. Either accept that, or allow the schema change and add `ui.micro`.
+  Check 12.8 once decided.
+- **12.9 Archive: not done.** Check the tasks that are finished. Apply the change's
+  spec deltas to `openspec/specs/jamcli/spec.md`, move the change into the archive, and
+  run `openspec validate --all --strict`. Update `openspec/SEQUENCE.md` and the "Known
+  state" section of `AGENTS.md`. Record in the archived `tasks.md` what this note still
+  lists.
+
+### Found late, not fixed
+
 - **`openspec/project.md`**: the tech stack still says tsup. The build moved to
   `bun build` in 6.13.
+- **Default categories** (`src/core/routing/categories.ts`) route every category to
+  `ollama:llama3`. On a machine without that model, delegation fails until `categories`
+  is configured, and llama3's tool calling is weak. Consider defaulting to the session's
+  model.
+- **`/tools` is taller than the terminal**, so its first line scrolls out of view. The
+  tests now wait for the first tool line instead (`bc62c1a`). The interface should open
+  a long report at its top, or page it.
+- **Mouse input** is on through OpenTUI's defaults, and the transcript scrolls with the
+  wheel, but no test covers it. The feature matrix marks it partial.
+- **`web_fetch` had no task.** It was in design D5's tool table and the feature matrix,
+  but not in `tasks.md`, so it went unbuilt until `bc62c1a`. Compare every design
+  decision against `tasks.md` for others like it before archiving.
+- **The ACP title for `web_fetch`** (`toolTitle` in `src/acp/updates.ts`) shows only the
+  tool name. Add the URL.
+- **Unchecked since earlier stages**: 1.1 (CI) and 3.7 (Seatbelt), both above.
