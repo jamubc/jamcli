@@ -78,6 +78,8 @@ export class PermissionEngine {
   private rules: Rule[];
   private currentMode: PermissionMode;
   readonly sandboxed: boolean;
+  /** While a command or skill with `allowed-tools` is active: only what these rules name may run. */
+  private narrowing: { rules: Rule[]; label: string } | undefined;
 
   constructor(private readonly options: PermissionEngineOptions) {
     this.rules = [...(options.rules ?? [])];
@@ -98,6 +100,31 @@ export class PermissionEngine {
 
   list(): Rule[] {
     return [...this.rules];
+  }
+
+  /**
+   * Narrow what may run to what `rules` name, while `label` (a command or a skill) is
+   * active; nothing again lifts it. Narrowing never allows: a call it lets through is
+   * decided as any other. Narrowing again keeps only what both allow.
+   */
+  narrow(rules: Rule[] | undefined, label = 'this command'): void {
+    if (!rules) {
+      this.narrowing = undefined;
+      return;
+    }
+    if (!this.narrowing) {
+      this.narrowing = { rules, label };
+      return;
+    }
+    const earlier = this.narrowing.rules;
+    // Keep the entries of the new list that the earlier one already covers.
+    const kept = rules.filter((rule) => earlier.some((before) => toolMatches(before, [rule.tool]) && (!before.pattern || before.pattern === rule.pattern)));
+    this.narrowing = { rules: kept, label: `${this.narrowing.label} and ${label}` };
+  }
+
+  /** What narrows the tools now, if anything. */
+  get narrowed(): { rules: Rule[]; label: string } | undefined {
+    return this.narrowing;
   }
 
   /** Add a rule for the rest of the session, such as a grant made at an approval prompt. */
@@ -131,6 +158,7 @@ export class PermissionEngine {
   /** Whether a tool is offered at all: not when a rule or the mode denies it outright. */
   offers(tool: string): boolean {
     const names = this.options.namesOf(tool);
+    if (this.narrowing && !this.narrowing.rules.some((rule) => toolMatches(rule, names))) return false;
     if (this.rules.some((rule) => rule.decision === 'deny' && !rule.pattern && toolMatches(rule, names))) return false;
     return MODE_DEFAULTS[this.currentMode][this.options.classOf(tool)] !== 'deny';
   }
@@ -142,6 +170,15 @@ export class PermissionEngine {
     const { subjects, command } = subjectsOf(call, names[0], this.options.projectRoot);
     const targets: (Subject | undefined)[] = subjects.length ? subjects : [undefined];
     const decided = targets.map((subject) => strongest(applicable.filter((rule) => patternMatches(rule, subject))));
+
+    if (this.narrowing) {
+      const narrowing = this.narrowing;
+      const covered = targets.every((subject) => narrowing.rules.some((rule) => toolMatches(rule, names) && patternMatches(rule, subject)));
+      if (!covered) {
+        const named = narrowing.rules.map((rule) => rule.text).join(', ') || 'no tools';
+        return { decision: 'deny', by: 'policy', reason: `${narrowing.label} allows only ${named}` };
+      }
+    }
 
     const denied = decided.find((rule) => rule?.decision === 'deny');
     if (denied) return fromRule(denied, `${denied.text} denies it (${denied.source})`);

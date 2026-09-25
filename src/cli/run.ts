@@ -1,4 +1,5 @@
-import { createRuntime, type DryRunEntry, type RuntimeOptions } from '../core/runtime/index.js';
+import { createRuntime, type DryRunEntry, type RunOptions, type RuntimeOptions } from '../core/runtime/index.js';
+import { expandCommand, loadCommands } from '../core/ext/commands.js';
 import type { AgentEvent, RunResult } from '../core/types.js';
 import type { SpendSummary } from '../core/catalog/cost.js';
 
@@ -73,8 +74,9 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   });
   const permissionDenials: PermissionDenial[] = [];
   const notices: HeadlessResult['notices'] = [];
+  const { prompt, turn } = customCommandTurn(options.prompt, options.projectRoot);
   try {
-    const result = await runtime.run(options.prompt, (event) => {
+    const result = await runtime.run(prompt, (event) => {
       if (event.type === 'approval_request') {
         const reason = event.request?.reason ?? 'this tool asks before it runs';
         permissionDenials.push({ tool: event.call.name, callId: event.call.id, arguments: event.call.arguments ?? {}, reason });
@@ -87,7 +89,7 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
         notices.push({ level: event.level ?? 'info', message: event.message });
       }
       options.onEvent?.(event);
-    });
+    }, turn);
     return {
       result,
       sessionId: runtime.sessionId,
@@ -103,3 +105,19 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
     await runtime.close();
   }
 };
+
+/**
+ * A prompt that names a custom command, as `/review src`, runs as the command's prompt with
+ * its front matter's model and tools. Any other text, a path such as `/tmp` included, is
+ * sent as written.
+ */
+function customCommandTurn(text: string, projectRoot: string): { prompt: string; turn: RunOptions } {
+  const match = /^\/(\S+)\s*([\s\S]*)$/.exec(text.trim());
+  if (!match) return { prompt: text, turn: {} };
+  const command = loadCommands(projectRoot).commands.find((entry) => entry.name === match[1].toLowerCase());
+  if (!command) return { prompt: text, turn: {} };
+  return {
+    prompt: expandCommand(command, match[2]),
+    turn: { label: `/${command.name}`, ...(command.model ? { model: command.model } : {}), ...(command.allowedTools ? { allowedTools: command.allowedTools } : {}) },
+  };
+}

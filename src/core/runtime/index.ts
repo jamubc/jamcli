@@ -94,6 +94,16 @@ export interface RuntimeOptions {
   observer?: { observer: Observer; parentSpan?: Span };
 }
 
+/** How one turn differs from the session's, as a custom command's front matter asks. */
+export interface RunOptions {
+  /** Run this turn on this model, then return to the session's. */
+  model?: string;
+  /** Narrow the tools for this turn to these rules; nothing is allowed that was not already. */
+  allowedTools?: string[];
+  /** What narrows them, such as `/review`, for the reason a refused call gives. */
+  label?: string;
+}
+
 export interface ContextUsage {
   /** Estimated tokens of the next request, corrected by what the provider has reported. */
   used: number;
@@ -162,7 +172,7 @@ export interface Runtime {
    * legacy `.jamcli/mcp.json` block are kept, and returned as such.
    */
   removePermissionRule(text: string): { removed: Rule[]; kept: Rule[]; error?: string };
-  run(input: string, onEvent?: (event: AgentEvent) => void): Promise<RunResult>;
+  run(input: string, onEvent?: (event: AgentEvent) => void, options?: RunOptions): Promise<RunResult>;
   cancel(): void;
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
   setModel(ref: string): void;
@@ -607,6 +617,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       )
     : Promise.resolve();
 
+  /** Switch the provider and model for later turns. Throws if the provider is not configured. */
+  const switchModel = (ref: string) => {
+    const next = resolveModel(ref, profile, config.api_registry);
+    provider = observed(createChatProvider(next.provider, config.api_registry), next.provider);
+    providerError = undefined;
+    choice = next;
+    modelInfo = catalog.lookup(next.provider, next.model, provider.family);
+    agent = buildAgent();
+    recorder.switchModel(`${next.provider}:${next.model}`);
+    modelReady = resolveModelInfo();
+  };
+
   return {
     get sessionId() {
       return log.id;
@@ -720,7 +742,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return { removed, kept };
     },
 
-    async run(input, onEvent) {
+    async run(input, onEvent, turn = {}) {
       if (running) throw new Error('A turn is already running in this session.');
       running = true;
       const emit = (event: AgentEvent) => {
@@ -730,7 +752,24 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         onEvent?.(event);
       };
       emitting = emit;
+      let restoreModel: string | undefined;
       try {
+        if (turn.model) {
+          const before = `${choice.provider}:${choice.model}`;
+          try {
+            switchModel(turn.model);
+            restoreModel = before;
+          } catch (error: any) {
+            emit({ type: 'notice', level: 'warn', message: `${turn.label ?? 'This turn'} asks for ${turn.model}, which cannot be used here (${error?.message ?? error}), so it runs on ${before}.` });
+          }
+        }
+        if (turn.allowedTools) {
+          const label = turn.label ?? 'this command';
+          const parsed = turn.allowedTools.map((text) => parseRule(text, 'allow', 'session', `${label} allowed-tools`));
+          for (const item of parsed) if ('error' in item) emit({ type: 'notice', level: 'warn', message: `${label}: ${item.error}` });
+          permissions.narrow(parsed.flatMap((item) => ('rule' in item ? [item.rule] : [])), label);
+          reassemble();
+        }
         await Promise.all([modelReady, trustReady]);
         for (const message of pending.splice(0)) emit({ type: 'notice', level: 'warn', message });
         if (!provider) {
@@ -754,6 +793,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         if (result.session) session = result.session;
         return result;
       } finally {
+        // What a command or a skill narrowed lasts the turn. A delegated run shares its
+        // parent's engine, so only the session that owns it lets go.
+        if (!options.parent && permissions.narrowed) {
+          permissions.narrow(undefined);
+          reassemble();
+        }
+        if (restoreModel) switchModel(restoreModel);
         running = false;
         emitting = undefined;
         turnAgent = undefined;
@@ -765,14 +811,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
 
     setModel(ref) {
-      const next = resolveModel(ref, profile, config.api_registry);
-      provider = observed(createChatProvider(next.provider, config.api_registry), next.provider);
-      providerError = undefined;
-      choice = next;
-      modelInfo = catalog.lookup(next.provider, next.model, provider.family);
-      agent = buildAgent();
-      recorder.switchModel(`${next.provider}:${next.model}`);
-      modelReady = resolveModelInfo();
+      switchModel(ref);
     },
 
     async listModels(timeoutMs = LIST_TIMEOUT_MS) {
