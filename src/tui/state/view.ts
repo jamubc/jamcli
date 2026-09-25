@@ -71,6 +71,8 @@ export interface StatusData {
   inputTokens: number;
   outputTokens: number;
   mcpServers: number;
+  /** The language servers that can run here, by name. */
+  lspServers: number;
   phase: Phase;
   retry?: { attempt: number; delayMs: number; reason: string };
 }
@@ -123,7 +125,7 @@ export function initialView(status: Partial<StatusData> = {}): ViewState {
     approvals: [],
     running: false,
     nextId: 1,
-    status: { mode: 'default', model: '', sandbox: 'none', costUsd: null, unpriced: 0, inputTokens: 0, outputTokens: 0, mcpServers: 0, phase: 'idle', ...status },
+    status: { mode: 'default', model: '', sandbox: 'none', costUsd: null, unpriced: 0, inputTokens: 0, outputTokens: 0, mcpServers: 0, lspServers: 0, phase: 'idle', ...status },
   };
 }
 

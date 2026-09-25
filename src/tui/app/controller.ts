@@ -54,6 +54,7 @@ export function statusOf(runtime: Runtime): Partial<StatusData> {
     costUsd: spend.requests > 0 && spend.unpriced === spend.requests ? null : spend.requests ? spend.cost : null,
     unpriced: spend.unpriced,
     mcpServers: new Set(runtime.tools.filter((tool) => tool.source === 'mcp').map((tool) => tool.server)).size,
+    lspServers: runtime.lspServers.length,
   };
 }
 

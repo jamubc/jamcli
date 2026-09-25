@@ -19,6 +19,9 @@ test('a tool line says its state in a word, with the change, the time, and who d
 test('the status line names each fact in words, and marks a cost that misses unpriced requests', () => {
   const status = { ...initialView().status, mode: 'plan', model: 'anthropic:claude-x', sandbox: 'bwrap', contextPercent: 41.6, costUsd: 0.0123, unpriced: 1, inputTokens: 12_345, outputTokens: 678, mcpServers: 2, phase: 'waiting' as const };
   expect(statusParts(status)).toEqual(['plan mode', 'anthropic:claude-x', 'context 42%', '$0.0123+', '12k in, 678 out', 'sandbox bwrap', 'MCP 2', 'waiting for you']);
+  // The language servers that can run here are counted beside MCP, and zero takes no room.
+  expect(statusParts({ ...status, lspServers: 3 })).toContain('LSP 3');
+  expect(statusParts({ ...status, lspServers: 0 })).not.toContain('LSP 0');
   expect(statusParts({ ...status, costUsd: null, contextPercent: undefined, mcpServers: 0, sandbox: 'none', phase: 'retrying', retry: { attempt: 2, delayMs: 10, reason: '429' } })).toEqual([
     'plan mode',
     'anthropic:claude-x',

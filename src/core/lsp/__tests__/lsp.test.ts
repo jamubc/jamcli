@@ -227,6 +227,7 @@ test('a language server gets the session environment, not the process one', asyn
     fs.writeFileSync(path.join(root, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_model: 'fake-model' }));
     const runtime = await createRuntime({ projectRoot: root, surface: 'headless', mcp: false, env });
     try {
+      expect(runtime.lspServers).toContain('probe');
       provider.enqueue({ toolCalls: [{ id: 'l1', name: 'lsp', arguments: { operation: 'diagnostics', path: 'main.fk' } }] }, { text: 'done' });
       await runtime.run('check it');
       const tool = provider.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');

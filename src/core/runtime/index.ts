@@ -174,6 +174,8 @@ export interface Runtime {
   readonly notices: string[];
   /** The skills found, which the system prompt lists and the skill tool loads. */
   readonly skills: Skill[];
+  /** The language servers that can run here, by name. */
+  readonly lspServers: string[];
   /** The prompts the MCP servers offer, each of which becomes `/server:name`. */
   mcpPrompts(): Promise<McpPrompt[]>;
   /** A server's prompt, filled in, as the text of one message. */
@@ -856,6 +858,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   return {
     skills: skillSet.skills,
+    lspServers: lsp?.available ?? [],
     async mcpPrompts() {
       if (!mcp?.listServerPrompts) return [];
       const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerPrompts!(server).catch(() => [])));

@@ -76,6 +76,7 @@ export function statusParts(status: StatusData): string[] {
   if (status.inputTokens || status.outputTokens) parts.push(`${formatTokens(status.inputTokens)} in, ${formatTokens(status.outputTokens)} out`);
   parts.push(status.sandbox === 'none' ? 'no sandbox' : `sandbox ${status.sandbox}`);
   if (status.mcpServers) parts.push(`MCP ${status.mcpServers}`);
+  if (status.lspServers) parts.push(`LSP ${status.lspServers}`);
   const phase = status.phase === 'retrying' && status.retry ? `retrying (${status.retry.attempt}): ${status.retry.reason}` : PHASE_WORDS[status.phase];
   parts.push(phase);
   return parts;
