@@ -703,4 +703,11 @@ cover headless, ACP, and delegation.
 - [ ] 12.5 `docs/migration.md` and `docs/CHANGELOG.md`.
 - [ ] 12.6 The release workflow and `bun run compile`. Build every target here, record the checksums, and smoke-test the Linux binary.
 - [ ] 12.7 The live local check: with the network disabled and Ollama as the only provider, confirm model listing, a tool-using turn, an edit with approval, and a command. Record where it was run.
-- [ ] 12.8 Archive. Apply the deltas to `openspec/specs/jamcli/spec.md`, move the change to the archive, run `openspec validate --all --strict`, and update `SEQUENCE.md`.
+- [ ] 12.8 Micro status mode, folded into this unit by the owner on 2026-09-25 (proposed as `add-micro-status-mode`). When several instances are tiled small, the interface shows one glanceable phrase instead of an unreadable full view. A render decision in `src/tui/` only: no file under `src/core/` changes.
+  - Below a size threshold, render a micro view: one static phrase of 2 to 4 words, no motion, no wrapping, no other interface. Above it, nothing changes.
+  - Priority, highest first: `need input` (an approval or a question pending) over `error` over `done` (the turn finished) over activity (`thinking`, `editing <file>`, `reading <file>`, `running <tool>`).
+  - One line, clipped to the width. When two words do not fit, show the single highest-priority word. The phrase changes only on a state change: no spinner, shimmer, or elapsed timer runs, and no timer redraws.
+  - Decisions taken from the request's recommendations: display-only, so a person resizes or expands to act; lowercase with no punctuation, and no label without a reliable signal; the threshold starts at `rows <= 10 || cols <= 40`, tuned against real tile sizes; automatic by default, with a `ui.micro` override (`auto`, `always`, `never`).
+  - Acceptance: at the threshold, one static phrase, and two captures over an idle interval are identical; an approval request shows `need input` on the same state change; a finished turn shows `done`; a tool in flight names the tool, and the file for file operations; restoring the size restores the full interface with its state intact; the four gates pass and no file under `src/core/` changes.
+  - Not in scope: headless and ACP output, the status style catalog.
+- [ ] 12.9 Archive. Apply the deltas to `openspec/specs/jamcli/spec.md`, move the change to the archive, run `openspec validate --all --strict`, and update `SEQUENCE.md`.

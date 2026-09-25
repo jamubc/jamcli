@@ -316,6 +316,30 @@ JamCLI SHALL provide a screen reader mode and a reduced motion setting.
 - **WHEN** reduced motion is enabled
 - **THEN** spinners and shimmer effects are replaced by static indicators
 
+### Requirement: Micro Status Mode
+JamCLI SHALL render a single static status phrase when the terminal is too small for the
+full interface.
+
+#### Scenario: Small terminal
+- **WHEN** the terminal is at or below the micro threshold, or `ui.micro` is `always`
+- **THEN** the interface shows one phrase of two to four words on one line, clipped to the width, with no motion and nothing else
+
+#### Scenario: Input needed wins
+- **WHEN** an approval or a question is pending in the micro view
+- **THEN** the phrase is `need input`, whatever else is happening
+
+#### Scenario: Priority of phrases
+- **WHEN** more than one state applies
+- **THEN** the phrase follows the order need input, error, done, then the current activity, which names the tool and, for a file operation, the file
+
+#### Scenario: No timer redraws
+- **WHEN** the micro view is idle
+- **THEN** two captures over an interval are identical
+
+#### Scenario: Restoring the size
+- **WHEN** the terminal grows above the threshold
+- **THEN** the full interface returns with its state intact
+
 ### Requirement: Checkpoints and Undo
 JamCLI SHALL checkpoint the working tree before state-changing tool calls and SHALL let
 the user restore a checkpoint, without altering the user's git index, branches, HEAD, or
