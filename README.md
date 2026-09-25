@@ -1,284 +1,103 @@
 # JamCLI
 
-![status](https://img.shields.io/badge/status-experimental%20beta-orange)
+A terminal-native AI coding agent. Local-first, provider-agnostic, human-in-the-loop.
 
-**an efficient multi-model CLI multi-tool**
----
-✓ Works in your terminal
+JamCLI reads, edits, and runs code in your project with your approval. It works with a
+local model through Ollama and no account at all, and with OpenAI-compatible,
+Anthropic, and OpenRouter endpoints when you want them. The same agent loop drives the
+terminal interface, the headless command line, and editors over the Agent Client
+Protocol.
 
-✓ Supports Ollama and Openrouter models /w easy filtering + selection
+## What it does
 
-✓ styling system
+- **Reads, edits, and runs commands** through one permission engine on every surface:
+  five modes, pattern rules with scopes, and the rule behind each decision shown.
+- **Sandboxes commands** with bubblewrap on Linux and Seatbelt on macOS, with your
+  credentials hidden and provider keys withheld from every subprocess.
+- **Checkpoints every change** so `/undo` and `/rewind` work without touching your git
+  state.
+- **Works offline** with Ollama, and routes kinds of work to chains of models.
+- **Commits and opens pull requests** only when you approve, under your own identity.
+- **Extends** with custom commands, Agent Skills, hooks, MCP servers, plugins with
+  consent and isolation, and declarative workflows with approvals, resume, and schedules.
+- **Speaks the protocols**: MCP (the 2026-07-28 revision with fallback), ACP as an
+  agent and as a client, and LSP for diagnostics and navigation.
+- **Runs headless** with JSON or streamed JSON output and a dry-run mode.
 
----
---> Roadmap:
+## Install
 
-X Plugins system
-
-X Git integration
-
-⚠️ **Experimental**: Please be careful when working with AI systems, use at your own risk. Feedback, issues, and pull requests are absolutely welcome.
-
-<img width="837" height="291" alt="Screenshot1" src="https://github.com/user-attachments/assets/80ac7d8e-fe5a-4547-b4c7-94b283be83a0" />
-<img width="837" height="350" alt="Screenshot2" src="https://github.com/user-attachments/assets/75713839-1992-4d6b-a959-125b71742708" />
-<img width="837" height="242" alt="Screenshot3" src="https://github.com/user-attachments/assets/49779295-9338-4655-a4f1-2d8d8994f881" />
-<img width="1013" height="391" alt="Screenshot5" src="https://github.com/user-attachments/assets/50280caf-86a8-45ab-bc68-22fa7e58ac81" />
-
-
-## Features
-
-- **Three surfaces, one core**: the terminal interface, a one-shot command line, and an Agent Client Protocol server all drive the same agent loop.
-- **Provider agnostic**: Ollama with no account, any OpenAI-compatible endpoint, and a translated Anthropic-shaped endpoint. Keys come from the environment or the system keychain, never from the project by default.
-- **Tool registry**: a tool declares its name, description, JSON Schema, policy class, and runner. Built-ins cover files, search, glob, edit, a todo list, read-only git, and delegation; MCP tools join the same list.
-- **Human in the loop**: state-changing tools ask before running, a deny always wins, and a headless run never prompts, it refuses and names the flag that would allow it.
-- **Trust gate**: tool output is screened for relevance and prompt injection before it enters context, and every removal is named with its reason.
-- **Project rules**: instruction files are collected from the project root to the working directory and injected outermost first, with glob-conditional sections.
-- **Hooks**: session start, turn start, pre-tool, post-tool, compaction, and session end, with a throwing hook reported rather than fatal.
-- **Category routing**: a category names an ordered chain of models, so delegated work resolves its own model instead of inheriting the session's.
-- **Layered configuration**: defaults, your own settings, the project's, local overrides, the environment, and flags, with `jamcli config list --show-origin` naming where each value came from.
-- **Configuration profiles**: switch between different behavior profiles via `.jamcli/profiles`.
-
-## Prerequisites
-
-- [Bun](https://bun.sh) runtime
-- Node.js (for npm package management)
-
-## Installation
-
-### For Development/Testing
+Once a release is published, download the binary for your system and check it against
+`SHA256SUMS`:
 
 ```bash
-# Install dependencies
+sha256sum -c SHA256SUMS --ignore-missing
+chmod +x jamcli-linux-x64 && mv jamcli-linux-x64 ~/.local/bin/jamcli
+```
+
+Binaries are built for Linux (x64, arm64), macOS (x64, arm64), and Windows (x64).
+
+From source, with [Bun](https://bun.sh) 1.4.2:
+
+```bash
 bun install
-
-# Link globally for testing (creates symlink)
-npm link
-
-# Now you can run from anywhere
-jamcli
+bun run build
+bun run compile linux-x64     # or any target; writes release/ and SHA256SUMS
 ```
 
-**Note:** No build step is required! The `npm link` command creates a symlink to your development directory. The global `jamcli` command runs the source code directly using Bun's runtime, so any changes you make to the source files are immediately reflected.
-
-### For Production Use
+## Start
 
 ```bash
-# Install dependencies
-bun install
-
-# Install globally
-npm install -g .
-
-# Run from anywhere
-jamcli
+ollama pull qwen2.5-coder:7b  # any local model with tool calling
+jamcli                        # the interface; first run walks through setup
+jamcli -p "explain src/cli.ts" --output-format json
+jamcli doctor                 # checks providers, models, tools, sandbox, config
 ```
 
-## Usage
+See [Getting started](docs/getting-started.md).
 
-Run the CLI from any directory:
+## Documentation
 
-```bash
-jamcli
-```
+Pages marked "not yet written" are listed in `openspec/DEFERRED.md`.
 
-### Slash Commands
-
-**Tip:** Type `/` in the input bar to see command suggestions.
-
-### One-shot and piped use
-
-Any argument that asks for a run or a subcommand switches the entry point out of the interface and onto the command surface:
-
-```bash
-jamcli -p "summarize the changes in src/core" --output-format text
-jamcli -p "list the tool registry" --output-format json | jq -r .response
-jamcli -p "read package.json and report the version" --output-format stream-json | jq -c 'select(.type=="tool_call")'
-```
-
-- `--output-format text` prints the answer on stdout and notices on stderr. `json` prints one object with `type` (`result`), `session_id`, `status`, `response`, `error` when there was one, `provider`, `model`, `permission_mode`, `sandbox`, `duration_ms`, `turns`, `usage`, `permission_denials`, `notices`, and in a dry run `dry_run`. `stream-json` prints one event per line while it runs, including tool output, approval decisions, retries, and notices, and ends with the same result object.
-- The result reports what the session cost: `total_cost_usd`, `unpriced_requests`, `model_usage` with requests, tokens, and `cost_usd` for each model, and `delegated` when delegated tasks spent part of it. A cost is `null` when none of its requests had a known price, and a lower bound while `unpriced_requests` is above zero. Each `usage` event in `stream-json` carries its `model` and `cost_usd`, and `delegated_session` when a delegated task made the request. `jamcli sessions show` prints the same account.
-- Exit codes: `0` on success, `1` on an error or a limited run, `2` on a usage error, and `130` when interrupted. The first Ctrl+C cancels the turn and still prints the result; a second one exits at once.
-- `--allow-tool <name>` and `--deny-tool <name>` govern the run without prompting. `--allow-tool` lets the named tool run without asking and leaves every other tool as it was. `--allowed-tools` and `--disallowed-tools` take rules such as `edit(src/**)` or `run_command(npm test *)`. A headless run never prompts: a call that would ask is not made, the model is told why and which flag would allow it, the run carries on, and the call is listed in `permission_denials`. A deny always wins.
-- `--permission-mode` picks `plan` (read and plan only), `default`, `accept-edits` (edits inside the project run without asking), `auto` (commands run without asking inside a sandbox, and only when one works here), or `bypass`, which only `--dangerously-bypass-permissions` can start. Rules and modes also live in the `permissions` block of `.jamcli/config.json`; the full syntax is in `openspec/changes/rehaul-jamcli/design.md` (D6) until the documentation lands.
-- `--dry-run` makes no change: every tool is offered, reads run, and each call that would have changed something is answered as not made and listed with its diff or command, after the answer or under `dry_run` in JSON.
-- Commands run in a sandbox where one works (bubblewrap on Linux, Seatbelt on macOS): the project is writable, the network is off, and credentials such as `~/.ssh` are hidden. No process JamCLI starts gets a variable whose name looks like a credential. The result's `sandbox` field says which sandbox ran.
-- `--cwd`, `--max-turns`, `--model`, `--continue`, and `--resume <id>` bound and shape the run. `--model` takes `provider:model` or a model on the profile's provider, and a model id with its own colon, such as `qwen2.5-coder:7b`, stays whole.
-- `@path` in a prompt includes that file or directory listing, as it does in the interface.
-- `-v` shows each model request, tool call, and approval on stderr as it happens, and `-vv` adds prompts, arguments, and outputs. Either way the log is also written as JSON lines to `~/.local/state/jamcli/logs/` (one file a day, kept 14 days), or to `--log-file <path>`. Without a flag only warnings and errors are logged. `--trace-file <path>` writes a span for the session, each turn, each model request, and each tool call. Keys and tokens are redacted from both. `-v` on its own still prints the version. The interface and `jamcli acp` read `JAMCLI_LOG_LEVEL`, `JAMCLI_LOG_FILE`, and `JAMCLI_TRACE_FILE` instead.
-- `jamcli sessions list`, `search <query>`, `show <id>`, `export <id>`, and `fork <id>` work on this project's sessions. Sessions record every message, tool call, result, and approval decision, and older history files are read without being rewritten.
-- `jamcli mcp add|list|test|remove` manages MCP servers, and `jamcli audit` reports tool access, isolation, and guardrail findings by severity without writing anything.
-- `jamcli doctor` checks your setup without changing it: configuration, keys, every model a session may use, ripgrep, the sandbox, git, gh, MCP servers, and the trace collector. Each line says `ok`, `info`, `warn`, or `fail`, and each problem comes with a fix. `--json` prints the same list, `--no-mcp` skips starting MCP servers, and the exit code is 1 when anything failed.
-- `jamcli acp` serves the Agent Client Protocol over stdio for an ACP client such as Zed:
-
-```bash
-~/.local/bin/acp-delegate --agent "bun src/index.tsx acp" --cwd . --prompt "unused" --list-only
-# agent: jamcli 1.0.0  protocol v1
-# session: <id>
-#   model: model = <configured model>
-#   profile: profile = default
-```
-
-**Driving a vendor subscription through a third-party protocol client can violate that vendor's terms of service.** The ACP surface exists for agents and endpoints you are entitled to drive. Where the vendor offers an API-key path, use that instead: configure the key through `key_env_var` so it stays out of the project file.
-
-## Configuration
-
-Configuration comes from layers, each overriding the ones before it:
-
-1. built-in defaults, which include Ollama on `http://localhost:11434`;
-2. your own `~/.config/jamcli/config.json` (or `$XDG_CONFIG_HOME/jamcli`, or `$JAMCLI_CONFIG_DIR`), for every project;
-3. the project's `.jamcli/config.json`, with the older `.jamcli/mcp.json` and `.jamcli/profiles/`;
-4. the project's `.jamcli/config.local.json`;
-5. `JAMCLI_MODEL`, `JAMCLI_PROFILE`, and `JAMCLI_PERMISSION_MODE`;
-6. flags such as `--model` and `--permission-mode`.
-
-Sections merge key by key, and permission rules from every layer apply, so a deny in your own file holds in every project. A value that does not fit its setting is reported by file, key, and expected shape, and the layer below it applies instead.
-
-```bash
-jamcli config set model ollama:qwen2.5-coder:7b              # into .jamcli/config.json
-jamcli config set agent_loop.max_steps 30 --scope user       # into your own config.json
-jamcli config set 'models["ollama:qwen2.5-coder:7b"].context_window' 32768 --scope local
-jamcli config list --show-origin                             # every value, and where it came from
-jamcli config get model
-jamcli config unset agent_loop.max_steps --scope user
-```
-
-Values are read as JSON where they parse, so `30`, `true`, and `["read_file"]` keep their types. `jamcli config` never prints a key, a header, or an environment value. Editors can complete configuration files from [`docs/config.schema.json`](docs/config.schema.json).
-
-JamCLI writes nothing into a project until it has something to keep there: a session's history, a permission granted at a prompt, a todo list, or a `jamcli config set`. It then creates `.jamcli/` with a `.gitignore` that ignores the whole directory, so history and keys never reach a repository by accident. To share a file with a team, add an exception to `.jamcli/.gitignore`, such as `!config.json`.
-
-### Traces over OpenTelemetry
-
-Nothing leaves your machine unless you turn it on. To send traces to an OpenTelemetry collector:
-
-```bash
-jamcli config set otel.enabled true --scope user
-jamcli config set otel.endpoint http://localhost:4318/v1/traces --scope user   # or set OTEL_EXPORTER_OTLP_ENDPOINT
-```
-
-Spans follow the OpenTelemetry GenAI conventions (`chat <model>`, `execute_tool <name>`, `invoke_agent jamcli`) with the provider, model, and token counts. Prompts, outputs, and tool results are left out unless `otel.include_content` is `true`, and even then keys are redacted. `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, and `OTEL_RESOURCE_ATTRIBUTES` are honored, and `otel.headers` adds headers such as a collector token.
-
-### Keys
-
-A provider's key is taken from, in order: the variable named in its `key_env_var`, an `api_key` in configuration, its usual variable (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), and then the key stored with `jamcli auth`:
-
-```bash
-jamcli auth set anthropic          # type the key at a prompt that does not echo it, or pipe it in
-jamcli auth login openrouter       # sign in to OpenRouter in the browser; it issues a key you control
-jamcli auth list                   # where each provider's key comes from
-jamcli auth get openrouter         # the stored key, masked; --reveal prints it
-jamcli auth remove openrouter
-```
-
-Stored keys go to the macOS keychain, to the Secret Service keyring on Linux, or, where neither exists, to `~/.config/jamcli/credentials.json`, readable only by you. `JAMCLI_CREDENTIAL_STORE=keychain|secret-service|file` chooses. A key is never taken as a command-line argument, and a stored key a session uses is redacted from tool output like any other. `jamcli audit` reports a key written into a project file.
-
-**Upgrading.** Existing `.jamcli/` files are read as they are. An existing `.jamcli/` gets its `.gitignore` the next time JamCLI stores something there. A new project no longer starts on a `gpt-4o` profile it never asked for: choose a model with `jamcli config set model <provider>:<model>` or `--model`. To turn the old per-tool settings in `mcp.json` into permission rules, run `jamcli config migrate` (add `--dry-run` to see the change first); it keeps `.bak` copies and never runs on its own.
-
-### Project Root Detection
-
-JamCLI detects the project root by walking up the directory tree from your current working directory until it finds a `.jamcli` folder, and uses the working directory when there is none. Once a project has one, this ensures that:
-
-- You can run `jamcli` from any subdirectory.
-- The same configuration and MCP servers are used across the project.
-- Chat history is preserved and shared regardless of where you launch the CLI within the project.
-
-### Configuration Files
-
-- `config.json`: General settings, including `model`, `permissions`, `sandbox`, `agent_loop` bounds, `categories` for routed work, `delegation` limits, and `trust`. `config.local.json` takes the same settings and overrides it.
-- `mcp.json`: Tool permissions, context limits, ignore patterns, and MCP servers over stdio or streamable HTTP.
-- `profiles/`: AI behavior profiles.
-- `AGENTS.md`, `CLAUDE.md`, and `.jamcli/rules/*.md`: project rules, collected from the project root toward the working directory. A section headed `# when: <glob>` applies only to matching work.
-- `styles` may be created using `/config > Style > Create Custom Style`
-
-### Models: limits and prices
-
-JamCLI sizes each request from what it knows about the model: its context window, its
-output limit, and its prices. Each fact comes from the first source that has it:
-
-1. the `models` block in `config.json`;
-2. the provider's own metadata: Ollama's `/api/show`, OpenRouter's model list, and
-   Anthropic's Models API, cached for a day under the cache directory;
-3. a table bundled with JamCLI for Claude models, checked against Anthropic's published
-   documentation;
-4. a context window of 8,192 tokens, and no price.
-
-Ollama models cost nothing, and their window is the `num_ctx` JamCLI sends: the model's
-entry, else `api_registry.ollama.num_ctx`, else the model's own limit capped at 16,384.
-A model with no known price is reported as unpriced, never estimated. Each request is
-priced when it is made, so changing a price later does not rewrite what a session cost.
-
-OpenAI's models route reports no limits or prices, so describe OpenAI models yourself.
-Prices are US dollars per million tokens:
-
-```json
-{
-  "models": {
-    "openai:example-model": {
-      "context_window": 200000,
-      "max_output": 32000,
-      "price": { "input": 2, "output": 8, "cache_read": 0.5 }
-    },
-    "ollama:qwen3-coder:30b": { "context_window": 65536 }
-  },
-  "agent_loop": { "max_output_tokens": 32000 }
-}
-```
-
-The OpenAI numbers are illustrations; take real ones from your provider. The other
-settings are `tools`, `reasoning`, `images`, `thinking` (`adaptive` or `budget`),
-`always_thinks`, `effort`, and the price `cache_write`. `agent_loop.max_output_tokens`
-caps how much each reply may write, 32,000 by default and never more than the model
-allows. A reply cut off at that limit says so.
-
-For Claude models, JamCLI caches the tool list, the system prompt, and the conversation so
-far, and asks each model to think in the way it supports. Opus 4.7 and later models
-refuse a temperature, so a profile's temperature is sent only to older models while they
-are not thinking.
-
-### Context
-
-When a conversation nears the model's context window, JamCLI summarizes its older part
-and keeps the latest messages as they were. It never separates a tool call from its
-results, and a request cut in the middle keeps its wording. The budget is the window,
-less the output a reply may need, less a tenth; compaction starts at 85 percent of it.
-The estimate learns from the token counts the provider reports. For a model whose window
-JamCLI does not know, it compacts only when the provider refuses a request as too long,
-then retries once. A summary that fails leaves the older messages out, and the notice
-says so. Set `"context": { "auto_compact": false }` in `config.json` to turn it off; the
-older `context_management` block applies only to the legacy interface.
+| Topic | Page |
+|---|---|
+| First run, providers, a first task | [getting-started.md](docs/getting-started.md) |
+| Configuration layers and every key | [configuration.md](docs/configuration.md) |
+| Permission modes, rules, and the sandbox | [permissions.md](docs/permissions.md) |
+| Built-in tools | [tools.md](docs/tools.md) |
+| Providers, models, keys, cost | not yet written |
+| Sessions, resume, fork, checkpoints | not yet written |
+| Custom commands and skills | not yet written |
+| Hooks | not yet written |
+| Plugins | not yet written |
+| Workflows | not yet written |
+| MCP, ACP, the observer, LSP | not yet written |
+| Headless use | not yet written |
+| The interface, keys, micro mode | not yet written |
+| Security model | not yet written |
+| Upgrading from 1.x | not yet written |
+| Changes | not yet written |
+| How it stands against other agents | [feature-matrix.md](docs/feature-matrix.md) |
+| Protocol conformance | [conformance.md](docs/conformance.md) |
+| Architecture | [architecture.md](docs/architecture.md) |
 
 ## Development
 
-### Run Locally (without installing)
+Four gates, every change:
 
 ```bash
-
-# watch mode /w auto-reload
-bun run dev
-```
-
-### Performance
-
-```bash
+bun install
+npx tsc --noEmit
+bun test
 bun run build
-bun run bench              # --version, headless overhead, and grep, against the budgets
-bun run bench -- --enforce # exit 1 when an enforced budget is missed
 ```
 
-The budgets and the latest measurements are in `openspec/changes/rehaul-jamcli/design.md` (D24).
+`bun run bench` measures startup, first frame, keystroke latency, and memory against
+the budgets. Work is planned in `openspec/`: `openspec/project.md` has the thesis and
+conventions, and `openspec/DEFERRED.md` lists what is not finished.
 
-### Cleanup
+## Status
 
-To remove the global `jamcli` command:
-
-```bash
-npm unlink -g jamcli
-```
-
-## Architecture
-
-- **Runtime**: Bun
-- **UI Framework**: Ink 7.1.1 (interim; OpenTUI is the committed target and the port follows this unit)
-- **State Management**: Zustand
-- **Type Safety**: TypeScript
-- **MCP**
-
+A personal project, not published to npm. Use it with care: an agent that edits files
+and runs commands can do damage, which is why the default mode asks before every change.
+Issues and pull requests are welcome.
