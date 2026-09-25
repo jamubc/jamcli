@@ -20,7 +20,7 @@ import type { SpendSummary } from './core/catalog/cost.js';
 const SESSIONS_ACTIONS = ['list', 'search', 'show', 'export', 'fork'] as const;
 type SessionsAction = (typeof SESSIONS_ACTIONS)[number];
 
-export type McpAction = 'add' | 'list' | 'test' | 'remove';
+export type McpAction = 'add' | 'list' | 'test' | 'remove' | 'login' | 'logout';
 
 export interface ParsedArgs {
   prompt?: string;
@@ -207,7 +207,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     if (token === 'mcp') {
       const action = argv[i + 1];
       const args = argv.slice(i + 2);
-      if (action === 'add' || action === 'list' || action === 'test' || action === 'remove') {
+      if (action === 'add' || action === 'list' || action === 'test' || action === 'remove' || action === 'login' || action === 'logout') {
         parsed.mcpCommand = { action, args };
       } else {
         parsed.mcpCommand = { action: (action ?? 'list') as McpAction, args };
@@ -273,7 +273,7 @@ export const USAGE = `Usage: jamcli [options]
   jamcli doctor [--json] [--no-mcp]   Check providers, models, tools, the sandbox, and configuration
   jamcli config list|get|set|unset|migrate   Read and change configuration, layer by layer
   jamcli auth set|get|remove|list|login   Store provider keys in the keychain, or sign in to OpenRouter
-  jamcli mcp add|list|test|remove   Manage MCP servers in .jamcli/mcp.json
+  jamcli mcp add|list|test|remove|login|logout   Manage MCP servers in .jamcli/mcp.json, and sign in to HTTP ones
   jamcli acp                   Serve the Agent Client Protocol over stdio
   jamcli skill list            List the skills the model can load, and any that could not be read
   jamcli hooks [list|trust]    List the configured hooks, or trust this project's as they are

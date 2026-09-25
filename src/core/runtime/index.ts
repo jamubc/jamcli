@@ -313,11 +313,23 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       ? undefined
       : (options.mcp ??
         (serversConfigured
-          ? new (await import('../../services/McpManager.js')).McpManager({
-              // The legacy configuration service loads only when an MCP server needs it.
-              configService: options.configService ?? new (await import('../../services/ConfigService.js')).ConfigService(projectRoot),
-              envFor: (server) => envFor(server.env_passthrough, server.env),
-            })
+          ? await (async () => {
+              const [{ McpManager }, { ConfigService }, { StoredOAuthProvider }, { transportKind }, { detectStore }] = await Promise.all([
+                import('../../services/McpManager.js'),
+                import('../../services/ConfigService.js'),
+                import('../mcp/oauth.js'),
+                import('../mcp/connect.js'),
+                import('../config/credentials.js'),
+              ]);
+              let store: ReturnType<typeof detectStore> | undefined;
+              return new McpManager({
+                // The legacy configuration service loads only when an MCP server needs it.
+                configService: options.configService ?? new ConfigService(projectRoot),
+                envFor: (server) => envFor(server.env_passthrough, server.env),
+                // A signed-in HTTP server's tokens come from the credential store; signing in is `jamcli mcp login`.
+                authFor: (server) => (transportKind(server) === 'http' ? new StoredOAuthProvider(server, (store ??= detectStore(env))) : undefined),
+              });
+            })()
           : undefined));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
   const depth = options.parent ? options.parent.depth : 0;

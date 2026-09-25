@@ -116,3 +116,33 @@ test('mcp add in a project without .jamcli creates it ignoring itself', async ()
     await remove(root);
   }
 });
+
+test('mcp login signs in to an HTTP server through the browser, keeps the tokens in the store, and logout forgets them', async () => {
+  const { startFakeOAuthMcp } = await import('../../testing/fakeOAuthMcp.js');
+  const fake = startFakeOAuthMcp();
+  const root = await makeProject();
+  const entries = new Map<string, string>();
+  const store = { kind: 'file' as const, where: 'the test store', get: (key: string) => entries.get(key), set: (key: string, value: string) => void entries.set(key, value), remove: (key: string) => entries.delete(key) };
+  const out: string[] = [];
+  const io: McpCommandIo = { out: (line) => out.push(line), err: (line) => out.push(`err: ${line}`) };
+  try {
+    await runMcpCommand({ action: 'add', args: ['remote', '--url', fake.url] }, root, silentIo);
+    const browser = async (url: URL) => {
+      const answer = await fetch(url, { redirect: 'manual' });
+      await fetch(answer.headers.get('location')!);
+    };
+    expect(await runMcpCommand({ action: 'login', args: ['remote'] }, root, io, { store, openBrowser: browser })).toBe(0);
+    expect(out[0]).toStartWith('Opening your browser to sign in to remote. If it does not open, visit:\nhttp://127.0.0.1:');
+    expect(out[1]).toBe('Signed in to remote; 4 tools. The tokens are kept in the test store.');
+    expect([...entries.keys()].sort()).toEqual(['mcp-oauth:remote:client', 'mcp-oauth:remote:tokens']);
+    // Nothing of the sign-in is written to the project.
+    expect(fs.readFileSync(path.join(root, '.jamcli', 'mcp.json'), 'utf8')).not.toContain('access_token');
+    expect(await runMcpCommand({ action: 'logout', args: ['remote'] }, root, io, { store })).toBe(0);
+    expect(out.at(-1)).toBe('Signed out of remote; its tokens are gone from the test store.');
+    expect(entries.size).toBe(0);
+    expect(await runMcpCommand({ action: 'login', args: ['nope'] }, root, io, { store })).toBe(1);
+  } finally {
+    fake.stop();
+    await remove(root);
+  }
+}, 20_000);

@@ -6,7 +6,7 @@ import type { McpServerConfig, McpTransport } from '../types/mcp.js';
 import { ensureProjectStateDir } from '../core/transcript/log.js';
 
 export interface McpCommandRequest {
-  action: 'add' | 'list' | 'test' | 'remove';
+  action: 'add' | 'list' | 'test' | 'remove' | 'login' | 'logout';
   args: string[];
 }
 
@@ -158,10 +158,22 @@ const describeServer = (server: McpServerConfig): string => {
   return `${server.id}\t${kind}\t${server.enabled === false ? 'disabled' : 'enabled'}\t${target}`;
 };
 
+/** Open a page in the person's browser; the address is printed as well, in case it cannot. */
+export async function openBrowser(url: URL): Promise<void> {
+  const { spawn } = await import('child_process');
+  const [command, args] = process.platform === 'darwin' ? ['open', [url.toString()]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url.toString()]] : ['xdg-open', [url.toString()]];
+  try {
+    spawn(command, args as string[], { stdio: 'ignore', detached: true }).on('error', () => undefined).unref();
+  } catch {
+    // The printed address is the fallback.
+  }
+}
+
 export const runMcpCommand = async (
   request: McpCommandRequest,
   projectRoot: string,
-  io: McpCommandIo = defaultIo
+  io: McpCommandIo = defaultIo,
+  options: { store?: import('../core/config/credentials.js').CredentialStore; openBrowser?: (url: URL) => void | Promise<void> } = {}
 ): Promise<number> => {
   const config = await readMcpConfig(projectRoot);
   const servers: McpServerConfig[] = Array.isArray(config.servers) ? config.servers : [];
@@ -209,13 +221,36 @@ export const runMcpCommand = async (
 
   const id = request.args[0];
   if (!id) {
-    io.err('Usage: jamcli mcp test <id>');
+    io.err(`Usage: jamcli mcp ${request.action} <id>`);
     return 2;
   }
   const server = servers.find((entry) => entry.id === id);
   if (!server) {
     io.err(`No MCP server named ${id}.`);
     return 1;
+  }
+  if (request.action === 'login' || request.action === 'logout') {
+    const { detectStore } = await import('../core/config/credentials.js');
+    const { mcpLogin, mcpLogout } = await import('../core/mcp/oauth.js');
+    const store = options.store ?? detectStore();
+    if (request.action === 'logout') {
+      io.out(mcpLogout(server, store) ? `Signed out of ${id}; its tokens are gone from ${store.where}.` : `${id} had no stored sign-in.`);
+      return 0;
+    }
+    try {
+      const done = await mcpLogin(server, {
+        store,
+        open: async (url) => {
+          io.out(`Opening your browser to sign in to ${id}. If it does not open, visit:\n${url}`);
+          await (options.openBrowser ?? openBrowser)(url);
+        },
+      });
+      io.out(`Signed in to ${id}; ${done.tools} tool${done.tools === 1 ? '' : 's'}. The tokens are kept in ${store.where}.`);
+      return 0;
+    } catch (error: any) {
+      io.err(`Not signed in to ${id}: ${error?.message ?? error}`);
+      return 1;
+    }
   }
   const result = await new McpTestService().testServer(server, projectRoot);
   io.out(`${result.status}: ${result.message}`);
