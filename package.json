@@ -27,6 +27,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/server": "^2.1.0",
     "@types/bun": "latest",
     "@types/diff": "^5.0.9",
     "@types/node": "^20.11.24",
