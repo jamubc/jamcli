@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from 'bun:test';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -129,4 +130,106 @@ test('a command typed after ! runs under the session\'s permissions without the 
   expect(denied).toMatchObject({ status: 'refused', error: 'The command was not run.' });
   expect(fs.existsSync(path.join(root, 'made.txt'))).toBe(false);
   await asking.close();
+});
+
+test('a ! command with output past the limit is recorded cut short, with the note', async () => {
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8'));
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, agent_loop: { tool_result_max_chars: 200 } }));
+  const runtime = await start({ allowTools: ['run_command'] });
+  try {
+    const events: AgentEvent[] = [];
+    const ran = await runtime.run('bun -e "console.log(\'x\'.repeat(4000))"', (event) => events.push(event), { shell: true });
+    expect(ran.status).toBe('ok');
+    // The person sees the whole output; what the model reads is bounded and says what was cut.
+    expect(ran.response.length).toBeGreaterThan(3_000);
+    const recorded = events.find((event) => event.type === 'message');
+    expect(recorded?.message.content).toContain('characters removed');
+    expect(recorded?.message.content.length).toBeLessThan(1_000);
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('a ! command cancelled while it runs reports cancelled, not ok', async () => {
+  const runtime = await start({ allowTools: ['run_command'] });
+  try {
+    const turn = runtime.run('bun -e "setTimeout(() => {}, 30000)"', () => {}, { shell: true });
+    await Bun.sleep(400);
+    runtime.cancel();
+    const ran = await turn;
+    expect(ran.status).toBe('cancelled');
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('a pre_tool hook sees a ! command and can deny it', async () => {
+  const guard = path.join(root, 'guard.sh');
+  fs.writeFileSync(guard, '#!/bin/sh\necho "a shell command is frozen" >&2\nexit 2\n', { mode: 0o755 });
+  const savedConfigDir = process.env.JAMCLI_CONFIG_DIR;
+  process.env.JAMCLI_CONFIG_DIR = path.join(root, '.user');
+  fs.mkdirSync(path.join(root, '.user'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.user', 'config.json'), JSON.stringify({ hooks: { pre_tool: [{ matcher: 'run_command(echo *)', command: guard }] } }));
+  try {
+    const runtime = await start({ allowTools: ['run_command'] });
+    try {
+      const events: AgentEvent[] = [];
+      const ran = await runtime.run('echo should-not-run', (event) => events.push(event), { shell: true });
+      expect(ran).toMatchObject({ status: 'refused', error: 'The command was not run.' });
+      const outputs = events.flatMap((event) => (event.type === 'tool_result' ? [event.result.output] : []));
+      expect(outputs.join('\n')).not.toContain('should-not-run');
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    if (savedConfigDir === undefined) delete process.env.JAMCLI_CONFIG_DIR;
+    else process.env.JAMCLI_CONFIG_DIR = savedConfigDir;
+  }
+});
+
+test('a ! command that changes a file takes a checkpoint, and it can be restored', async () => {
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: root, env: { ...process.env, GIT_AUTHOR_NAME: 'P', GIT_AUTHOR_EMAIL: 'p@example.com', GIT_COMMITTER_NAME: 'P', GIT_COMMITTER_EMAIL: 'p@example.com' } });
+  git('init', '-q', '-b', 'main');
+  git('add', 'a.txt');
+  git('commit', '-q', '-m', 'first');
+  const runtime = await start({ allowTools: ['run_command'] });
+  try {
+    const ran = await runtime.run('echo new > a.txt', () => {}, { shell: true });
+    expect(ran.status).toBe('ok');
+    expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
+    expect(runtime.checkpoints().length).toBeGreaterThan(0);
+    await runtime.restoreCheckpoint(1);
+    expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('old\n');
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('a ! command runs even when no model provider can be built', async () => {
+  const config = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8'));
+  fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ ...config, model: 'openai:gpt-5', api_registry: {} }));
+  const runtime = await start({ allowTools: ['run_command'] });
+  try {
+    const ran = await runtime.run('echo no provider needed', () => {}, { shell: true });
+    expect(ran.status).toBe('ok');
+    expect(ran.response).toContain('no provider needed');
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('! runs its text literally, without expanding @ references', async () => {
+  const runtime = await start({ allowTools: ['run_command'] });
+  try {
+    const events: AgentEvent[] = [];
+    const ran = await runtime.run('echo @a.txt', (event) => events.push(event), { shell: true });
+    expect(ran.status).toBe('ok');
+    expect(ran.response).toContain('@a.txt');
+    const recorded = events.find((event) => event.type === 'message');
+    expect(recorded?.message.content).toContain('echo @a.txt');
+    expect(recorded?.message.content).not.toContain('File a.txt');
+  } finally {
+    await runtime.close();
+  }
 });

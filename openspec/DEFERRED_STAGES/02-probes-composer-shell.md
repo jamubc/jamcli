@@ -3,12 +3,12 @@
 **Description:** `CoreAgent.shell` truncates via `this.truncate`. No test runs a long-output command.
 
 **Acceptance criteria:**
-- [ ] Test runs `!` command with output over the limit and asserts truncation note plus bounded length
-- [ ] `this.truncate(result.output)` to `result.output` turns the test red
+- [x] Test runs `!` command with output over the limit and asserts truncation note plus bounded length
+- [x] `this.truncate(result.output)` to `result.output` turns the test red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts`
-- [ ] Manual check: probe without truncate fails
+- [x] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts`
+- [x] Manual check: probe without truncate fails
 
 **Dependencies:** None
 
@@ -23,11 +23,11 @@
 **Description:** A stopped `!` command must not report `ok`.
 
 **Acceptance criteria:**
-- [ ] Test cancels a running `!` command and asserts cancelled status, not `ok`
-- [ ] `signal.aborted` to `false` turns the test red
+- [x] Test cancels a running `!` command and asserts cancelled status, not `ok`
+- [x] `signal.aborted` to `false` turns the test red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts`
+- [x] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts`
 
 **Dependencies:** Task 1
 
@@ -42,11 +42,11 @@
 **Description:** `pre_tool` hooks must see `!` commands, and file-editing `!` commands must take checkpoints for `/rewind`.
 
 **Acceptance criteria:**
-- [ ] Deny hook on `run_command` stops a `!` command; dropping `hooks` from `executeBatch` turns it red
-- [ ] `/rewind` after a `!` command that edits a file restores it; dropping `beforeChange`/`afterChange` turns it red
+- [x] Deny hook on `run_command` stops a `!` command; dropping `hooks` from `executeBatch` turns it red
+- [x] `/rewind` after a `!` command that edits a file restores it; dropping `beforeChange`/`afterChange` turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts src/core/git/__tests__/checkpoints.test.ts`
+- [x] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts src/core/git/__tests__/checkpoints.test.ts`
 
 **Dependencies:** None
 
@@ -61,12 +61,12 @@
 **Description:** `!` must work with no provider and must run shell text literally.
 
 **Acceptance criteria:**
-- [ ] Test runs `!` in a session with no provider and asserts it still works
-- [ ] `!cat @a.txt` runs as typed (no reference expansion); expanding it turns the test red
-- [ ] Lone `!` does not run an empty command (guard in `submit`)
+- [x] Test runs `!` in a session with no provider and asserts it still works
+- [x] `!cat @a.txt` runs as typed (no reference expansion); expanding it turns the test red
+- [x] Lone `!` does not run an empty command (guard in `submit`)
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts src/tui/__tests__/composer.test.tsx`
+- [x] Tests pass: `bun test src/core/runtime/__tests__/turns.test.ts src/tui/__tests__/composer.test.tsx`
 
 **Dependencies:** Tasks 1-3
 
@@ -77,8 +77,8 @@
 **Estimated scope:** Small: 1-2 files
 
 ## Checkpoint: After Tasks 1-4
-- [ ] Already-caught probes re-run green: `executeBatch` bypass, denied-as-ok, missing user message, `!cmd` to model
-- [ ] New gap tests fail without fix
+- [x] Already-caught probes re-run green: `executeBatch` bypass, denied-as-ok, missing user message, `!cmd` to model
+- [x] New gap tests fail without fix
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 139-174)

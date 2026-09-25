@@ -154,3 +154,17 @@ test('a server whose resource listing fails still leaves file completion working
     await close();
   }
 }, 30_000);
+
+test('a lone ! is sent as text, not run as an empty command', async () => {
+  context.server.enqueue({ text: 'Noted.' });
+  const { setup, close } = await open({}, { size: { width: 110, height: 40 } });
+  try {
+    await setup.mockInput.typeText('!');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Noted.'), 5_000);
+    expect(context.server.completions().length).toBe(1);
+    expect(context.server.completions()[0].body.messages.at(-1).content).toBe('!');
+  } finally {
+    await close();
+  }
+}, 20_000);
