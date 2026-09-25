@@ -169,6 +169,34 @@ test('a lone ! is sent as text, not run as an empty command', async () => {
   }
 }, 20_000);
 
+test('a # note is confirmed, appended through a tool call, and Escape leaves the file alone', async () => {
+  const agents = path.join(context.root, 'AGENTS.md');
+  fs.writeFileSync(agents, '# Rules\n\nBe kind.\n');
+  const { setup, close } = await open({}, { size: { width: 110, height: 40 } });
+  try {
+    const before = context.server.completions().length;
+    await setup.mockInput.typeText('#Always run the tests.');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Append to AGENTS.md?') && frame.includes('Add it'), 5_000);
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => !frame.includes('Append to AGENTS.md?'), 2_000);
+    expect(fs.readFileSync(agents, 'utf8')).toBe('# Rules\n\nBe kind.\n');
+
+    await setup.mockInput.typeText('#Always run the tests.');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Append to AGENTS.md?'), 5_000);
+    setup.mockInput.pressEnter();
+    // The note goes through the edit tool, which asks like any edit in default mode.
+    await frameWith(setup, (frame) => frame.includes('Allow edit AGENTS.md?'), 5_000);
+    setup.mockInput.typeText('1');
+    await frameWith(setup, (frame) => frame.includes('done: edit AGENTS.md'), 5_000);
+    expect(fs.readFileSync(agents, 'utf8')).toBe('# Rules\n\nBe kind.\nAlways run the tests.\n');
+    expect(context.server.completions().length).toBe(before);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('the observer hears every event of a turn, in order', async () => {
   const events: string[] = [];
   const observer = { event: (event: { type: string }) => void events.push(event.type), attach: () => undefined };

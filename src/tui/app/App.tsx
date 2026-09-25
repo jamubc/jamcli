@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import path from 'path';
+import fs from 'fs';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import { fitPhrase, isMicro, microPhrase, microSetting } from './micro.js';
@@ -17,6 +18,7 @@ import { askToTrustHooks } from './extensions.js';
 import { answerElicitation } from './elicit.js';
 import { Palette, ReferencePalette } from './Palette.js';
 import { completeReference, matchReferences, referenceCandidates, referenceToken, type ReferenceItem } from './references.js';
+import { noteCall, noteText } from './note.js';
 import { Picker, shownItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
 import { MotionContext, PlainContext, THEMES, ThemeContext, framed, type Theme } from './theme.js';
 import { keysFor, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
@@ -362,6 +364,34 @@ export function App(props: AppProps) {
     setPalette({ draft: next, index: 0 });
   };
 
+  /** Append a `#` note to AGENTS.md after showing it, through the tool path so permissions and checkpoints apply. */
+  const appendNote = (note: string) => {
+    const file = 'AGENTS.md';
+    let current = '';
+    try {
+      current = fs.readFileSync(path.join(projectRoot, file), 'utf8');
+    } catch {
+      // A missing file is created by the same confirmation.
+    }
+    const call = noteCall(file, current, note);
+    // After the key event, so the Enter that submitted this does not also choose the first row.
+    setTimeout(() => {
+      pick({
+        title: `Append to ${file}?`,
+        items: [
+          { key: 'yes', label: 'Add it', detail: `+ ${note}` },
+          { key: 'no', label: 'Do not', detail: 'nothing is written' },
+        ],
+        empty: '',
+        hint: 'Enter chooses · Escape says no',
+        choose: (item) => {
+          if (item.key === 'yes') void controller.submit(`#${note}`, { display: `#${note}`, tool: call });
+        },
+        dismissed: () => undefined,
+      });
+    }, 0);
+  };
+
   const submit = () => {
     const typed = composer.current?.plainText ?? '';
     const text = typed.trim();
@@ -369,6 +399,13 @@ export function App(props: AppProps) {
     // Enter on an `@` word still being typed completes it rather than sending.
     const referenced = referencesFor(typed)?.[palette.current.index];
     if (referenced) return completeWith(referenced);
+    // `#` opens a note to the project's AGENTS.md, through the tool path.
+    const note = noteText(text);
+    if (note) {
+      composer.current?.setText('');
+      setPalette({ draft: '', index: 0 });
+      return void appendNote(note);
+    }
     // Enter on a name still being typed runs the chosen match.
     const listed = matchesFor(typed);
     const chosen = listed?.[palette.current.index];
