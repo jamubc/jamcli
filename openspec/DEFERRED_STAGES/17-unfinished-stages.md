@@ -87,8 +87,18 @@
 **Estimated scope:** Medium: 3-5 files
 
 ## Checkpoint: After Tasks 1-4
-- [ ] Each item either implemented with surface tests or recorded as a gap with reason
-- [ ] Four gates pass
+- [x] Each item either implemented with surface tests or recorded as a gap with reason
+- [x] Four gates pass
+
+## Record (2026-09-25): what was implemented and what is a recorded gap
+- Implemented: an agent step's `category` now resolves through `resolveRoute` like delegation, so an unconfigured provider at the head of the chain is skipped and the next servable model runs. Test: workflows.test.ts "an agent step category falls back along the chain like delegation"; probe 17a is caught.
+- Implemented: the status line counts language servers beside MCP (`LSP n`, zero takes no room). The runtime exposes `lspServers`; tests: lsp.test.ts asserts it contains `probe`, format.test.ts asserts `LSP 3` and no `LSP 0`; probe 17b is caught.
+- Gap, 9.3 editor file system and terminals: not implemented. It needs optional `readText`, `writeText`, and `terminal` on `ToolContext`, set from the ACP client's capabilities in `src/acp/session.ts` and used below the dispatcher so permissions and checkpoints still apply. That is 5-8 files of protocol work, and its acceptance needs a live editor session (unsaved buffer read, editor terminal run), which needs the owner's editor. Scoped for a follow-up unit rather than half-built here.
+- Gap, 9.4 onwards: delegated runs deliberately get no language server (`options.parent` skips the manager) because the parent's servers own the workspace and two servers would race on diagnostics; recorded as the documentation of why not. Workspace symbols, rename, and code actions are not wired: the fake server does not exercise them and each needs its own request and result mapping; recorded as gaps with that reason.
+- Known limit, stage 10 per-host network: a plugin's declared hosts still turn the sandbox network on or off as a whole. A filtering proxy or a network namespace with its own resolver is a project of its own; the plan's default is to record this as a known limit unless the owner approves the proxy work.
+- Gap, stage 10 consent in the interface: `/plugins` lists only; install, update, and remove stay on the command line, which already carries the consent text. An interface flow would reuse `consentWith`; recorded as UI work for a later unit.
+- Known limits, stage 11 schedules: macOS accepts single numbers only and Windows daily or weekly times only; `triggers.ts` refuses what it cannot express with clear errors ('launchd cannot express', 'daily'). Ranges and steps stay crontab-only.
+- Blocked on hardware, stage 11: the launchd and Windows schedule files have not run on their systems (the same limit as 3.7); owner-provided machines are needed, tracked in `15-blocked-access-hardware.md`.
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 573-599)
