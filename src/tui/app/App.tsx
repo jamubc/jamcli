@@ -11,6 +11,7 @@ import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
 import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
+import { customCommands } from './custom.js';
 import { Palette } from './Palette.js';
 import { Picker, filterItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
 import { MotionContext, PlainContext, THEMES, ThemeContext, framed, type Theme } from './theme.js';
@@ -103,7 +104,9 @@ export function App(props: AppProps) {
   );
   const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch), [runtime]);
-  const commands = useMemo(() => [...BUILTIN_COMMANDS, ...extra], [extra]);
+  // Custom commands are read again with each session, so a file added meanwhile is found.
+  const custom = useMemo(() => customCommands(projectRoot, BUILTIN_COMMANDS), [projectRoot, runtime]);
+  const commands = useMemo(() => [...BUILTIN_COMMANDS, ...custom.commands, ...extra], [custom, extra]);
   const composer = useRef<TextareaRenderable | null>(null);
   const transcript = useRef<ScrollBoxRenderable | null>(null);
   /** How many of the latest rows are drawn; it starts over with each session. */
@@ -129,6 +132,9 @@ export function App(props: AppProps) {
   useEffect(() => {
     for (const problem of keys.problems) dispatch({ type: 'notice', level: 'warn', text: problem });
   }, [keys]);
+  useEffect(() => {
+    for (const problem of custom.problems) dispatch({ type: 'notice', level: 'warn', text: problem });
+  }, [custom]);
 
   // Another session starts at its latest rows, at the bottom, wherever this one was.
   useEffect(() => {
@@ -252,6 +258,7 @@ export function App(props: AppProps) {
       composer.current?.setText(text);
       composer.current?.gotoBufferEnd();
     },
+    send: (prompt, options) => void controller.submit(prompt, options),
     keys: keys.bindings,
   });
 
@@ -271,8 +278,9 @@ export function App(props: AppProps) {
   const runCommand = async (line: string, options: { quiet?: boolean } = {}) => {
     const parsed = parseCommand(line);
     if (!parsed) return;
-    if (!options.quiet) dispatch({ type: 'command', text: line });
     const command = findCommand(commands, parsed.name);
+    // A custom command's line is shown as the message it sends.
+    if (!options.quiet && command?.source !== 'user' && command?.source !== 'project') dispatch({ type: 'command', text: line });
     if (!command) return say('warn', LATER.has(parsed.name) ? `/${parsed.name} is not available yet.` : `/${parsed.name} is not a command. /help lists them.`);
     try {
       await command.run(context(), parsed.args);

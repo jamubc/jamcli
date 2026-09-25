@@ -1,7 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { Runtime } from '../../core/runtime/index.js';
+import type { RunOptions, Runtime } from '../../core/runtime/index.js';
 import type { EditableRuleScope } from '../../core/runtime/index.js';
 import { isPermissionMode, type PermissionMode } from '../../core/permissions/modes.js';
 import type { Decision } from '../../core/permissions/rules.js';
@@ -26,7 +26,7 @@ import { pr } from './pr.js';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import type { ThemeName } from '../../types/config.js';
 
-/** Where a command comes from. Custom commands arrive with stage 8 and show their source in the palette. */
+/** Where a command comes from. The palette shows a custom command's source. */
 export type CommandSource = 'built-in' | 'user' | 'project';
 
 /** A session to open in place of the current one. */
@@ -71,6 +71,8 @@ export interface CommandContext {
   setStatusStyle(style: StatusStyleDefinition): void;
   /** Put text in the composer for the person to finish. */
   prefill(text: string): void;
+  /** Send a prompt as a turn, showing `display` as what was typed, as a custom command does. */
+  send(prompt: string, options?: RunOptions & { display?: string }): void;
   /** The keys in effect, for help. */
   readonly keys: Keybindings;
 }

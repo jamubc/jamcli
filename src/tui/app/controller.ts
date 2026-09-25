@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { Runtime } from '../../core/runtime/index.js';
+import type { RunOptions, Runtime } from '../../core/runtime/index.js';
 import type { PermissionMode } from '../../core/permissions/modes.js';
 import type { AgentEvent, ApprovalDecision, ApprovalScope } from '../../core/types.js';
 import type { StatusData, ViewAction } from '../state/view.js';
@@ -79,19 +79,27 @@ export class SessionController {
     this.dispatch({ type: 'status', patch: this.status() });
   }
 
-  /** Send a message and run a turn on it. Resolves when the turn ends. */
-  async submit(text: string): Promise<void> {
+  /**
+   * Send a message and run a turn on it. Resolves when the turn ends. A custom command
+   * shows what was typed, `display`, and sends its prompt with its model and tools.
+   */
+  async submit(text: string, options: RunOptions & { display?: string } = {}): Promise<void> {
     if (this.busy) {
       this.dispatch({ type: 'notice', level: 'warn', text: 'A turn is running; wait for it, or press Escape to stop it.' });
       return;
     }
     this.busy = true;
-    this.dispatch({ type: 'submit', text });
+    const { display, ...turn } = options;
+    this.dispatch({ type: 'submit', text: display ?? text });
     try {
-      const result = await this.runtime.run(text, (event: AgentEvent) => {
-        if (event.type === 'approval_request') this.decisions.set(event.call.id, event.decide);
-        this.dispatch({ type: 'event', event });
-      });
+      const result = await this.runtime.run(
+        text,
+        (event: AgentEvent) => {
+          if (event.type === 'approval_request') this.decisions.set(event.call.id, event.decide);
+          this.dispatch({ type: 'event', event });
+        },
+        turn
+      );
       // A turn that did not finish says why, since no reply may have been written.
       if (result.status === 'refused' || result.status === 'limit') this.dispatch({ type: 'notice', level: 'warn', text: result.response || result.error || 'The turn stopped.' });
       else if (result.status === 'cancelled') this.dispatch({ type: 'notice', level: 'info', text: 'Stopped.' });
