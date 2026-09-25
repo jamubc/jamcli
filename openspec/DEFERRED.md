@@ -279,6 +279,46 @@ then run the probe.
   - **caught by**: partly, in `composer.test.tsx`, which checks `turn_start` and
     `turn_end` only.
 
+### 9.4 LSP (`7612e2b`)
+
+`src/core/lsp/client.ts`:
+
+- **break** `sync`: send `didOpen` every time.
+  - **caught by**: `lsp.test.ts`, whose second diagnostics read would see the old text
+    (the fake server replaces its text on `didOpen` too, so this is likely a **gap**:
+    make the fake refuse a second `didOpen` for the same file).
+- **break** `diagnosticsFor`: return at once without waiting for a newer report.
+  - **caught by**: `lsp.test.ts`, where the fake publishes 20 ms later.
+- **break**: drop the `workspace/configuration` handler.
+  - **gap**: the fake asks and ignores the error. Make it wait for the answer.
+- **break** `stop`: never kill a server that ignores `shutdown`.
+  - **gap**: no fake ignores `shutdown`.
+
+`src/core/lsp/manager.ts`:
+
+- **break** `installed`: fall back to the process `PATH` when the session's has none.
+  - **caught by**: `lsp.test.ts`, which expects nothing available with `PATH: ''`.
+- **break**: a server that failed to start stays cached (drop the `.catch` delete).
+  - **gap**: no test starts a server that fails once and then works.
+- **break** `where`: show absolute paths inside the project.
+  - **caught by**: `lsp.test.ts`, which expects `main.fk:1:10`.
+
+`src/core/tools/lsp.ts`:
+
+- **break**: drop `resolveProjectPath`, so `../outside.fk` is read.
+  - **caught by**: `lsp.test.ts`.
+- **break**: the 1-based to 0-based conversion.
+  - **caught by**: `lsp.test.ts`, whose hover would name another word.
+
+The runtime's post-tool handler (`src/core/runtime/index.ts`):
+
+- **break**: report warnings as well as errors.
+  - **gap**: the fake reports only errors.
+- **break**: skip `apply_patch`'s files.
+  - **gap**: only `edit` is tested.
+- **break**: the 20-line cap.
+  - **gap**.
+
 ### Probes to repeat once later stages land
 
 These areas were probed in their own tasks, but the unfinished stages below add new paths
@@ -352,8 +392,10 @@ copy once the unit closes), what is missing, and what finishing it needs.
     functions, set them in `src/acp/session.ts` from the client's capabilities, and use
     them in `read_file`, `edit`, `write_file`, and `run_command`. The permission engine
     and checkpoints must still apply, so this goes below the dispatcher.
-- **9.4** The LSP client and the `lsp` tool.
-- **9.5** `docs/conformance.md`.
+- **9.4, the rest of LSP.** A delegated task gets no language server, the status line
+  does not count servers (D14 lists "MCP and LSP counts"), and servers run outside the
+  sandbox, with the minimal environment only. Workspace symbols, rename, and code actions
+  are not used.
 - **Stage 10**: plugins (10.1 to 10.5).
 - **Stage 11**: workflows (11.1 to 11.5).
 - **Stage 12**: 12.1 to 12.9.
