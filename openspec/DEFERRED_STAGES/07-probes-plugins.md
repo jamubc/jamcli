@@ -3,11 +3,11 @@
 **Description:** Rename and symlink handling in the integrity hash are unproven.
 
 **Acceptance criteria:**
-- [ ] Renaming a file changes the hash; contents-only hash turns it red
-- [ ] Plugin with a symlink is refused; allowing links turns it red (must prove no outside-file read)
+- [x] Renaming a file changes the hash; contents-only hash turns it red
+- [x] Plugin with a symlink is refused; allowing links turns it red (must prove no outside-file read)
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/plugins/__tests__/plugins.test.ts`
+- [x] Tests pass: `bun test src/core/plugins/__tests__/plugins.test.ts`
 
 **Dependencies:** None
 
@@ -22,12 +22,12 @@
 **Description:** Plugin hooks vs project trust, tamper-before-session, and unsandboxed notice need tests.
 
 **Acceptance criteria:**
-- [ ] Untrusted project hooks plus a plugin hook: plugin hook still runs; routing plugin hooks through project gate turns it red
-- [ ] Tampered installed plugin before session start is disabled at startup; skipping `verifyPlugins` turns it red
-- [ ] Where bubblewrap is absent, unsandboxed notice is asserted (or test documents why it cannot run here)
+- [x] Untrusted project hooks plus a plugin hook: plugin hook still runs; routing plugin hooks through project gate turns it red
+- [x] Tampered installed plugin before session start is disabled at startup; skipping `verifyPlugins` turns it red
+- [x] Where bubblewrap is absent, unsandboxed notice is asserted (or test documents why it cannot run here)
 
 **Verification:**
-- [ ] Tests pass: `bun test src/core/plugins/__tests__/plugins.test.ts src/core/runtime/__tests__/plugins.test.ts`
+- [x] Tests pass: `bun test src/core/plugins/__tests__/plugins.test.ts src/core/runtime/__tests__/plugins.test.ts`
 
 **Dependencies:** Task 1
 
@@ -42,11 +42,11 @@
 **Description:** Project-scope install path is untested from the command line.
 
 **Acceptance criteria:**
-- [ ] CLI test installs with `--scope project` and asserts lockfile location and contents
-- [ ] `--scope` always-user turns it red
+- [x] CLI test installs with `--scope project` and asserts lockfile location and contents
+- [x] `--scope` always-user turns it red
 
 **Verification:**
-- [ ] Tests pass: `bun test src/cli/__tests__/plugin.test.ts`
+- [x] Tests pass: `bun test src/cli/__tests__/plugin.test.ts`
 
 **Dependencies:** Task 1
 
@@ -56,7 +56,7 @@
 **Estimated scope:** Small: 1-2 files
 
 ## Checkpoint: After Tasks 1-3
-- [ ] Caught probes re-run: `..` check, semver engines, widened consent, verify disable, install-before-consent, `.git` strip, network/env/project sandbox, `--yes` handling
+- [x] Caught probes re-run: `..` check, semver engines, widened consent, verify disable, install-before-consent, `.git` strip, network/env/project sandbox, `--yes` handling
 
 
 ## Source verbatim from openspec/DEFERRED.md (lines 322-372)
