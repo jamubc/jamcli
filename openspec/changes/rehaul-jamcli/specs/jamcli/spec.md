@@ -1506,6 +1506,27 @@ surface.
 - **WHEN** the client cancels
 - **THEN** the in-flight turn stops and the session remains usable
 
+### Requirement: ACP Observer Endpoint
+A running interface SHALL be able to serve a standard ACP stream to an observing client
+without making that client an approver.
+
+#### Scenario: No endpoint
+- **WHEN** `JAMCLI_ACP_ENDPOINT` is not set
+- **THEN** the interface serves nothing and behaves as it does without the feature
+
+#### Scenario: Observe a session
+- **WHEN** `JAMCLI_ACP_ENDPOINT` names a Unix socket and a client connects to it
+- **THEN** the client receives standard ACP session updates for the session on screen, including tool calls with their title, kind, and locations
+
+#### Scenario: Need input
+- **WHEN** a call waits for the person's approval
+- **THEN** within a second the client receives the call with status `pending` and a `requires_action` state
+- **AND** only the person, in the interface, can answer it
+
+#### Scenario: A client goes away
+- **WHEN** the observing client disconnects or crashes during a turn
+- **THEN** the interface keeps running, with no hang and no lost output
+
 ### Requirement: ACP Client Surface
 JamCLI SHALL act as an ACP client through the protocol's reference SDK so it can delegate
 to other agents instead of reimplementing them.

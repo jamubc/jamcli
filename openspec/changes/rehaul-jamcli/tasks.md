@@ -671,6 +671,14 @@ cover headless, ACP, and delegation.
   - the editor's file system and terminals when offered;
   - schema validation of every message in tests.
   - Move the ACP client to the SDK.
+- [ ] 9.3a The ACP observer for a running interface (addendum `tui-acp-observer`, folded into this unit on 2026-09-25 for the space terminal manager, which shows jamcli sessions as tiles). Built on 9.3's SDK server, hosted beside the interface.
+  - Endpoint, the one interop decision: when `JAMCLI_ACP_ENDPOINT=unix:<path>` is set, the interface serves standard ACP on that Unix socket for the life of the process, created user-private (0600), with no TCP. Unset, nothing changes. An inherited descriptor is not offered.
+  - One process, one session: an observer sees the session on screen, and is told when `/clear`, `/resume`, or `/fork` replaces it.
+  - It receives standard session updates: the person's messages, message and thought streaming, and tool calls with title, kind, and locations, so a client can render "thinking" or "editing auth.ts".
+  - Need input: a call waiting on the person is sent as a `tool_call_update` with status `pending`, ACP's stable word for a call awaiting approval, within a second. Turn start, waiting, and turn end are also sent as the ACP draft's `state_update` (`running`, `requires_action`, `idle` with the stop reason), ACP's own vocabulary for exactly this, so no status protocol is invented. The person still answers in the interface: the observer is never asked to approve, and its presence never changes approval behavior.
+  - With no client, the interface is exactly as before. A client connecting, disconnecting, or crashing never disturbs the session or blocks the interface; updates are written without waiting, and a slow client is dropped rather than waited for.
+  - Acceptance: no endpoint leaves the interface and the four gates unchanged; with a client attached, an edit yields updates renderable as "editing <file>", and a pending approval yields the need-input signal within a second; killing the client mid-turn leaves the interface running, with no hang and no lost output.
+  - Not in scope: rendering changes, headless `-p`, several sessions per process, Windows.
 - [ ] 9.4 The LSP client. Files: `src/core/lsp/`, the `lsp` tool, tests against a scripted server, and a smoke test against `typescript-language-server` when present.
 - [ ] 9.5 `docs/conformance.md` lists every standard with its status, its test, and the reason for any gap.
 
