@@ -1,14 +1,14 @@
 ## 1. Signals
 
-- [ ] 1.1 `src/core/reflection/signals.ts`: `signalsOf(events)` over `TranscriptEvent[]`,
+- [x] 1.1 `src/core/reflection/signals.ts`: `signalsOf(events)` over `TranscriptEvent[]`,
   each signal carrying the index of its source event as its id.
-- [ ] 1.2 `tool_error`, `denied` (with the approval's feedback), and `cancelled` from tool
+- [x] 1.2 `tool_error`, `denied` (with the approval's feedback), and `cancelled` from tool
   messages' `toolStatus`, approval events, and `end` events.
-- [ ] 1.3 `retry`: a tool call whose name and arguments repeat an earlier one in the session.
-- [ ] 1.4 `correction`: a user message right after a failure or cancellation, low-confidence.
-- [ ] 1.5 `waste`: a usage event far above the session's median, and a file read that no
+- [x] 1.3 `retry`: a tool call whose name and arguments repeat an earlier one in the session.
+- [x] 1.4 `correction`: a user message right after a failure or cancellation, low-confidence.
+- [x] 1.5 `waste`: a usage event far above the session's median, and a file read that no
   later message mentions.
-- [ ] 1.6 Tests over hand-built event lists: each kind is found at its index, a clean
+- [x] 1.6 Tests over hand-built event lists: each kind is found at its index, a clean
   session yields none.
 
 ## 2. Rule
