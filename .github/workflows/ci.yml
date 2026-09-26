@@ -21,7 +21,12 @@ jobs:
           bun-version: "1.4.2"
       - name: Install bubblewrap and ripgrep
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap ripgrep
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap ripgrep
+          # Ubuntu's default AppArmor policy blocks unprivileged user namespaces,
+          # which bubblewrap needs to sandbox at all: https://ubuntu.com/blog/ubuntu-23-10-unprivileged-user-namespace-restrictions
+          # Without this, bwrap fails to start and the plugin sandbox silently runs unsandboxed.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Install
         run: bun install --frozen-lockfile
       - name: Type gate
@@ -60,7 +65,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.4.2"
-      - run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: bun install --frozen-lockfile
       - name: Sandbox escapes, hostile plugins, hooks, permissions, and redaction
         run: bun test src/core/sandbox src/core/plugins src/core/hooks src/core/permissions src/core/__tests__
