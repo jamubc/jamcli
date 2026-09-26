@@ -16,6 +16,11 @@ test('in a worktree session, the header, /diff, and /commit are the worktree\'s'
   const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'P', GIT_AUTHOR_EMAIL: 'p@example.com', GIT_COMMITTER_NAME: 'P', GIT_COMMITTER_EMAIL: 'p@example.com' } });
   fs.writeFileSync(path.join(context.root, 'a.txt'), 'one\n');
   git(context.root, 'init', '-q', '-b', 'main');
+  // /commit below runs through the app's own git path, which does not inherit this
+  // helper's env override, so it needs a repo-local identity: a fresh CI runner has
+  // none, unlike a developer machine with a global one already set.
+  git(context.root, 'config', 'user.name', 'P');
+  git(context.root, 'config', 'user.email', 'p@example.com');
   git(context.root, 'add', 'a.txt');
   git(context.root, 'commit', '-q', '-m', 'first');
   const tree = await openWorktree(context.root, 'feature');

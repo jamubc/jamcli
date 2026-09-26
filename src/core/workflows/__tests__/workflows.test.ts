@@ -149,6 +149,11 @@ test('an approval nobody can answer waits; approving resumes at the first unfini
 test('a real run: an agent step in plan mode, a command, a tool, a headless approval, then a commit after approve', async () => {
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).toString().trim();
   git('init', '-q');
+  // The commit step below runs through the runner's own git path, which does not
+  // inherit this helper's env override, so it needs a repo-local identity: a fresh
+  // CI runner has none, unlike a developer machine with a global one already set.
+  git('config', 'user.name', 't');
+  git('config', 'user.email', 't@t');
   fs.mkdirSync(path.join(root, '.jamcli', 'profiles'), { recursive: true });
   fs.mkdirSync(path.join(root, '.jamcli', 'workflows'), { recursive: true });
   fs.writeFileSync(path.join(root, '.jamcli', 'config.json'), JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false } }));
@@ -191,9 +196,7 @@ test('a real run: an agent step in plan mode, a command, a tool, a headless appr
 
   fs.writeFileSync(path.join(root, 'notes.txt'), 'hello, fixed\n');
   out.length = 0;
-  const approveCode = await runWorkflowCommand(['approve', runId, 'gate', '--headless'], root, { io, runtime: { env: { PATH: process.env.PATH, HOME: process.env.HOME } } });
-  if (approveCode !== 0) console.error('TEMP DEBUG approve output:\n' + out.join('\n'));
-  expect(approveCode).toBe(0);
+  expect(await runWorkflowCommand(['approve', runId, 'gate', '--headless'], root, { io, runtime: { env: { PATH: process.env.PATH, HOME: process.env.HOME } } })).toBe(0);
   expect(out.at(-1)).toBe(`Run ${runId} of fix ended: ok.`);
   expect(git('log', '-1', '--format=%s')).toBe('fix: typo');
 }, 60_000);
@@ -321,14 +324,18 @@ test('a commit step with message agent drafts the message from the session', asy
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).toString().trim();
   project();
   git('init', '-q');
+  // The commit step below runs through the runner's own git path, which does not
+  // inherit this helper's env override, so it needs a repo-local identity: a fresh
+  // CI runner has none, unlike a developer machine with a global one already set.
+  git('config', 'user.name', 't');
+  git('config', 'user.email', 't@t');
   fs.writeFileSync(path.join(root, 'notes.txt'), 'hello\n');
   git('add', '.');
   git('commit', '-qm', 'init');
   fs.writeFileSync(path.join(root, 'notes.txt'), 'hello, changed\n');
   fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'save.yaml'), ['name: save', 'steps:', '  - id: save', '    commit: { message: agent, paths: [notes.txt] }', ''].join('\n'));
   provider.enqueue({ text: 'fix: draft from here' });
-  const { code, out } = await runWorkflow(['run', 'save', '--headless']);
-  if (code !== 0) console.error('TEMP DEBUG save output:\n' + out.join('\n'));
+  const { code } = await runWorkflow(['run', 'save', '--headless']);
   expect(code).toBe(0);
   expect(git('log', '-1', '--format=%s')).toBe('fix: draft from here');
 }, 30_000);
