@@ -102,7 +102,7 @@ test('an Ollama that is not running, a refused key, and a store others can read 
     fs.writeFileSync(store, '{"version":1,"keys":{}}', { mode: 0o644 });
     const checks = await runChecks({ projectRoot: root, env: tools(), timeoutMs: 2_000 });
     expect(find(checks, 'model (session model)')[0]).toMatchObject({ status: 'fail', detail: expect.stringMatching(/^Ollama is not answering at http:\/\/127\.0\.0\.1:9: /), fix: 'Start it with ollama serve, or set api_registry.ollama.endpoint.' });
-    expect(find(checks, 'model (category deep)')[0]).toMatchObject({ status: 'fail', detail: 'anthropic:claude-x: the provider refused the key (401).', fix: 'Store a working key with jamcli auth set anthropic.' });
+    expect(find(checks, 'model (agent deep)')[0]).toMatchObject({ status: 'fail', detail: 'anthropic:claude-x: the provider refused the key (401).', fix: 'Store a working key with jamcli auth set anthropic.' });
     expect(find(checks, 'key store')[0]).toMatchObject({ status: 'fail', fix: `chmod 600 ${store}` });
   } finally {
     delete process.env.DOCTOR_KEY;

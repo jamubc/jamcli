@@ -217,7 +217,7 @@ test('/export writes the session as Markdown and will not overwrite a file; /cop
   }
 }, 30_000);
 
-test('/tools, /mcp, /categories, and /doctor report, and /config reads and changes settings through the same code as jamcli config', async () => {
+test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes settings through the same code as jamcli config', async () => {
   const { setup, current, close } = await open({}, { size: tall });
   try {
     await turn(setup, 'hello', 'Hi.');
@@ -229,8 +229,14 @@ test('/tools, /mcp, /categories, and /doctor report, and /config reads and chang
     // The CLI's messages name the command as it is typed here.
     await send(setup, '/mcp remove');
     await frameWith(setup, (frame) => frame.includes('Usage: /mcp remove <id>'));
-    await send(setup, '/categories');
-    await frameWith(setup, (frame) => frame.includes('Model categories (defaults):'));
+    await send(setup, '/agents list');
+    await frameWith(setup, (frame) => frame.includes('Agents that delegated work runs on:') && frame.includes('- quick (default):'));
+    // Choosing a default writes it where /config set would, and reopens the session with it.
+    await send(setup, '/agents writing');
+    await frameWith(setup, (frame) => frame.includes('This session was reopened, so the change applies.'));
+    expect(readJson(path.join(context.root, '.jamcli', 'config.json')).delegation.default_agent).toBe('writing');
+    await send(setup, '/agents nobody');
+    await frameWith(setup, (frame) => frame.includes('No agent named nobody. The agents are explore, intelligent, quick, writing.'));
 
     await send(setup, '/config get model --show-origin');
     await frameWith(setup, (frame) => frame.includes('ollama:fake-model') && frame.includes('config.json'));

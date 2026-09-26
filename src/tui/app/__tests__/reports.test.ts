@@ -28,7 +28,7 @@ test('a typed prefix lists names that start with it first, then names that conta
 
 test('the palette reaches every command the interface has today', () => {
   const names = BUILTIN_COMMANDS.map((command) => command.name);
-  for (const name of ['help', 'model', 'mode', 'permissions', 'context', 'cost', 'compact', 'clear', 'resume', 'fork', 'undo', 'rewind', 'tools', 'skills', 'commands', 'hooks', 'mcp', 'config', 'copy', 'profile', 'categories', 'doctor', 'export', 'exit']) {
+  for (const name of ['help', 'model', 'mode', 'permissions', 'context', 'cost', 'compact', 'clear', 'resume', 'fork', 'undo', 'rewind', 'tools', 'skills', 'commands', 'hooks', 'mcp', 'config', 'copy', 'profile', 'agents', 'doctor', 'export', 'exit']) {
     expect(names).toContain(name);
   }
   expect(new Set(names).size).toBe(names.length);

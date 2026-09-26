@@ -54,7 +54,7 @@ afterEach(() => {
 const start = (options: Partial<RuntimeOptions> = {}) => createRuntime({ projectRoot: root, surface: 'headless', mcp: false, ...options });
 const edit = (id: string) => ({ id, name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } });
 const read = (dir: string) => fs.readFileSync(path.join(dir, 'a.txt'), 'utf8');
-const taskCall = (isolation?: string) => ({ id: 't1', name: 'task', arguments: { category: 'quick', prompt: 'change a.txt', ...(isolation ? { isolation } : {}) } });
+const taskCall = (isolation?: string) => ({ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'change a.txt', ...(isolation ? { isolation } : {}) } });
 const taskWorktrees = () => (fs.existsSync(path.join(root, '.jamcli', 'worktrees')) ? fs.readdirSync(path.join(root, '.jamcli', 'worktrees')) : []);
 
 test('a session in a worktree changes the worktree, with the project\'s settings, log, and checkpoints', async () => {

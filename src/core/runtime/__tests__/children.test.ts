@@ -44,7 +44,7 @@ function configure(extra: Record<string, unknown> = {}) {
       api_registry: { ollama: { endpoint: server.ollamaBaseUrl } },
       active_profile: 'default',
       categories: { quick: [{ model: 'ollama:child-model' }] },
-      // The quick category's model is also the trust classifier unless the gate is off.
+      // The quick agent's model is also the trust classifier unless the gate is off.
       trust: { enabled: false },
       ...extra,
     })
@@ -53,7 +53,7 @@ function configure(extra: Record<string, unknown> = {}) {
 }
 
 const start = (options: Partial<RuntimeOptions> = {}) => createRuntime({ projectRoot: root, surface: 'headless', mcp: false, ...options });
-const delegateCall = (prompt: string) => ({ id: 't1', name: 'task', arguments: { category: 'quick', prompt } });
+const delegateCall = (prompt: string) => ({ id: 't1', name: 'task', arguments: { agent: 'quick', prompt } });
 const editCall = { id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } };
 
 test('a child edits under the delegated policy, on its own model and session', async () => {
@@ -124,14 +124,64 @@ test('an unreachable ollama refuses the delegation cleanly instead of failing th
   expect(taskResult).toBe('Delegation refused: no entry in "quick" is currently servable');
 });
 
-test('delegation depth is bounded, and an unknown category is refused with the real ones named', async () => {
+const systemOf = (request: any) => request.body.messages.find((message: any) => message.role === 'system')?.content ?? '';
+const lastTool = (request: any) => request.body.messages.filter((message: any) => message.role === 'tool').at(-1).content;
+
+test('a task that names no agent runs on the default, and with no default it is refused naming the agents', async () => {
+  configure({ delegation: { default_agent: 'quick' } });
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { prompt: 'look' } }] }, { text: 'child done' }, { text: 'ok' });
+  await parent.run('go');
+  const [, child, back] = server.completions().slice(-3);
+  expect(child.body.model).toBe('child-model');
+  expect(lastTool(back)).toContain('Delegated to agent "quick" on ollama:child-model');
+
+  configure();
+  const bare = await start({ allowTools: ['task'] });
+  server.enqueue({ toolCalls: [{ id: 't2', name: 'task', arguments: { prompt: 'look' } }] }, { text: 'ok' });
+  await bare.run('go');
+  expect(lastTool(server.completions().at(-1))).toBe('Delegation refused: Name an agent: none is the default. The agents are quick.');
+});
+
+test("a chain entry's reasoning reaches the child, and the call's level replaces it", async () => {
+  configure({ categories: { quick: [{ model: 'ollama:qwq', reasoning: 'off' }] } });
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue({ toolCalls: [delegateCall('think less')] }, { text: 'child done' }, { text: 'ok' });
+  await parent.run('go');
+  // Before agents, the level was computed and dropped, and the child thought anyway.
+  expect(server.completions().at(-2)!.body.think).toBeUndefined();
+
+  server.enqueue({ toolCalls: [{ id: 't2', name: 'task', arguments: { agent: 'quick', prompt: 'think more', reasoning: 'on' } }] }, { text: 'child done' }, { text: 'ok' });
+  await parent.run('again');
+  expect(server.completions().at(-2)!.body.think).toBe(true);
+});
+
+test("an agent's rules reach its child before the project's rules, and never the parent", async () => {
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), 'PROJECT-RULE-MARKER\n');
+  fs.mkdirSync(path.join(root, '.jamcli', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.jamcli', 'agents', 'quick.md'), '---\ndescription: Small jobs.\nmodels: ollama:child-model\n---\nAGENT-RULE-MARKER\n');
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue({ toolCalls: [delegateCall('look')] }, { text: 'child done' }, { text: 'ok' });
+  await parent.run('go');
+  const [first, child] = server.completions().slice(-3);
+  const childSystem = systemOf(child);
+  expect(childSystem).toContain('Rules for the quick agent, from .jamcli/agents/quick.md:\nAGENT-RULE-MARKER');
+  expect(childSystem.indexOf('AGENT-RULE-MARKER')).toBeLessThan(childSystem.indexOf('PROJECT-RULE-MARKER'));
+  expect(systemOf(first)).toContain('PROJECT-RULE-MARKER');
+  expect(systemOf(first)).not.toContain('AGENT-RULE-MARKER');
+  // The model choosing sees the file's description, and the default.
+  const description = first.body.tools.find((tool: any) => tool.function.name === 'task').function.description;
+  expect(description).toContain('- quick: Small jobs. (runs on ollama:child-model)');
+});
+
+test('delegation depth is bounded, and an unknown agent is refused with the real ones named', async () => {
   configure({ delegation: { max_depth: 1, max_concurrent: 3, max_turns_per_child: 4 } });
   const parent = await start({ allowTools: ['task'] });
   server.enqueue(
     { toolCalls: [delegateCall('delegate again')] },
-    { toolCalls: [{ id: 't2', name: 'task', arguments: { category: 'quick', prompt: 'deeper' } }] },
+    { toolCalls: [{ id: 't2', name: 'task', arguments: { agent: 'quick', prompt: 'deeper' } }] },
     { text: 'child stopped' },
-    { toolCalls: [{ id: 't3', name: 'task', arguments: { category: 'nope', prompt: 'x' } }] },
+    { toolCalls: [{ id: 't3', name: 'task', arguments: { agent: 'nope', prompt: 'x' } }] },
     { text: 'done' }
   );
   await parent.run('go');
@@ -139,8 +189,10 @@ test('delegation depth is bounded, and an unknown category is refused with the r
   const childSaw = requests[2].body.messages.find((message: any) => message.role === 'tool').content;
   expect(childSaw).toBe('Delegation refused: Delegation depth 1 is at the configured maximum of 1.');
   const parentSaw = requests[4].body.messages.filter((message: any) => message.role === 'tool').at(-1).content;
-  expect(parentSaw).toBe('Delegation refused: No category named "nope". The categories are quick.');
-  expect(requests[0].body.tools.find((tool: any) => tool.function.name === 'task').function.description).toContain('Categories: quick.');
+  expect(parentSaw).toBe('Delegation refused: No agent named "nope". The agents are quick.');
+  // A configured category is an agent with no description, and names no default.
+  const description = requests[0].body.tools.find((tool: any) => tool.function.name === 'task').function.description;
+  expect(description).toContain('- quick: (runs on ollama:child-model)\nAlways name an agent.');
 });
 
 test('cancelling the parent turn cancels the child', async () => {
@@ -162,25 +214,25 @@ test('a background task runs on, reports its status, and can be cancelled with i
       release = resolve;
       request.signal?.addEventListener('abort', () => resolve(undefined), { once: true });
     });
-    return { status: request.signal?.aborted ? ('cancelled' as const) : ('ok' as const), response: request.signal?.aborted ? '' : 'finished', category: request.category, resolvedModel: 'ollama:m', childSessionId: 'c1' };
+    return { status: request.signal?.aborted ? ('cancelled' as const) : ('ok' as const), response: request.signal?.aborted ? '' : 'finished', agent: request.agent ?? 'quick', resolvedModel: 'ollama:m', childSessionId: 'c1' };
   };
   const ctx = { projectRoot: root, delegate };
-  const started = await taskRunner({ category: 'quick', prompt: 'p', background: true }, ctx);
+  const started = await taskRunner({ agent: 'quick', prompt: 'p', background: true }, ctx);
   const id = started.metadata!.id as string;
   expect((await taskStatusRunner({ id })).output).toContain(`${id}: running`);
   release();
   await Bun.sleep(5);
   expect((await taskResultRunner({ id })).output).toContain('finished');
 
-  const second = (await taskRunner({ category: 'quick', prompt: 'p', background: true }, ctx)).metadata!.id as string;
+  const second = (await taskRunner({ agent: 'quick', prompt: 'p', background: true }, ctx)).metadata!.id as string;
   expect((await taskCancelRunner({ id: second })).output).toBe(`Cancelled ${second}. Partial output:\npartial `);
 });
 
 test('finished background tasks do not count against the concurrency limit', async () => {
-  const delegate = async (request: DelegationRequest) => ({ status: 'ok' as const, response: 'done', category: request.category });
+  const delegate = async (request: DelegationRequest) => ({ status: 'ok' as const, response: 'done', agent: request.agent ?? 'quick' });
   const ctx = { projectRoot: root, delegate, delegationConfig: { max_depth: 2, max_concurrent: 1, max_turns_per_child: 2 } };
-  await taskRunner({ category: 'quick', prompt: 'a', background: true }, ctx);
+  await taskRunner({ agent: 'quick', prompt: 'a', background: true }, ctx);
   await Bun.sleep(5);
-  const next = await taskRunner({ category: 'quick', prompt: 'b', background: true }, ctx);
+  const next = await taskRunner({ agent: 'quick', prompt: 'b', background: true }, ctx);
   expect(next.output).toContain('Started background task');
 });

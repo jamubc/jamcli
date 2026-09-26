@@ -84,7 +84,7 @@ test('at debug level prompts and outputs are logged, with credentials redacted',
 test('a compaction and a delegated run are traced, the child under the turn that started it', async () => {
   const runtime = await start({ observe: { level: 'warn', logFile, traceFile } });
   server.enqueue(
-    { toolCalls: [{ id: 't1', name: 'task', arguments: { category: 'quick', prompt: 'look around' } }] },
+    { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'look around' } }] },
     { text: 'child done' },
     { text: 'parent done' },
     { text: 'another turn' }

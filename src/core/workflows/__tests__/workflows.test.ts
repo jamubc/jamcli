@@ -368,6 +368,36 @@ test('an agent step category falls back along the chain like delegation', async 
   expect(provider.completions().at(-1)!.body.model).toBe('fake-model');
 }, 30_000);
 
+test('an agent step on an unreachable Ollama is refused before the step runs', async () => {
+  project();
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({ api_registry: { ollama: { endpoint: 'http://127.0.0.1:1' } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false }, categories: { quick: [{ model: 'ollama:llama3' }] } })
+  );
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'down.yaml'), ['name: down', 'steps:', '  - id: ask', '    agent: { category: quick, prompt: "say hi" }', ''].join('\n'));
+  const before = provider.completions().length;
+  const { out, code } = await runWorkflow(['run', 'down', '--headless']);
+  expect(code).toBe(1);
+  expect(out.join('\n')).toContain('no entry in "quick" is currently servable');
+  expect(provider.completions().length).toBe(before);
+}, 30_000);
+
+test("an agent step runs with its agent's rules", async () => {
+  project();
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({ api_registry: { ollama: { endpoint: provider.ollamaBaseUrl } }, active_profile: 'default', trust: { enabled: false }, sandbox: { enabled: false } })
+  );
+  fs.mkdirSync(path.join(root, '.jamcli', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.jamcli', 'agents', 'writing.md'), '---\ndescription: Prose.\nmodels: ollama:fake-model\n---\nWRITING-RULE-MARKER\n');
+  fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'prose.yaml'), ['name: prose', 'steps:', '  - id: write', '    agent: { category: writing, prompt: "write a line" }', ''].join('\n'));
+  provider.enqueue({ text: 'a line' });
+  const { code } = await runWorkflow(['run', 'prose', '--headless']);
+  expect(code).toBe(0);
+  const system = provider.completions().at(-1)!.body.messages.find((message: any) => message.role === 'system').content;
+  expect(system).toContain('Rules for the writing agent, from .jamcli/agents/writing.md:\nWRITING-RULE-MARKER');
+}, 30_000);
+
 test('an agent step cannot raise the session mode', async () => {
   project();
   fs.writeFileSync(path.join(root, 'a.txt'), 'old\n');

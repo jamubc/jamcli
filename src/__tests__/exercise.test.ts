@@ -106,7 +106,7 @@ test('a session through every command, as a person meets it', async () => {
   await command('/cost', 'This session:');
   await command('/tools', '- read_file (read):');
   await command('/mcp', 'No MCP servers configured.');
-  await command('/categories', 'Model categories (defaults):');
+  await command('/agents list', 'Agents that delegated work runs on:');
   // With no profile files, it says where they would go: here, the user directory in use.
   expect(await command('/profile', 'The profile is default')).toContain(`${path.join(base, 'user', 'profiles')}${path.sep}`);
   await command('/doctor', /JamCLI \S+ on linux/);

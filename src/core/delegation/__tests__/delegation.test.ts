@@ -4,7 +4,7 @@ import { DEFAULT_DELEGATION_CONFIG } from '../../../types/config.js';
 import { resolveRoute } from '../../routing/resolve.js';
 import type { CategoryChain } from '../../../types/config.js';
 
-test('a child model comes from its category chain and never from the session', async () => {
+test('a child model comes from its agent chain and never from the session', async () => {
   const categories: Record<string, CategoryChain> = {
     quick: [{ model: 'ollama:tiny' }],
   };
@@ -34,19 +34,26 @@ test('a concurrent child beyond the bound is refused', () => {
   expect(refusal.reason).toContain('maximum');
 });
 
+test('a delegation block that sets only some keys keeps the defaults for the rest', () => {
+  const partial = { default_agent: 'quick' };
+  expect(canDelegate({ depth: DEFAULT_DELEGATION_CONFIG.max_depth, running: 0, config: partial }).allowed).toBe(false);
+  expect(canDelegate({ depth: 0, running: DEFAULT_DELEGATION_CONFIG.max_concurrent, config: partial }).allowed).toBe(false);
+  expect(canDelegate({ depth: 5, running: 0, config: { max_depth: 9 } }).allowed).toBe(true);
+});
+
 test('a child turn count is clamped to the configured bound', () => {
   expect(childTurns(undefined, 50)).toBe(DEFAULT_DELEGATION_CONFIG.max_turns_per_child);
   expect(childTurns(undefined, 2)).toBe(2);
 });
 
-test('the transcript line records the category, model, and child session', () => {
+test('the transcript line records the agent, model, and child session', () => {
   const line = delegationTranscriptLine({
-    category: 'deep',
+    agent: 'intelligent',
     resolvedModel: 'ollama:llama3',
     childSessionId: 'abc-123',
     status: 'ok',
   });
-  expect(line).toContain('deep');
+  expect(line).toBe('Delegated to agent "intelligent" on ollama:llama3 | child session abc-123 | status ok');
   expect(line).toContain('ollama:llama3');
   expect(line).toContain('abc-123');
 });

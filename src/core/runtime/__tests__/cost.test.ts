@@ -152,7 +152,7 @@ test("the trust gate's requests are counted under its own model", async () => {
 const delegate = (id: string, prompt: string, background = false) => ({
   id,
   name: 'task',
-  arguments: { category: 'quick', prompt, ...(background ? { background: true } : {}) },
+  arguments: { agent: 'quick', prompt, ...(background ? { background: true } : {}) },
 });
 
 test('what a delegated session spends is counted by the session that delegated, apart from its context', async () => {
