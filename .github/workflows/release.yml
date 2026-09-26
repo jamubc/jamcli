@@ -19,13 +19,21 @@ jobs:
           bun-version: "1.4.2"
       - name: Install, with every platform's native library for the binaries
         run: bun install --frozen-lockfile --os='*' --cpu='*'
+      - name: Install bubblewrap and ripgrep
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap ripgrep
+          # See ci.yml: without this, bwrap fails to start and the sandbox tests
+          # silently run unsandboxed instead of exercising the real thing.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Gates
         run: |
           npx tsc --noEmit
           bun test
           bun run build
-      - name: Compile every target
-        run: bun run compile
+      - name: Compile every target but Windows
+        # Windows has no sandbox or credential-store equivalent yet: see
+        # docs/feature-matrix.md and the add-windows-support change.
+        run: bun run compile linux-x64 linux-arm64 darwin-x64 darwin-arm64
       - name: Smoke-test the Linux binary
         run: ./release/jamcli-linux-x64 --version
       - name: CycloneDX SBOM

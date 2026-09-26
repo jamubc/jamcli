@@ -122,7 +122,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 
 | Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
-| Single-file release binaries | ✗ | ✓ Linux, macOS, Windows, with checksums, built and smoke-tested here; SBOM and provenance in the staged release job, not yet run | n.v. | ✓ [3] | n.v. | n.v. | parity |
+| Single-file release binaries | ✗ | ✓ Linux, macOS, with checksums, built and smoke-tested here; SBOM and provenance in the staged release job; ✗ Windows, dropped from the 2.0.0 release since the sandbox gap above means the binary would run with no sandbox at all rather than a documented one, see `add-windows-support` | n.v. | ✓ [3] | n.v. | n.v. | parity, with a deferred Windows target |
 | npm package | ✗ | ✗ | n.v. | ✓ [3] | n.v. | n.v. | gap: the owner keeps the project unpublished on npm |
 
 ## Deliberate gaps

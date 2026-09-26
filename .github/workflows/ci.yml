@@ -10,7 +10,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Windows has no sandbox or credential-store equivalent yet (see
+        # docs/feature-matrix.md and the add-windows-support change) and was
+        # never actually exercised before 2.0.0; it is not a supported gate
+        # until that change lands.
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
       TYPE_ERRORS_BASELINE: "0"
