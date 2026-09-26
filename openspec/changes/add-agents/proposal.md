@@ -57,7 +57,8 @@ depends on them:
   configuration directory, or a plugin, resolved in that order like skills. Frontmatter:
   `description` (the words the model reads when choosing), `models` (the ordered chain,
   each entry `provider:model` or `{ model, reasoning }`). The body, when present, is the
-  agent's rules: appended to the child's system prompt and read by nothing else. Parsing
+  agent's rules: placed in the child's system prompt before the project's rules, which win
+  a conflict, and read by nothing else. Parsing
   reuses `parseFrontMatter`.
 - **The four built-ins are agents.** `quick`, `intelligent`, `explore`, and `writing`
   (owner decision: `deep` is renamed), each with a description and the `ollama:llama3`

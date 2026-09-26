@@ -60,7 +60,7 @@ registry as the parent, and SHALL resolve each child's model and rules from its 
 
 #### Scenario: Apply the agent's rules
 - **WHEN** a child runs on an agent that has a rules body
-- **THEN** the body is appended to the child's system prompt after the rules the child already receives
+- **THEN** the body is placed in the child's system prompt before the project's rules, so the project's rules win a conflict
 - **AND** the parent does not receive it
 - **AND** the transcript records the file the rules came from
 

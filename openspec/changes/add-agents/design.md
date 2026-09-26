@@ -115,9 +115,8 @@ When summarising for the person, lead with what changed and what they must decid
 - `description` is required. A file without one is reported and skipped, as a skill
   without a name is.
 - `models` is required and non-empty. A string entry is `{ model }`.
-- The body is optional. When present it is appended to the child's system prompt after
-  the rules the child already gets, so a project's `AGENTS.md` still applies and the
-  agent's own rules come last.
+- The body is optional. When present it goes into the child's system prompt before the
+  project's rules, so a project's `AGENTS.md` comes last and wins a conflict.
 - Later units add keys beside these (`input`, `output` for stages). Unknown keys are
   reported by name and the file still loads, so a file written for a later version does
   not break an earlier one.
@@ -156,8 +155,8 @@ When summarising for the person, lead with what changed and what they must decid
   `ProviderRequestOptions['reasoning']`. Precedence: the call, then the chain entry, then
   the agent-loop default (`auto`, `src/core/agent.ts:524`), always through
   `downgradeReasoning`.
-- **Decision: the rules body reaches only the child.** Owner decision 4. It is appended to
-  the child's system prompt in `childLauncher`, after what the child already receives.
+- **Decision: the rules body reaches only the child.** Owner decision 4. It goes into the
+  child's system prompt before the project's rules (owner decision below).
   The parent never sees it and the transcript records that the agent's rules were
   applied, by file path, so a person can tell why a child behaved as it did.
 - **Decision: a settings change applies from the next session, and says so.** A runtime
@@ -196,6 +195,10 @@ files are then ignored with a notice naming them, and `categories` still routes.
   `deep`: the tests that use that string configure it themselves. On the default chain
   all four run on `ollama:llama3`, and the generated "runs on" suffix keeps `intelligent`
   honest there.
+- **A project's rules win over an agent's rules** (2026-09-26). A person who writes an
+  `AGENTS.md` means it to be the real one; without one, jamcli runs as it does. So the
+  agent's body goes before the project's rules in the child's system prompt, and the
+  project's rules come last.
 - **Agents, not categories, before any code is written** (2026-09-26). Recorded as
   decision 3 in `openspec/ROADMAP.md`.
 
@@ -203,6 +206,3 @@ files are then ignored with a notice naming them, and `categories` still routes.
 
 - **Graded effort.** If graded levels are wanted later, they extend `reasoning`'s enum
   where the catalog reports `effort` support (`src/types/config.ts:89`). A provider unit.
-- **Where the rules body sits in the child's system prompt.** After the child's existing
-  rules is the proposal here. If a project's rules and an agent's rules conflict, last
-  wins, which is the agent. Confirm at task 1.1.

@@ -1,8 +1,8 @@
 ## 1. Decide
 
-- [ ] 1.1 Owner approves the `task` description text and the agent file format in
-  `design.md`, including the built-in descriptions and where the rules body sits in the
-  child's system prompt. Wording changes land here, before code.
+- [x] 1.1 Owner approves the `task` description text and the agent file format in
+  `design.md` (2026-09-26). The rules body sits before the project's rules, so a
+  project's `AGENTS.md` comes last and wins: see "Owner Decisions" in `design.md`.
 - [x] 1.2 Owner settles the built-in names. Done: `quick`, `intelligent`, `explore`,
   `writing`. See "Owner Decisions" in `design.md`.
 - [x] 1.3 Owner settles the concept. Done: agents, with `categories` as the compatibility
@@ -30,7 +30,7 @@
   `childLauncher`, create the child with `route.reasoning`. The test fails first: a chain
   entry with `reasoning: 'on'` shows on the child's request today as the default.
 - [ ] 2.4 Carry rules to the child. `childLauncher` appends the agent's `rules` to the
-  child's system prompt after what it already receives, and the child's session log
+  child's system prompt before the project's rules, and the child's session log
   records the source path. Test: a file agent's body appears on the child's first request
   and not on the parent's.
 - [ ] 2.5 Extend the `task` schema (`src/core/tools/task.ts:27-42`): `agent` optional,
