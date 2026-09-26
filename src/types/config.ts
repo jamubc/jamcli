@@ -54,6 +54,8 @@ export interface DelegationConfig {
   max_depth: number;
   max_concurrent: number;
   max_turns_per_child: number;
+  /** The agent a `task` call that names none runs on. */
+  default_agent?: string;
 }
 
 export interface TrustConfig {

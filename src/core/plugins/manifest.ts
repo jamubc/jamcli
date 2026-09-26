@@ -32,6 +32,7 @@ const ManifestSchema = z.strictObject({
     .strictObject({
       commands: inside.optional(),
       skills: inside.optional(),
+      agents: inside.optional(),
       hooks: inside.optional(),
       mcpServers: z.record(z.string().regex(NAME, 'must be lowercase letters, digits, and single hyphens'), z.strictObject({ command: z.string().min(1), args: z.array(z.string()).optional() })).optional(),
     })
@@ -68,7 +69,7 @@ export function readManifest(dir: string, version = JAMCLI_VERSION): PluginManif
   if (manifest.engines?.jamcli && !semver.satisfies(version, manifest.engines.jamcli, { includePrerelease: true })) {
     throw new Error(`${manifest.name} ${manifest.version} needs JamCLI ${manifest.engines.jamcli}, and this is ${version}.`);
   }
-  for (const [key, relative] of Object.entries({ commands: manifest.contributes?.commands, skills: manifest.contributes?.skills, hooks: manifest.contributes?.hooks })) {
+  for (const [key, relative] of Object.entries({ commands: manifest.contributes?.commands, skills: manifest.contributes?.skills, agents: manifest.contributes?.agents, hooks: manifest.contributes?.hooks })) {
     if (relative && !fs.existsSync(path.join(dir, relative))) throw new Error(`${manifest.name} contributes ${key} at ${relative}, which does not exist.`);
   }
   return manifest;
@@ -86,6 +87,7 @@ export function describeContributions(dir: string, manifest: PluginManifest): st
   const contributes = manifest.contributes ?? {};
   if (contributes.commands) lines.push(`commands: ${listed(contributes.commands, (entry) => entry.isFile() && entry.name.endsWith('.md')).map((name) => `/${manifest.name}:${name}`).join(', ') || 'none'}`);
   if (contributes.skills) lines.push(`skills: ${listed(contributes.skills, (entry) => entry.isDirectory()).join(', ') || 'none'}`);
+  if (contributes.agents) lines.push(`agents: ${listed(contributes.agents, (entry) => entry.isFile() && entry.name.endsWith('.md')).join(', ') || 'none'}`);
   if (contributes.hooks) {
     const hooks = JSON.parse(fs.readFileSync(path.join(dir, contributes.hooks), 'utf8')) as Record<string, { command: string }[]>;
     for (const [event, list] of Object.entries(hooks)) for (const hook of list ?? []) lines.push(`hook on ${event}: ${hook.command}`);

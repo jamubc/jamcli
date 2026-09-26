@@ -7,7 +7,7 @@ import { enabledPlugins } from './lock.js';
  * manifests as JSON. It stays light, since every command and skill lookup runs it: the
  * manifests were checked at install, and each session start hashes the installed copies.
  */
-function contributed(projectRoot: string, key: 'commands' | 'skills'): { plugin: string; dir: string }[] {
+function contributed(projectRoot: string, key: 'commands' | 'skills' | 'agents'): { plugin: string; dir: string }[] {
   const found: { plugin: string; dir: string }[] = [];
   for (const plugin of enabledPlugins(projectRoot)) {
     try {
@@ -26,3 +26,6 @@ export const pluginCommandDirs = (projectRoot: string) => contributed(projectRoo
 
 /** The directories of skills the enabled plugins contribute. */
 export const pluginSkillDirs = (projectRoot: string) => contributed(projectRoot, 'skills').map((entry) => entry.dir);
+
+/** The directories of agents the enabled plugins contribute. */
+export const pluginAgentDirs = (projectRoot: string) => contributed(projectRoot, 'agents').map((entry) => entry.dir);

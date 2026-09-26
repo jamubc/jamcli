@@ -165,12 +165,15 @@ export const ConfigFileSchema = z
         auto_compact: z.boolean().describe('Summarize older turns when a request nears the model\'s window. On by default.'),
       })
       .partial(),
-    categories: z.record(z.string(), z.array(CategoryEntrySchema)).describe('Model chains delegation routes each category of task to.'),
+    categories: z
+      .record(z.string(), z.array(CategoryEntrySchema))
+      .describe('Model chains by name, loaded as agents with no description or rules. Agent files in .jamcli/agents/ describe them.'),
     delegation: z
       .strictObject({
         max_depth: positiveInt(),
         max_concurrent: positiveInt(),
         max_turns_per_child: positiveInt(),
+        default_agent: z.string().min(1).describe('The agent a task call that names none runs on.'),
       })
       .partial(),
     trust: z

@@ -479,7 +479,7 @@
           "additionalProperties": false
         }
       },
-      "description": "Model chains delegation routes each category of task to."
+      "description": "Model chains by name, loaded as agents with no description or rules. Agent files in .jamcli/agents/ describe them."
     },
     "delegation": {
       "type": "object",
@@ -498,6 +498,11 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "default_agent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The agent a task call that names none runs on."
         }
       },
       "additionalProperties": false
