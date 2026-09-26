@@ -5,10 +5,11 @@ import type { RunOptions, Runtime } from '../../core/runtime/index.js';
 import type { EditableRuleScope } from '../../core/runtime/index.js';
 import { isPermissionMode, type PermissionMode } from '../../core/permissions/modes.js';
 import type { Decision } from '../../core/permissions/rules.js';
-import { loadConfig, userConfigFile } from '../../core/config/load.js';
+import { displayPath, loadConfig, userConfigFile } from '../../core/config/load.js';
 import { storedKey } from '../../core/config/credentials.js';
 import { userConfigDir } from '../../utils/paths.js';
-import { DEFAULT_CATEGORIES, describeChain, listCategories } from '../../core/routing/categories.js';
+import { describeChain } from '../../core/routing/categories.js';
+import { describeSource, loadAgents, type LoadedAgents } from '../../core/ext/agents.js';
 import { readSessionIndex, readTranscript, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from '../../cli/config.js';
 import type { McpCommandRequest } from '../../cli/mcp.js';
@@ -540,17 +541,56 @@ const theme: SlashCommand = {
   },
 };
 
-const categories: SlashCommand = {
-  name: 'categories',
-  summary: 'Show the model categories that delegated work is routed by',
+/** Each agent in words: what it is for, what it runs on, where it came from. */
+const agentReport = (loaded: LoadedAgents, projectRoot: string): string[] => {
+  const label = (file: string) => displayPath(file, projectRoot);
+  const lines = ['Agents that delegated work runs on:'];
+  for (const agent of Object.values(loaded.agents).sort((a, b) => a.name.localeCompare(b.name))) {
+    const marks = [agent.name === loaded.defaultAgent ? 'default' : '', agent.rules ? 'has rules' : ''].filter(Boolean).join(', ');
+    lines.push(`- ${agent.name}${marks ? ` (${marks})` : ''}: ${agent.description ?? 'no description'}`);
+    lines.push(`    runs on ${describeChain(agent.chain)} · from ${describeSource(agent.source, label)}`);
+  }
+  lines.push('', loaded.defaultAgent ? `A task that names no agent runs on ${loaded.defaultAgent}.` : 'No agent is the default, so every task must name one.');
+  lines.push('Define or replace one with .jamcli/agents/<name>.md; the session keeps its own model.');
+  return lines;
+};
+
+const agentsCommand: SlashCommand = {
+  name: 'agents',
+  args: '[list|<name>]',
+  summary: 'List the agents delegated work runs on, or choose the default',
   source: 'built-in',
-  run(ctx) {
-    const configured = loadConfig({ projectRoot: ctx.projectRoot }).config.categories;
-    const own = configured && Object.keys(configured).length > 0;
-    const lines = [`Model categories (${own ? 'configured' : 'defaults'}):`];
-    for (const entry of listCategories(own ? configured : DEFAULT_CATEGORIES)) lines.push(`- ${entry.name}: ${describeChain(entry.chain)}`);
-    lines.push('', 'Categories route delegated work; the session keeps its own model.');
-    ctx.show(lines.join('\n'));
+  async run(ctx, args) {
+    const config = loadConfig({ projectRoot: ctx.projectRoot }).config;
+    const loaded = loadAgents(ctx.projectRoot, config);
+    if (loaded.problems.length) ctx.notice('warn', loaded.problems.join('\n'));
+    const choose = async (name: string) => {
+      if (!loaded.agents[name]) return ctx.notice('warn', `No agent named ${name}. The agents are ${Object.keys(loaded.agents).sort().join(', ')}.`);
+      if (waitForTurn(ctx, 'change the default agent')) return;
+      const request = { action: 'set' as ConfigAction, args: ['delegation.default_agent', name] };
+      const code = await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
+      if (code === 0) await reopen(ctx);
+    };
+    const word = args.trim();
+    if (word === 'list') return ctx.show(agentReport(loaded, ctx.projectRoot).join('\n'));
+    if (word) return choose(word);
+    const label = (file: string) => displayPath(file, ctx.projectRoot);
+    ctx.pick({
+      title: 'Agents delegated work runs on',
+      items: Object.values(loaded.agents)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((agent) => ({
+          key: agent.name,
+          label: agent.name,
+          detail: [agent.description, `runs on ${describeChain(agent.chain)}`, describeSource(agent.source, label), agent.rules ? 'has rules' : '']
+            .filter(Boolean)
+            .join(' · '),
+          ...(agent.name === loaded.defaultAgent ? { current: true } : {}),
+        })),
+      empty: 'No agents.',
+      hint: 'Enter makes it the default for tasks that name none · /agents list prints this',
+      choose: (item) => void choose(item.key),
+    });
   },
 };
 
@@ -623,7 +663,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   copy,
   profile,
   theme,
-  categories,
+  agentsCommand,
   doctor,
   exportCommand,
   exit,
