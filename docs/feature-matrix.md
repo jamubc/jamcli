@@ -35,7 +35,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Every tool call answered and recorded | ✗ (F8) | ✓ | n.v. | n.v. | n.v. | n.v. | parity |
 | Local models, no account, offline | ◐ chat only | ✓ Ollama default, `num_ctx`, onboarding | ✗ Anthropic-family endpoints [1] | n.v. | n.v. | ◐ "open models" [6] | exceeds |
 | Provider breadth | ✓ OpenAI-compatible, Anthropic, Ollama, custom | ✓ plus catalog, retries | ◐ Anthropic API, Bedrock, Vertex, Foundry [1] | ◐ OpenAI, ChatGPT sign-in [3] | n.v. | n.v. | parity |
-| Model routing by kind of work | ✓ categories | ✓ | n.v. | n.v. | n.v. | n.v. | exceeds |
+| Model routing by kind of work | ✓ categories | ✓ agents with descriptions, rules, and a default | n.v. | n.v. | n.v. | n.v. | exceeds |
 | Prompt caching and per-model thinking for Claude | ✗ (F14) | ✓ cache breakpoints, adaptive or budget thinking by model, replay only while valid | n.v. | n.v. | n.v. | n.v. | parity |
 | OpenAI Responses API | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | will not do: OpenAI's documentation is blocked from the build environment, so the adapter was not built against it; closing 4.5 with the gap kept here; Chat Completions stays fully supported |
 | Headless use with machine-readable output | ◐ read-only, empty schemas | ✓ JSON, stream-json, `--dry-run` | ✓ `-p`, stream-json in and out, SDK [1] | n.v. | n.v. | n.v. | parity |

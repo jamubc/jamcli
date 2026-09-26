@@ -46,18 +46,49 @@ Keys never enter project files, and a subprocess gets none unless a setting name
 - A model whose price is unknown reports a cost as a lower bound; `/cost` says what is
   unpriced.
 
-## Categories
+## Agents
 
-Delegated work (`task`, `delegate`, and a workflow's `agent` step with `category`) routes
-through categories, each a chain of models tried in order:
+Delegated work (`task`, and a workflow's `agent` step with `category`) runs on an agent:
+a name, a description the model reads when choosing, a chain of models tried in order,
+and optional rules. An agent is one markdown file, `agents/<name>.md`, in the project's
+`.jamcli` directory, the user configuration directory, or a plugin, the first found
+winning:
+
+```markdown
+---
+description: Prose: documentation, a commit message, a summary for the person.
+models:
+  - openrouter:anthropic/claude-haiku-4.5
+  - model: ollama:llama3
+    reasoning: off
+---
+Write plainly. Short sentences. No em dashes, no emojis.
+```
+
+- `description` and `models` are required. An entry is a model ref, or `{ model,
+  reasoning }` with `reasoning` of `off`, `on`, or `auto`.
+- The body is the agent's rules. Only a child running on the agent reads them, before the
+  project's rules, so a project's `AGENTS.md` wins a conflict.
+- The built-ins are `quick`, `intelligent`, `explore`, and `writing`, each on
+  `ollama:llama3`, which must be pulled. A file of the same name replaces one.
+- `delegation.default_agent` names the agent a `task` without one runs on; with only the
+  built-ins it is `quick`. `/agents` lists every agent with where it came from and sets
+  the default.
+- The model sees each agent as one line, its description and the chain it runs on, and
+  only agents with a model on a configured provider.
+
+The earlier `categories` setting still works: each entry loads as an agent of that name
+with that chain and no description or rules, and configured categories replace the
+built-ins, as they always have.
 
 ```json
 { "categories": { "quick": [{ "model": "ollama:qwen2.5-coder:7b" }, { "model": "openai:gpt-5-mini" }] } }
 ```
 
-The defaults route every category to `ollama:llama3`, which must be pulled; an entry
-whose provider is not configured is skipped with a reason, and a chain with no servable
-entry says so. `jamcli doctor` reports the session's model and what it answers.
+An entry whose provider is not configured is skipped with a reason, an Ollama that is not
+running is skipped before a child starts, and a chain with no servable entry says so.
+`jamcli doctor` checks every configured agent's models and reports agent files it could
+not read.
 
 ## Context and compaction
 

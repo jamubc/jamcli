@@ -36,7 +36,7 @@ steps:
 - A step has `id`, optional `needs`, optional `when`, optional `continue_on_error`, and
   exactly one kind:
   - `agent: { prompt, model?, category?, mode?, allowed_tools? }` runs a turn. A
-    `category` resolves through the category chain like delegation; a `mode` may be
+    `category` names an agent and runs on its chain and rules like delegation; a `mode` may be
     lower than the session's, never higher.
   - `run: <command>` runs a command under the same permissions as a shell turn.
   - `tool: { name, arguments }` runs one tool call.

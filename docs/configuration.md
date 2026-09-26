@@ -60,8 +60,8 @@ file and the key.
 | `lsp` | `enabled`, `diagnostics_after_edit`, and `servers` by name. See [protocols.md](protocols.md). |
 | `tool_search` | `threshold`: past this many MCP tools, offer them through `search_tools`. Defaults to 40; 0 always sends them all. |
 | `context` | `auto_compact`: summarize older turns when a request nears the window. On by default. |
-| `categories` | Model chains that delegation routes each kind of task to. |
-| `delegation` | `max_depth`, `max_concurrent`, `max_turns_per_child`. |
+| `categories` | Model chains by name, loaded as agents with no description or rules. Agent files in `.jamcli/agents/` are the richer form; see [providers](providers.md#agents). |
+| `delegation` | `max_depth`, `max_concurrent`, `max_turns_per_child`, `default_agent`. A key left out keeps its default. |
 | `trust` | The classifier that screens tool output: `enabled`, `model`, `threshold`, `dedupe`. |
 | `otel` | Trace export: `enabled` (off by default), `endpoint`, `headers`, `include_content` (off by default). |
 | `hooks` | Commands run at lifecycle events. See [hooks.md](hooks.md). |

@@ -1,7 +1,7 @@
 # Plugins
 
 A plugin is a directory with a `jamcli-plugin.json` manifest. It can add commands,
-skills, hooks, and MCP servers, and it runs in a sandbox sized to what it declares.
+skills, agents, hooks, and MCP servers, and it runs in a sandbox sized to what it declares.
 
 ## The manifest
 
@@ -19,6 +19,7 @@ skills, hooks, and MCP servers, and it runs in a sandbox sized to what it declar
   "contributes": {
     "commands": "commands",
     "skills": "skills",
+    "agents": "agents",
     "hooks": "hooks.json",
     "mcpServers": { "acme": { "command": "./bin/acme-mcp", "args": [] } }
   }

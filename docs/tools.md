@@ -53,7 +53,7 @@ Allow a site with a rule such as `web_fetch(domain:docs.python.org)` or
 | Tool | Class | What it does |
 |---|---|---|
 | `todo_write`, `todo_read` | state | The session's todo list, shown with `Ctrl+T`. |
-| `task` | delegate | Runs a child agent on a model chosen by category, with a narrowed policy, in the foreground or background. |
+| `task` | delegate | Runs a child on an agent (its model chain and rules), the default when none is named, with an optional reasoning level and a narrowed policy, in the foreground or background. |
 | `task_status`, `task_result`, `task_cancel` | read, delegate | For background tasks. |
 | `delegate` | delegate | Hands a task to another ACP agent. |
 | `delegate_status`, `delegate_result`, `delegate_cancel` | read, delegate | For delegated work. |

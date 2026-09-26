@@ -25,7 +25,7 @@ afterward.
    rules/         instruction files from the project root to the working directory
    hooks/         the in-process event bus and user command hooks
    trust/         the tool output screening gate
-   routing/       categories that name a kind of work and resolve to a model chain
+   routing/       agent chains resolved to the first servable model
    delegation/    child runs
    ext/           custom commands and Agent Skills
    plugins/       manifests, installation, lockfile, lifecycle
