@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import {
   canonicalizeUrl,
   containment,
@@ -11,6 +11,12 @@ import {
 import type { SearchResult } from '../providers.js';
 
 const realFetch = globalThis.fetch;
+// The developer's own shell may export a real LANGSEARCH_API_KEY; scrub it before and
+// after every test so a test's result never depends on that machine or on run order.
+beforeEach(() => {
+  delete process.env.LANGSEARCH_API_KEY;
+  delete process.env.JAMCLI_LANGSEARCH_KEY;
+});
 afterEach(() => {
   globalThis.fetch = realFetch;
   delete process.env.LANGSEARCH_API_KEY;
