@@ -1,6 +1,7 @@
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../../types/tools.js';
 import { htmlToText } from './extract.js';
-import { refineFetch } from './refine.js';
+import { refineFetch, refineSearch } from './refine.js';
+import { FRESHNESS_PROPERTY, type Freshness, type SearchProviders, type SearchResult } from './providers.js';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
@@ -168,3 +169,43 @@ export const WEB_FETCH_TOOL: RegisteredTool = {
   policy: 'network',
   runner: webFetchWith(refineFetch),
 };
+
+export interface SearchRunner {
+  readonly available: string[];
+  run(query: string, options?: { count?: number; freshness?: Freshness; signal?: AbortSignal }): Promise<SearchResult[]>;
+}
+
+const searchSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    query: { type: 'string', description: 'The search query.' },
+    freshness: FRESHNESS_PROPERTY as unknown as JsonSchema,
+  },
+  required: ['query'],
+  additionalProperties: false,
+};
+
+export function webSearchWith(runner: SearchRunner, refine: typeof refineSearch): RegisteredTool {
+  return {
+    name: 'web_search',
+    description: `Search the web with the ${runner.available.join(', ') || 'configured'} provider and return ranked results with page text.`,
+    inputSchema: searchSchema,
+    policy: 'network',
+    runner: async (args, ctx) => {
+      const query = String(args.query ?? '').trim();
+      if (!query) return { output: 'Refused: a query is required.' };
+      const freshness = typeof args.freshness === 'string' ? (args.freshness as Freshness) : undefined;
+      let results: SearchResult[];
+      try {
+        results = await runner.run(query, { freshness, signal: ctx.signal });
+      } catch (error: any) {
+        return { output: `Search failed: ${error?.message ?? String(error)}` };
+      }
+      const refined = await refine(query, results, ctx);
+      if (!refined.length) return { output: `No results for ${JSON.stringify(query)}.` };
+      return { output: refined.map((result) => [`## ${result.title ?? result.url}`, result.url, result.content ?? ''].join('\n')).join('\n\n') };
+    },
+  };
+}
+
+export const webSearchTool = (providers: SearchProviders) => webSearchWith(providers, refineSearch);

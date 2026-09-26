@@ -116,7 +116,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | First-run onboarding | ✗ | ✓ local-first | n.v. | n.v. | n.v. | n.v. | parity |
 | Image input | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | gap: not in this unit; needs a vision-capable local path to keep the local-first promise |
 | Web fetch | ✗ | ✓ `web_fetch`: asks by default, rules by domain, a redirect to another host not followed | n.v. | n.v. | n.v. | n.v. | parity |
-| Web search | ✗ | ✗ | n.v. | n.v. | n.v. | n.v. | gap: every search API needs an account or network service; can be added as an MCP server |
+| Web search | ✗ | ✓ `web_search`: LangSearch provider, offered only when a key resolves, asks by default, rules by provider host | n.v. | n.v. | n.v. | n.v. | parity |
 
 ## Distribution
 

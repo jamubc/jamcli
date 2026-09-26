@@ -34,6 +34,8 @@ import { formatDiagnostic, LspManager } from '../lsp/manager.js';
 import { enabledPlugins, installedPlugins, verifyPlugins } from '../plugins/lock.js';
 import type { PluginParts } from '../plugins/runtime.js';
 import { lspTool } from '../tools/lsp.js';
+import { webSearchTool } from '../tools/web/index.js';
+import { SearchProviders } from '../tools/web/providers.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
@@ -440,6 +442,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   // A delegated run has none, so a task does not start a second copy of each server.
   const lsp = options.parent || config.lsp?.enabled === false ? undefined : new LspManager(workRoot, config.lsp ?? {}, envFor(), sandbox.kind === 'none' ? undefined : sandbox.wrap);
   if (lsp?.available.length) registry.register(lspTool(lsp));
+
+  const searchProviders = new SearchProviders(config.search);
+  if (searchProviders.available.length) registry.register(webSearchTool(searchProviders));
 
   let permissions: PermissionEngine;
   if (options.parent) {
