@@ -42,7 +42,7 @@ request with `gh`, both after you approve.
 
 | Tool | Class | What it does |
 |---|---|---|
-| `web_fetch` | network | A URL as readable text: HTML reduced to its text, other text types as they are, binary refused. Up to 5 MB, 30 seconds. A redirect to another host is not followed; the model is told where it points and must fetch it in a new call, which rules judge for that host. |
+| `web_fetch` | network | A URL as readable text: HTML reduced to its text with links kept as markdown, navigation and footers dropped, other text types as they are, binary refused. Up to 5 MB, 30 seconds, sent with the `JamCLI` user agent. Responses are cached in memory for 15 minutes. A redirect to another host is not followed; the model is told where it points and must fetch it in a new call, which rules judge for that host. |
 
 Allow a site with a rule such as `web_fetch(domain:docs.python.org)` or
 `web_fetch(domain:*.python.org)`.

@@ -10,7 +10,7 @@ import { APPLY_PATCH_TOOL } from './patch.js';
 import { READ_FILE_TOOL } from './read_file.js';
 import { TASK_TOOLS } from './task.js';
 import { TODO_TOOLS } from './todo.js';
-import { WEB_FETCH_TOOL } from './webFetch.js';
+import { WEB_FETCH_TOOL } from './web/index.js';
 import { WRITE_FILE_TOOL } from './write_file.js';
 
 /** Every built-in tool, one per job, plus the hidden aliases that keep older names working. */
