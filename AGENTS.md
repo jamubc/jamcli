@@ -50,8 +50,11 @@ run the four gates, then archive.
   read from the environment through `key_env_var` wherever the provider allows it.
 - **The local-first path must keep working.** If Ollama with no network is broken, the
   change is not done, regardless of what else it does.
-- **No memory, learning, or self-improvement features.** That experiment was run and
-  decommissioned. See `openspec/SEQUENCE.md` for the numbers.
+- **Learning only as reviewable files, on demand, behind the gates.** JamCLI may improve
+  itself only by proposing edits to skills, rules, or agents that the user approves, when
+  the user asks, and only after the citation and novelty gates of `add-session-reflection`.
+  No background learning, no hidden memory, no user profile. The earlier unguarded attempt
+  and its numbers are in `openspec/SEQUENCE.md`.
 
 ## Four gates, every change
 

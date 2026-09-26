@@ -156,6 +156,11 @@ These are recorded so they are not proposed again without new evidence.
   another LLM had already done. Revisit only with a hard novelty gate that can be
   demonstrated on real transcripts before any code is written. This also rules out a
   learned preference profile of the kind Command Code calls "taste".
+  Reopened 2026-09-26 by the owner as `add-session-reflection`, under the gates that
+  proposal names: on demand only, evidence cited from the log, known lessons dropped,
+  delta edits the user approves. Its close must report approved novel edits against this
+  0 of 26. A learned preference profile stays rejected. Cross-session insights are a
+  candidate for after it closes.
 - **Team mode, member visualization, or unbounded parallel agents.** The complexity cost
   is real and the benefit is unproven for a single user. Workflows may run a small,
   capped number of steps in parallel; that is the whole of it.
