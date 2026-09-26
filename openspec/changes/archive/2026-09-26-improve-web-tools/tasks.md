@@ -122,6 +122,6 @@
 
 ## 4. Archive
 
-- [ ] 4.1 Apply the deltas in `specs/jamcli/spec.md` into `openspec/specs/jamcli/spec.md`
+- [x] 4.1 Apply the deltas in `specs/jamcli/spec.md` into `openspec/specs/jamcli/spec.md`
   and move this change to `openspec/changes/archive/` with every box above checked.
-- [ ] 4.2 Update `openspec/SEQUENCE.md`'s open unit and closed units.
+- [x] 4.2 Update `openspec/SEQUENCE.md`'s open unit and closed units.

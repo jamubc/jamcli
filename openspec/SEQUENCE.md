@@ -55,14 +55,38 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. `rehaul-jamcli` closed 2026-09-26; see Closed units below. `add-windows-support` is
-shelved, not in the active changes tree: it waits for the owner to approve it before any
-task begins, and `git checkout 9d9f5c6 -- openspec/changes/add-windows-support` restores
-its proposal from the commit that recorded it. `improve-web-tools` is proposed
-(`openspec/changes/improve-web-tools/`) and not started: per the working rule, it waits
-for the owner to approve the proposal before any task begins.
+None. `improve-web-tools` closed 2026-09-26; see Closed units below. `add-windows-support`
+is shelved, not in the active changes tree: it waits for the owner to approve it before
+any task begins, and `git checkout 9d9f5c6 -- openspec/changes/add-windows-support`
+restores its proposal from the commit that recorded it.
 
 ## Closed units
+
+### 3. `improve-web-tools`
+
+Archived as `2026-09-26-improve-web-tools`: 2 requirements added, 1 modified, 0 removed.
+Modern web research for JamCLI: `web_fetch` gained link-preserving extraction, a
+main-content preference, an in-process 15 minute response cache, and a real user agent;
+`web_search` was added over a configured LangSearch provider, offered only when a key
+resolves, gated by the provider's host through the existing `domain:` rule matcher; both
+tools pass through an identity refinement stage that names the TypeSafe System One gate
+(`jev-latest`) as its intended later occupant. Built in `src/core/tools/web/`, one new
+directory of four files, plus ten mechanical edits and two deletions named in `design.md`.
+
+**Owner decisions recorded with it**: no worktree and no new branch, work stayed on
+`feat/agentic-harness-core`, knowingly setting aside the per-unit branch rule for this
+unit; the refine stage ships empty rather than wired to a summarizer, so no extra process
+call is paid until `jev` lands; extending `jamcli auth` to manage search-provider keys
+was kept out of scope.
+
+**What closing it found.** `providers.ts`'s two relative imports in the plan's own draft
+were one directory level short (`../providers/factory.js` and `../../types/config.js`),
+caught by `tsc` rather than by inspection. `providers.test.ts` scrubbed the developer's
+real `LANGSEARCH_API_KEY` only in `afterEach`, so a filtered or reordered run picked up
+the actual production key from the shell instead of failing closed; fixed with a matching
+`beforeEach`. `design.md` asserted a four-tier key precedence ending in the OS credential
+store, but the call site never passed an account name, so that tier was dead code for
+every search provider; fixed by passing the provider's name as the account.
 
 ### 2. `rehaul-jamcli`
 
