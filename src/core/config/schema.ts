@@ -141,6 +141,20 @@ export const ConfigFileSchema = z
           .describe('Language servers by name. A name used by a default (typescript, python, go, rust) replaces it.'),
       })
       .partial(),
+    search: z
+      .strictObject({
+        providers: z
+          .record(
+            z.string(),
+            z.strictObject({
+              endpoint: z.string().url().optional().describe('The provider API endpoint. The built-in LangSearch endpoint is used when omitted.'),
+              api_key: z.string().optional().describe('The key itself. Used only when the declared variable is not set.'),
+              key_env_var: z.string().optional().describe('The environment variable holding the key. Read first.'),
+            })
+          )
+          .describe('Search providers by name. A name used by a built-in (langsearch) replaces it.'),
+      })
+      .partial(),
     tool_search: z
       .strictObject({
         threshold: nonNegativeInt().describe('Offer MCP tools through search_tools once the servers bring more than this many. 0 always sends them all. Defaults to 40.'),

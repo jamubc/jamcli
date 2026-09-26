@@ -396,6 +396,38 @@
       },
       "additionalProperties": false
     },
+    "search": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "endpoint": {
+                "description": "The provider API endpoint. The built-in LangSearch endpoint is used when omitted.",
+                "type": "string",
+                "format": "uri"
+              },
+              "api_key": {
+                "description": "The key itself. Used only when the declared variable is not set.",
+                "type": "string"
+              },
+              "key_env_var": {
+                "description": "The environment variable holding the key. Read first.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Search providers by name. A name used by a built-in (langsearch) replaces it."
+        }
+      },
+      "additionalProperties": false
+    },
     "tool_search": {
       "type": "object",
       "properties": {
