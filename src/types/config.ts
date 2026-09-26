@@ -156,6 +156,8 @@ export interface Config {
   tool_search?: { threshold?: number };
   /** Language servers: the `lsp` tool and the errors reported after edits. */
   lsp?: LspSettings;
+  /** Search providers by name, used by `web_search`. */
+  search?: SearchSettings;
 }
 
 export type ThemeName = 'dark' | 'light' | 'high-contrast' | 'monochrome';

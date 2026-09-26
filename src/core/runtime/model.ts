@@ -1,4 +1,4 @@
-import type { ApiRegistry, Config, Profile } from '../../types/config.js';
+import type { ApiRegistry, Config, Profile, SearchSettings } from '../../types/config.js';
 import { SUPPORTED_PROVIDERS, createChatProvider } from '../providers/factory.js';
 import type { ChatProvider } from '../providers/types.js';
 
@@ -46,13 +46,18 @@ export function trustClassifier(config: Config): { provider?: ChatProvider; mode
  * Credentials a session knows about beyond the environment's naming convention: keys and
  * headers stored in configuration, and variables named by `key_env_var`, for redaction.
  */
-export function configuredSecrets(registry: ApiRegistry | undefined, env: Record<string, string | undefined>): { name: string; value: string }[] {
+export function configuredSecrets(
+  registry: ApiRegistry | undefined,
+  env: Record<string, string | undefined>,
+  search?: SearchSettings
+): { name: string; value: string }[] {
   type Keyed = { api_key?: string; key_env_var?: string; headers?: Record<string, string> };
   const entries: [string, Keyed | undefined][] = [
     ['openrouter', registry?.openrouter],
     ['openai', registry?.openai],
     ['anthropic', registry?.anthropic],
     ...(registry?.endpoints ?? []).map((entry): [string, Keyed] => [entry.id, entry]),
+    ...Object.entries(search?.providers ?? {}).map(([name, entry]): [string, Keyed] => [`search.${name}`, entry]),
   ];
   const secrets: { name: string; value: string }[] = [];
   for (const [name, entry] of entries) {
@@ -68,7 +73,13 @@ export function configuredSecrets(registry: ApiRegistry | undefined, env: Record
 }
 
 /** The variables configuration names as holding provider keys, which no subprocess gets. */
-export function keyVariables(registry: ApiRegistry | undefined): string[] {
-  const entries = [registry?.openrouter, registry?.openai, registry?.anthropic, ...(registry?.endpoints ?? [])];
+export function keyVariables(registry: ApiRegistry | undefined, search?: SearchSettings): string[] {
+  const entries = [
+    registry?.openrouter,
+    registry?.openai,
+    registry?.anthropic,
+    ...(registry?.endpoints ?? []),
+    ...Object.values(search?.providers ?? {}),
+  ];
   return [...new Set(entries.flatMap((entry) => (entry?.key_env_var ? [entry.key_env_var] : [])))];
 }

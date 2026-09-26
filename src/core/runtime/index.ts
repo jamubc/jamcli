@@ -273,7 +273,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const settings = loadConfig({ projectRoot, env });
   notices.push(...settings.errors);
   const { config, profile, mcp: mcpConfig } = settings;
-  const redact = createRedactor(env, configuredSecrets(config.api_registry, env), revealedKeys);
+  const redact = createRedactor(env, configuredSecrets(config.api_registry, env, config.search), revealedKeys);
   let observer: Observer;
   const includeContent = config.otel?.include_content === true;
   if (options.observer) observer = options.observer.observer;
@@ -300,7 +300,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   notices.push(...catalog.problems);
 
   const sandboxSettings: SandboxSettings = config.sandbox ?? {};
-  const withheld = keyVariables(config.api_registry);
+  const withheld = keyVariables(config.api_registry, config.search);
   /** Every process the session starts inherits this, with no credential unless one is named. */
   const envFor = (passthrough: string[] = [], values?: Record<string, string>) =>
     subprocessEnv(env, {
