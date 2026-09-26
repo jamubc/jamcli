@@ -79,5 +79,6 @@ description. `bun test` must pass, and the tests must be capable of failing.
 
 No unit is open. `rehaul-jamcli` closed 2026-09-26 as `2026-09-26-rehaul-jamcli` (35
 added, 30 modified) and is tagged `v2.0.0`; its type baseline of 22 errors reached 0 when
-Ink was removed (6.15) and stays 0. `add-windows-support` is proposed but not started;
-see `openspec/SEQUENCE.md` for what closing the last unit found and left open.
+Ink was removed (6.15) and stays 0. `add-windows-support` is shelved, `improve-web-tools`
+is proposed and not started; see `openspec/SEQUENCE.md` for what closing the last unit
+found and left open.

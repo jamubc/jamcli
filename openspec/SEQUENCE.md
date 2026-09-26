@@ -55,9 +55,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. `rehaul-jamcli` closed 2026-09-26; see Closed units below. `add-windows-support`
-is proposed (`openspec/changes/add-windows-support/`) but not started: per the working
-rule, it waits for the owner to approve the proposal before any task begins.
+None. `rehaul-jamcli` closed 2026-09-26; see Closed units below. `add-windows-support` is
+shelved, not in the active changes tree: it waits for the owner to approve it before any
+task begins, and `git checkout 9d9f5c6 -- openspec/changes/add-windows-support` restores
+its proposal from the commit that recorded it. `improve-web-tools` is proposed
+(`openspec/changes/improve-web-tools/`) and not started: per the working rule, it waits
+for the owner to approve the proposal before any task begins.
 
 ## Closed units
 
