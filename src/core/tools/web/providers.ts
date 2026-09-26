@@ -225,7 +225,7 @@ export class SearchProviders {
   }
 
   private keyFor(definition: ProviderDefinition): string | undefined {
-    return resolveApiKey(definition.config, definition.name === 'langsearch' ? LANGSEARCH_KEY_VAR : undefined);
+    return resolveApiKey(definition.config, definition.name === 'langsearch' ? LANGSEARCH_KEY_VAR : undefined, definition.name);
   }
 
   async run(
