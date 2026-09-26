@@ -1,6 +1,9 @@
-import type { Config } from '../../types/config.js';
+import type { ApiRegistry, Config } from '../../types/config.js';
 import { DEFAULT_CATEGORIES } from '../routing/categories.js';
 import { resolveRoute } from '../routing/resolve.js';
+import { providerOf } from '../routing/capabilities.js';
+import { createChatProvider } from '../providers/factory.js';
+import { isListableProvider } from '../providers/types.js';
 import type { Delegate, DelegationOutcome } from '../delegation/types.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import type { McpSource } from './tools.js';
@@ -9,6 +12,25 @@ import type { Runtime, RuntimeOptions } from './index.js';
 import type { Sandbox } from '../sandbox/types.js';
 import type { AgentEvent } from '../types.js';
 import { describeWorktree, openWorktree, removeWorktree, worktreeChanges, type Worktree } from '../git/worktrees.js';
+
+/**
+ * Ollama is the only provider a category chain can name without configuring anything, so
+ * it is the only one that can be "configured" yet not actually running. A chain that names
+ * it deserves this check before a child spends a turn discovering the same thing itself;
+ * without it, `resolveRoute`'s skip-and-report path never engages and every request in the
+ * chain fails raw, once per child.
+ */
+const isChainReachable = async (model: string, registry: ApiRegistry | undefined): Promise<boolean> => {
+  if (providerOf(model) !== 'ollama') return true;
+  const provider = createChatProvider('ollama', registry ?? {});
+  if (!isListableProvider(provider)) return true;
+  try {
+    await provider.listModels();
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export type UsageEvent = Extract<AgentEvent, { type: 'usage' }>;
 
@@ -58,7 +80,12 @@ const STATUS: Record<string, DelegationOutcome['status']> = { ok: 'ok', cancelle
 export function childLauncher(options: ChildLauncherOptions): Delegate {
   return async (request) => {
     const categories = categoriesOf(options.config);
-    const route = await resolveRoute({ registry: options.config.api_registry, categories, category: request.category });
+    const route = await resolveRoute({
+      registry: options.config.api_registry,
+      categories,
+      category: request.category,
+      isReachable: (model) => isChainReachable(model, options.config.api_registry),
+    });
     const refuse = (reason: string): DelegationOutcome => ({ status: 'refused', response: '', category: request.category, reason });
     if (!route) return refuse(`No category named "${request.category}". The categories are ${Object.keys(categories).join(', ')}.`);
     if (!route.model) return refuse(route.notes.join(' '));

@@ -106,6 +106,24 @@ test('a child cannot widen the policy it inherits', async () => {
   expect(asked).toEqual(['edit']);
 });
 
+test('an unreachable ollama refuses the delegation cleanly instead of failing the child raw', async () => {
+  // The parent runs on openai here, since the point is the *child's* ollama chain being
+  // unreachable, not the parent's own model.
+  configure({
+    api_registry: { ollama: { endpoint: 'http://127.0.0.1:1' }, openai: { base_url: server.openaiBaseUrl } },
+    categories: { quick: [{ model: 'ollama:llama3' }] },
+  });
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'profiles', 'default.json'),
+    JSON.stringify({ name: 'Default', preferred_provider: 'openai', preferred_model: 'fake-model' })
+  );
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue({ toolCalls: [delegateCall('go')] }, { text: 'done' });
+  await parent.run('delegate');
+  const taskResult = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool').content;
+  expect(taskResult).toBe('Delegation refused: no entry in "quick" is currently servable');
+});
+
 test('delegation depth is bounded, and an unknown category is refused with the real ones named', async () => {
   configure({ delegation: { max_depth: 1, max_concurrent: 3, max_turns_per_child: 4 } });
   const parent = await start({ allowTools: ['task'] });
