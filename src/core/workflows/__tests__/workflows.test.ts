@@ -191,7 +191,9 @@ test('a real run: an agent step in plan mode, a command, a tool, a headless appr
 
   fs.writeFileSync(path.join(root, 'notes.txt'), 'hello, fixed\n');
   out.length = 0;
-  expect(await runWorkflowCommand(['approve', runId, 'gate', '--headless'], root, { io, runtime: { env: { PATH: process.env.PATH, HOME: process.env.HOME } } })).toBe(0);
+  const approveCode = await runWorkflowCommand(['approve', runId, 'gate', '--headless'], root, { io, runtime: { env: { PATH: process.env.PATH, HOME: process.env.HOME } } });
+  if (approveCode !== 0) console.error('TEMP DEBUG approve output:\n' + out.join('\n'));
+  expect(approveCode).toBe(0);
   expect(out.at(-1)).toBe(`Run ${runId} of fix ended: ok.`);
   expect(git('log', '-1', '--format=%s')).toBe('fix: typo');
 }, 60_000);
@@ -325,7 +327,8 @@ test('a commit step with message agent drafts the message from the session', asy
   fs.writeFileSync(path.join(root, 'notes.txt'), 'hello, changed\n');
   fs.writeFileSync(path.join(root, '.jamcli', 'workflows', 'save.yaml'), ['name: save', 'steps:', '  - id: save', '    commit: { message: agent, paths: [notes.txt] }', ''].join('\n'));
   provider.enqueue({ text: 'fix: draft from here' });
-  const { code } = await runWorkflow(['run', 'save', '--headless']);
+  const { code, out } = await runWorkflow(['run', 'save', '--headless']);
+  if (code !== 0) console.error('TEMP DEBUG save output:\n' + out.join('\n'));
   expect(code).toBe(0);
   expect(git('log', '-1', '--format=%s')).toBe('fix: draft from here');
 }, 30_000);
