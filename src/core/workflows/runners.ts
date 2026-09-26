@@ -2,6 +2,7 @@ import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime/ind
 import { loadConfig } from '../config/load.js';
 import { categoriesOf } from '../runtime/children.js';
 import { resolveRoute } from '../routing/resolve.js';
+import { isChainReachable } from '../routing/reachable.js';
 import { commitChanges } from '../git/commit.js';
 import type { AgentEvent, RunResult } from '../types.js';
 import { executeWorkflow, type StepOutcome, type StepRunners } from './engine.js';
@@ -60,7 +61,12 @@ export function runtimeRunners(options: RuntimeRunnerOptions): StepRunners {
       let model = spec.model;
       if (!model && spec.category) {
         const config = loadConfig({ projectRoot: options.projectRoot }).config;
-        const route = await resolveRoute({ registry: config.api_registry, categories: categoriesOf(config), category: spec.category });
+        const route = await resolveRoute({
+          registry: config.api_registry,
+          categories: categoriesOf(config),
+          category: spec.category,
+          isReachable: (candidate) => isChainReachable(candidate, config.api_registry),
+        });
         if (!route) return { ok: false, output: `There is no category ${spec.category}.` };
         if (!route.model) return { ok: false, output: route.notes.join(' ') };
         model = route.model;
