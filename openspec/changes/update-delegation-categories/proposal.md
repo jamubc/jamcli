@@ -103,8 +103,9 @@ depends on them:
   `downgradeReasoning`, `providerConfigured`, `describeChain`, the layered loader, the
   `/config` writer, and the existing refusal path in `task.ts:98-99`.
 - **Not affected:** the local-first path. The built-in defaults still route to
-  `ollama:llama3` with no key and no network. They gain descriptions and nothing else, and
-  `ollama` always counts as configured, so the defaults are always offered.
+  `ollama:llama3` with no key and no network. They gain descriptions, and `deep` is renamed
+  `intelligent` (owner decision), so the built-ins are `quick`, `intelligent`, `explore`,
+  and `writing`. `ollama` always counts as configured, so the defaults are always offered.
 - **Deliberately not done:** letting the model name an arbitrary `provider:model` (owner
   decision, above). Graded effort levels beyond `off`, `on`, and `auto`, since only
   Anthropic exposes them. Reloading configuration in a running session, which would touch

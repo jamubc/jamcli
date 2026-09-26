@@ -41,13 +41,15 @@ session with the same tools as you, under your permissions, and returns one fina
 The person does not see that message, so tell them what matters in it.
 
 Categories (choose by what the work needs):
-- smart: Hard problems where getting it right matters more than speed: a subtle bug, a
-  change that crosses several modules. (runs on openrouter:anthropic/claude-sonnet-4.5)
-- thinker: Problems that need long, careful reasoning before any action: a design with
-  real trade-offs, a proof, a tricky migration plan. (runs on openrouter:deepseek/deepseek-r1,
-  reasoning on)
 - quick: Small, well-specified jobs with a short answer: a lookup, a single-file check,
   one piece of a fan-out. Fast and cheap, not deep. (runs on ollama:qwen3:8b)
+- intelligent: Hard problems where getting it right matters more than speed: a subtle
+  bug, a change that crosses several modules, a design with real trade-offs.
+  (runs on openrouter:anthropic/claude-sonnet-4.5, reasoning on)
+- explore: Investigation across the codebase: where something lives, how two parts
+  connect, what calls what. Ask it to report, not to edit. (runs on ollama:qwen3:8b)
+- writing: Prose: documentation, a commit message, a summary for the person.
+  (runs on openrouter:anthropic/claude-haiku-4.5)
 If you omit category, quick is used.
 
 Delegate when:
@@ -78,9 +80,10 @@ With no configured categories, the built-in list reads:
 ```
 - quick: Small, well-specified jobs with a short answer: a lookup, a single-file check,
   one piece of a fan-out. (runs on ollama:llama3)
+- intelligent: Hard problems where getting it right matters more than speed: a subtle
+  bug, a change that crosses several modules. (runs on ollama:llama3)
 - explore: Investigation across the codebase: where something lives, how two parts
   connect, what calls what. Ask it to report, not to edit. (runs on ollama:llama3)
-- deep: Problems that need sustained, multi-step work. (runs on ollama:llama3)
 - writing: Prose: documentation, a commit message, a summary for the person.
   (runs on ollama:llama3)
 If you omit category, quick is used.
@@ -163,14 +166,17 @@ reverting the change. Object-form files written in the meantime then fail valida
 the file and key named, and converting them back is removing `description` and renaming
 `models` to a plain list.
 
+## Owner Decisions
+
+- **Built-in category names are `quick`, `intelligent`, `explore`, and `writing`**
+  (2026-09-26). `deep` is renamed `intelligent`. Nothing outside tests names the built-in
+  `deep`: the tests that use that string configure it themselves. On the default chain all
+  four run on `ollama:llama3`, and the generated "runs on" suffix keeps `intelligent` honest
+  there. The name tells the model what the category is for, and the suffix tells it what
+  will actually do the work.
+
 ## Open Questions
 
-- **Built-in category names.** Keep `quick`, `explore`, `deep`, and `writing` (recommended:
-  they name kinds of work as the spec requires, existing workflows reference them, and the
-  owner's `smart`, `thinker`, and `quick` fit naturally as configured categories), or
-  replace the built-ins with the owner's capability vocabulary. Capability names on four
-  copies of one small model would be exactly the overselling the "runs on" suffix exists to
-  expose.
 - **Graded effort.** If graded levels are wanted later, they extend `reasoning`'s enum where
   the catalog reports `effort` support (`src/types/config.ts:89`). That is a provider
   change, so a later unit.

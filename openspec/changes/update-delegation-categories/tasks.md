@@ -3,8 +3,9 @@
 - [ ] 1.1 Owner approves the `task` description text in `design.md` ("The language the
   model reads"), including the built-in descriptions. This is the substance of the change;
   wording changes land here, before code.
-- [ ] 1.2 Owner settles the built-in names (open question in `design.md`): keep `quick`,
-  `explore`, `deep`, `writing` (recommended), or replace them.
+- [x] 1.2 Owner settles the built-in names. Done: `quick`, `intelligent`, `explore`,
+  `writing`; `deep` becomes `intelligent` in `DEFAULT_CATEGORIES`
+  (`src/core/routing/categories.ts:7-10`). See "Owner Decisions" in `design.md`.
 - [ ] 1.3 Confirm the config keys: `categories.<name>.description`,
   `categories.<name>.models`, and `delegation.default_category`.
 
