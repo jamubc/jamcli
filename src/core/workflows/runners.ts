@@ -1,5 +1,5 @@
 import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime/index.js';
-import { loadConfig } from '../config/load.js';
+import { displayPath, loadConfig } from '../config/load.js';
 import { chainsOf, describeSource, loadAgents } from '../ext/agents.js';
 import { resolveRoute } from '../routing/resolve.js';
 import { isChainReachable } from '../routing/reachable.js';
@@ -75,7 +75,7 @@ export function runtimeRunners(options: RuntimeRunnerOptions): StepRunners {
         model = route.model;
         agentOptions = {
           ...(route.reasoning ? { reasoning: route.reasoning } : {}),
-          ...(agent.rules ? { agentRules: { agent: agent.name, source: describeSource(agent.source), text: agent.rules } } : {}),
+          ...(agent.rules ? { agentRules: { agent: agent.name, source: describeSource(agent.source, (file) => displayPath(file, options.projectRoot)), text: agent.rules } } : {}),
         };
       }
       const ranks: Record<string, number> = { plan: 0, default: 1, 'accept-edits': 2, auto: 3, bypass: 4 };

@@ -1,5 +1,6 @@
 import type { Config } from '../../types/config.js';
 import { chainsOf, describeSource, type LoadedAgents } from '../ext/agents.js';
+import { displayPath } from '../config/load.js';
 import { downgradeReasoning } from '../routing/capabilities.js';
 import { resolveRoute } from '../routing/resolve.js';
 import { isChainReachable } from '../routing/reachable.js';
@@ -92,7 +93,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         surface: 'child',
         model,
         ...(reasoning ? { reasoning } : {}),
-        ...(agent.rules ? { agentRules: { agent: name, source: describeSource(agent.source), text: agent.rules } } : {}),
+        ...(agent.rules ? { agentRules: { agent: name, source: describeSource(agent.source, (file) => displayPath(file, options.projectRoot)), text: agent.rules } } : {}),
         maxSteps: request.maxTurns,
         signal: request.signal,
         mcp: options.mcp ? borrowed(options.mcp) : false,
