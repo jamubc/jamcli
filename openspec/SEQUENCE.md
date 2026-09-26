@@ -55,49 +55,42 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-### 2. `rehaul-jamcli`
-
-The rehaul of JamCLI into a modern coding CLI, as directed by the owner on 2026-09-23.
-It covers:
-
-- one runtime for every surface, a streaming turn engine, and a transcript event log;
-- permission modes with a sandbox;
-- a model catalog with cost tracking, and model-aware context management;
-- layered configuration, credentials, and observability;
-- the interface rebuilt on OpenTUI;
-- git workflows;
-- commands, skills, and hooks;
-- MCP, ACP, and LSP adapters;
-- plugins, workflows, and release binaries.
-
-Full scope in `openspec/changes/rehaul-jamcli/`.
-
-**Owner decisions recorded with it** (2026-09-23):
-
-- One unit rather than several, with twelve stages.
-- The pre-authorized `replace-ink-with-opentui` unit is folded into stage 6 and merged
-  with an interface redesign. Its benchmark gate stands, and frame-text snapshot tests
-  are authorized.
-- A plugin system, a git write path, a workflow engine, and release binaries are
-  authorized. They were previously deferred.
-- The owner's answers approve the plan. Each stage proceeds without a separate review of
-  its proposal.
-
-**Insertion rule for this unit.**
-
-- Stage 1 precedes everything, and stage 2 precedes everything after it.
-- Stage 6 needs stages 3 and 4.
-- Stage 10 needs stages 8 and 9.
-- Stage 11 needs stage 8, and stage 7 for its commit step.
-- Stage 12 is last.
-
-**Partial completion is identifiable.** The stopped point is the last checked task in
-`tasks.md`. Stopping after stage 2 still leaves a working agent on all three surfaces.
-
-**Baseline.** `npx tsc --noEmit` reports 22 errors on Bun 1.4.2 and TypeScript 7.0.2.
-CI's ceiling is lowered to match in task 1.1.
+None. `rehaul-jamcli` closed 2026-09-26; see Closed units below. `add-windows-support`
+is proposed (`openspec/changes/add-windows-support/`) but not started: per the working
+rule, it waits for the owner to approve the proposal before any task begins.
 
 ## Closed units
+
+### 2. `rehaul-jamcli`
+
+Archived as `2026-09-26-rehaul-jamcli`: 35 added, 30 modified, 0 removed. The rehaul of
+JamCLI into a modern coding CLI, as directed by the owner on 2026-09-23. It built one
+runtime for every surface with a streaming turn engine and a transcript event log;
+permission modes with a sandbox; a model catalog with cost tracking and model-aware
+context management; layered configuration, credentials, and observability; the
+interface on OpenTUI; git workflows; commands, skills, and hooks; MCP, ACP, and LSP
+adapters; and plugins, workflows, and release binaries.
+
+**Owner decisions recorded with it** (2026-09-23): one unit rather than several, with
+twelve stages; `replace-ink-with-opentui` folded into stage 6; a plugin system, a git
+write path, a workflow engine, and release binaries authorized, previously deferred;
+each stage proceeds without a separate proposal review. On 2026-09-25: `12.8` (micro
+status mode) folded in, with `JAMCLI_MICRO` as its override instead of a `ui.micro`
+config key; the type baseline reached 0 when Ink was removed (6.15) and stayed there.
+
+**What closing it found.** The unit's own first real CI run (2026-09-26, the branch had
+never been pushed before) failed on nearly the whole suite on Windows: no sandbox
+equivalent to bubblewrap or Seatbelt, no credential-store equivalent to Keychain or
+Secret Service, and POSIX process groups assumed for command cancellation. Windows was
+dropped from the CI gate and the 2.0.0 release rather than shipped unsandboxed;
+`add-windows-support` tracks building it properly. Two real defects surfaced and were
+fixed in the same pass: Ubuntu's GitHub-hosted runner blocks the unprivileged user
+namespace bubblewrap needs, which silently disabled the sandbox in CI until worked
+around, and workflow/`/commit` tests relied on an ambient git identity a fresh runner
+does not have. A macOS Seatbelt sandbox escape (a hostile plugin can still write outside
+its declared paths) is accepted, documented, load-bearing test evidence, not fixed here;
+see `openspec/changes/archive/2026-09-26-rehaul-jamcli/audit.md` and the unit's `tasks.md`
+for what `openspec/DEFERRED_STAGES/` still records as open beyond that.
 
 ### 1. `add-agentic-harness-core`
 

@@ -77,7 +77,7 @@ description. `bun test` must pass, and the tests must be capable of failing.
 
 ## Known state
 
-The open unit is `rehaul-jamcli`. Its `audit.md` records the measured state of the tree
-when it opened, including the defects the previous unit's tests did not catch. Its
-`tasks.md` is the checklist, and the last checked task is where work stopped. The type
-baseline for the unit was 22 errors; it reached 0 when Ink was removed (6.15), and stays 0.
+No unit is open. `rehaul-jamcli` closed 2026-09-26 as `2026-09-26-rehaul-jamcli` (35
+added, 30 modified) and is tagged `v2.0.0`; its type baseline of 22 errors reached 0 when
+Ink was removed (6.15) and stays 0. `add-windows-support` is proposed but not started;
+see `openspec/SEQUENCE.md` for what closing the last unit found and left open.
