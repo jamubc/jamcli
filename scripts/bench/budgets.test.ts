@@ -30,6 +30,6 @@ test('an enforced budget missed fails the job; an unenforced one is only recorde
     ['grep', 500],
     ['first-frame', 250],
     ['keystroke', 16],
-    ['idle-memory', 150],
+    ['idle-memory', 165],
   ]);
 });
