@@ -4,7 +4,8 @@ import { DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
 export interface DelegationState {
   depth: number;
   running: number;
-  config: DelegationConfig;
+  /** What configuration sets; a key it leaves out keeps its default. */
+  config?: Partial<DelegationConfig>;
 }
 
 export interface DelegationDecision {
@@ -13,7 +14,8 @@ export interface DelegationDecision {
 }
 
 export const canDelegate = (state: DelegationState): DelegationDecision => {
-  const config = state.config ?? DEFAULT_DELEGATION_CONFIG;
+  // A block that sets only some keys must not leave the others unbounded.
+  const config = { ...DEFAULT_DELEGATION_CONFIG, ...state.config };
   if (state.depth >= config.max_depth) {
     return {
       allowed: false,
@@ -29,7 +31,7 @@ export const canDelegate = (state: DelegationState): DelegationDecision => {
   return { allowed: true };
 };
 
-export const childTurns = (config: DelegationConfig | undefined, requested?: number): number => {
+export const childTurns = (config: Partial<DelegationConfig> | undefined, requested?: number): number => {
   const limit = config?.max_turns_per_child ?? DEFAULT_DELEGATION_CONFIG.max_turns_per_child;
   if (!requested || requested <= 0) return limit;
   return Math.min(requested, limit);
