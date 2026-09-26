@@ -23,7 +23,7 @@ access, preserving the page's links and preferring its main content.
 #### Scenario: A repeated URL is served from memory
 - **WHEN** the model fetches the same URL again within the cache lifetime
 - **THEN** the text is returned without a second request to the site
-- **AND** the cache never outlives the session and never touches disk
+- **AND** the cache is in-process, expires, and never touches disk
 
 #### Scenario: A refinement stage stands between the page and the model
 - **WHEN** a page has been reduced to text
