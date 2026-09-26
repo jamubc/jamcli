@@ -461,6 +461,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       sandboxed: sandbox.kind !== 'none',
       env,
       commitInBypass: config.git?.allow_commit_in_bypass === true,
+      webSearchHost: searchProviders.host,
     });
     permissions = assembled.engine;
     notices.push(...assembled.notices);

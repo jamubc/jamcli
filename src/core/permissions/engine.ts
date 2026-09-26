@@ -31,6 +31,8 @@ export interface PermissionEngineOptions {
   alwaysAsks?: (tool: string) => boolean;
   /** Whether bypass mode may run those without asking, as `git.allow_commit_in_bypass` says. */
   bypassAllowsAlwaysAsked?: boolean;
+  /** The configured search provider's host, for web_search domain rules. */
+  webSearchHost?: string;
 }
 
 /** A person's choices for this run outrank configuration, except a deny, which nothing outranks. */
@@ -131,7 +133,7 @@ export class PermissionEngine {
     if ('error' in parsed) return false;
     const names = this.options.namesOf(call.name);
     if (!toolMatches(parsed.rule, names)) return false;
-    const { subjects } = subjectsOf(call, names[0], this.options.projectRoot);
+    const { subjects } = subjectsOf(call, names[0], this.options.projectRoot, { webSearchHost: this.options.webSearchHost });
     const targets: (Subject | undefined)[] = subjects.length ? subjects : [undefined];
     return targets.every((subject) => patternMatches(parsed.rule, subject));
   }
@@ -181,7 +183,7 @@ export class PermissionEngine {
     const names = this.options.namesOf(call.name);
     const toolClass = this.options.classOf(call.name);
     const applicable = this.rules.filter((rule) => toolMatches(rule, names));
-    const { subjects, command } = subjectsOf(call, names[0], this.options.projectRoot);
+    const { subjects, command } = subjectsOf(call, names[0], this.options.projectRoot, { webSearchHost: this.options.webSearchHost });
     const targets: (Subject | undefined)[] = subjects.length ? subjects : [undefined];
     const decided = targets.map((subject) => strongest(applicable.filter((rule) => patternMatches(rule, subject))));
 

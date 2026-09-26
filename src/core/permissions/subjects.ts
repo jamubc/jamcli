@@ -48,12 +48,20 @@ export interface CallSubjects {
   command?: CommandAnalysis;
 }
 
+export interface SubjectOptions {
+  /** The configured search provider's host, which a web_search rule names as a domain. */
+  webSearchHost?: string;
+}
+
 /** What a call touches, for the tool it is really calling. */
-export function subjectsOf(call: ToolCall, canonical: string, projectRoot: string): CallSubjects {
+export function subjectsOf(call: ToolCall, canonical: string, projectRoot: string, options: SubjectOptions = {}): CallSubjects {
   const args = call.arguments ?? {};
   if (canonical === 'run_command') {
     const command = analyzeCommand(typeof args.command === 'string' ? args.command : '');
     return { subjects: command.parts.map((value) => ({ kind: 'command', value })), command };
+  }
+  if (canonical === 'web_search') {
+    return { subjects: options.webSearchHost ? [{ kind: 'domain', value: options.webSearchHost }] : [] };
   }
   if (PATH_TOOLS.has(canonical)) {
     const targets =

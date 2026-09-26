@@ -21,6 +21,8 @@ export interface SessionPermissionOptions {
   env?: Record<string, string | undefined>;
   /** `git.allow_commit_in_bypass`: bypass mode commits without asking. */
   commitInBypass?: boolean;
+  /** The configured search provider's host, for web_search domain rules. */
+  webSearchHost?: string;
 }
 
 /**
@@ -53,6 +55,7 @@ export function sessionPermissions(options: SessionPermissionOptions): { engine:
     namesOf,
     alwaysAsks,
     bypassAllowsAlwaysAsked: options.commitInBypass === true,
+    webSearchHost: options.webSearchHost,
   });
   for (const rule of engine.unmatched(options.registry.list().map((tool) => tool.name))) {
     notices.push(`The rule ${rule.text} (${rule.source}) names no tool, so it has no effect.`);
