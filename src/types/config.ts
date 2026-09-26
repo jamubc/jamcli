@@ -29,6 +29,20 @@ export interface EndpointConfig {
   headers?: Record<string, string>;
 }
 
+export interface SearchProviderConfig {
+  /** The provider API endpoint. The built-in LangSearch endpoint is used when omitted. */
+  endpoint?: string;
+  /** The key itself. Used only when the declared variable is not set. */
+  api_key?: string;
+  /** The environment variable holding the key. Read first. */
+  key_env_var?: string;
+}
+
+export interface SearchSettings {
+  /** Search providers by name. A name used by a built-in (langsearch) replaces it. */
+  providers?: Record<string, SearchProviderConfig>;
+}
+
 export interface CategoryEntry {
   model: string;
   reasoning?: 'off' | 'on' | 'auto';
