@@ -16,7 +16,10 @@ import { createBuiltinRegistry } from '../tools/registry.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
 import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type ToolSummary } from './tools.js';
-import { categoriesOf, childLauncher, type ParentSession } from './children.js';
+import { childLauncher, type ParentSession } from './children.js';
+import { loadAgents, routableAgents } from '../ext/agents.js';
+import { taskDescription } from '../tools/task.js';
+import type { ReasoningLevel } from '../routing/capabilities.js';
 import { sessionPermissions } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
@@ -76,6 +79,10 @@ export interface RuntimeOptions {
   sessionId?: string;
   /** `provider:model`, or a model on the profile's provider. */
   model?: string;
+  /** The reasoning level every request asks for. The agent loop's default when absent. */
+  reasoning?: ReasoningLevel;
+  /** A delegated run's agent rules, read before the project's, which win a conflict. */
+  agentRules?: { agent: string; source: string; text: string };
   /** `--allow-tool` names for this run. */
   allowTools?: string[];
   /** `--deny-tool` names for this run. */
@@ -467,9 +474,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     notices.push(...assembled.notices);
   }
 
+  // Loaded once, so the agents the model is shown and the routing it gets stay in step.
+  const agents = loadAgents(projectRoot, config);
+  notices.push(...agents.problems);
   const delegateChild = childLauncher({
     projectRoot,
     config,
+    agents,
     ...(options.configService ? { configService: options.configService } : {}),
     mcp,
     env: options.env,
@@ -511,7 +522,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       ...(searching ? { deferred: (name: string) => Boolean(mcpServers?.has(name)) && !loadedTools.has(name) } : {}),
       ...(options.dryRun ? { dryRun: recordDryRun } : {}),
       descriptions: taskTool
-        ? { task: `${taskTool.description} Categories: ${Object.keys(categoriesOf(config)).join(', ')}.` }
+        ? { task: taskDescription(routableAgents(agents.agents, config.api_registry), agents.defaultAgent) }
         : undefined,
       context: () => ({
         projectRoot: workRoot,
@@ -592,13 +603,19 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** A provider whose requests are timed and logged under the current turn. */
   const observed = (target: ChatProvider, name: string, purpose?: string) =>
     instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose, includeContent });
-  const trust = trustClassifier(config);
+  const trust = trustClassifier(config, agents.agents);
   if (trust.note) notices.push(trust.note);
   if (trust.provider && trust.choice) trust.provider = observed(trust.provider, trust.choice.provider, 'trust');
+  // An agent's rules come before the project's, so a project's AGENTS.md has the last word.
+  const agentRulesText = options.agentRules
+    ? `Rules for the ${options.agentRules.agent} agent, from ${options.agentRules.source}:\n${options.agentRules.text}`
+    : undefined;
+  if (options.agentRules) notices.push(`This run follows the ${options.agentRules.agent} agent's rules from ${options.agentRules.source}.`);
   const buildPrompt = () =>
     buildRuntimePrompt({
       profile,
       rulesText: [
+        agentRulesText,
         rulesPromptText(rules),
         toolSet.summaries.some((tool) => tool.name === 'skill') ? skillsPromptText(skillSet.skills) : undefined,
         hookContext.length ? hookContext.join('\n') : undefined,
@@ -645,6 +662,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       provider,
       model: choice.model,
       temperature: profile.temperature,
+      ...(options.reasoning ? { reasoning: options.reasoning } : {}),
       modelUsageKey: `${choice.provider}:${choice.model}`,
       maxOutputTokens: requestedOutputTokens(modelInfo, loop?.max_output_tokens),
       context: { budget: budgetFor(), counter, auto: autoCompact, proactive: windowKnown() },

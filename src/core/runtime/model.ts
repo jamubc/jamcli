@@ -1,6 +1,7 @@
 import type { ApiRegistry, Config, Profile, SearchSettings } from '../../types/config.js';
 import { SUPPORTED_PROVIDERS, createChatProvider } from '../providers/factory.js';
 import type { ChatProvider } from '../providers/types.js';
+import type { Agent } from '../ext/agents.js';
 
 export interface ModelChoice {
   provider: string;
@@ -29,10 +30,18 @@ export function resolveModel(ref: string | undefined, profile: Profile | undefin
 }
 
 /** The trust gate's classifier, when one is configured and enabled. */
-export function trustClassifier(config: Config): { provider?: ChatProvider; model?: string; choice?: ModelChoice; note?: string } {
-  const trust = config.trust;
-  if (trust?.enabled === false) return {};
-  const ref = trust?.model ?? config.categories?.quick?.[0]?.model;
+/**
+ * The model the trust gate runs on: its own, or a configured quick agent's first model.
+ * The built-in quick does not count, so the gate stays off until someone chooses a model.
+ */
+export function trustModelRef(config: Config, agents: Record<string, Agent>): string | undefined {
+  if (config.trust?.enabled === false) return undefined;
+  const quick = agents.quick?.source.kind === 'builtin' ? undefined : agents.quick;
+  return config.trust?.model ?? quick?.chain[0]?.model;
+}
+
+export function trustClassifier(config: Config, agents: Record<string, Agent>): { provider?: ChatProvider; model?: string; choice?: ModelChoice; note?: string } {
+  const ref = trustModelRef(config, agents);
   if (!ref) return {};
   const choice = resolveModel(ref, { preferred_provider: 'ollama' } as Profile, config.api_registry);
   try {

@@ -38,7 +38,7 @@ export const childTurns = (config: Partial<DelegationConfig> | undefined, reques
 };
 
 export interface DelegationRecord {
-  category: string;
+  agent: string;
   resolvedModel: string;
   childSessionId: string;
   status: string;
@@ -46,7 +46,7 @@ export interface DelegationRecord {
 
 export const delegationTranscriptLine = (record: DelegationRecord): string =>
   [
-    `Delegated "${record.category}" to ${record.resolvedModel}`,
+    `Delegated to agent "${record.agent}" on ${record.resolvedModel}`,
     `child session ${record.childSessionId}`,
     `status ${record.status}`,
   ].join(' | ');

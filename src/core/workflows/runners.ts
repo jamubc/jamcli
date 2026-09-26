@@ -1,6 +1,6 @@
 import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime/index.js';
 import { loadConfig } from '../config/load.js';
-import { categoriesOf } from '../runtime/children.js';
+import { chainsOf, describeSource, loadAgents } from '../ext/agents.js';
 import { resolveRoute } from '../routing/resolve.js';
 import { isChainReachable } from '../routing/reachable.js';
 import { commitChanges } from '../git/commit.js';
@@ -59,23 +59,30 @@ export function runtimeRunners(options: RuntimeRunnerOptions): StepRunners {
     async agent(step, prompt, signal) {
       const spec = step.agent!;
       let model = spec.model;
+      let agentOptions: Partial<RuntimeOptions> = {};
       if (!model && spec.category) {
         const config = loadConfig({ projectRoot: options.projectRoot }).config;
+        const { agents } = loadAgents(options.projectRoot, config);
+        const agent = agents[spec.category];
+        if (!agent) return { ok: false, output: `There is no agent ${spec.category}. The agents are ${Object.keys(agents).sort().join(', ')}.` };
         const route = await resolveRoute({
           registry: config.api_registry,
-          categories: categoriesOf(config),
+          categories: chainsOf(agents),
           category: spec.category,
           isReachable: (candidate) => isChainReachable(candidate, config.api_registry),
         });
-        if (!route) return { ok: false, output: `There is no category ${spec.category}.` };
-        if (!route.model) return { ok: false, output: route.notes.join(' ') };
+        if (!route?.model) return { ok: false, output: route?.notes.join(' ') ?? `No model in ${spec.category} can serve it.` };
         model = route.model;
+        agentOptions = {
+          ...(route.reasoning ? { reasoning: route.reasoning } : {}),
+          ...(agent.rules ? { agentRules: { agent: agent.name, source: describeSource(agent.source), text: agent.rules } } : {}),
+        };
       }
       const ranks: Record<string, number> = { plan: 0, default: 1, 'accept-edits': 2, auto: 3, bypass: 4 };
       // A project workflow may ask for a lower mode than the session, never a higher one.
       const sessionMode = options.runtime?.permissions?.mode ?? 'default';
       const capped = spec.mode && (ranks[spec.mode] ?? 99) <= (ranks[sessionMode] ?? 1) ? spec.mode : undefined;
-      const runtime = await open({ ...(model ? { model } : {}), ...(capped ? { permissions: { ...options.runtime?.permissions, mode: capped } } : {}) });
+      const runtime = await open({ ...(model ? { model } : {}), ...agentOptions, ...(capped ? { permissions: { ...options.runtime?.permissions, mode: capped } } : {}) });
       return within(runtime, signal, () => runtime.run(prompt, handler(step.id), { label: `step ${step.id}`, ...(spec.allowed_tools ? { allowedTools: spec.allowed_tools } : {}) }));
     },
     async run(command, signal) {

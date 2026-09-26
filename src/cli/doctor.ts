@@ -5,7 +5,8 @@ import { loadConfig, type LoadedConfig } from '../core/config/load.js';
 import { detectStore } from '../core/config/credentials.js';
 import { createChatProvider } from '../core/providers/factory.js';
 import { ProviderError } from '../core/providers/http.js';
-import { resolveModel } from '../core/runtime/model.js';
+import { resolveModel, trustModelRef } from '../core/runtime/model.js';
+import { loadAgents, type Agent } from '../core/ext/agents.js';
 import { detectSandbox } from '../core/sandbox/index.js';
 import { exportTarget } from '../core/observe/otlp.js';
 import { McpTestService } from '../services/McpTestService.js';
@@ -58,12 +59,15 @@ const versionOf = (file: string, env: Record<string, string | undefined>): strin
 
 const LANGUAGE_SERVERS = ['typescript-language-server', 'pyright-langserver', 'gopls', 'rust-analyzer', 'clangd'];
 
-function configurationChecks(settings: LoadedConfig, projectRoot: string): Check[] {
+function configurationChecks(settings: LoadedConfig, projectRoot: string, agentProblems: string[]): Check[] {
   const checks: Check[] = [];
   const files = settings.layers.filter((layer) => layer.scope !== 'default').map((layer) => layer.label);
   checks.push({ name: 'configuration', status: 'ok', detail: files.length ? `read ${files.join(', ')}` : 'no configuration files; defaults apply' });
   for (const error of settings.errors) {
     checks.push({ name: 'configuration', status: 'warn', detail: error, fix: 'Correct the value with jamcli config set, or edit the file.' });
+  }
+  for (const problem of agentProblems) {
+    checks.push({ name: 'agents', status: 'warn', detail: problem, fix: 'Correct the agent file, or the delegation.default_agent setting.' });
   }
   for (const key of projectKeyNames(projectRoot).filter((name) => /(^|\.)api_key$/.test(name))) {
     const [file, setting] = key.split(' ');
@@ -104,17 +108,17 @@ function credentialCheck(env: Record<string, string | undefined>): Check {
   }
 }
 
-/** Every model a session may use: its own, the trust classifier's, and each delegation category's. */
-function modelsInUse(settings: LoadedConfig): { ref: string; role: string }[] {
+/** Every model a session may use: its own, the trust classifier's, and each configured agent's. */
+function modelsInUse(settings: LoadedConfig, agents: Record<string, Agent>): { ref: string; role: string }[] {
   const { config, profile } = settings;
   const out: { ref: string; role: string }[] = [];
   const session = resolveModel(config.model, profile, config.api_registry);
   out.push({ ref: session.model ? `${session.provider}:${session.model}` : `${session.provider}:`, role: 'session model' });
-  if (config.trust?.enabled !== false && (config.trust?.model || config.categories?.quick?.[0]?.model)) {
-    out.push({ ref: (config.trust?.model ?? config.categories?.quick?.[0]?.model)!, role: 'trust classifier' });
-  }
-  for (const [category, chain] of Object.entries(config.categories ?? {})) {
-    for (const entry of chain) out.push({ ref: entry.model, role: `category ${category}` });
+  const trust = trustModelRef(config, agents);
+  if (trust) out.push({ ref: trust, role: 'trust classifier' });
+  // The built-ins are checked when someone chooses to rely on them, not by default.
+  for (const agent of Object.values(agents).filter((entry) => entry.source.kind !== 'builtin')) {
+    for (const entry of agent.chain) out.push({ ref: entry.model, role: `agent ${agent.name}` });
   }
   const seen = new Map<string, string[]>();
   for (const entry of out) seen.set(entry.ref, [...(seen.get(entry.ref) ?? []), entry.role]);
@@ -232,13 +236,14 @@ export async function runChecks(options: DoctorOptions): Promise<Check[]> {
   const env = options.env ?? process.env;
   const timeoutMs = options.timeoutMs ?? 5_000;
   const settings = loadConfig({ projectRoot: options.projectRoot, env });
+  const agents = loadAgents(options.projectRoot, settings.config);
   const [models, mcp, telemetry] = await Promise.all([
-    Promise.all(modelsInUse(settings).map((entry) => modelCheck(entry.ref, entry.role, settings, timeoutMs))),
+    Promise.all(modelsInUse(settings, agents.agents).map((entry) => modelCheck(entry.ref, entry.role, settings, timeoutMs))),
     options.skipMcp ? Promise.resolve([]) : mcpChecks(options.projectRoot, settings),
     telemetryCheck(settings, env, timeoutMs),
   ]);
   return [
-    ...configurationChecks(settings, options.projectRoot),
+    ...configurationChecks(settings, options.projectRoot, agents.problems),
     credentialCheck(env),
     ...models,
     ...toolChecks(options.projectRoot, settings, env),

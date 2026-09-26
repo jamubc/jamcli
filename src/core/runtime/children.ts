@@ -1,5 +1,6 @@
 import type { Config } from '../../types/config.js';
-import { DEFAULT_CATEGORIES } from '../routing/categories.js';
+import { chainsOf, describeSource, type LoadedAgents } from '../ext/agents.js';
+import { downgradeReasoning } from '../routing/capabilities.js';
 import { resolveRoute } from '../routing/resolve.js';
 import { isChainReachable } from '../routing/reachable.js';
 import type { Delegate, DelegationOutcome } from '../delegation/types.js';
@@ -24,6 +25,8 @@ export interface ParentSession {
 export interface ChildLauncherOptions {
   projectRoot: string;
   config: Config;
+  /** The session's agents, loaded once so routing agrees with what the model was shown. */
+  agents: LoadedAgents;
   configService?: ConfigService;
   parent: () => ParentSession;
   mcp?: McpSource;
@@ -36,10 +39,6 @@ export interface ChildLauncherOptions {
   /** The parent's observer and the span a child starts under, so a delegated run shares its trace. */
   observer?: () => RuntimeOptions['observer'];
 }
-
-/** The categories in effect: the configured ones, or the documented defaults. */
-export const categoriesOf = (config: Config) =>
-  config.categories && Object.keys(config.categories).length ? config.categories : DEFAULT_CATEGORIES;
 
 /** MCP connections belong to the parent, so a child uses them without closing them. */
 const borrowed = (mcp: McpSource): McpSource => ({
@@ -57,17 +56,24 @@ const STATUS: Record<string, DelegationOutcome['status']> = { ok: 'ok', cancelle
  * unless it runs in the background, where nobody can answer and the call is not made.
  */
 export function childLauncher(options: ChildLauncherOptions): Delegate {
+  const { agents, defaultAgent } = options.agents;
+  const names = Object.keys(agents).sort().join(', ');
   return async (request) => {
-    const categories = categoriesOf(options.config);
+    const name = request.agent ?? defaultAgent;
+    const refuse = (reason: string): DelegationOutcome => ({ status: 'refused', response: '', agent: name ?? '', reason });
+    if (!name) return refuse(`Name an agent: none is the default. The agents are ${names}.`);
+    const agent = agents[name];
+    if (!agent) return refuse(`No agent named "${name}". The agents are ${names}.`);
     const route = await resolveRoute({
       registry: options.config.api_registry,
-      categories,
-      category: request.category,
+      categories: chainsOf(agents),
+      category: name,
       isReachable: (model) => isChainReachable(model, options.config.api_registry),
     });
-    const refuse = (reason: string): DelegationOutcome => ({ status: 'refused', response: '', category: request.category, reason });
-    if (!route) return refuse(`No category named "${request.category}". The categories are ${Object.keys(categories).join(', ')}.`);
-    if (!route.model) return refuse(route.notes.join(' '));
+    if (!route?.model) return refuse(route?.notes.join(' ') || `No model in "${name}" can serve it.`);
+    const model = route.model;
+    // The call's level replaces the chain entry's, and is held to what the model accepts.
+    const reasoning = request.reasoning ? downgradeReasoning(request.reasoning, model).level : route.reasoning;
 
     let tree: Worktree | undefined;
     if (request.isolation === 'worktree') {
@@ -84,7 +90,9 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         projectRoot: options.projectRoot,
         ...(tree ? { workTree: tree.dir } : {}),
         surface: 'child',
-        model: route.model,
+        model,
+        ...(reasoning ? { reasoning } : {}),
+        ...(agent.rules ? { agentRules: { agent: name, source: describeSource(agent.source), text: agent.rules } } : {}),
         maxSteps: request.maxTurns,
         signal: request.signal,
         mcp: options.mcp ? borrowed(options.mcp) : false,
@@ -96,7 +104,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
       });
     } catch (error: any) {
       if (tree) await removeWorktree(tree, { branch: true }).catch(() => undefined);
-      return { status: 'error', response: '', category: request.category, resolvedModel: route.model, reason: error?.message ?? String(error) };
+      return { status: 'error', response: '', agent: name, resolvedModel: model, reason: error?.message ?? String(error) };
     }
 
     try {
@@ -116,8 +124,8 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
       return {
         status: STATUS[result.status] ?? 'error',
         response: result.response,
-        category: request.category,
-        resolvedModel: route.model,
+        agent: name,
+        resolvedModel: model,
         childSessionId: child.sessionId,
         ...(result.error ? { reason: result.error } : {}),
         ...(tree ? await settleWorktree(tree, options.projectRoot) : {}),
