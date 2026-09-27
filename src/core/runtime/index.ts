@@ -42,7 +42,7 @@ import { lspTool } from '../tools/lsp.js';
 import { webSearchTool } from '../tools/web/index.js';
 import { SearchProviders } from '../tools/web/providers.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
-import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
+import { answerOutputTokens, ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
 import { displayPath, loadConfig, localConfigFile, permissionLayers, projectConfigFile, userConfigFile, type LoadedConfig } from '../config/load.js';
@@ -855,7 +855,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     if (!provider) throw new Error(providerError ?? 'No model provider is configured for this session.');
     const result = await provider.complete([{ role: 'user', content: prompt, timestamp: Date.now() }], {
       model: choice.model,
-      maxOutputTokens: request.maxOutputTokens ?? 800,
+      maxOutputTokens: answerOutputTokens(modelInfo, request.maxOutputTokens ?? 800),
       contextLength: modelInfo.contextWindow,
       ...(request.signal ? { signal: request.signal } : {}),
     });

@@ -179,3 +179,20 @@ export function requestedOutputTokens(info: ModelInfo, configured?: number): num
   if (info.maxOutput) return Math.min(info.maxOutput, wanted ?? DEFAULT_OUTPUT_REQUEST);
   return wanted;
 }
+
+/**
+ * Room beyond the answer for a model that thinks first. Its output limit counts the
+ * thinking too, so a cap sized for a one-line answer can be spent before the answer
+ * starts, and the answer comes back empty.
+ */
+export const THINKING_ALLOWANCE = 4_096;
+
+/**
+ * Output tokens for a short answer outside the conversation, such as a commit message: the
+ * answer's own size, with room for thinking when the model thinks, and never more than the
+ * model's limit.
+ */
+export function answerOutputTokens(info: ModelInfo, answer: number): number {
+  const wanted = info.reasoning || info.alwaysThinks ? answer + THINKING_ALLOWANCE : answer;
+  return info.maxOutput ? Math.min(info.maxOutput, wanted) : wanted;
+}

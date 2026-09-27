@@ -13,6 +13,8 @@ import {
   bundledModels,
   bundledProblems,
   requestedOutputTokens,
+  answerOutputTokens,
+  THINKING_ALLOWANCE,
   type MetadataSource,
   type ModelFacts,
 } from '../index.js';
@@ -223,4 +225,12 @@ test('output requests are capped, and left to the server when nothing is known',
   expect(requestedOutputTokens(info())).toBeUndefined();
   expect(requestedOutputTokens(info(), 12_000)).toBe(12_000);
   expect(requestedOutputTokens(info(128_000), -5)).toBe(DEFAULT_OUTPUT_REQUEST);
+});
+
+test('a short answer from a model that thinks leaves room for the thinking, within the model\'s limit', () => {
+  const info = (facts: { reasoning?: boolean; alwaysThinks?: boolean; maxOutput?: number }) => ({ provider: 'p', model: 'm', contextWindow: 200_000, sources: {}, ...facts });
+  expect(answerOutputTokens(info({}), 400)).toBe(400);
+  expect(answerOutputTokens(info({ reasoning: true }), 400)).toBe(400 + THINKING_ALLOWANCE);
+  expect(answerOutputTokens(info({ alwaysThinks: true }), 800)).toBe(800 + THINKING_ALLOWANCE);
+  expect(answerOutputTokens(info({ reasoning: true, maxOutput: 2_000 }), 400)).toBe(2_000);
 });
