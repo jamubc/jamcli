@@ -96,7 +96,7 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
       ...runtime.model,
       permissionDenials,
       notices,
-      permissionMode: runtime.permissionMode,
+      permissionMode: options.dryRun ? 'plan' : runtime.permissionMode,
       sandbox: runtime.sandbox.kind,
       ...(options.dryRun ? { dryRun: runtime.dryRunReport } : {}),
       spend: runtime.spend(),

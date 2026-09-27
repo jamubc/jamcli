@@ -183,6 +183,7 @@ test('--dry-run makes no change and reports each call that would have made one',
   expect(result.dry_run[0].preview.kind).toBe('diff');
   expect(result.dry_run[0].preview.text).toContain('+new');
   expect(result.permission_denials).toEqual([]);
+  expect(result.permission_mode).toBe('plan');
   const results = server.completions().at(-1)!.body.messages.filter((message: any) => message.role === 'tool');
   expect(results[0].content).toContain('old');
   expect(results[1].content).toContain('this is a dry run');
