@@ -41,6 +41,8 @@ export interface ScreenOptions {
 }
 
 const DEFAULT_THRESHOLD = 0.3;
+/** Said once per session in auto mode when no classifier is configured. */
+export const TRUST_UNSET_NOTE = 'The trust gate is off because no classifier model is configured. Set trust.model to "provider:model" in .jamcli/config.json, on any provider you use.';
 /** Characters of one result the classifier sees; the middle of a longer one is cut. */
 const MAX_RESULT_CHARS = 4_000;
 /** Characters of the task the classifier sees. */
@@ -129,7 +131,7 @@ export const screenToolResults = async ({
   }
 
   if (!provider) {
-    notes.push('The trust gate is off because no classifier model is configured.');
+    notes.push(TRUST_UNSET_NOTE);
     return { kept: unique, dropped: [], deduped, notes, screened: false };
   }
 

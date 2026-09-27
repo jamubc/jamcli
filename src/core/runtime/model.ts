@@ -1,7 +1,6 @@
 import type { ApiRegistry, Config, Profile, SearchSettings } from '../../types/config.js';
 import { SUPPORTED_PROVIDERS, createChatProvider } from '../providers/factory.js';
 import type { ChatProvider } from '../providers/types.js';
-import type { Agent } from '../ext/agents.js';
 
 export interface ModelChoice {
   provider: string;
@@ -29,18 +28,19 @@ export function resolveModel(ref: string | undefined, profile: Profile | undefin
   return { provider: fallbackProvider, model: profile?.preferred_model?.trim() || '' };
 }
 
-/** The trust gate's classifier, when one is configured and enabled. */
 /**
- * The model the trust gate runs on: its own, or the quick agent's first model. The built-in
- * quick has no chain, so the gate stays off until someone chooses a model.
+ * The model the trust gate runs on: `trust.model`, as `provider:model` on any configured
+ * provider, or a bare model name on Ollama. Nothing is chosen for the user: the classifier
+ * reads every tool result in auto mode, so which model does that is theirs to decide.
  */
-export function trustModelRef(config: Config, agents: Record<string, Agent>): string | undefined {
+export function trustModelRef(config: Config): string | undefined {
   if (config.trust?.enabled === false) return undefined;
-  return config.trust?.model ?? agents.quick?.chain[0]?.model;
+  return config.trust?.model?.trim() || undefined;
 }
 
-export function trustClassifier(config: Config, agents: Record<string, Agent>): { provider?: ChatProvider; model?: string; choice?: ModelChoice; note?: string } {
-  const ref = trustModelRef(config, agents);
+/** The trust gate's classifier, when `trust.model` names one and the gate is on. */
+export function trustClassifier(config: Config): { provider?: ChatProvider; model?: string; choice?: ModelChoice; note?: string } {
+  const ref = trustModelRef(config);
   if (!ref) return {};
   const choice = resolveModel(ref, { preferred_provider: 'ollama' } as Profile, config.api_registry);
   try {

@@ -61,8 +61,8 @@ exports[`a finished tool block and the reply after it 1`] = `
 
 > read the notes
 ✓ done: read_file notes.txt, N ms
-i The trust gate is off because no classifier model is configured.
 It lists alpha and beta.
+
 
 
 
@@ -150,10 +150,10 @@ exports[`screen reader mode, through a reply, a tool, and a prompt 1`] = `
 "JamCLI, project project, session <session>
 You: read the notes
 Tool done: read_file notes.txt, N ms
-Note: The trust gate is off because no classifier model is configured.
 JamCLI: It says alpha.
 You: list
 Tool asking: run_command ls
+
 
 
 

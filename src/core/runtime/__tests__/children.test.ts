@@ -44,7 +44,6 @@ function configure(extra: Record<string, unknown> = {}) {
       api_registry: { ollama: { endpoint: server.ollamaBaseUrl } },
       active_profile: 'default',
       categories: { quick: [{ model: 'ollama:child-model' }] },
-      // The quick agent's model is also the trust classifier unless the gate is off.
       trust: { enabled: false },
       ...extra,
     })

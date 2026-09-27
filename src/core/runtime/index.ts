@@ -649,9 +649,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** A provider whose requests are timed and logged under the current turn. */
   const observed = (target: ChatProvider, name: string, purpose?: string) =>
     instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose, includeContent });
-  const trust = trustClassifier(config, agents.agents);
-  if (trust.note) notices.push(trust.note);
+  // The trust gate screens tool output only in auto mode, where no one reads it first.
+  const trust = trustClassifier(config);
+  if (trust.note && permissions.mode === 'auto') notices.push(trust.note);
   if (trust.provider && trust.choice) trust.provider = observed(trust.provider, trust.choice.provider, 'trust');
+  const gated = () => permissions.mode === 'auto';
   // An agent's rules come before the project's, so a project's AGENTS.md has the last word.
   const agentRulesText = options.agentRules
     ? `Rules for the ${options.agentRules.agent} agent, from ${options.agentRules.source}:\n${options.agentRules.text}`
@@ -731,16 +733,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       truncationLimit: loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars,
       systemPrompt,
       hooks,
-      trustProvider: trust.provider,
-      trustModel: trust.model,
-      trustUsageKey: trustKey,
-      trustPrice: trustInfo?.price,
+      ...(gated() ? { trustProvider: trust.provider, trustModel: trust.model, trustUsageKey: trustKey, trustPrice: trustInfo?.price } : {}),
       price: modelInfo.price,
       thinkingStyle: modelInfo.thinking,
       alwaysThinks: modelInfo.alwaysThinks,
       reasoningSince,
       trustThreshold: config.trust?.threshold,
-      trustOffNote: true,
+      trustOffNote: gated(),
       redact,
       signal: options.signal,
       // A delegated run shares the working copy; the checkpoint before its task call covers it.

@@ -124,8 +124,8 @@ test('local models cost nothing, an unknown price is counted apart, and each mod
 });
 
 test("the trust gate's requests are counted under its own model", async () => {
-  configure({ trust: { model: 'ollama:fake-model' } });
-  const runtime = await start();
+  configure({ trust: { model: 'ollama:fake-model' }, permissions: { mode: 'auto' } });
+  const runtime = await start({ sandbox: { kind: 'bwrap' as const, reason: 'a test sandbox', wrap: (command: string) => ({ file: '/bin/sh', args: ['-c', command] }) } });
   server.enqueue(
     { toolCalls: [{ id: 'c1', name: 'read_file', arguments: { path: 'a.txt' } }], usage: { prompt: 1_000, completion: 20 } },
     // The classifier's verdict.

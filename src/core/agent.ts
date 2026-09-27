@@ -609,6 +609,8 @@ export class CoreAgent implements Agent {
       if (result.status === 'ok' || result.status === 'error') candidates.push({ tool: calls[index].name, output: result.output, result: index });
     });
     if (!candidates.length) return { results };
+    // Outside auto mode the person reads every result, so nothing is screened or reported.
+    if (!this.options.trustProvider && !this.options.trustOffNote) return { results };
     const screening = await screenToolResults({
       prompt,
       provider: this.options.trustProvider,

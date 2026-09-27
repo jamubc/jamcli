@@ -114,7 +114,7 @@ function modelsInUse(settings: LoadedConfig, agents: Record<string, Agent>): { r
   const out: { ref: string; role: string }[] = [];
   const session = resolveModel(config.model, profile, config.api_registry);
   out.push({ ref: session.model ? `${session.provider}:${session.model}` : `${session.provider}:`, role: 'session model' });
-  const trust = trustModelRef(config, agents);
+  const trust = trustModelRef(config);
   if (trust) out.push({ ref: trust, role: 'trust classifier' });
   // An agent on the session's model has no chain, so the session model check covers it.
   for (const agent of Object.values(agents)) {

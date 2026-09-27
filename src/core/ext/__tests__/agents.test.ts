@@ -128,15 +128,15 @@ test('only agents with a model on a configured provider are routable, with no ne
   expect(routableAgents(agents, { openrouter: { api_key: 'sk-or-test' } }).map((agent) => agent.name)).toContain('cloud');
 });
 
-test('the trust gate stays off for the built-in quick, and uses a configured one', () => {
-  expect(trustModelRef({} as Config, loadAgents(root, {}).agents)).toBeUndefined();
+test('the trust gate runs only on the classifier the user names, never on an agent', () => {
+  expect(trustModelRef({} as Config)).toBeUndefined();
+  // A quick agent with its own model does not become the classifier by accident.
   projectAgent('quick', '---\ndescription: mine\nmodels: ollama:tiny\n---\n');
-  expect(trustModelRef({} as Config, loadAgents(root, {}).agents)).toBe('ollama:tiny');
-  const categories = loadAgents(root, { categories: { quick: [{ model: 'ollama:cat' }] } }).agents;
-  // The project file still wins over the category of the same name.
-  expect(trustModelRef({} as Config, categories)).toBe('ollama:tiny');
-  expect(trustModelRef({ trust: { enabled: false } } as Config, categories)).toBeUndefined();
-  expect(trustModelRef({ trust: { model: 'openai:judge' } } as Config, categories)).toBe('openai:judge');
+  expect(trustModelRef({} as Config)).toBeUndefined();
+  expect(trustModelRef({ trust: { model: 'openai:judge' } } as Config)).toBe('openai:judge');
+  expect(trustModelRef({ trust: { model: 'openrouter:meta-llama/llama-guard-4-12b' } } as Config)).toBe('openrouter:meta-llama/llama-guard-4-12b');
+  expect(trustModelRef({ trust: { model: '  ' } } as Config)).toBeUndefined();
+  expect(trustModelRef({ trust: { enabled: false, model: 'openai:judge' } } as Config)).toBeUndefined();
 });
 
 test('a source is described as a path, the categories configuration, or built-in', () => {
