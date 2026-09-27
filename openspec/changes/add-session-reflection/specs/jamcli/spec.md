@@ -36,9 +36,14 @@ edits to skills, rules, or agents that the user approves before anything is writ
 - **WHEN** every finding is dropped
 - **THEN** the user is told that reflection found nothing new
 
-### Requirement: Skill Authoring Agent
-JamCLI SHALL ship a replaceable agent that drafts skill, rule, and agent edits for approval.
-
 #### Scenario: Warn on governed skills
-- **WHEN** a drafted edit touches a skill that bundles scripts or declares `allowed-tools`
+- **WHEN** a proposed edit touches a skill that bundles scripts or declares `allowed-tools`
 - **THEN** the diff carries a safety warning
+
+#### Scenario: Only on request
+- **WHEN** a turn is not a reflection the user asked for
+- **THEN** the reflection tools are not offered to the model and cannot be called
+
+#### Scenario: Replace the prompt
+- **WHEN** the project or the user has a skill named `reflect`
+- **THEN** `/reflect` follows that skill instead of the built-in prompt

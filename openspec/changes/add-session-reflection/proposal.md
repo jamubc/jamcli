@@ -33,13 +33,18 @@ a safety warning.
   The log already records all of this, so nothing new is recorded or persisted, and no
   model is called. A signal's id is the index of the log event it came from, so a citation
   can always be checked against the log.
-- **Agents come from `add-agents`.** That unit loads `agents/<name>.md` and runs `task` on
-  them. `skill-author` is one such file; this change adds none of that machinery.
-- **`/reflect`.** A bundled skill and command for the current session only. It produces
-  cited findings and approvable delta diffs, or says that nothing survived the gates.
-- **`skill-author`.** A bundled agent that drafts delta edits to skills, rules, and agents.
-  It is a file the user can edit or replace, and `/reflect` may propose edits to it and to
-  itself through the same gates.
+- **`/reflect`.** A command for the current session only. The main session reflects
+  itself: it calls `session_signals`, and proposes each lesson through `propose_lesson`,
+  which cites signal ids, adds lines under one heading of one markdown file (`AGENTS.md`, a
+  rules file, a `SKILL.md`, or an agent file), always asks, and shows the diff. The
+  existing approval diff is the review screen. A project or user skill named `reflect`
+  replaces the built-in prompt, which is how the user customizes it.
+- **Offered only when asked for.** The two tools register hidden. `/reflect` names them in
+  `RunOptions.offer`, the gate hook exists only while that turn runs, and no other request
+  carries their schemas or a hook per tool call.
+- **No separate agent or view.** An earlier draft had a bundled `skill-author` agent and a
+  `ReflectView` screen. Neither was needed: the session that saw the failures proposes
+  the lessons, and the approval diff reviews them.
 - **Hard rule change.** `AGENTS.md` and `SEQUENCE.md` move from "no learning" to "learning
   only as reviewable files, on demand, behind the gates", keeping the failure record.
 
@@ -57,30 +62,30 @@ directory. Other modules get only the thin wiring that is theirs to own.
 
 ```
 src/core/reflection/
-  index.ts        public surface: the only import other modules use
+  index.ts        public surface
   signals.ts      derives signals from a session's log events (no model calls)
-  gates.ts        citation gate and novelty gate
-  delta.ts        applies an approved edit to one section of one file
-  bundled/
-    reflect/SKILL.md
-    agents/skill-author.md
+  lesson.ts       citation and novelty gates, the section append, the skill warning
+  tools.ts        session_signals and propose_lesson
+  prompt.ts       the /reflect prompt, replaced by a skill named reflect
   __tests__/
-src/tui/reflection/
-  ReflectView.tsx findings with citations, approve or reject per diff
+src/tui/app/reflect.ts   the /reflect command
 ```
 
 Wiring outside that directory, each a few lines in the module that owns it:
 
-- `src/core/runtime/index.ts`: register the bundled skill and agent roots.
-- `src/tui/app/commands.ts`: route `/reflect` to `ReflectView`.
+- `src/core/runtime/index.ts`: register the tools hidden, and subscribe the gate hook only
+  for a turn that offers `propose_lesson`.
+- `src/core/runtime/tools.ts`: `alsoOffer`, the hidden tools a turn asked for.
+- `src/core/approval.ts`: the `propose_lesson` preview, its diff and warning.
+- `src/tui/app/commands.ts`: register `/reflect`.
 
 Signals read `src/core/transcript/` through `SessionLog`; nothing else in the core changes
 for capture.
 
 ## Impact
 
-- Specs: ADDED Failure Signals, Session Reflection, Skill Authoring Agent.
-- Depends on: `add-agents` (agent files and `task` on an agent).
+- Specs: ADDED Failure Signals, Session Reflection.
+- Depends on nothing else in flight. A lesson may target an agent file from `add-agents`.
 - Code: see Layout.
 - Evidence bar: `/reflect` run on at least 10 real sessions, with the count of approved,
   novel edits recorded in `SEQUENCE.md` against the 0 of 26 baseline.
