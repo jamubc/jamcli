@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import type { SyntaxStyle } from '@opentui/core';
+import { useTerminalDimensions } from '@opentui/react';
 import type { PendingApproval } from '../state/view.js';
 import { useClick } from './mouse.js';
 import { DiffView } from './Rows.js';
@@ -8,10 +9,21 @@ import { framed, usePlain, useTheme } from './theme.js';
 /** An input's submitted text: OpenTUI's React input hands over the value itself. */
 const submitted = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+/** A line cut to a width, with an ellipsis where it was cut. */
+const fitTo = (line: string, room: number): string => (line.length > room ? `${line.slice(0, Math.max(0, room - 1))}…` : line);
+
+/** The most lines of a command the prompt shows. */
+const PREVIEW_LINES = 12;
+
+/** The keyed choices. Escape is the fifth: deny and stop the turn. */
+type Choice = '1' | '2' | '3' | '4';
+
 /**
- * The permission prompt, which replaces the composer while a call waits: the action, its
- * preview, why it asked, and the four choices of D6. A deny can carry feedback for the
- * model, typed on a line of its own.
+ * The permission prompt, which replaces the composer while a call waits. It reads top
+ * to bottom as a decision: what wants to run; why the harness stopped; then the keyed
+ * choices, the pattern a grant would remember beside the two that use it. Escape, shown
+ * as a badge in the corner, denies and stops the turn; the badge turns red when pressed.
+ * A deny can instead carry feedback for the model, typed on a line of its own.
  */
 export function PermissionPrompt(props: {
   approval: PendingApproval;
@@ -20,35 +32,84 @@ export function PermissionPrompt(props: {
   file?: string;
   selected: number;
   feedback: boolean;
+  /** Escape was pressed: the badge shows red while the answer lands. */
+  escaping?: boolean;
   onFeedback: (text: string) => void;
   /** A choice was clicked: 1 to 4, as its key would. */
-  onChoose?: (key: '1' | '2' | '3' | '4') => void;
+  onChoose?: (key: Choice) => void;
 }) {
-  const { approval, queued, syntax, file, selected, feedback } = props;
+  const { approval, queued, syntax, file, selected, feedback, escaping } = props;
   const theme = useTheme();
   const click = useClick();
-  const choice = (key: '1' | '2' | '3' | '4') => click(() => props.onChoose?.(key));
   const plain = usePlain();
-  const preview = approval.preview?.kind === 'diff' ? undefined : approval.preview?.text.split('\n').slice(0, 12).join('\n');
+  const { width: columns } = useTerminalDimensions();
+  // The frame takes two columns of border and two of padding.
+  const room = Math.max(20, columns - 4);
+  const choice = (key: Choice) => click(() => props.onChoose?.(key));
+
+  const diff = approval.preview?.kind === 'diff' ? approval.preview.text : undefined;
+  const text = approval.preview && approval.preview.kind !== 'diff' ? approval.preview.text : undefined;
+  const lines = text ? text.split('\n') : [];
+  const shown = lines.slice(0, PREVIEW_LINES);
+  // The heading names the call. When the preview carries the whole command, the heading
+  // does not repeat it past one line.
+  const heading = `${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?`;
+  const waiting = queued > 1 ? `1 of ${queued} waiting · ` : '';
+  const badge = plain ? 'Escape denies and stops' : '[Esc]';
+  const corner = waiting.length + badge.length + 2;
+  const title = text ? fitTo(heading, room - corner) : heading;
+  const reason = approval.reason.charAt(0).toUpperCase() + approval.reason.slice(1);
+
   const pattern = approval.suggestions[selected];
-  const others = approval.suggestions.length > 1 ? ` (${selected + 1} of ${approval.suggestions.length}; Up and Down choose)` : '';
+  const patterns = approval.suggestions.length;
+  const label = (key: Choice, what: string, detail?: string) => {
+    const head = plain ? `${key}: ` : ` ${key}  `;
+    const shownDetail = detail ? `   ${fitTo(detail, room - head.length - what.length - 3)}` : '';
+    return (
+      <text fg={theme.text} onMouseUp={choice(key)}>
+        <span fg={theme.accent}>{head}</span>
+        <span>{what}</span>
+        {shownDetail ? <span fg={theme.dim}>{shownDetail}</span> : null}
+      </text>
+    );
+  };
+  const notes = patterns > 1 ? `Up/Down pattern ${selected + 1}/${patterns}` : '';
+
   return (
     <box {...framed(plain, theme.warn)} flexDirection="column" flexShrink={0}>
-      <text fg={theme.warn}>{`${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?${queued > 1 ? ` (1 of ${queued} waiting)` : ''}`}</text>
-      <text fg={theme.dim}>{`Asked because ${approval.reason}.`}</text>
-      {approval.preview?.kind === 'diff' ? <DiffView diff={approval.preview.text} file={file} syntax={syntax} /> : null}
-      {preview ? <text fg={theme.text}>{preview}</text> : null}
+      <box flexDirection="row" justifyContent="space-between">
+        <text fg={theme.warn}>{title}</text>
+        <text>
+          {waiting ? <span fg={theme.dim}>{waiting}</span> : null}
+          <span fg={escaping ? theme.error : theme.dim}>{plain ? `${badge}${escaping ? ' (denying)' : ''}` : `[${escaping ? '✕ Esc' : 'Esc'}]`}</span>
+        </text>
+      </box>
+      {diff ? <DiffView diff={diff} file={file} syntax={syntax} /> : null}
+      {shown.length ? (
+        <box flexDirection="column" paddingLeft={plain ? 0 : 2}>
+          {shown.map((line, index) => (
+            <text key={index} fg={theme.tokens.raw ?? theme.text}>
+              {fitTo(line, room - 2)}
+            </text>
+          ))}
+        </box>
+      ) : null}
+      <text fg={theme.dim} wrapMode="word">
+        {`${reason}.`}
+      </text>
+      <text> </text>
       {feedback ? (
         <box flexDirection="column">
-          <text fg={theme.text}>Tell the model what to do instead, or press Enter to just deny:</text>
+          <text fg={theme.text}>Feedback for the model (Enter alone denies):</text>
           <input focused placeholder="feedback for the model" onSubmit={(value: unknown) => props.onFeedback(submitted(value))} />
         </box>
       ) : (
         <box flexDirection="column">
-          <text fg={theme.text} onMouseUp={choice('1')}>1 allow once</text>
-          {pattern ? <text fg={theme.text} onMouseUp={choice('2')}>{`2 allow ${pattern} for this session${others}`}</text> : null}
-          {pattern ? <text fg={theme.text} onMouseUp={choice('3')}>{`3 allow ${pattern} for this project, saved in .jamcli/config.local.json`}</text> : null}
-          <text fg={theme.text} onMouseUp={choice('4')}>4 deny, and say why · Escape denies</text>
+          {label('1', 'Allow once')}
+          {pattern ? label('2', 'Allow this session', pattern) : null}
+          {pattern ? label('3', 'Allow this project', `${pattern} · .jamcli/config.local.json`) : null}
+          {label('4', 'Deny with feedback')}
+          {notes ? <text fg={theme.dim}>{fitTo(notes, room)}</text> : null}
         </box>
       )}
     </box>

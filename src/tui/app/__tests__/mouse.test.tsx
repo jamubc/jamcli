@@ -70,8 +70,8 @@ test('clicking a permission choice answers it, and clicking a tool line opens an
   try {
     context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo clicked-output' } }] }, { text: 'Done.' });
     await send(setup, 'run it');
-    await frameWith(setup, (frame) => frame.includes('1 allow once'));
-    const allow = where(setup, '1 allow once');
+    await frameWith(setup, (frame) => frame.includes('1  Allow once'));
+    const allow = where(setup, '1  Allow once');
     await setup.mockMouse.click(allow.x + 2, allow.y);
     await frameWith(setup, (frame) => frame.includes('Done.'));
     const line = where(setup, 'run_command echo clicked-output');

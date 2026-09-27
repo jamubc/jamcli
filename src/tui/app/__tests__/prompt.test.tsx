@@ -13,19 +13,19 @@ test('2 allows the chosen pattern for the session, so the same call no longer as
     await setup.mockInput.typeText('echo twice');
     setup.mockInput.pressEnter();
     const prompt = await frameWith(setup, (value) => value.includes('Allow run_command echo first?'));
-    expect(prompt).toContain('1 allow once');
-    expect(prompt).toContain('2 allow run_command(echo first) for this session (1 of 3; Up and Down choose)');
-    expect(prompt).toContain('4 deny, and say why');
+    expect(prompt).toContain('1  Allow once');
+    expect(prompt).toContain('2  Allow this session   run_command(echo first)');
+    expect(prompt).toContain('4  Deny with feedback');
     // Down walks to broader patterns and stops at the last; Up walks back. Keys that
     // arrive together each count.
     setup.mockInput.pressArrow('down');
-    await frameWith(setup, (value) => value.includes('2 allow run_command(echo first *) for this session (2 of 3'));
+    await frameWith(setup, (value) => value.includes('Allow this session   run_command(echo first *)'));
     setup.mockInput.pressArrow('down');
     setup.mockInput.pressArrow('down');
-    await frameWith(setup, (value) => value.includes('2 allow run_command(echo *) for this session (3 of 3'));
+    await frameWith(setup, (value) => value.includes('Allow this session   run_command(echo *)'));
     setup.mockInput.pressArrow('up');
     setup.mockInput.pressArrow('up');
-    await frameWith(setup, (value) => value.includes('2 allow run_command(echo first) for this session (1 of 3'));
+    await frameWith(setup, (value) => value.includes('Allow this session   run_command(echo first)'));
     // A grant pressed with the moves, before any frame shows them, takes the pattern
     // they chose: the broadest, which also covers the second call, so it runs unasked.
     setup.mockInput.pressArrow('down');
@@ -47,7 +47,7 @@ test('3 allows the pattern for the project, in .jamcli/config.local.json', async
     context.server.enqueue(command('c1', 'echo saved'), { text: 'Saved.' });
     await setup.mockInput.typeText('save it');
     setup.mockInput.pressEnter();
-    await frameWith(setup, (value) => value.includes('3 allow run_command(echo saved) for this project, saved in .jamcli/config.local.json'));
+    await frameWith(setup, (value) => value.includes('3  Allow this project   run_command(echo saved)'));
     setup.mockInput.pressKey('3');
     await frameWith(setup, (value) => value.includes('Saved.'));
     const local = JSON.parse(fs.readFileSync(path.join(context.root, '.jamcli', 'config.local.json'), 'utf8'));
@@ -65,7 +65,7 @@ test('4 takes feedback, which the model reads, and the turn goes on', async () =
     setup.mockInput.pressEnter();
     await frameWith(setup, (value) => value.includes('Allow run_command rm -rf build?'));
     setup.mockInput.pressKey('4');
-    await frameWith(setup, (value) => value.includes('Tell the model what to do instead'));
+    await frameWith(setup, (value) => value.includes('Feedback for the model'));
     await setup.mockInput.typeText('use npm run clean');
     setup.mockInput.pressEnter();
     const after = await frameWith(setup, (value) => value.includes('I will use the clean script instead.'));

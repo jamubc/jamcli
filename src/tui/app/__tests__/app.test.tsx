@@ -37,8 +37,8 @@ test('a call that asks shows the permission prompt, and Escape denies it', async
     await setup.mockInput.typeText('say hello');
     setup.mockInput.pressEnter();
     const prompt = await frameWith(setup, (value) => value.includes('Allow run_command echo hello?'));
-    expect(prompt).toContain('1 allow once');
-    expect(prompt).toContain('Asked because default mode asks before tools that run commands.');
+    expect(prompt).toContain('1  Allow once');
+    expect(prompt).toContain('Default mode asks before tools that run commands.');
     setup.mockInput.pressEscape();
     // A person's no, without feedback, ends the turn, and the interface says so.
     const after = await frameWith(setup, (value) => value.includes('Stopped because a tool call was denied.'));

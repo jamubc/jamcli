@@ -94,6 +94,9 @@ function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; pl
   );
 }
 
+/** How long the Esc badge shows red before a denied prompt goes. */
+const ESC_FLASH_MS = 150;
+
 /** The pattern a prompt offers, by its place among the suggestions, and whether it is taking feedback. */
 interface PromptSelection {
   callId?: string;
@@ -264,6 +267,11 @@ export function App(props: AppProps) {
    * which changes at once: Up then 2, arriving together, grant the pattern Up chose.
    */
   const [, setChoice] = useState<PromptSelection>({ selected: 0, feedback: false });
+  /** Escape was pressed on the prompt, and the answer is on its way. */
+  const [escaping, setEscaping] = useState(false);
+  useEffect(() => {
+    if (!approval) setEscaping(false);
+  }, [approval]);
   const choice = useRef<PromptSelection>({ selected: 0, feedback: false });
   const selection = (): PromptSelection => (approval && choice.current.callId === approval.callId ? choice.current : { callId: approval?.callId, selected: 0, feedback: false });
   const { selected, feedback } = selection();
@@ -529,8 +537,11 @@ export function App(props: AppProps) {
     }
     if (approval) {
       const now = selection();
-      if (key.name === 'escape') answer({ allow: false });
-      else if (now.feedback) return;
+      if (key.name === 'escape') {
+        // The Esc badge turns red first, so the no is seen before the prompt goes.
+        setEscaping(true);
+        setTimeout(() => answer({ allow: false }), ESC_FLASH_MS);
+      } else if (now.feedback) return;
       else if (key.name === '1' || key.name === 'y') answerWith('1');
       else if (key.name === '2' || key.name === '3') answerWith(key.name);
       else if (key.name === '4' || key.name === 'n') answerWith('4');
@@ -675,6 +686,7 @@ export function App(props: AppProps) {
                 file={(state.rows.find((row) => row.kind === 'tool' && row.callId === approval.callId) as { path?: string } | undefined)?.path}
                 selected={selected}
                 feedback={feedback}
+                escaping={escaping}
                 onFeedback={(text) => answer({ allow: false, ...(text.trim() ? { feedback: text.trim() } : {}) })}
                 onChoose={answerWith}
               />
