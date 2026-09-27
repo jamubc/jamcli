@@ -5,7 +5,9 @@
 Current behavior as built. This file describes what JamCLI does today and is updated
 only when a change is archived, never while a change is open. Proposals to alter this
 behavior live in `openspec/changes/`.
+
 ## Requirements
+
 ### Requirement: Terminal User Interface
 JamCLI SHALL provide an interactive terminal interface with a header, a scrollable
 transcript, a multi-line composer, and a status line, rendering the same runtime events
@@ -24,7 +26,32 @@ every other surface receives.
 #### Scenario: Show tool activity
 - **WHEN** a tool call runs
 - **THEN** the transcript shows it as a block with the tool, a summary of its arguments, its status, and its duration
-- **AND** edits show their diff and commands show the end of their output
+- **AND** a click on the block shows or hides an edit's diff or the end of a command's output
+
+#### Scenario: Show thinking in a steady window
+- **WHEN** the model thinks before it answers
+- **THEN** the thinking streams into a window of the height and width `ui.thinking_lines` and `ui.thinking_width` set, so the transcript above it does not move
+- **AND** once the reply starts the window folds to one line saying how much thinking there was, which a click opens
+
+#### Scenario: Expand the transcript
+- **WHEN** the user presses the expanded view key
+- **THEN** every block shows all it holds, thinking, tool output, and diffs, until the key is pressed again
+- **AND** the status line says the view is expanded
+
+#### Scenario: Keep the transcript in view behind a prompt
+- **WHEN** a permission prompt is open
+- **THEN** the transcript keeps rows above it, and a preview too long for the rest is cut with a note of how much remains
+- **AND** the page keys scroll the transcript while the prompt waits
+
+#### Scenario: Pin a note
+- **WHEN** the user runs `/note` with text
+- **THEN** the note is pinned above the conversation, newest first, until `/notes clear` removes the notes
+- **AND** notes are never sent to the model
+
+#### Scenario: Select and click
+- **WHEN** the user drags across the transcript
+- **THEN** the text is selected, stays on its words as the transcript scrolls, and is copied on release
+- **AND** a click chooses a row in a list or answers a prompt, and the row a click would choose is marked before the click
 
 #### Scenario: Show the session state
 - **WHEN** a session is active
@@ -129,8 +156,8 @@ hand-maintained list, and SHALL show catalog information for each.
 
 #### Scenario: Select a model
 - **WHEN** the user selects a model in the model selector
-- **THEN** JamCLI persists it as the active profile's preferred model
-- **AND** subsequent turns use that model
+- **THEN** the session switches to it and JamCLI saves it as `model` in the user configuration
+- **AND** subsequent turns, and new sessions, use that model unless a project sets its own
 
 #### Scenario: View model details
 - **WHEN** the user opens details for a model
@@ -198,6 +225,10 @@ rules do not already allow, and the decision SHALL come from the active surface.
 - **WHEN** an action is rejected
 - **THEN** it is recorded as rejected and the model receives a result saying so
 - **AND** nothing is written to disk and no command runs
+
+#### Scenario: Reject and continue
+- **WHEN** the user rejects an action and chooses to let the turn go on
+- **THEN** the model receives a result saying the call was denied and the turn continues
 
 #### Scenario: Reject with feedback
 - **WHEN** the user rejects an action and writes feedback
@@ -474,6 +505,11 @@ JamCLI SHALL let the user choose and create status indicator styles.
 #### Scenario: Preview a style
 - **WHEN** the user previews a status style
 - **THEN** the interface renders the indicator using that style before it is saved
+
+#### Scenario: Follow the theme
+- **WHEN** a style names a theme role, such as `accent` or `dim`, in place of a color
+- **THEN** the indicator takes that role's color from the active theme
+- **AND** a style name saved by an earlier version still resolves to a style
 
 ### Requirement: Bounded Agent Loop
 JamCLI SHALL bound each turn by configurable limits sized for multi-step work and SHALL
@@ -811,8 +847,24 @@ registry as the parent, and SHALL resolve each child's model and rules from its 
 - **AND** exceeding it returns an error instead of spawning another level
 
 ### Requirement: Tool Output Trust Gate
-JamCLI SHALL screen tool results for prompt injection before they enter model context on
-every surface, and SHALL bound and delimit the output it sends to the classifier.
+JamCLI SHALL, in auto mode, screen tool results for prompt injection before they enter
+model context on every surface, with the classifier the user names, and SHALL bound and
+delimit the output it sends to the classifier.
+
+#### Scenario: Screen in auto mode only
+- **WHEN** the permission mode is not auto
+- **THEN** tool results enter context unscreened
+- **AND** the gate reports nothing
+
+#### Scenario: Choose the classifier
+- **WHEN** `trust.model` names a model on any configured provider, a model on Ollama, or TypeSafe's Jev
+- **THEN** that model classifies the results in auto mode
+- **AND** no other model, such as an agent's, is used in its place
+
+#### Scenario: No classifier in auto mode
+- **WHEN** auto mode runs with no classifier configured
+- **THEN** results pass through unscreened
+- **AND** JamCLI says that the gate is off and how to set `trust.model`, once rather than on every turn
 
 #### Scenario: Classify tool results
 - **WHEN** tool results are about to be appended to context
@@ -1259,12 +1311,17 @@ support cancellation, and support long-running commands in the background.
 
 ### Requirement: Model Catalog
 JamCLI SHALL resolve, for any configured model, its context window, output limit,
-supported features, and price, from configuration, provider metadata, a bundled table,
-or conservative defaults, in that order.
+supported features, and price, from configuration, provider metadata, the models.dev
+directory, a bundled table, or conservative defaults, in that order.
 
 #### Scenario: Metadata from the provider
 - **WHEN** a provider reports a model's context length or price
 - **THEN** the catalog uses it unless configuration overrides it
+
+#### Scenario: Metadata from the directory
+- **WHEN** neither configuration nor the provider states a fact about a hosted model
+- **THEN** the catalog takes it from a copy of the models.dev directory kept for an hour
+- **AND** an Ollama model never consults the directory, and `JAMCLI_MODELS_DIRECTORY=off` turns it off
 
 #### Scenario: Unknown model
 - **WHEN** no source knows a model
@@ -1312,7 +1369,8 @@ environment, and flag layers, and SHALL report where each resolved value came fr
 
 ### Requirement: Credential Storage
 JamCLI SHALL read provider credentials from environment variables or the operating
-system's credential store, and SHALL report credentials stored in project files.
+system's credential store, SHALL NOT write a credential into a project file, and SHALL
+report credentials stored in project files.
 
 #### Scenario: Store a key
 - **WHEN** the user runs `jamcli auth set <provider>`
@@ -1322,9 +1380,15 @@ system's credential store, and SHALL report credentials stored in project files.
 - **WHEN** the user runs `jamcli auth login openrouter`
 - **THEN** JamCLI completes OpenRouter's PKCE flow through the browser and stores the resulting key
 
+#### Scenario: Never write a key into the project
+- **WHEN** the user runs `jamcli config set` with a provider key, alone or inside a section
+- **THEN** it is written to the user configuration file when no scope is given
+- **AND** a project or local scope is refused, naming the command that stores the key instead
+
 #### Scenario: Key in a project file
 - **WHEN** a provider key is found in a project configuration file
 - **THEN** it still works, and `jamcli doctor` and `jamcli audit` report it as a finding
+- **AND** each session says which file holds it and how to move it, without showing the key
 
 ### Requirement: Observability
 JamCLI SHALL provide structured logs with verbosity levels, a local trace of sessions,
@@ -1387,6 +1451,10 @@ monochrome themes, and SHALL honor `NO_COLOR`.
 #### Scenario: No color
 - **WHEN** `NO_COLOR` is set
 - **THEN** the interface renders without color and every state remains distinguishable by symbol and text
+
+#### Scenario: Selection in the theme
+- **WHEN** text is selected, or a row is chosen in a list or a prompt
+- **THEN** it is drawn in the theme's own selection or chosen-row colors, and inverted in monochrome
 
 ### Requirement: Accessibility Mode
 JamCLI SHALL provide a screen reader mode and a reduced motion setting.
@@ -1854,4 +1922,3 @@ through configuration files, as one store, and SHALL show where each agent came 
 #### Scenario: Default names no agent
 - **WHEN** the configured default agent is not one of the agents in effect
 - **THEN** JamCLI names the file, the key, and the agents that exist
-

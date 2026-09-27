@@ -71,7 +71,7 @@ description. `bun test` must pass, and the tests must be capable of failing.
 ## Known state
 
 `add-session-reflection` is open: its code is committed, and it waits on `/reflect` run
-over 10 or more real sessions with the owner approving (task 6.2). `add-agents` closed
-2026-09-27 as `2026-09-27-add-agents`, and `improve-web-tools` closed 2026-09-26. The type
-baseline is 0. `add-windows-support` is shelved. `openspec/ROADMAP.md` names the units
+over 10 or more real sessions with the owner approving (task 6.2). `add-agents` and
+`reconcile-shipped-behavior` closed 2026-09-27, and `improve-web-tools` closed 2026-09-26.
+The type baseline is 0. `add-windows-support` is shelved. `openspec/ROADMAP.md` names the units
 after these, and `openspec/SEQUENCE.md` what closing each found and left open.

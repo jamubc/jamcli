@@ -58,13 +58,37 @@ per-surface clauses above were added for that reason. The record is in
 `add-session-reflection`. Its code is committed and its task 6.1 ran end to end on
 OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real sessions,
 the approved novel edits counted against the 0 of 26 baseline, which only the owner's
-approvals can produce. `add-agents` closed 2026-09-27; see Closed units below.
-`add-windows-support`
-is shelved, not in the active changes tree: it waits for the owner to approve it before
+approvals can produce. `add-agents` and `reconcile-shipped-behavior` closed 2026-09-27;
+see Closed units below. `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to approve it before
 any task begins, and `git checkout 9d9f5c6 -- openspec/changes/add-windows-support`
 restores its proposal from the commit that recorded it.
 
 ## Closed units
+
+### 5. `reconcile-shipped-behavior`
+
+Archived as `2026-09-27-reconcile-shipped-behavior`: 8 requirements modified, none added
+or removed. After `add-agents` closed, owner-directed work landed on this branch without
+a change of its own, and the spec stopped describing it: the interface's thinking window
+of fixed size, its expanded view, a permission prompt that leaves the transcript in view,
+`/note`, and selection and clicking; `/model` saving its choice to the user
+configuration; a denial that lets the turn go on; indicator styles that follow the theme;
+a trust gate that screens only in auto mode, on the classifier `trust.model` names,
+TypeSafe's Jev included; models.dev in the catalog; and keys kept out of project files.
+The unit records that behavior and adds no code. It closed while `add-session-reflection`
+stays open, as `add-agents` did, since that unit's last task waits on the owner.
+
+**What closing it found.** Seven sessions had worked the one checkout at once and left 66
+files uncommitted, several concerns interleaved in single files, and tests that matched a
+wording no session wrote: the owner's own edit of the denial message, which ended in two
+full stops. The work went in as 17 commits by concern (`d510087` to `eedfc70`), each
+state passing the four gates on its own. One defect surfaced: the prompt measured a diff
+by its raw lines rather than the rows the diff view draws, so a short diff was padded out
+with blank rows and said it continued (fixed in `da128fc`). The same pass met the one ACP
+scenario the spec stated and jamcli did not: an editor that lends its files and
+terminals now gets the session's reads, writes, and commands (`e73563e`), the command
+under `env -i` so the editor's environment never reaches it. Its live check in a real
+editor waits on the owner (`openspec/DEFERRED_STAGES/17-unfinished-stages.md`).
 
 ### 4. `add-agents`
 
