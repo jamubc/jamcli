@@ -71,9 +71,11 @@ export function PermissionPrompt(props: {
   const diffHeight = diff ? (plain ? diff.split('\n').length + 1 : diffRows(diff)) : 0;
   const diffOverflow = diffHeight > previewRows;
   const text = approval.preview && approval.preview.kind !== 'diff' ? approval.preview.text : undefined;
-  const lines = text ? text.split('\n') : [];
-  const shown = lines.slice(0, previewRows);
-  const cut = lines.length - shown.length;
+  // A command is read whole before it is allowed: long lines wrap, and rows past the ones
+  // the transcript leaves scroll with the wheel, as a diff does.
+  const indent = plain ? 0 : 2;
+  const textRows = text ? text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / Math.max(1, room - indent))), 0) : 0;
+  const textOverflow = textRows > previewRows;
   // The heading names the call. When the preview carries the whole command, the heading
   // does not repeat it past one line.
   const heading = `${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?`;
@@ -126,16 +128,14 @@ export function PermissionPrompt(props: {
         <DiffView diff={diff} file={file} syntax={syntax} />
       ) : null}
       {diffOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The diff continues.' : '… the diff continues, wheel scrolls it'}</text> : null}
-      {shown.length ? (
-        <box flexDirection="column" paddingLeft={plain ? 0 : 2}>
-          {shown.map((line, index) => (
-            <text {...sel} key={index} fg={theme.tokens.raw ?? theme.text}>
-              {fitTo(line, room - 2)}
-            </text>
-          ))}
-          {cut > 0 ? <text {...sel} fg={theme.dim}>{`… ${cut} more ${cut === 1 ? 'line' : 'lines'}, in the tool row once it runs`}</text> : null}
-        </box>
+      {text ? (
+        <scrollbox height={Math.min(textRows, previewRows)} flexShrink={0} paddingLeft={indent} verticalScrollbarOptions={{ visible: false }}>
+          <text {...sel} fg={theme.tokens.raw ?? theme.text} wrapMode="char">
+            {text}
+          </text>
+        </scrollbox>
       ) : null}
+      {textOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The command continues.' : `… ${textRows - previewRows} more ${textRows - previewRows === 1 ? 'row' : 'rows'}, wheel scrolls it`}</text> : null}
       <text {...sel} fg={theme.dim} wrapMode="word">
         {`${reason}.`}
       </text>

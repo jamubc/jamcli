@@ -155,7 +155,7 @@ test('the prompt leaves the transcript its rows, and Page Up scrolls it behind t
     const prompt = await frameWith(setup, (value) => value.includes('1  Allow once') && value.includes('Step 10 of the plan.'));
     expect(prompt).toMatch(/^│ {3}echo line-9/m);
     expect(prompt).not.toMatch(/^│ {3}echo line-10/m);
-    expect(prompt).toContain('31 more lines');
+    expect(prompt).toContain('31 more rows, wheel scrolls it');
     expect(prompt).not.toContain('> list them');
     const paged = await pageUntil(setup, 'pageup', (value) => value.includes('> list them'));
     expect(paged).toContain('1  Allow once');
@@ -228,3 +228,22 @@ test("a subagent's prompts can each be answered, and each goes once it is", asyn
     await close();
   }
 }, 30_000);
+
+test('a long command wraps in the prompt, so all of it is read before it is allowed', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 40 } });
+  try {
+    // One line of well over a screen's width, as the child's commands in the session that found this were.
+    const long = `echo ${Array.from({ length: 12 }, (_, index) => `part-${index + 1}-of-one-long-line`).join('-')}`;
+    context.server.enqueue(command('c1', long), { text: 'Echoed.' });
+    await setup.mockInput.typeText('echo it');
+    setup.mockInput.pressEnter();
+    // Joined back up, the wrapped rows hold the whole command, and nothing says it goes on.
+    const whole = (value: string) => value.replace(/[│\s]/g, '').includes(long.replace(/\s/g, ''));
+    const prompt = await frameWith(setup, (value) => value.includes('1  Allow once') && whole(value));
+    expect(prompt).not.toContain('wheel scrolls it');
+    setup.mockInput.pressKey('1');
+    await frameWith(setup, (value) => value.includes('Echoed.'));
+  } finally {
+    await close();
+  }
+}, 20_000);
