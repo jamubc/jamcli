@@ -30,8 +30,9 @@ import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type Sand
 import { buildRuntimePrompt } from './prompt.js';
 import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
-import { loadSkills, skillsPromptText, type Skill } from '../ext/skills.js';
+import { loadSkills, skillInstructions, skillsPromptText, type Skill } from '../ext/skills.js';
 import { skillTool } from '../tools/skill.js';
+import { lessonFor, reflectionTools } from '../reflection/index.js';
 import { DEFAULT_TOOL_SEARCH_THRESHOLD, toolSearchTool } from '../tools/toolSearch.js';
 import { formatDiagnostic, LspManager } from '../lsp/manager.js';
 import { enabledPlugins, installedPlugins, verifyPlugins } from '../plugins/lock.js';
@@ -132,6 +133,8 @@ export interface RunOptions {
   shell?: boolean;
   /** Call this tool once, without the model, as a workflow's `tool` step does. The input is what the log shows. */
   tool?: { name: string; arguments: Record<string, unknown> };
+  /** Hidden tools offered for this turn only, such as `/reflect`'s, so no other turn pays for their schemas. */
+  offer?: string[];
 }
 
 export interface ContextUsage {
@@ -364,6 +367,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       })
     );
   }
+  const reflection = options.parent
+    ? undefined
+    : {
+        projectRoot: workRoot,
+        events: () => log.events(),
+        known: () => [...rules.files.flatMap((file) => file.sections.map((section) => section.body)), ...skillSet.skills.map(skillInstructions)],
+      };
+  // Registered hidden: only a turn that offers them, /reflect's, shows them to the model.
+  if (reflection) for (const tool of reflectionTools(reflection)) registry.register({ ...tool, hidden: true });
+  /** Tools offered for the running turn beyond the visible ones, and hooks that exist only while they are. */
+  let turnOffer: string[] = [];
+  const offerHooks = new Map<string, () => () => void>();
   // Plugins: each installed copy is hashed again, and one that changed is turned off. The
   // code that loads them is imported only when one is on, so a session without any pays nothing.
   if (!options.parent && installedPlugins(projectRoot).length) {
@@ -518,6 +533,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       registry,
       mcpServers,
       permissions,
+      alsoOffer: turnOffer,
       grantProject,
       ...(searching ? { deferred: (name: string) => Boolean(mcpServers?.has(name)) && !loadedTools.has(name) } : {}),
       ...(options.dryRun ? { dryRun: recordDryRun } : {}),
@@ -560,6 +576,21 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         return reports.length ? { context: [`The language server reports errors after this change:\n${reports.join('\n')}`] } : undefined;
       },
       'language server diagnostics'
+    );
+  }
+  if (reflection) {
+    const sources = reflection;
+    // A lesson that fails the gates is denied before anyone is asked, and only on a turn that offers it.
+    offerHooks.set('propose_lesson', () =>
+      hooks.on(
+        'pre_tool',
+        ({ call }) => {
+          if (call.name !== 'propose_lesson') return undefined;
+          const plan = lessonFor(sources, call.arguments ?? {});
+          return plan.ok ? undefined : { decision: 'deny', reason: plan.reason };
+        },
+        'reflection gates'
+      )
     );
   }
   // The configuration's hooks subscribe to the bus. A project's run only once the person
@@ -1034,6 +1065,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       };
       emitting = emit;
       let restoreModel: string | undefined;
+      const unsubscribes: (() => void)[] = [];
       try {
         if (turn.model) {
           const before = `${choice.provider}:${choice.model}`;
@@ -1043,6 +1075,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           } catch (error: any) {
             emit({ type: 'notice', level: 'warn', message: `${turn.label ?? 'This turn'} asks for ${turn.model}, which cannot be used here (${error?.message ?? error}), so it runs on ${before}.` });
           }
+        }
+        if (turn.offer?.length) {
+          turnOffer = turn.offer;
+          for (const name of turn.offer) {
+            const subscribe = offerHooks.get(name);
+            if (subscribe) unsubscribes.push(subscribe());
+          }
+          if (!turn.allowedTools) reassemble();
         }
         if (turn.allowedTools) {
           const label = turn.label ?? 'this command';
@@ -1079,6 +1119,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         // parent's engine, so only the session that owns it lets go.
         if (!options.parent && permissions.narrowed) {
           permissions.narrow(undefined);
+          reassemble();
+        }
+        if (turnOffer.length) {
+          turnOffer = [];
+          for (const unsubscribe of unsubscribes.splice(0)) unsubscribe();
           reassemble();
         }
         if (restoreModel) switchModel(restoreModel);

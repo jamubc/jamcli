@@ -108,7 +108,9 @@ export interface ToolSetOptions {
   mcpServers?: Map<string, string>;
   /** Tools that run when called but whose schemas are held back until `search_tools` loads them. */
   deferred?: (name: string) => boolean;
-  /** Descriptions to offer instead of a tool's own, such as `task` listing the categories. */
+  /** Hidden tools to offer anyway, for the turn that asked for them, such as `/reflect`'s. */
+  alsoOffer?: string[];
+  /** Descriptions to offer instead of a tool's own, such as `task` listing the agents. */
   descriptions?: Record<string, string>;
   /** The context every call runs with, less what each call supplies. */
   context: () => ToolContext;
@@ -136,7 +138,8 @@ export interface ToolSet {
 export function createToolSet(options: ToolSetOptions): ToolSet {
   const { registry, permissions } = options;
   const { canonical, classOf } = toolNaming(registry);
-  const offered = registry.visible().filter((tool) => permissions.offers(tool.name));
+  const extra = (options.alsoOffer ?? []).flatMap((name) => registry.get(name) ?? []);
+  const offered = [...registry.visible(), ...extra.filter((tool) => tool.hidden)].filter((tool) => permissions.offers(tool.name));
   const offeredNames = new Set(offered.map((tool) => tool.name));
   const summaries: ToolSummary[] = offered.map((tool) => {
     const server = options.mcpServers?.get(tool.name);

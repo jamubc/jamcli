@@ -5,6 +5,7 @@ import { createTwoFilesPatch } from 'diff';
 import type { ApprovalPreview, ApprovalRequest, PolicyClass, ToolCall } from './types.js';
 import { replaceLiteral } from './tools/textEdit.js';
 import { analyzeCommand } from './permissions/command.js';
+import { draftLesson } from './reflection/lesson.js';
 import { patchPaths } from './permissions/subjects.js';
 
 /**
@@ -99,6 +100,11 @@ export function previewCall(call: ToolCall, projectRoot: string): ApprovalPrevie
       const files = plan.files.map((file) => `${file.status} ${file.path}`).join('\n');
       const message = argString(call, 'message') ?? '';
       return { kind: 'text', text: clip(`${message.trim()}\n\n${files || 'Nothing is staged.'}\n\n${plan.stat}`, MAX_PREVIEW_CHARS) };
+    }
+    if (call.name === 'propose_lesson') {
+      const lesson = draftLesson(projectRoot, { file: argString(call, 'file') ?? '', section: argString(call, 'section') ?? '', add: argString(call, 'add') ?? '' });
+      const head = [lesson.warning ? `Warning: ${lesson.warning}` : '', (argString(call, 'finding') ?? '').trim()].filter(Boolean).join('\n\n');
+      return { kind: 'diff', text: clip(`${head}\n\n${lesson.diff}`, MAX_PREVIEW_CHARS) };
     }
     if (call.name === 'run_command') {
       const command = argString(call, 'command') ?? '';
