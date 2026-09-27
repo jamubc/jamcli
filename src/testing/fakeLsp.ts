@@ -64,7 +64,12 @@ const functionLines = (uri: string, name?: string) =>
     return match && (!name || match[1] === name) ? [{ name: match[1], line: index, character: match.index + 9 }] : [];
   });
 
-connection.onRequest('initialize', () => ({ capabilities: { textDocumentSync: 1, hoverProvider: true, definitionProvider: true, referencesProvider: true, documentSymbolProvider: true }, serverInfo: { name: 'fake-lsp' } }));
+// The parent process id the client gave, which a real server watches and exits when it cannot see.
+let parentPid: unknown;
+connection.onRequest('initialize', (params: any) => {
+  parentPid = params?.processId;
+  return { capabilities: { textDocumentSync: 1, hoverProvider: true, definitionProvider: true, referencesProvider: true, documentSymbolProvider: true }, serverInfo: { name: 'fake-lsp' } };
+});
 connection.onNotification('initialized', () => {
   // Real servers ask the client for settings and wait for the answer before serving.
   void connection.request('workspace/configuration', { items: [{ section: 'fake' }] }).then(
@@ -107,6 +112,7 @@ connection.onRequest('textDocument/documentSymbol', async (params) => {
 });
 connection.onRequest('fake/opens', () => Object.fromEntries(opens));
 connection.onRequest('fake/changes', () => changes);
+connection.onRequest('fake/parent', () => parentPid ?? null);
 connection.onRequest('fake/configuration', () => configuration);
 connection.onRequest('fake/probe', () => ({ hidden: hiddenNow(), env: process.env.JAMCLI_PROBE_ONLY ?? 'absent' }));
 connection.onRequest('shutdown', () => (stubborn ? new Promise(() => {}) : null));

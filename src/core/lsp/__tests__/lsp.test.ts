@@ -260,3 +260,19 @@ test('a credential in a diagnostic after an edit is redacted before the model re
     await runtime.close();
   }
 }, 20_000);
+
+test("a server in the sandbox is given no parent to watch, since it cannot see JamCLI's process and would exit", async () => {
+  const file = path.join(root, 'main.fk');
+  // Outside the sandbox the server may watch JamCLI's process, as the protocol intends.
+  const open = new LspManager(root, { servers: { fake } }, env);
+  // Inside it, a watch fails and the server takes its parent for gone: typescript-language-server
+  // exited a few seconds in under Seatbelt this way, in the session that found this.
+  const sandboxed = new LspManager(root, { servers: { fake } }, env, (command) => ({ file: '/bin/sh', args: ['-c', command] }));
+  try {
+    expect(await open.at<unknown>('fake/parent', file, 0, 0)).toBe(process.pid);
+    expect(await sandboxed.at<unknown>('fake/parent', file, 0, 0)).toBeNull();
+  } finally {
+    await open.close();
+    await sandboxed.close();
+  }
+}, 20_000);

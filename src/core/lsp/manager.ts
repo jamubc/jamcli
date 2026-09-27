@@ -98,7 +98,7 @@ export class LspManager {
     if (!started) {
       const quote = (value: string) => (/^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`);
       const wrapped = this.wrap?.([server.command, ...(server.args ?? [])].map(quote).join(' '), { cwd: this.root, env: this.env as Record<string, string> });
-      started = LspClient.start({ ...(wrapped ? { command: wrapped.file, args: wrapped.args } : server), env: this.env }, this.root);
+      started = LspClient.start({ ...(wrapped ? { command: wrapped.file, args: wrapped.args } : server), env: this.env }, this.root, undefined, Boolean(wrapped));
       this.running.set(name, started);
       // A server that fails to start is tried again on the next request.
       started.catch(() => this.running.delete(name));

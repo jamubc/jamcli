@@ -50,7 +50,12 @@ export class LspClient {
     private readonly connection: JsonRpcConnection
   ) {}
 
-  static async start(spec: LspServerSpec, root: string, timeoutMs = 20_000): Promise<LspClient> {
+  /**
+   * Start a server and initialize it. `sandboxed` says it runs where it cannot see JamCLI's
+   * process: it is then given no process id to watch, since a server that cannot signal its
+   * parent takes it for gone and exits a few seconds in. It still exits when its input closes.
+   */
+  static async start(spec: LspServerSpec, root: string, timeoutMs = 20_000, sandboxed = false): Promise<LspClient> {
     const child = spawn(spec.command, spec.args ?? [], { cwd: root, env: spec.env as NodeJS.ProcessEnv, stdio: ['pipe', 'pipe', 'pipe'] }) as ChildProcessWithoutNullStreams;
     const connection = new JsonRpcConnection({
       framing: contentLengthFraming,
@@ -92,7 +97,7 @@ export class LspClient {
 
     await Promise.race([
       connection.request('initialize', {
-        processId: process.pid,
+        processId: sandboxed ? null : process.pid,
         clientInfo: { name: 'jamcli' },
         rootUri: fileUri(root),
         workspaceFolders: [{ uri: fileUri(root), name: 'project' }],
