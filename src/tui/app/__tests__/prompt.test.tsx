@@ -71,7 +71,7 @@ test('4 takes feedback, which the model reads, and the turn goes on', async () =
     const after = await frameWith(setup, (value) => value.includes('I will use the clean script instead.'));
     expect(after).toContain('denied: run_command rm -rf build');
     const toolMessage = context.server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
-    expect(toolMessage.content).toBe('Denied by the user, who said: use npm run clean');
+    expect(toolMessage.content).toBe('Tool call was denied, feedback: use npm run clean');
   } finally {
     await close();
   }

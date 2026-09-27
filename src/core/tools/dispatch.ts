@@ -320,8 +320,8 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
           read.by !== 'user'
             ? `Not run: ${read.feedback ?? `denied by ${read.by}`}`
             : read.feedback
-              ? `Denied by the user, who said: ${read.feedback}`
-              : 'Denied by the user. The call did not run.';
+              ? `Tool call was denied, feedback: ${read.feedback}`
+              : 'Tool call was denied.';
         const result = resultFor(call, 'denied', output);
         ctx.emit({ type: 'tool_result', result });
         settle(i, result);

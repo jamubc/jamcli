@@ -126,7 +126,7 @@ test('a denial without feedback answers the rest of the batch and ends the turn'
   expect(results.map((r) => r.status)).toEqual(['denied', 'cancelled']);
   const toolMessages = result.session!.messages.filter((m) => m.role === 'tool');
   expect(toolMessages.map((m) => m.content)).toEqual([
-    'Denied by the user. The call did not run.',
+    'Tool call was denied.',
     'Not run: an earlier call in this step was denied.',
   ]);
 });
@@ -138,7 +138,7 @@ test('a denial with feedback is given to the model and the turn continues', asyn
     if (e.type === 'approval_request') e.decide({ allow: false, feedback: 'use the other file' });
   });
   expect(result.status).toBe('ok');
-  expect(provider.calls[1].messages.at(-1)).toMatchObject({ role: 'tool', content: 'Denied by the user, who said: use the other file' });
+  expect(provider.calls[1].messages.at(-1)).toMatchObject({ role: 'tool', content: 'Tool call was denied, feedback: use the other file' });
 });
 
 test('a read, search, edit, and test cycle finishes under the default limits (F9)', async () => {
