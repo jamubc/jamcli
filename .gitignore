@@ -7,8 +7,8 @@ package-lock.json
 # Testing
 coverage/
 
-# Specs and docs: markdown is tracked inside openspec/ and docs/ only.
-# A bare *.md rule would also hide openspec/, which is the point of this change.
+# Markdown is ignored except where it is listed below. A new .md file anywhere else
+# (for example under .claude/skills/) stays untracked until it is added here.
 *.xml
 *.md
 !README.md
