@@ -1,0 +1,27 @@
+{
+  "name": "grep-description",
+  "project": "/Users/jam/Documents/github/jamubc/monaco-code-editor",
+  "model": "opencode-go:deepseek-v4.1-flash",
+  "base": "head",
+  "repeat": 3,
+  "allowTools": ["read_file", "grep", "glob"],
+  "maxSteps": 25,
+  "turns": ["How does the file tree talk to the editor in this project? Name the exact functions and files involved, with line numbers, briefly."],
+  "variants": {
+    "jamcli": {},
+    "claude-code-grep": {
+      "toolDescriptions": {
+        "grep": "A powerful search tool built on ripgrep\n\nUsage:\n- ALWAYS use grep for search tasks. NEVER invoke `grep` or `rg` through run_command.\n- Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n- Filter files with the glob parameter (e.g., \"*.js\", \"**/*.tsx\")\n- output_mode: \"content\" shows matching lines, \"files\" shows only file paths, \"count\" shows match counts\n- Use the task tool for open-ended searches requiring multiple rounds\n- Pattern syntax: uses ripgrep (not grep); literal braces need escaping (use `interface\\{\\}` to find `interface{}`)"
+      }
+    }
+  },
+  "checks": [
+    { "contains": "openFileFromTree" },
+    { "contains": "createNewTab" },
+    { "regex": "file-tree\\.js" },
+    { "regex": "editor-core\\.js" }
+  ],
+  "judge": {
+    "rubric": "Score how well the reply answers how the file tree talks to the editor. 10: names the real functions and files with correct roles and says where each is, concisely. Subtract for vagueness, padding, unverified guesses, or missing the click-to-open path (setupFileTreeEvents in js/main.js, openFileFromTree in js/ui/file-tree.js, createNewTab in js/editor/editor-core.js)."
+  }
+}
