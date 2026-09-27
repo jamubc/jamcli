@@ -15,6 +15,7 @@ import { SessionLog, TranscriptRecorder, ensureProjectStateDir, newSessionId } f
 import { createBuiltinRegistry } from '../tools/registry.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
+import type { EditorBridge } from '../../types/tools.js';
 import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type ToolSummary } from './tools.js';
 import { childLauncher, type ParentSession } from './children.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
@@ -115,6 +116,8 @@ export interface RuntimeOptions {
   observe?: ObserveSettings;
   /** Record into this observer instead, under `parentSpan`: a delegated run shares its parent's. */
   observer?: { observer: Observer; parentSpan?: Span };
+  /** What an ACP editor lends the session's own tools: its files and its terminal. */
+  editor?: EditorBridge;
 }
 
 /** An MCP server's prompt. */
@@ -580,6 +583,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         delegate: delegateChild,
         delegationDepth: depth,
         delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
+        ...(options.editor ? { editor: options.editor } : {}),
       }),
     });
   let toolSet = buildTools();

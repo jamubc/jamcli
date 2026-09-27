@@ -192,6 +192,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
         signal: context?.signal,
         onProgress: context?.onProgress,
         requestApproval: context?.requestApproval,
+        callId: call.id,
       });
       return {
         tool: call.name,

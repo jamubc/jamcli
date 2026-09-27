@@ -6,6 +6,7 @@ import { customCommandTurn } from '../core/ext/commandTurn.js';
 import { promptHint } from '../core/mcp/prompts.js';
 import { PERMISSION_MODES, type PermissionMode } from '../core/permissions/modes.js';
 import type { AgentEvent, ChatMessage, RunResult } from '../core/types.js';
+import type { EditorBridge } from '../types/tools.js';
 
 /** What the ACP server needs from a session in order to drive a turn. */
 export interface AcpSessionController {
@@ -39,6 +40,8 @@ export interface CreateAcpSessionOptions {
   sessionId?: string;
   maxSteps?: number;
   configService?: ConfigService;
+  /** The editor's files and terminals, when it lends them. */
+  editor?: EditorBridge;
   /** Assembly overrides, for tests. */
   runtime?: Partial<RuntimeOptions>;
 }
@@ -74,6 +77,7 @@ export const createAcpSession = async (options: CreateAcpSessionOptions): Promis
     sessionId: options.sessionId,
     maxSteps: options.maxSteps,
     configService,
+    ...(options.editor ? { editor: options.editor } : {}),
     ...options.runtime,
   });
   const config = await configService.getConfig();

@@ -51,3 +51,25 @@ test('refuses a path outside the project root', async () => {
   expect(result.output.toLowerCase()).toContain('escapes the project root');
   expect(await pathExists(path.resolve(projectRoot, outside))).toBe(false);
 });
+
+test("in an editor that lends its files, writes land in the editor's copy and reads see it", async () => {
+  // The editor holds unsaved text for a.txt; the disk has the saved text.
+  await fs.promises.writeFile(path.join(projectRoot, 'a.txt'), 'saved\n');
+  const buffers = new Map<string, string>([[path.join(projectRoot, 'a.txt'), 'unsaved\n']]);
+  const editor = {
+    readText: async (file: string) => buffers.get(file) ?? fs.promises.readFile(file, 'utf-8'),
+    writeText: async (file: string, content: string) => void buffers.set(file, content),
+  };
+  const registry = createBuiltinRegistry();
+  const run = (name: string, args: Record<string, unknown>) => registry.execute(name, args, { projectRoot, editor });
+
+  expect((await run('read_file', { path: 'a.txt' })).output).toContain('unsaved');
+  expect((await run('write_file', { path: 'a.txt', content: 'written\n', overwrite: true })).success).toBe(true);
+  const patch = ['--- a/a.txt', '+++ b/a.txt', '@@ -1 +1 @@', '-written', '+patched', ''].join('\n');
+  expect((await run('apply_patch', { patch })).success).toBe(true);
+  expect((await run('edit', { path: 'a.txt', find_string: 'patched', replace_string: 'edited' })).success).toBe(true);
+
+  // Each change built on the editor's copy, and the disk was left for the editor to save.
+  expect(buffers.get(path.join(projectRoot, 'a.txt'))).toBe('edited\n');
+  expect(await fs.promises.readFile(path.join(projectRoot, 'a.txt'), 'utf-8')).toBe('saved\n');
+});

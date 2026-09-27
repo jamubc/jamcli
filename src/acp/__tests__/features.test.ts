@@ -9,6 +9,16 @@ import { startFakeProvider, type FakeProviderServer } from '../../testing/fakePr
 
 // The SDK's own zod schemas, which its package does not export, checked against every message.
 const zod: any = await import(new URL('./schema/zod.gen.js', import.meta.resolve('@agentclientprotocol/sdk')).href);
+/** What the agent may ask of the editor, each checked against the SDK's schema. */
+const EDITOR_REQUESTS: Record<string, any> = {
+  'fs/read_text_file': zod.zReadTextFileRequest,
+  'fs/write_text_file': zod.zWriteTextFileRequest,
+  'terminal/create': zod.zCreateTerminalRequest,
+  'terminal/output': zod.zTerminalOutputRequest,
+  'terminal/wait_for_exit': zod.zWaitForTerminalExitRequest,
+  'terminal/kill': zod.zKillTerminalRequest,
+  'terminal/release': zod.zReleaseTerminalRequest,
+};
 const RESPONSES: Record<string, any> = {
   initialize: zod.zInitializeResponse,
   'session/new': zod.zNewSessionResponse,
@@ -74,7 +84,9 @@ const connect = () => {
           ? zod.zSessionNotification
           : message.method === 'session/request_permission'
             ? zod.zRequestPermissionRequest
-            : 'result' in message
+            : message.method in EDITOR_REQUESTS
+              ? EDITOR_REQUESTS[message.method]
+              : 'result' in message
               ? RESPONSES[methods.get(message.id) ?? '']
               : undefined;
       const checked = schema?.safeParse(message.method ? message.params : message.result);
@@ -88,17 +100,28 @@ const connect = () => {
     const id = nextId++;
     methods.set(id, method);
     input.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-    await waitFor(() => messages.some((message) => message.id === id && ('result' in message || 'error' in message)));
-    return messages.find((message) => message.id === id);
+    // The agent numbers its own requests to the editor too, so only a response answers this one.
+    const answered = (message: any) => message.id === id && !('method' in message) && ('result' in message || 'error' in message);
+    await waitFor(() => messages.some(answered));
+    return messages.find(answered);
   };
   const updates = (kind?: string) => messages.filter((message) => message.method === 'session/update' && (!kind || message.params.update.sessionUpdate === kind)).map((message) => message.params.update);
   const answer = (id: unknown, optionId: string) => input.write(`${JSON.stringify({ jsonrpc: '2.0', id, result: { outcome: { outcome: 'selected', optionId } } })}\n`);
   const answerError = (id: unknown, message: string) => input.write(`${JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32603, message } })}\n`);
+  /** Answer the agent's request, as an editor does. */
+  const reply = (id: unknown, result: unknown) => input.write(`${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
+  /** Wait for the agent's next unanswered request by that method. */
+  const asked = async (method: string, seen = new Set<unknown>()) => {
+    await waitFor(() => messages.some((message) => message.method === method && !seen.has(message.id)));
+    const found = messages.find((message) => message.method === method && !seen.has(message.id));
+    seen.add(found.id);
+    return found;
+  };
   const close = async () => {
     input.end();
     await done;
   };
-  return { messages, request, updates, answer, answerError, close, problems };
+  return { messages, request, updates, answer, answerError, reply, asked, close, problems };
 };
 
 test('a session offers modes, a model setting, and its commands; a mode can be switched but bypass is not offered', async () => {
@@ -272,5 +295,108 @@ test('apply_patch reports every file it touches as a location', async () => {
   expect(update.locations.map((location: any) => location.path).sort()).toEqual([path.join(root, 'a.txt'), path.join(root, 'c.txt')].sort());
   expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
   expect(fs.readFileSync(path.join(root, 'c.txt'), 'utf8')).toBe('two\n');
+  await client.close();
+}, 30_000);
+
+test("an editor that lends its files: a read sees the unsaved buffer, and an edit is written through the editor", async () => {
+  const client = connect();
+  await client.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } } });
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  const file = path.join(root, 'a.txt');
+  server.enqueue(
+    { toolCalls: [{ id: 'r1', name: 'read_file', arguments: { path: 'a.txt' } }] },
+    { toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'unsaved', replace_string: 'saved' } }] },
+    { text: 'Done.' }
+  );
+  const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'change it' }] });
+  const seen = new Set<unknown>();
+  const read = await client.asked('fs/read_text_file', seen);
+  expect(read.params).toMatchObject({ sessionId, path: file });
+  client.reply(read.id, { content: 'unsaved\n' });
+  client.answer((await client.asked('session/request_permission')).id, 'allow-once');
+  client.reply((await client.asked('fs/read_text_file', seen)).id, { content: 'unsaved\n' });
+  const write = await client.asked('fs/write_text_file');
+  expect(write.params).toMatchObject({ sessionId, path: file, content: 'saved\n' });
+  client.reply(write.id, null);
+  expect((await pending).result.stopReason).toBe('end_turn');
+  // The model read the editor's copy, and the disk was never written.
+  const toolMessages = server.completions().at(-2)!.body.messages.filter((message: any) => message.role === 'tool');
+  expect(toolMessages[0].content).toContain('unsaved');
+  expect(fs.readFileSync(file, 'utf8')).toBe('old\n');
+  expect(client.updates('tool_call_update').find((update) => update.toolCallId === 'e1')).toMatchObject({ status: 'completed', content: [{ type: 'diff', oldText: 'unsaved\n', newText: 'saved\n' }] });
+  expect(client.problems).toEqual([]);
+  await client.close();
+}, 30_000);
+
+test("an editor that lends a terminal runs the command in it, shown under the call, with jamcli's own environment", async () => {
+  process.env.ACP_TEST_API_KEY = 'must-not-reach-the-terminal';
+  try {
+    const client = connect();
+    await client.request('initialize', { protocolVersion: 1, clientCapabilities: { terminal: true } });
+    const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+    server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hello' } }] }, { text: 'It said hello.' });
+    const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'say hello' }] });
+    client.answer((await client.asked('session/request_permission')).id, 'allow-once');
+    const created = await client.asked('terminal/create');
+    const { command, args, cwd } = created.params;
+    // env -i replaces the terminal's environment with the one jamcli gives every command.
+    expect(command).toBe('/usr/bin/env');
+    expect(args[0]).toBe('-i');
+    expect(args.slice(-3)).toEqual(['/bin/sh', '-c', 'echo hello']);
+    expect(args.some((arg: string) => arg.startsWith('PATH='))).toBe(true);
+    expect(args.join(' ')).not.toContain('must-not-reach-the-terminal');
+    expect(cwd).toBe(root);
+    client.reply(created.id, { terminalId: 'term-1' });
+    // The terminal is shown under the call while it runs.
+    await waitFor(() => client.updates('tool_call_update').some((update) => update.toolCallId === 'c1' && update.content?.[0]?.type === 'terminal'));
+    client.reply((await client.asked('terminal/wait_for_exit')).id, { exitCode: 0, signal: null });
+    client.reply((await client.asked('terminal/output')).id, { output: 'hello\n', truncated: false, exitStatus: { exitCode: 0, signal: null } });
+    client.reply((await client.asked('terminal/release')).id, null);
+    expect((await pending).result.stopReason).toBe('end_turn');
+    const toolMessage = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
+    expect(toolMessage.content).toContain('Exit code 0');
+    expect(toolMessage.content).toContain('hello');
+    // The last update leaves the terminal in place rather than replacing it with text.
+    const last = client.updates('tool_call_update').filter((update) => update.toolCallId === 'c1').at(-1)!;
+    expect(last).toEqual({ sessionUpdate: 'tool_call_update', toolCallId: 'c1', status: 'completed' });
+    expect(client.problems).toEqual([]);
+    await client.close();
+  } finally {
+    delete process.env.ACP_TEST_API_KEY;
+  }
+}, 30_000);
+
+test("a command in the editor's terminal that runs out of time is killed, and what it printed is kept", async () => {
+  const client = connect();
+  await client.request('initialize', { protocolVersion: 1, clientCapabilities: { terminal: true } });
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'sleep 60', timeout_ms: 200 } }] }, { text: 'It hung.' });
+  const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'wait' }] });
+  client.answer((await client.asked('session/request_permission')).id, 'allow-once');
+  client.reply((await client.asked('terminal/create')).id, { terminalId: 'term-2' });
+  // wait_for_exit is never answered: the time limit decides.
+  await client.asked('terminal/wait_for_exit');
+  client.reply((await client.asked('terminal/kill')).id, null);
+  client.reply((await client.asked('terminal/output')).id, { output: 'partial\n', truncated: false, exitStatus: { exitCode: null, signal: 'SIGTERM' } });
+  client.reply((await client.asked('terminal/release')).id, null);
+  expect((await pending).result.stopReason).toBe('end_turn');
+  const toolMessage = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
+  expect(toolMessage.content).toContain('Timed out');
+  expect(toolMessage.content).toContain('partial');
+  expect(client.problems).toEqual([]);
+  await client.close();
+}, 30_000);
+
+test('an editor that cannot start the terminal leaves the command to run here', async () => {
+  const client = connect();
+  await client.request('initialize', { protocolVersion: 1, clientCapabilities: { terminal: true } });
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo ran-here' } }] }, { text: 'Ran.' });
+  const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'run' }] });
+  client.answer((await client.asked('session/request_permission')).id, 'allow-once');
+  client.answerError((await client.asked('terminal/create')).id, 'no terminals here');
+  expect((await pending).result.stopReason).toBe('end_turn');
+  const toolMessage = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
+  expect(toolMessage.content).toContain('ran-here');
   await client.close();
 }, 30_000);

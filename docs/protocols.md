@@ -32,6 +32,16 @@ terminal manager.
 - `session/set_mode` takes `plan`, `default`, `accept-edits`, or `auto` (never `bypass`);
   `session/set_config_option` switches the model. `apply_patch` reports every file it
   touches as a tool location, and a tool result past 20,000 characters is cut with a note.
+- An editor that offers its file system (`fs.readTextFile`, `fs.writeTextFile`) gets the
+  session's reads and writes: `read_file`, `edit`, `write_file`, and `apply_patch` see
+  unsaved changes and write into open buffers. Permissions, checkpoints, and the path
+  rules apply as before; a read the editor cannot answer falls back to the disk.
+- An editor that offers terminals (`terminal`) runs `run_command` in one, shown under the
+  call while it runs and left there after. The program is the one JamCLI would start: the
+  sandbox's wrapper or the shell, under `env -i` with the command environment, so the
+  editor's own environment and its credentials never reach it. A time limit or a cancel
+  kills it and keeps what it printed. When the editor cannot start the terminal, the
+  command runs here. Background commands and delegated tasks keep their own processes.
 - The delegating client (`delegate` and `.jamcli/agents.json`) starts an external agent
   with the session's minimal environment, offers it no file system or terminal
   capabilities, and answers its permission requests from the surface's policy.

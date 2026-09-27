@@ -1,8 +1,8 @@
-import fs from 'fs';
 import { ensureDir, pathExists, remove } from '../../utils/fsx.js';
 import path from 'path';
 import { applyPatch as applyStructuredPatch, parsePatch } from 'diff';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
+import { readText, writeText } from './files.js';
 import { resolveProjectPath } from './paths.js';
 import { detectLineEnding, withLineEnding } from './textEdit.js';
 
@@ -59,7 +59,7 @@ export async function applyPatchRunner(args: Record<string, any>, ctx: ToolConte
     const exists = await pathExists(absolute);
     if (creating && exists) throw new Error(`Patch creates ${rel}, but it already exists.`);
     if (!creating && !exists) throw new Error(`Patch modifies ${rel}, but it does not exist.`);
-    const current = exists ? await fs.promises.readFile(absolute, 'utf-8') : '';
+    const current = exists ? await readText(ctx, absolute) : '';
     const eol = detectLineEnding(current);
     const next = applyStructuredPatch(current.replace(/\r\n/g, '\n'), entry);
     if (next === false) {
@@ -91,7 +91,7 @@ export async function applyPatchRunner(args: Record<string, any>, ctx: ToolConte
       await remove(change.absolute);
     } else {
       await ensureDir(path.dirname(change.absolute));
-      await fs.promises.writeFile(change.absolute, change.next, 'utf-8');
+      await writeText(ctx, change.absolute, change.next);
     }
   }
 

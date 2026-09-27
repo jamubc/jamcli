@@ -95,7 +95,7 @@ A competitor cell is marked ✓ or ◐ only with a source listed at the bottom. 
 | Capability | JamCLI before | JamCLI now | Claude Code | Codex CLI | OpenCode | Command Code | Decision |
 |---|---|---|---|---|---|---|---|
 | MCP client | ◐ 2025 protocol, no OAuth, interface only | ✓ 2026-07-28 with fallback, OAuth, elicitation, prompts, resources, tool search, every surface | ✓ 2026-07-28 by default [1] | ✓ [2] | n.v. | n.v. | parity |
-| ACP agent (editor integration) | ◐ read-only, forgets turns | ✓ official SDK: load, modes, config options, diffs; ◐ the editor's file system and terminals are not used | n.v. | n.v. | ✓ [4] | n.v. | parity |
+| ACP agent (editor integration) | ◐ read-only, forgets turns | ✓ official SDK: load, modes, config options, diffs, the editor's file system and terminals | n.v. | n.v. | ✓ [4] | n.v. | parity |
 | ACP client (delegating to other agents) | ✓ | ✓ official SDK | n.v. | n.v. | n.v. | n.v. | exceeds |
 | LSP diagnostics and navigation | ✗ | ✓ diagnostics after edits, an `lsp` tool for hover, definition, references, symbols; servers sandboxed | ◐ through a plugin [1] | n.v. | ✓ with formatters [4] | n.v. | parity |
 | An editor watching an interactive session | ✗ | ✓ ACP observer on a local socket (`JAMCLI_ACP_ENDPOINT`) | n.v. | n.v. | n.v. | n.v. | exceeds |

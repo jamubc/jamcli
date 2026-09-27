@@ -109,6 +109,46 @@ export type CommandWrapper = (
   options: { cwd: string; env: Record<string, string> }
 ) => { file: string; args: string[] };
 
+/**
+ * A program `run_command` runs in the editor's terminal: exactly this program, which already
+ * carries the sandbox and the environment JamCLI gives every command.
+ */
+export interface EditorTerminalRun {
+  /** The tool call the terminal is shown under. */
+  callId?: string;
+  file: string;
+  args: string[];
+  cwd: string;
+  /** Bytes of output the editor keeps, from the end. */
+  outputByteLimit: number;
+  timeoutMs: number;
+  signal?: AbortSignal;
+}
+
+/** How a program run in the editor's terminal ended, and what it printed. */
+export interface EditorTerminalResult {
+  terminalId: string;
+  output: string;
+  /** The editor dropped the start of the output to stay within the limit. */
+  truncated: boolean;
+  exitCode: number | null;
+  signal: string | null;
+  timedOut: boolean;
+  cancelled: boolean;
+}
+
+/**
+ * What an editor lends the tools over ACP, each part only when the editor offers it:
+ * reads that see unsaved changes, writes that land in open buffers, and a terminal the
+ * person watches. Paths are absolute.
+ */
+export interface EditorBridge {
+  readText?(path: string): Promise<string>;
+  writeText?(path: string, content: string): Promise<void>;
+  /** Rejects only when the editor could not start the program, so the caller may run it itself. */
+  terminal?(run: EditorTerminalRun): Promise<EditorTerminalResult>;
+}
+
 export interface ToolContext {
   projectRoot: string;
   signal?: AbortSignal;
@@ -136,6 +176,10 @@ export interface ToolContext {
   delegationConfig?: DelegationConfig;
   /** Ask whoever answers this call's approvals about a nested call, such as a child run's. */
   requestApproval?: NestedApproval;
+  /** The tool call this context runs, so what the tool starts can be shown under it. */
+  callId?: string;
+  /** The editor's files and terminal, when the session runs in an ACP editor that lends them. */
+  editor?: EditorBridge;
 }
 
 export type ToolRunner = (args: Record<string, any>, ctx: ToolContext) => Promise<ToolRunPayload>;

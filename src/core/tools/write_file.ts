@@ -2,6 +2,7 @@ import fs from 'fs';
 import { ensureDir, pathExists } from '../../utils/fsx.js';
 import path from 'path';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
+import { readText, writeText } from './files.js';
 import { resolveProjectPath } from './paths.js';
 
 const writeFileSchema: JsonSchema = {
@@ -34,7 +35,7 @@ export async function writeFile(args: Record<string, any>, ctx: ToolContext): Pr
       return { output: `Refused: ${relative} is a directory.` };
     }
     if (!args.overwrite) {
-      const current = await fs.promises.readFile(target, 'utf8').catch(() => '');
+      const current = await readText(ctx, target).catch(() => '');
       return {
         output: [
           `Refused to overwrite ${relative}: it already exists (${current.length} chars).`,
@@ -48,7 +49,7 @@ export async function writeFile(args: Record<string, any>, ctx: ToolContext): Pr
     await ensureDir(path.dirname(target));
   }
 
-  await fs.promises.writeFile(target, content, 'utf8');
+  await writeText(ctx, target, content);
   const bytes = Buffer.byteLength(content, 'utf8');
   return { output: `${exists ? 'Overwrote' : 'Created'} ${relative} (${bytes} bytes).` };
 }

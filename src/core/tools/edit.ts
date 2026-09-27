@@ -1,7 +1,7 @@
-import fs from 'fs';
 import { createTwoFilesPatch } from 'diff';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
 import { anchorAtLine, type LineAnchor } from './anchors.js';
+import { readText, writeText } from './files.js';
 import { resolveProjectPath } from './paths.js';
 import { AmbiguousMatchError, replaceLiteral } from './textEdit.js';
 
@@ -85,7 +85,7 @@ export async function editRunner(args: Record<string, any>, ctx: ToolContext): P
   const replaceString = typeof args.replace_string === 'string' ? args.replace_string : '';
 
   const absolute = resolveProjectPath(ctx.projectRoot, target);
-  const content = await fs.promises.readFile(absolute, 'utf-8');
+  const content = await readText(ctx, absolute);
   const lines = content.split(/\r?\n/);
 
   const anchors = normalizeAnchors(args.anchors);
@@ -107,7 +107,7 @@ export async function editRunner(args: Record<string, any>, ctx: ToolContext): P
     all: args.replace_all === true,
     occurrence: typeof args.occurrence === 'number' ? args.occurrence : undefined,
   });
-  await fs.promises.writeFile(absolute, result.content, 'utf-8');
+  await writeText(ctx, absolute, result.content);
 
   const { startLine, endLine, replaced } = result;
   const affected = endLine > startLine ? `lines ${startLine}-${endLine}` : `line ${startLine}`;

@@ -4,11 +4,14 @@ import {
   PROTOCOL_VERSION,
   RequestError,
   type Agent,
+  type ClientCapabilities,
   type ContentBlock,
   type PermissionOption,
   type SessionUpdate,
 } from '@agentclientprotocol/sdk';
 import type { AgentEvent, ApprovalDecision } from '../core/types.js';
+import type { EditorBridge } from '../types/tools.js';
+import { editorBridge } from './editor.js';
 import { createAcpSession, type AcpSessionController, type CreateAcpSessionOptions } from './session.js';
 import { stopReasonFor, toolKind, toolLocations, toolTitle, UpdateMapper } from './updates.js';
 import { JAMCLI_VERSION } from '../core/version.js';
@@ -78,6 +81,8 @@ const writable = (output: NodeJS.WritableStream): WritableStream<Uint8Array> =>
  */
 export class AcpServer {
   private readonly sessions = new Map<string, { controller: AcpSessionController; mapper: UpdateMapper }>();
+  /** What the editor said it offers when it connected: its files and terminals, for one. */
+  private capabilities: ClientCapabilities | undefined;
 
   constructor(private readonly options: AcpServerOptions) {}
 
@@ -90,12 +95,13 @@ export class AcpServer {
     this.sessions.clear();
   }
 
-  private open(request: AcpNewSessionRequest): Promise<AcpSessionController> {
+  private open(request: AcpNewSessionRequest, editor?: EditorBridge): Promise<AcpSessionController> {
     if (this.options.createSession) return this.options.createSession(request);
     return createAcpSession({
       projectRoot: this.options.projectRoot,
       cwd: request.cwd,
       ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+      ...(editor ? { editor } : {}),
       ...this.options.sessionOptions,
     });
   }
@@ -117,12 +123,16 @@ export class AcpServer {
       const commands = (await controller.commands?.().catch(() => [])) ?? [];
       if (commands.length) await update(controller.id, { sessionUpdate: 'available_commands_update', availableCommands: commands });
     };
-    const register = (controller: AcpSessionController, cwd: string) => {
-      this.sessions.set(controller.id, { controller, mapper: new UpdateMapper(cwd) });
+    const register = (controller: AcpSessionController, cwd: string, written: Map<string, string>) => {
+      this.sessions.set(controller.id, { controller, mapper: new UpdateMapper(cwd, written) });
     };
+    /** The editor's files and terminals for a session, whose id is known once it is open. */
+    const lent = (session: { id: string }, written: Map<string, string>) => editorBridge(client, this.capabilities, () => session.id, update, written);
 
     return {
-      initialize: async () => ({
+      initialize: async (params) => {
+        this.capabilities = params.clientCapabilities;
+        return {
         protocolVersion: PROTOCOL_VERSION,
         agentCapabilities: {
           loadSession: true,
@@ -130,19 +140,23 @@ export class AcpServer {
         },
         agentInfo: this.options.agentInfo ?? { name: 'jamcli', version: JAMCLI_VERSION },
         authMethods: [],
-      }),
+        };
+      },
 
       authenticate: async () => ({}),
 
       newSession: async (params) => {
         const cwd = params.cwd || this.options.projectRoot;
         let controller: AcpSessionController;
+        const session = { id: '' };
+        const written = new Map<string, string>();
         try {
-          controller = await this.open({ cwd, mcpServers: params.mcpServers ?? [] });
+          controller = await this.open({ cwd, mcpServers: params.mcpServers ?? [] }, lent(session, written));
         } catch (error: any) {
           throw RequestError.internalError(undefined, `Failed to create session: ${error?.message || error}`);
         }
-        register(controller, cwd);
+        session.id = controller.id;
+        register(controller, cwd, written);
         // After the reply, so the client knows the session the list belongs to.
         setTimeout(() => void announceCommands(controller), 0);
         return { sessionId: controller.id, configOptions: controller.configOptions, ...(controller.modes ? { modes: controller.modes } : {}) };
@@ -151,12 +165,13 @@ export class AcpServer {
       loadSession: async (params) => {
         const cwd = params.cwd || this.options.projectRoot;
         let controller: AcpSessionController;
+        const written = new Map<string, string>();
         try {
-          controller = await this.open({ cwd, mcpServers: params.mcpServers ?? [], sessionId: params.sessionId });
+          controller = await this.open({ cwd, mcpServers: params.mcpServers ?? [], sessionId: params.sessionId }, lent({ id: params.sessionId }, written));
         } catch (error: any) {
           throw RequestError.resourceNotFound(`${params.sessionId}: ${error?.message || error}`);
         }
-        register(controller, cwd);
+        register(controller, cwd, written);
         const mapper = this.sessions.get(controller.id)!.mapper;
         // The conversation is replayed before the reply, as the protocol asks.
         for (const item of mapper.replay(controller.history?.() ?? [])) await update(controller.id, item);

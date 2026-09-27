@@ -97,6 +97,17 @@ const startProcess = (options: CommandRunOptions): ChildProcess => {
   });
 };
 
+/**
+ * A command as a program another process can start: the sandbox's wrapper or the shell,
+ * under `env -i` with exactly the environment it would get here, since an editor's
+ * terminal would otherwise pass on its own, credentials included.
+ */
+export const editorProgram = (options: CommandRunOptions): { file: string; args: string[] } => {
+  const env = options.env ?? baseEnv();
+  const inner = options.wrap ? options.wrap(options.command, { cwd: options.cwd, env }) : { file: '/bin/sh', args: ['-c', options.command] };
+  return { file: '/usr/bin/env', args: ['-i', ...Object.entries(env).map(([name, value]) => `${name}=${value}`), inner.file, ...inner.args] };
+};
+
 const stopProcess = (child: ChildProcess): void => {
   if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) return;
   const signalTree = (signal: NodeJS.Signals) => {
@@ -332,6 +343,34 @@ async function runCommandRunner(args: Record<string, any>, ctx: ToolContext): Pr
       output: `Started ${job.id} in the background: ${command}\nRead its output with command_output and stop it with command_kill.`,
       metadata: { command, cwd, jobId: job.id, background: true },
     };
+  }
+
+  // In an editor that lends its terminal the command runs there, where the person watches it.
+  // It is the same program, in the same sandbox and environment; when the editor cannot start
+  // it, it runs here instead.
+  if (ctx.editor?.terminal) {
+    const started = Date.now();
+    const ran = await ctx.editor
+      .terminal({ ...editorProgram(options), cwd, outputByteLimit: ctx.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS, timeoutMs, signal: ctx.signal, ...(ctx.callId ? { callId: ctx.callId } : {}) })
+      .catch(() => undefined);
+    if (ran) {
+      const payload = formatCommandResult(
+        command,
+        {
+          exitCode: ran.exitCode,
+          signal: ran.signal as NodeJS.Signals | null,
+          timedOut: ran.timedOut,
+          cancelled: ran.cancelled,
+          stdout: ran.truncated ? `[The editor kept only the end of the output.]\n${ran.output}` : ran.output,
+          stderr: '',
+          removedChars: 0,
+          durationMs: Date.now() - started,
+        },
+        timeoutMs
+      );
+      const note = payload.status === 'error' && ctx.sandboxNote ? `\n\n${ctx.sandboxNote}` : '';
+      return { ...payload, output: `${payload.output}${note}`, metadata: { ...payload.metadata, cwd, terminalId: ran.terminalId } };
+    }
   }
 
   const result = await runShellCommand(options);

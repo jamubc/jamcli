@@ -3,13 +3,13 @@
 **Description:** ACP editor offers `fs/read_text_file`, `fs/write_text_file`, `terminal/*`. JamCLI tools still use disk and own processes.
 
 **Acceptance criteria:**
-- [ ] `ToolContext` gains optional `readText`, `writeText`, `terminal`
-- [ ] Set from client capabilities in `src/acp/session.ts`
-- [ ] Used in `read_file`, `edit`, `write_file`, `run_command` below the dispatcher so permissions and checkpoints still apply
+- [x] `ToolContext` gains optional `readText`, `writeText`, `terminal`: as `editor`, an `EditorBridge`
+- [x] Set from client capabilities: `src/acp/editor.ts`, from `initialize`, through `src/acp/session.ts`
+- [x] Used in `read_file`, `edit`, `write_file`, `apply_patch`, and `run_command`, below the dispatcher, so permissions and checkpoints still apply
 
 **Verification:**
-- [ ] Tests pass: `bun test src/acp/__tests__/ src/core/tools/__tests__/`
-- [ ] Manual check: unsaved buffer read and editor terminal run proven in a live editor session
+- [x] Tests pass: `bun test src/acp/__tests__/ src/core/tools/__tests__/`, against a scripted editor that answers `fs/*` and `terminal/*`, checked against the SDK's schemas
+- [ ] Manual check: unsaved buffer read and editor terminal run proven in a live editor session. Needs the owner's editor.
 
 **Dependencies:** `04-probes-acp-sdk.md`
 

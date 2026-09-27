@@ -39,7 +39,8 @@ export async function readFileRunner(args: Record<string, any>, ctx: ToolContext
     };
   }
 
-  const content = buffer.toString('utf8');
+  // In an editor that lends its files, the text is the editor's, unsaved changes included.
+  const content = ctx.editor?.readText ? await ctx.editor.readText(absolute).catch(() => buffer.toString('utf8')) : buffer.toString('utf8');
   if (!content.length) {
     return { output: `${rel} is empty.`, metadata: { path: rel, startLine: 0, endLine: 0, totalLines: 0, anchors: [] } };
   }

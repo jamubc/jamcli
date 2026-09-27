@@ -78,14 +78,17 @@ export const stopReasonFor = (status: RunStatus): StopReason => {
 
 const text = (value: string) => ({ type: 'text' as const, text: value });
 
-/** A change's before and after, from the unified diff an edit reports and the file as it is now. */
-function diffContent(result: ToolResult, root: string): ToolCallContent | undefined {
+/**
+ * A change's before and after, from the unified diff an edit reports and the file as it is
+ * now: the text last written through the editor, or else the disk's.
+ */
+function diffContent(result: ToolResult, root: string, written?: Map<string, string>): ToolCallContent | undefined {
   const patch = result.metadata?.diff;
   const target = result.metadata?.path;
   if (typeof patch !== 'string' || typeof target !== 'string') return undefined;
   const absolute = path.resolve(root, target);
   try {
-    const now = fs.readFileSync(absolute, 'utf8');
+    const now = written?.get(absolute) ?? fs.readFileSync(absolute, 'utf8');
     const before = applyPatch(now, reversePatch(parsePatch(patch)[0]));
     return { type: 'diff', path: absolute, oldText: before === false ? null : before, newText: now };
   } catch {
@@ -111,7 +114,11 @@ const planOf = (call: ToolCall): PlanEntry[] | undefined => {
 export class UpdateMapper {
   private readonly calls = new Map<string, ToolCall>();
 
-  constructor(readonly root: string) {}
+  /** `written` holds the texts the editor was given, by path, until the result that wrote them is mapped. */
+  constructor(
+    readonly root: string,
+    private readonly written?: Map<string, string>
+  ) {}
 
   map(event: AgentEvent): SessionUpdate[] {
     switch (event.type) {
@@ -141,7 +148,8 @@ export class UpdateMapper {
       case 'tool_result': {
         const id = event.result.callId ?? event.result.tool;
         const failed = !event.result.success || (event.result.status !== undefined && event.result.status !== 'ok');
-        const diff = failed ? undefined : diffContent(event.result, this.root);
+        const diff = failed ? undefined : diffContent(event.result, this.root, this.written);
+        this.written?.clear();
         const output = event.result.output ?? '';
         const content: ToolCallContent[] = diff
           ? [diff]
@@ -149,6 +157,8 @@ export class UpdateMapper {
             ? [{ type: 'content', content: text(output.length > OUTPUT_LIMIT ? `${output.slice(0, OUTPUT_LIMIT)}\n[${output.length - OUTPUT_LIMIT} more characters]` : output) }]
             : [];
         this.calls.delete(id);
+        // A command run in the editor's terminal stays shown there, so its content is left alone.
+        if (typeof event.result.metadata?.terminalId === 'string') return [{ sessionUpdate: 'tool_call_update', toolCallId: id, status: failed ? 'failed' : 'completed' }];
         return [{ sessionUpdate: 'tool_call_update', toolCallId: id, status: failed ? 'failed' : 'completed', content }];
       }
       case 'notice':
