@@ -179,7 +179,10 @@ export class CommandHost {
 
   private async answer(open: { request: ChoiceRequest; items: ChoiceItem[] }, given: string): Promise<void> {
     const text = given.trim();
-    if (text.toLowerCase() === 'none') return open.request.dismissed?.();
+    if (text.toLowerCase() === 'none') {
+      this.emit({ kind: 'notice', level: 'info', text: `Closed "${open.request.title}" without a choice.` });
+      return open.request.dismissed?.();
+    }
     const number = /^\d+$/.test(text) ? Number(text) : undefined;
     const item =
       open.items.find((candidate) => candidate.key === text) ??

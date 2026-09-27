@@ -40,6 +40,7 @@ test('an answer that is not a choice says what the choices are, and the list kee
   expect(host.waiting).toBeDefined();
   await host.run('/choose none');
   expect(host.waiting).toBeUndefined();
+  expect(said(entries)).toContain('without a choice');
 });
 
 test('anything else sent closes a waiting list, as Escape does', async () => {
