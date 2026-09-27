@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { ApiRegistry, EndpointConfig } from '../../types/config.js';
 import type { ChatProvider } from './types.js';
 import { OpenAICompatProvider, type ProviderDialect } from './openai-compat.js';
@@ -127,14 +128,31 @@ const buildAnthropic = (config: ApiRegistry['anthropic']): ChatProvider => {
 export const endpointDialect = (endpoint: EndpointConfig): ProviderDialect =>
   endpoint.dialect === 'anthropic' ? 'anthropic' : 'openai';
 
-const buildEndpoint = (endpoint: EndpointConfig): ChatProvider => {
+/** What an endpoint's header values may name, filled in when its client is built. */
+export interface ProviderContext {
+  /** The conversation this client serves. A fresh id stands in when there is none. */
+  sessionId?: string;
+}
+
+/**
+ * An endpoint's headers with `${session_id}` replaced by the conversation's id, for a
+ * provider that routes or caches per conversation and asks for a stable id.
+ */
+const expandHeaders = (headers: Record<string, string> | undefined, context: ProviderContext): Record<string, string> | undefined => {
+  if (!headers) return undefined;
+  const sessionId = context.sessionId ?? randomUUID();
+  return Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, value.split('${session_id}').join(sessionId)]));
+};
+
+const buildEndpoint = (endpoint: EndpointConfig, context: ProviderContext): ChatProvider => {
   if (!endpoint.base_url) throw unconfigured(endpoint.id);
+  const headers = expandHeaders(endpoint.headers, context);
   const apiKey = resolveApiKey(endpoint, `${endpoint.id.toUpperCase()}_API_KEY`, endpoint.id);
   if (endpointDialect(endpoint) === 'anthropic') {
     return new AnthropicProvider({
       apiKey,
       baseUrl: endpoint.base_url.trim(),
-      headers: endpoint.headers,
+      headers,
       name: endpoint.id,
       keyVariable: endpoint.key_env_var,
     });
@@ -142,7 +160,7 @@ const buildEndpoint = (endpoint: EndpointConfig): ChatProvider => {
   return new OpenAICompatProvider({
     apiKey,
     baseUrl: endpoint.base_url.trim(),
-    headers: endpoint.headers,
+    headers,
     dialect: 'openai',
     name: endpoint.id,
     keyVariable: endpoint.key_env_var,
@@ -154,7 +172,7 @@ const buildEndpoint = (endpoint: EndpointConfig): ChatProvider => {
  * serve it. Built-in providers are ollama, openrouter, openai, and anthropic;
  * any other name is resolved as a custom entry from api_registry.endpoints.
  */
-export function createChatProvider(name: string, registry: ApiRegistry = {}): ChatProvider {
+export function createChatProvider(name: string, registry: ApiRegistry = {}, context: ProviderContext = {}): ChatProvider {
   switch (name) {
     case 'ollama':
       return buildOllama(registry.ollama);
@@ -166,7 +184,7 @@ export function createChatProvider(name: string, registry: ApiRegistry = {}): Ch
       return buildAnthropic(registry.anthropic);
     default: {
       const endpoint = registry.endpoints?.find((entry) => entry.id === name);
-      if (endpoint) return buildEndpoint(endpoint);
+      if (endpoint) return buildEndpoint(endpoint, context);
       throw unconfigured(name);
     }
   }

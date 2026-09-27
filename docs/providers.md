@@ -25,7 +25,28 @@ the environment variable holding the key:
 ```
 
 A custom OpenAI-compatible server is an entry under `api_registry.endpoints` with an
-`id` and a `base_url`; models then read `id:model`.
+`id` and a `base_url`; models then read `id:model`. Its key is stored under the id with
+`jamcli auth set <id>`. `headers` adds headers to every request, and `${session_id}` in a
+value becomes the conversation's id, for a provider that routes or caches per
+conversation. OpenCode Go asks for exactly that:
+
+```json
+{
+  "api_registry": {
+    "endpoints": [
+      {
+        "id": "opencode-go",
+        "base_url": "https://opencode.ai/zen/go/v1",
+        "headers": { "x-opencode-session": "${session_id}" }
+      }
+    ]
+  }
+}
+```
+
+Then `jamcli auth set opencode-go` and `--model opencode-go:deepseek-v4.1-flash`. Every
+request names JamCLI as its user agent, `jamcli/<version>`, which such providers also ask
+for.
 
 ## Keys
 

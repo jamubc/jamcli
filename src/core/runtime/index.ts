@@ -11,7 +11,7 @@ import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
 import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
 import { HookTrust, hooksDigest, hooksFromLayers, needsTrust, subscribeHooks, type HookCommand } from '../hooks/commands.js';
 import { createRedactor } from '../redact.js';
-import { SessionLog, TranscriptRecorder, ensureProjectStateDir } from '../transcript/index.js';
+import { SessionLog, TranscriptRecorder, ensureProjectStateDir, newSessionId } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
@@ -629,12 +629,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     });
   let systemPrompt = buildPrompt();
 
+  // Chosen before the provider, which may send it: some route and cache per conversation.
+  const sessionId = options.sessionId ?? newSessionId();
   let choice = resolveModel(options.model ?? config.model, profile, config.api_registry);
   let provider: ChatProvider | undefined = options.provider;
   let providerError: string | undefined;
   if (!provider) {
     try {
-      provider = createChatProvider(choice.provider, config.api_registry);
+      provider = createChatProvider(choice.provider, config.api_registry, { sessionId });
     } catch (error: any) {
       providerError = error?.message ?? String(error);
     }
@@ -707,6 +709,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const log = options.sessionId
     ? SessionLog.open(projectRoot, options.sessionId)
     : SessionLog.create(projectRoot, {
+        id: sessionId,
         cwd,
         surface: options.surface,
         delegatedBy: options.parent?.sessionId,
@@ -871,7 +874,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
   const switchModel = (ref: string) => {
     const next = resolveModel(ref, profile, config.api_registry);
-    provider = observed(createChatProvider(next.provider, config.api_registry), next.provider);
+    provider = observed(createChatProvider(next.provider, config.api_registry, { sessionId: log.id }), next.provider);
     providerError = undefined;
     choice = next;
     modelInfo = catalog.lookup(next.provider, next.model, provider.family);

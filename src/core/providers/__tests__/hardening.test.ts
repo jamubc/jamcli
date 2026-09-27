@@ -4,6 +4,7 @@ import { OpenAICompatProvider } from '../openai-compat.js';
 import { AnthropicProvider } from '../anthropic.js';
 import { OllamaProvider, DEFAULT_OLLAMA_CONTEXT_CAP } from '../ollama.js';
 import { ProviderError, USER_AGENT, extractErrorText, parseRetryAfter, type RetryInfo } from '../http.js';
+import { createChatProvider } from '../factory.js';
 import { JAMCLI_VERSION } from '../../version.js';
 import type { ChatMessage } from '../../types.js';
 
@@ -182,4 +183,18 @@ test('every provider names itself as jamcli, not as its HTTP library', async () 
   await new OllamaProvider({ endpoint: server.ollamaBaseUrl, retryPolicy: fast }).complete([user('hi')], { model: 'm' });
   expect(server.completions().map((request) => request.headers['user-agent'])).toEqual([USER_AGENT, USER_AGENT, USER_AGENT]);
   expect(USER_AGENT).toBe(`jamcli/${JAMCLI_VERSION}`);
+});
+
+test("an endpoint's header can carry the conversation's id, and each client without one gets its own", async () => {
+  server = startFakeProvider();
+  server.enqueue({ text: 'a' }, { text: 'b' }, { text: 'c' });
+  const registry = { endpoints: [{ id: 'go', base_url: server.openaiBaseUrl, headers: { 'x-opencode-session': '${session_id}', 'x-fixed': 'same' } }] };
+  await createChatProvider('go', registry, { sessionId: '2026-09-27-abcd1234' }).complete([user('hi')], { model: 'm' });
+  await createChatProvider('go', registry).complete([user('hi')], { model: 'm' });
+  await createChatProvider('go', registry).complete([user('hi')], { model: 'm' });
+  const [named, first, second] = server.completions().map((request) => request.headers);
+  expect(named['x-opencode-session']).toBe('2026-09-27-abcd1234');
+  expect(named['x-fixed']).toBe('same');
+  expect(first['x-opencode-session']).not.toContain('${');
+  expect(first['x-opencode-session']).not.toBe(second['x-opencode-session']);
 });
