@@ -21,7 +21,7 @@ one SHALL be reachable on every surface.
 - **THEN** the interface lists the active mode and every rule with its scope, and lets the user add or remove rules
 
 #### Scenario: Every built-in command has one definition
-- **WHEN** any built-in command is run in the interface, headlessly, over ACP, or through the driver
+- **WHEN** any built-in command is run in the interface, headlessly, or over ACP
 - **THEN** the same definition of it runs
 - **AND** what only a terminal can do, such as repainting in a new theme, is done where there is one, while the rest of the command, such as saving the theme, is done everywhere
 
@@ -133,23 +133,27 @@ commands as every other surface.
 - **WHEN** the client cancels
 - **THEN** the in-flight turn stops and the session remains usable
 
-## ADDED Requirements
+### Requirement: ACP Observer Endpoint
+A running interface SHALL be able to serve a standard ACP stream to an observing client
+without making that client an approver.
 
-### Requirement: Interface Driver
-JamCLI SHALL let a program drive the interface itself, on a session in a project, typing
-into it, pressing keys, and reading its screen and state, without a terminal.
+#### Scenario: No endpoint
+- **WHEN** `JAMCLI_ACP_ENDPOINT` is not set
+- **THEN** the interface serves nothing and behaves as it does without the feature
 
-#### Scenario: Start and stop a driven interface
-- **WHEN** a program runs `jamcli drive start` in a project
-- **THEN** the interface opens offscreen in a local process listening on a socket private to the user, and the command prints its id
-- **AND** `jamcli drive stop <id>` closes it and its session stays in history
+#### Scenario: Observe a session
+- **WHEN** `JAMCLI_ACP_ENDPOINT` names a Unix socket and a client connects to it
+- **THEN** the client receives standard ACP session updates for the session on screen, including tool calls with their title, kind, and locations
 
-#### Scenario: Send and read
-- **WHEN** a program sends text, types, or presses keys
-- **THEN** the interface receives them as it would from a keyboard
-- **AND** the reply comes once the interface settles or needs an answer, with the screen as text and the state: whether a turn runs, the pending approval or list, the status line, and the latest rows
+#### Scenario: Need input
+- **WHEN** a call waits for the person's approval
+- **THEN** within a second the client receives the call with status `pending` and a `requires_action` state
+- **AND** only the person, in the interface, can answer it
 
-#### Scenario: The person's answers
-- **WHEN** the interface waits on a call to a tool that always asks, the bypass confirmation, or a choice marked as the person's
-- **THEN** the state says the answer is the person's
-- **AND** input is refused unless the request says it relays the person's own answer
+#### Scenario: Say whose answer it is
+- **WHEN** the waiting call's tool always asks, such as a lesson from `/reflect`
+- **THEN** the `requires_action` state names the tool and says that it always asks
+
+#### Scenario: A client goes away
+- **WHEN** the observing client disconnects or crashes during a turn
+- **THEN** the interface keeps running, with no hang and no lost output

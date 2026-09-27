@@ -1,4 +1,4 @@
-# Change: Surface parity, and a driver for the interface
+# Change: Surface parity for commands
 
 ## Why
 
@@ -12,17 +12,14 @@ prompts but no built-in one. The interface also reaches into `src/cli/` for the 
 commands share with the CLI verbs, so the layer that should only render depends on the
 dispatcher.
 
-The second gap is how anyone other than the person uses JamCLI. Testing a change, debugging
-a report, or letting an agent work on JamCLI all end the same way today: "run jamcli and try
-this". An agent that can run shell commands has no supported way to use the interface: no
-way to type into it, answer its prompts, choose from its lists, or read what it shows. Each
-attempt invents a harness (a pseudo-terminal, tmux, screen scraping) that is slow, costly,
-and not repeatable. The test suite already renders the real interface offscreen and types
-into it, which is the supported way; it is simply not offered to anyone outside the tests.
+This is the first half of a larger gap: nothing but the person at a terminal can use
+JamCLI fully. Another agent cannot delegate work to it beyond one headless prompt, and an
+agent asked to try JamCLI and find what is wrong has no way in. `add-mcp-server`, the next
+unit in `ROADMAP.md`, closes that with `jamcli mcp serve`; it needs every command reachable
+without a screen first, which is this change.
 
-Both gaps are one invariant not held: **surface parity**. What a person can do in JamCLI, a
-program can do too, under the same permissions, without each feature wiring itself to each
-surface.
+The invariant is **surface parity**: what a person can do in JamCLI, any surface can do,
+through the same code, under the same permissions.
 
 ## What Changes
 
@@ -43,38 +40,33 @@ surface.
   as any headless turn does.
 - **ACP offers and runs built-in commands.** An editor is offered every built-in command, and a prompt naming one runs it; choices come back as a
   list answered with `/choose`.
-- **`jamcli drive`: the interface, driven by a program.** `jamcli drive start` opens the real
-  interface offscreen in a local process, on a session in a project, and prints its id.
-  `send`, `type`, `keys`, `screen`, `state`, `wait`, and `stop` type into it, press keys, and
-  read the screen and a structured state (the pending prompt or list, whether a turn runs,
-  the status line, the latest rows). It is the interface itself, so everything a person can
-  do is there without per-feature wiring, and what it shows can be checked. It listens only
-  on a socket private to the user.
-- **The person's answers stay the person's.** A call to a tool that always asks (a lesson
-  from `/reflect`, a push), the bypass confirmation, and the question whether to trust a
-  project's hooks are marked as the person's. `drive` refuses to answer them unless told
-  `--as-person`, which exists for relaying the person's own answer.
+- **The observer says whose answer a call waits for.** The ACP observer endpoint
+  (`JAMCLI_ACP_ENDPOINT`) already streams a waiting call and a `requires_action` state. It
+  now says which tool the call is for and whether that tool always asks, so any watcher
+  knows the answer is the person's. `add-mcp-server` builds on it.
+- **A choice can be the person's.** The hooks trust question is marked so; the host lists
+  it but never answers it from answers given in advance.
 - **A parity test** fails when any built-in command is not reachable on headless and ACP.
-- **Docs and process.** `docs/driving.md` explains driving JamCLI. `AGENTS.md` says how any
-  agent tests JamCLI by driving it. The layout rules name `src/commands/`.
+- **Docs.** Headless, ACP, and the command reference say that every built-in command runs
+  there, and how lists are answered. `AGENTS.md` and `openspec/config.yaml` name
+  `src/commands/` in the layout.
 
 ## Not in this change
 
-- An MCP server surface (`jamcli mcp serve`). ACP and `drive` cover programs and editors;
-  MCP is a later unit if agents need it without a shell.
+- `jamcli mcp serve`, with its `session_*` and `terminal_*` tools: `add-mcp-server`.
+- Turning what agents find into proposals: `add-findings-loop`.
 - Generating CLI verbs from commands. The existing verbs stay; they and the commands share
   the same operation code.
 - A result schema per command. Commands produce text and diffs, as they do in the
   interface.
-- Tagging sessions by who drove them, and any automatic learning from driven sessions.
 
 ## Impact
 
 - Code: `src/commands/` (new), `src/tui/app/` (commands move out; the interface supplies the
-  context and publishes its state to `drive`), `src/acp/`, `src/cli/run.ts`, `src/cli.ts`,
-  `src/cli/drive.ts` (new), `src/core/permissions/engine.ts` and `src/core/types.ts` (an
-  approval says when its tool always asks).
-- Docs: `docs/driving.md` (new), `docs/headless.md`, `docs/protocols.md`,
-  `docs/commands-and-skills.md`, `docs/architecture.md`, `AGENTS.md`.
-- Specs: Slash Command Surface, Command Line Invocation, and ACP Agent Surface are modified;
-  Interface Driver is added.
+  context), `src/acp/`, `src/cli/run.ts`, `src/cli.ts`, `src/tui/observer.ts`,
+  `src/core/types.ts` and `src/core/permissions/engine.ts` (an approval says when its tool
+  always asks).
+- Docs: `docs/headless.md`, `docs/protocols.md`, `docs/commands-and-skills.md`,
+  `docs/architecture.md`, `AGENTS.md`, `openspec/config.yaml`.
+- Specs: Slash Command Surface, Command Line Invocation, ACP Agent Surface, and ACP Observer
+  Endpoint are modified.

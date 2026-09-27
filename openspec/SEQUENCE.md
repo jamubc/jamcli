@@ -58,12 +58,13 @@ per-surface clauses above were added for that reason. The record is in
 `add-surface-parity`, on `feat/surface-parity`. The owner opened it on 2026-09-27 while
 `add-session-reflection` waits at its task 6.2, an exception to the working rule made by
 the owner and recorded here. The reason: 6.2 asks for `/reflect` on 10 or more real
-sessions, `/reflect` exists only in the interface, and nothing let anyone but the person at
-the terminal use the interface. Every "run jamcli and try this" handed back to the owner
-came from the same gap. `add-surface-parity` moves the built-in commands out of the
-interface so every surface runs the same set, and adds `jamcli drive`, which lets a program
-drive the interface itself. With it, 6.2 can be run by an agent driving `/reflect`, the
-owner still approving each lesson.
+sessions, `/reflect` exists only in the interface, and nothing lets anyone but the person
+at the terminal use JamCLI. Every "run jamcli and try this" handed back to the owner came
+from the same gap. `add-surface-parity` moves the built-in commands out of the interface so
+every surface runs one set. `add-mcp-server`, next in `ROADMAP.md`, lets other agents
+delegate to JamCLI and use its interface through the same program a person runs, and its
+acceptance is 6.2 run that way, the owner approving each lesson. Both are stacked on
+`feat/agentic-harness-core`, which is not yet merged to `master`.
 
 `add-session-reflection` stays open. Its code is committed and its task 6.1 ran end to end
 on OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real

@@ -1,10 +1,10 @@
-# Design: Surface parity, and a driver for the interface
+# Design: Surface parity for commands
 
 ## Layers
 
 ```
-src/tui/  src/acp/  src/cli.ts (headless)  src/cli/drive.ts
-        \      |          |                   /
+src/tui/        src/acp/        src/cli.ts (headless)
+        \          |              /
          src/commands/   registry, parsing, built-in commands, CommandHost
                 |
          src/cli/<verb>.ts  operation code the CLI verbs and the commands share
@@ -51,7 +51,7 @@ where there is a terminal is a context member each surface implements:
 | `theme`, `statusStyle` | the ones on screen | the configured ones |
 | `copy(text)` | system clipboard, else the terminal's | system clipboard, else says it could not |
 | `note(text)`, `clearNotes()` | the notes panel | the host's notes, reported in its state |
-| `exit()` | leave the interface | end the session: headless finishes, ACP and the driver close it |
+| `exit()` | leave the interface | end the session: headless finishes, ACP closes it |
 
 So `/theme`, `/style`, `/copy`, `/note`, and `/exit` are ordinary commands, not an
 exception list.
@@ -67,8 +67,7 @@ first. Headless is one process, so it takes the answers in advance: each `--choo
 answers the next choice offered, in order, and a choice with no answer left is reported
 and dismissed.
 
-A choice can be marked as the person's. `drive` uses that mark; the host never answers a
-choice itself.
+A choice can be marked as the person's; the host never takes an answer given in advance for it.
 
 ## Opening sessions without a terminal
 
@@ -79,35 +78,17 @@ optional way to open sessions; without one it refuses with the surface's own spe
 the part of the command that needs no new session (listing, forking into a new file) still
 runs. Parity is reachability, not spelling.
 
-## The driver
+## Whose answer it is
 
-`jamcli drive` offers the interface to a program. The design choice is to drive the real
-interface rather than a model of it: the interface is what a person uses, it already holds
-every command, overlay, prompt, and key, and it is what a person's bug reports are about.
+The observer's `requires_action` update carries, in `_meta.jamcli`, the waiting call's tool
+and whether that tool always asks (a lesson from `/reflect`, a push). The permission engine
+already knows the second; the approval request now says it. A choice request can be marked
+`personOnly`, and the hooks trust question is: the host lists it, says only the person may
+answer it, and never takes an answer given in advance for it. The bypass confirmation is
+never entered without a screen at all.
 
-- `drive start` spawns `jamcli drive serve` detached, with its log beside its socket under
-  the state directory, and waits until it listens. The server creates the runtime as the
-  interface does, renders `App` with OpenTUI's headless renderer (the renderer the
-  interface tests use), and listens on a Unix socket in a directory only the user can
-  write, as the ACP observer does.
-- Requests are one JSON object per line: `type`, `keys`, `send` (type, then Enter),
-  `screen`, `state`, `wait`, `stop`. Input requests wait until the interface settles (no
-  turn running, no list loading, the frame unchanged for a moment) or needs an answer, then
-  return the frame and the state.
-- `state` comes from the interface itself: `App` takes an optional inspector and hands it,
-  after each render, the view (rows, pending approvals, status), the open list with its
-  items and selection, whether the bypass confirmation is open, and the session id.
-- An approval whose tool always asks, the bypass confirmation, and a choice marked as the
-  person's are reported as the person's. While one waits, input is refused unless the
-  request says `asPerson`. This keeps an agent from answering for the person by accident;
-  it is not a security boundary, since anyone who can reach the socket is the user.
-- The CLI prints the frame and a one-line summary by default, and the whole response with
-  `--json`.
-
-Driving the offscreen interface uses `@opentui/react/test-utils` outside tests. It is the
-same package the interface already depends on, and its headless renderer is exactly what is
-needed; the alternative, a pseudo-terminal and a terminal emulator, adds a native
-dependency and parses escape codes back into a screen the renderer already has as text.
+`add-mcp-server` uses both marks to put such questions to the person by elicitation. No
+agent-facing tool is built here.
 
 ## Tests
 
@@ -120,5 +101,5 @@ dependency and parses escape codes back into a screen the renderer already has a
   refused session opening, refused bypass.
 - Headless and ACP tests drive the assembled surface with the fake provider: `/compact`,
   `/resume list`, `/commit` answered with `--choose`, an ACP prompt `/context`.
-- Driver tests start a real server on a fake provider, send a prompt, answer an approval,
-  read the screen, and are refused on a person's approval without `asPerson`.
+- The observer reports the tool a call waits on and whether it always asks.
+- The host lists a choice marked as the person's and does not answer it from `--choose`.

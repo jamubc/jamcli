@@ -75,7 +75,50 @@ them and sets the default through the configuration writer.
 Why first: it is the smallest unit, it fixes the session that started this, and every
 later unit hangs fields off the agent file.
 
-### 2. `add-connections`
+### 2. `add-surface-parity` (open)
+
+Opened by the owner on 2026-09-27, ahead of the units below. Built-in commands move out of
+the interface into `src/commands/`, one set every surface runs: the interface, headless
+`-p`, and ACP. Where no screen offers a list, `/choose` answers it. The ACP observer says
+when a waiting call's tool always asks. See the change for the whole of it.
+
+### 3. `add-mcp-server`
+
+`jamcli mcp serve`: JamCLI as a tool for other agents, the way `claude mcp serve` is, so an
+agent host (OpenCode, Claude Code, or JamCLI itself) can delegate work to JamCLI, and an
+agent can use JamCLI's interface to find what is wrong with it, with nothing hand-rolled
+around it. Two groups of tools on one stdio server:
+
+- `session_*` (`start`, `send`, `answer`, `state`, `stop`): delegated work, built directly
+  on the ACP session controller and the command host, so MCP means what ACP means. A turn
+  that needs an answer returns the question; long turns report progress.
+- `terminal_*` (`start`, `type`, `keys`, `screen`, `wait`, `resize`, `stop`): the ordinary
+  `jamcli` program in a pseudo-terminal, read through a terminal emulator, from the harness
+  the end-to-end tests use. There is no driven mode: the program is the one a person runs,
+  launched as the shipped build launches. Each session is kept as an asciinema recording.
+
+The person's answers stay the person's: a call to a tool that always asks is put to the
+person through MCP elicitation in their own agent host, never answered by the calling agent,
+and denied where the host cannot ask. Whether Claude Code and OpenCode support elicitation
+is to be verified before the spec claims it. The bypass confirmation and the hooks trust
+question show only on screen and are the person's by rule. A driven JamCLI never runs in
+JamCLI's own checkout: it runs in a throwaway worktree of a fixture project, so its sessions
+do not land in this repository's history and `/reflect` never learns from its experiments.
+
+Acceptance: task 6.2 of `add-session-reflection` runs through `jamcli mcp serve`, an agent
+driving `/reflect` over the owner's sessions and the owner approving each lesson by
+elicitation. `jamcli-trials`, which imports JamCLI's source rather than using the product,
+moves onto it.
+
+### 4. `add-findings-loop`
+
+What an agent finds while using JamCLI becomes an openspec proposal through the same gates
+as any change, citing the recording and the session that show it, and the agent goes on to
+the next thing to try. Findings about JamCLI's behavior are defects to fix in code, not
+lessons for `AGENTS.md`; lessons stay with `/reflect`. The person reviews every proposal.
+It needs `add-mcp-server`.
+
+### 5. `add-connections`
 
 A connection is a named way to reach a provider: a provider kind, a base URL, a dialect,
 and a credential filed under the connection's name in the store
@@ -98,7 +141,7 @@ The wizard is a later unit; this one is flags and files.
 Why second: agents name refs, and this unit widens what a ref can name without changing
 how one is written.
 
-### 3. `add-fallback`
+### 6. `add-fallback`
 
 A conversation should survive a rate limit or an exhausted key. Semantics are LiteLLM's,
 reduced to one process: a connection that answers 429 or 402 is cooled down for a
@@ -112,7 +155,7 @@ connections in one chain. `ProviderError` already carries `status` and `retryabl
 Why third: it needs connections to have identity, and it is the second half of the
 credentials decision.
 
-### 4. `add-stages`
+### 7. `add-stages`
 
 The observable pipeline. An agent file gains `input` and `output` lists. A stage is a
 script (JSON on stdin, JSON on stdout, the hook contract at
@@ -127,7 +170,7 @@ the web unit is the seam this occupies.
 Why fourth: it needs agents to attach to, and the settle order (final text only, or hold
 the stream) is decided here with the stream in hand.
 
-### 5. `add-setup-wizard`
+### 8. `add-setup-wizard`
 
 `jamcli setup` and `/setup`: an interactive path that writes the same files the flags
 write, then shows what it wrote and where. Connections, keys, agents, fallbacks, stages.
