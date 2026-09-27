@@ -36,6 +36,8 @@ const DEFAULT_ENDPOINT = 'http://localhost:11434';
  */
 export const DEFAULT_OLLAMA_CONTEXT_CAP = 16_384;
 const FALLBACK_CONTEXT = 8_192;
+/** How long a listing waits on each model's `/api/show` before leaving its window unknown. */
+const LIST_SHOW_TIMEOUT_MS = 3_000;
 
 /**
  * What Ollama's `think` takes: gpt-oss models take a level of `low`, `medium`, or `high`,
@@ -88,12 +90,27 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
     const response = await this.send('/api/tags', {}, {});
     const data: any = await response.json();
     const models: any[] = Array.isArray(data?.models) ? data.models : [];
-    return models
+    const listed = models
       .map((model: any): ProviderModelInfo | null => {
         const name = model?.name ?? model?.model;
         return typeof name === 'string' && name ? { id: name, name } : null;
       })
       .filter((model): model is ProviderModelInfo => model !== null);
+    return Promise.all(listed.map(async (model) => ({ ...model, ...(await this.listedWindow(model.id)) })));
+  }
+
+  /**
+   * The window a listed model runs with: the configured `num_ctx`, or the length `/api/show`
+   * reports. A show that fails or is slow leaves it unknown rather than failing the list.
+   */
+  private async listedWindow(model: string): Promise<{ contextWindow?: number }> {
+    if (this.numCtx) return { contextWindow: this.numCtx };
+    try {
+      const window = (await this.describeModel(model, AbortSignal.timeout(LIST_SHOW_TIMEOUT_MS)))?.contextWindow;
+      return window ? { contextWindow: window } : {};
+    } catch {
+      return {};
+    }
   }
 
   /** What `/api/show` reports: the model's own context length and, where the server lists them, its capabilities. */

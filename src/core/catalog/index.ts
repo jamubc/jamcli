@@ -82,9 +82,12 @@ export class ModelCatalog {
     this.timeoutMs = options.timeoutMs ?? METADATA_TIMEOUT_MS;
   }
 
-  /** Everything known without asking the provider: configuration, the cache, the bundled table, and defaults. */
-  lookup(provider: string, model: string, family?: ProviderFamily): ModelInfo {
-    return this.combine(provider, model, family, this.cache?.get(this.key(provider, model)));
+  /**
+   * Everything known without asking the provider: configuration, the cache, the bundled
+   * table, and defaults. `listed` is what a model listing said, used when nothing is cached.
+   */
+  lookup(provider: string, model: string, family?: ProviderFamily, listed?: ModelFacts): ModelInfo {
+    return this.combine(provider, model, family, this.cache?.get(this.key(provider, model)) ?? listed);
   }
 
   /**

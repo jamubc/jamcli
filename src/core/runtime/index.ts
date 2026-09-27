@@ -1188,7 +1188,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
             });
             const offered = await Promise.race([listed.listModels(), late]);
             return offered.map((entry) => {
-              const info = catalog.lookup(id, entry.id, listed.family);
+              const info = catalog.lookup(id, entry.id, listed.family, entry.contextWindow ? { contextWindow: entry.contextWindow } : undefined);
               return info.tools === undefined && entry.supports_tool_calling !== undefined ? { ...info, tools: entry.supports_tool_calling } : info;
             });
           } catch (error: any) {

@@ -102,6 +102,8 @@ export interface ProviderModelInfo {
   name?: string;
   description?: string;
   supports_tool_calling?: boolean;
+  /** The context window the provider reports for the model, when the listing knows it. */
+  contextWindow?: number;
 }
 
 /** A provider that can enumerate the models its endpoint exposes. */

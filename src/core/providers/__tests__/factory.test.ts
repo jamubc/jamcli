@@ -79,16 +79,17 @@ test('an ollama base ending in /v1 is served by the compatible client', async ()
 });
 
 test('ollama lists models through the native tags route', async () => {
-  let url = '';
+  const urls: string[] = [];
   globalThis.fetch = (async (target: any) => {
-    url = String(target);
+    urls.push(String(target));
     return new Response(JSON.stringify({ models: [{ name: 'llama3:8b' }, { model: 'qwen3' }] }), { status: 200 });
   }) as typeof fetch;
 
   const provider = createChatProvider('ollama', { ollama: { endpoint: 'http://localhost:11434' } }) as OllamaProvider;
   const models = await provider.listModels();
 
-  expect(url).toBe('http://localhost:11434/api/tags');
+  // The list comes from the tags route; each model's window is then asked of /api/show.
+  expect(urls[0]).toBe('http://localhost:11434/api/tags');
   expect(models).toEqual([
     { id: 'llama3:8b', name: 'llama3:8b' },
     { id: 'qwen3', name: 'qwen3' },

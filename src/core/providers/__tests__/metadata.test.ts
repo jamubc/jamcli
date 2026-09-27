@@ -22,6 +22,18 @@ test('Ollama reports the context length under the model architecture, and its ca
   expect(await provider.describeModel('absent')).toBeUndefined();
 });
 
+test('an Ollama listing carries each model window from /api/show, and a configured num_ctx caps it', async () => {
+  server = startFakeProvider({
+    models: [{ id: 'qwen3:4b', contextLength: 40960 }, { id: 'no-length' }],
+  });
+  const listed = await new OllamaProvider({ endpoint: server.ollamaBaseUrl }).listModels();
+  expect(listed.find((model) => model.id === 'qwen3:4b')?.contextWindow).toBe(40960);
+  // A model whose show reports no length stays unknown.
+  expect(listed.find((model) => model.id === 'no-length')?.contextWindow).toBeUndefined();
+  const capped = await new OllamaProvider({ endpoint: server.ollamaBaseUrl, numCtx: 8192 }).listModels();
+  expect(capped.map((model) => model.contextWindow)).toEqual([8192, 8192]);
+});
+
 test('metadata is asked for once, even when the failure is one a chat request would retry', async () => {
   let hits = 0;
   const busy = Bun.serve({
