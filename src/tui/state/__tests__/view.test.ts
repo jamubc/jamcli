@@ -201,6 +201,14 @@ test('the todo list is the one the model last wrote, and another session has non
   expect(reduceView(state, { type: 'load', messages: [] }).todos).toBeUndefined();
 });
 
+test('notes stack newest first, survive a session load, and clear together', () => {
+  let state = run([{ type: 'note', text: 'first' }, { type: 'note', text: 'second' }]);
+  expect(state.notes).toEqual(['second', 'first']);
+  state = run([{ type: 'load', messages: [] }, { type: 'clear' }], state);
+  expect(state.notes).toEqual(['second', 'first']);
+  expect(run([{ type: 'clear_notes' }], state).notes).toEqual([]);
+});
+
 test('a report taller than the viewport anchors to its own top, not the viewport bottom', () => {
   // A /tools report with more lines than the terminal can show: without anchoring to the
   // row's top, sticky-bottom scrolling would settle past the report's first line.

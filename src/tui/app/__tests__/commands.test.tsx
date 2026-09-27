@@ -196,6 +196,20 @@ test('/compact says when there is nothing to compact yet', async () => {
   }
 }, 30_000);
 
+test('/note pins notes above the conversation, newest on top, and /notes clear removes them', async () => {
+  const { setup, close } = await open({}, { size: tall });
+  try {
+    await send(setup, '/note check the migration');
+    await send(setup, '/note ask about retries');
+    const frame = await frameWith(setup, (frame) => frame.includes('- ask about retries') && frame.includes('- check the migration'));
+    expect(frame.indexOf('- ask about retries')).toBeLessThan(frame.indexOf('- check the migration'));
+    await send(setup, '/notes clear');
+    await frameWith(setup, (frame) => frame.includes('Notes cleared.') && !frame.includes('- check the migration'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('/export writes the session as Markdown and will not overwrite a file; /copy says what it did', async () => {
   const { setup, current, close } = await open({}, { size: tall });
   try {

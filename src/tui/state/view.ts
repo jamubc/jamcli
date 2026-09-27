@@ -95,6 +95,8 @@ export interface ViewState {
   nextId: number;
   /** The todo list the model last wrote in this session, when it has written one. */
   todos?: TodoView[];
+  /** The person's sticky notes for this interface, newest first. They never reach the model. */
+  notes: string[];
 }
 
 export type ViewAction =
@@ -111,7 +113,10 @@ export type ViewAction =
   | { type: 'toggle'; id: number }
   /** Show everything, or go back to the compact view. */
   | { type: 'expand'; on?: boolean }
-  | { type: 'clear' };
+  | { type: 'clear' }
+  /** Put a sticky note on top of the others. */
+  | { type: 'note'; text: string }
+  | { type: 'clear_notes' };
 
 /** Characters of a tool's output a block keeps, from the end. */
 export const OUTPUT_TAIL_CHARS = 4_000;
@@ -139,6 +144,7 @@ export function initialView(status: Partial<StatusData> = {}): ViewState {
     approvals: [],
     running: false,
     nextId: 1,
+    notes: [],
     status: { mode: 'default', model: '', sandbox: 'none', costUsd: null, unpriced: 0, inputTokens: 0, outputTokens: 0, mcpServers: 0, lspServers: 0, phase: 'idle', expanded: false, ...status },
   };
 }
@@ -395,6 +401,10 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
       return { ...state, status: { ...state.status, expanded: action.on ?? !state.status.expanded } };
     case 'clear':
       return { ...state, rows: [], approvals: [] };
+    case 'note':
+      return { ...state, notes: [action.text, ...state.notes] };
+    case 'clear_notes':
+      return { ...state, notes: [] };
     default:
       return state;
   }

@@ -96,6 +96,18 @@ function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; pl
   );
 }
 
+/** The person's sticky notes, newest on top, shown while there are any. */
+function NotesPanel({ notes, plain, colors }: { notes: string[]; plain: boolean; colors: Theme }) {
+  return (
+    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
+      <text fg={colors.accent}>{`Notes${plain ? ', newest first' : ''}`}</text>
+      {notes.map((text, index) => (
+        <text key={notes.length - index} fg={index === 0 ? colors.text : colors.dim}>{`- ${text}`}</text>
+      ))}
+    </box>
+  );
+}
+
 /** How long the Esc badge shows red before a denied prompt goes. */
 const ESC_FLASH_MS = 150;
 
@@ -689,6 +701,7 @@ export function App(props: AppProps) {
             <box height={1} flexShrink={0}>
               <text fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
             </box>
+            {state.notes.length ? <NotesPanel notes={state.notes} plain={plain} colors={theme} /> : null}
             <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
               {hidden ? (
                 <text fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>

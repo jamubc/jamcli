@@ -760,6 +760,22 @@ const exportCommand: SlashCommand = {
   },
 };
 
+const note: SlashCommand = {
+  name: 'note',
+  aliases: ['notes'],
+  args: '<text>|clear',
+  summary: 'Pin a sticky note above the conversation, newest on top; clear removes them all',
+  source: 'built-in',
+  run(ctx, args) {
+    if (args.toLowerCase() === 'clear') {
+      ctx.dispatch({ type: 'clear_notes' });
+      return ctx.notice('info', 'Notes cleared.');
+    }
+    if (!args) return ctx.notice('warn', 'Usage: /note <text> pins a note; /notes clear removes them all.');
+    ctx.dispatch({ type: 'note', text: args });
+  },
+};
+
 const exit: SlashCommand = {
   name: 'exit',
   aliases: ['quit'],
@@ -803,6 +819,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   agentsCommand,
   effort,
   reflect,
+  note,
   doctor,
   exportCommand,
   exit,
