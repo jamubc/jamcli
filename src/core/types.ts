@@ -94,6 +94,8 @@ export interface ApprovalRequest {
   reason: string;
   /** Patterns a grant could remember, most specific first. */
   suggestions: string[];
+  /** The tool asks every time, whatever the rules and mode: only the person answers it. */
+  alwaysAsks?: boolean;
 }
 
 export type ApprovalScope = 'once' | 'session' | 'project';

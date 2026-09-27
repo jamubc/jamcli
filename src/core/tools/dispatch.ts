@@ -43,6 +43,8 @@ export interface ToolDispatcher {
   /** Why the call needs a decision, shown in the approval prompt. */
   approvalReason?(call: ToolCall): string;
   policyClass?(name: string): PolicyClass | 'unknown';
+  /** Whether the tool asks every time, whatever the rules and mode. */
+  alwaysAsks?(name: string): boolean;
   /** Remember a grant the user chose at approval time. */
   grant?(call: ToolCall, scope: ApprovalScope, pattern?: string): void;
   /** For a state-changing call that runs without asking: who allowed it, and by which rule. */
@@ -247,6 +249,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
           projectRoot: ctx.projectRoot,
           policyClass: ctx.dispatcher.policyClass?.(call.name),
           reason: reason ?? ctx.dispatcher.approvalReason?.(call),
+          alwaysAsks: ctx.dispatcher.alwaysAsks?.(call.name),
         });
       ctx.emit({
         type: 'approval_request',

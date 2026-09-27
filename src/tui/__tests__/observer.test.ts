@@ -99,6 +99,8 @@ test('an observer sees the turn, "editing a file", and need input within a secon
   await waitFor(() => decide !== undefined);
   const needInput = await waitFor(() => client.updates().some((update) => update.sessionUpdate === 'state_update' && update.state === 'requires_action'), 1000);
   expect(needInput).toBeLessThan(1000);
+  // It says which call waits, and that an edit is not one only the person may answer.
+  expect(client.updates().find((update) => update.state === 'requires_action')._meta).toEqual({ jamcli: { tool: 'edit', alwaysAsks: false } });
   expect(client.updates().find((update) => update.sessionUpdate === 'tool_call')).toMatchObject({ toolCallId: 'e1', title: 'edit a.txt', kind: 'edit', locations: [{ path: path.join(root, 'a.txt') }] });
   expect(client.updates()).toContainEqual({ sessionUpdate: 'tool_call_update', toolCallId: 'e1', status: 'pending' });
   // The observer was never asked to approve.
@@ -115,7 +117,7 @@ test('a client that dies mid-turn leaves the turn running to its end, and a relo
   const client = await observe();
   await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
   await client.request('session/load', { sessionId: runtime.sessionId, cwd: root, mcpServers: [] });
-  server.enqueue({ text: 'first ', delayMs: 50 } as any, { text: 'unused' });
+  server.enqueue({ text: 'first ', delayMs: 50 } as any);
   const turn = runtime.run('say something', (event) => {
     hub.event(event);
     if (event.type === 'turn_start') client.socket.destroy();
@@ -195,3 +197,21 @@ test('after a session is replaced the old watcher hears the replacement, then no
     client.socket.destroy();
   }
 }, 20_000);
+
+test('a call to a tool that always asks is reported as the person\'s to answer', async () => {
+  const client = await observe();
+  await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
+  await client.request('session/load', { sessionId: runtime.sessionId, cwd: root, mcpServers: [] });
+  server.enqueue({ toolCalls: [{ id: 'g1', name: 'git_commit', arguments: { message: 'fix: a' } }] }, { text: 'Not committed.' });
+  const turn = runtime.run('commit it', (event: AgentEvent) => {
+    hub.event(event);
+    if (event.type === 'approval_request') event.decide({ allow: false });
+  });
+  // The person said no, which ends the turn.
+  expect((await turn).status).toBe('refused');
+  const waiting = (update: any) => update.sessionUpdate === 'state_update' && update.state === 'requires_action';
+  await waitFor(() => client.updates().some(waiting), 1000);
+  const asked = client.updates().find(waiting);
+  expect(asked._meta).toEqual({ jamcli: { tool: 'git_commit', alwaysAsks: true } });
+  client.socket.destroy();
+});

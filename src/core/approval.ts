@@ -140,7 +140,7 @@ let counter = 0;
 
 export function buildApprovalRequest(
   call: ToolCall,
-  options: { projectRoot: string; policyClass?: PolicyClass | 'unknown'; reason?: string }
+  options: { projectRoot: string; policyClass?: PolicyClass | 'unknown'; reason?: string; alwaysAsks?: boolean }
 ): ApprovalRequest {
   counter += 1;
   return {
@@ -151,5 +151,6 @@ export function buildApprovalRequest(
     preview: previewCall(call, options.projectRoot),
     reason: options.reason ?? 'this tool asks before it runs',
     suggestions: suggestPatterns(call),
+    ...(options.alwaysAsks ? { alwaysAsks: true } : {}),
   };
 }

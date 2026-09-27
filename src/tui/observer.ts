@@ -163,7 +163,8 @@ export async function startObserver(socketPath: string, first: Runtime): Promise
       try {
         if (event.type === 'turn_start') setState('running');
         for (const watcher of watchers) for (const update of watcher.mapper.map(event)) watcher.send(update);
-        if (event.type === 'approval_request') setState('requires_action');
+        // Whose answer it waits for: a tool that always asks is the person's, whatever else watches.
+        if (event.type === 'approval_request') setState('requires_action', { _meta: { jamcli: { tool: event.call.name, alwaysAsks: Boolean(event.request?.alwaysAsks) } } });
         if (event.type === 'approval_decision' && state === 'requires_action') setState('running');
         if (event.type === 'turn_end') setState('idle', { stopReason: stopReasonFor(event.status) });
       } catch {

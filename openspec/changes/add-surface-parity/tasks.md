@@ -20,9 +20,9 @@
 
 ## 4. Whose answer it is
 
-- [ ] 4.1 An approval request says when its tool always asks; the observer's `requires_action` update names the tool and says so.
+- [x] 4.1 An approval request says when its tool always asks; the observer's `requires_action` update names the tool and says so.
 - [x] 4.2 A choice request can be marked as the person's; the hooks trust question is; the host never answers it from answers given in advance.
-- [ ] 4.3 Tests for both.
+- [x] 4.3 Tests for both.
 
 ## 5. Docs
 

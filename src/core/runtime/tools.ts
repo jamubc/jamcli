@@ -137,7 +137,7 @@ export interface ToolSet {
  */
 export function createToolSet(options: ToolSetOptions): ToolSet {
   const { registry, permissions } = options;
-  const { canonical, classOf } = toolNaming(registry);
+  const { canonical, classOf, alwaysAsks } = toolNaming(registry);
   const extra = (options.alsoOffer ?? []).flatMap((name) => registry.get(name) ?? []);
   const offered = [...registry.visible(), ...extra.filter((tool) => tool.hidden)].filter((tool) => permissions.offers(tool.name));
   const offeredNames = new Set(offered.map((tool) => tool.name));
@@ -162,6 +162,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
     requiresApproval: (name, call) => permissions.decide(call ?? { id: '', name, arguments: {} }).decision === 'ask',
     isReadOnly: (name) => classOf(name) === 'read',
     policyClass: classOf,
+    alwaysAsks,
     decide: (call) => {
       const verdict = permissions.decide(call);
       const changes = !['read', 'state'].includes(classOf(call.name));
