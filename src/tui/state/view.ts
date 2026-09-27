@@ -13,7 +13,8 @@ export type ToolPhase = 'pending' | 'waiting' | 'running' | ToolStatus;
 
 export type Row =
   | { kind: 'user'; id: number; text: string }
-  | { kind: 'assistant'; id: number; text: string; reasoning: string; streaming: boolean }
+  /** What the model said, with the thinking that came before it. The thinking shows as one line until this row is expanded. */
+  | { kind: 'assistant'; id: number; text: string; reasoning: string; streaming: boolean; collapsed: boolean }
   | {
       kind: 'tool';
       id: number;
@@ -190,7 +191,7 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         const rows = [...state.rows.slice(0, -1), { ...last, [field]: last[field] + event.delta }];
         return { ...state, rows, status: { ...status, phase, retry: undefined } };
       }
-      const row: Row = { kind: 'assistant', id: state.nextId, text: '', reasoning: '', streaming: true, [field]: event.delta };
+      const row: Row = { kind: 'assistant', id: state.nextId, text: '', reasoning: '', streaming: true, collapsed: true, [field]: event.delta };
       return { ...state, rows: [...state.rows, row], nextId: state.nextId + 1, status: { ...status, phase, retry: undefined } };
     }
 
@@ -341,7 +342,7 @@ function rowsFrom(messages: ChatMessage[], firstId: number): { rows: Row[]; next
     }
     if (message.role === 'assistant') {
       if (message.content?.trim() || message.reasoning?.trim()) {
-        rows.push({ kind: 'assistant', id: id++, text: message.content ?? '', reasoning: message.reasoning ?? '', streaming: false });
+        rows.push({ kind: 'assistant', id: id++, text: message.content ?? '', reasoning: message.reasoning ?? '', streaming: false, collapsed: true });
       }
       (message.tool_calls ?? []).forEach((raw, index) => {
         const call = toolCallOf(raw, index);
@@ -385,7 +386,7 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
       return { ...state, rows: [...closeStreaming(state.rows), row], nextId: state.nextId + 1 };
     }
     case 'toggle':
-      return { ...state, rows: updateRow(state.rows, (row) => row.id === action.id && row.kind === 'tool', (row) => ({ ...row, collapsed: !row.collapsed })) };
+      return { ...state, rows: updateRow(state.rows, (row) => row.id === action.id && (row.kind === 'tool' || row.kind === 'assistant'), (row) => ({ ...row, collapsed: !row.collapsed })) };
     case 'clear':
       return { ...state, rows: [], approvals: [] };
     default:

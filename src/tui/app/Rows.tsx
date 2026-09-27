@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/react */
 import type { SyntaxStyle } from '@opentui/core';
 import type { Row } from '../state/view.js';
-import { compactionLine, noticeLine, toolLine } from './format.js';
+import { compactionLine, noticeLine, thinkingLine, thinkingSize, thinkingWindow, toolLine } from './format.js';
+import type { ThinkingSize } from './format.js';
 import { useClick } from './mouse.js';
 import { filetypeOf } from './syntax.js';
 import { usePlain, useTheme } from './theme.js';
@@ -40,13 +41,20 @@ function PlainRow({ row, onToggle }: { row: Row; onToggle?: (id: number) => void
   switch (row.kind) {
     case 'user':
       return <text fg={theme.text}>{`You: ${row.text}`}</text>;
-    case 'assistant':
+    case 'assistant': {
+      const thinkingShown = !row.collapsed;
       return (
         <box flexDirection="column">
-          {row.reasoning && !row.text ? <text fg={theme.text}>{`Thinking: ${row.reasoning.slice(-200)}`}</text> : null}
+          {/* The live window is a moving picture, so plain mode says only that thinking is under way. */}
+          {row.reasoning && row.streaming && !row.text ? <text fg={theme.text}>Thinking...</text> : null}
+          {row.reasoning && (row.text || !row.streaming) ? (
+            <text fg={theme.text} onMouseUp={click(() => onToggle?.(row.id))}>{`${thinkingLine(row.reasoning, thinkingShown, false)}, ${thinkingShown ? 'shown' : 'hidden'}`}</text>
+          ) : null}
+          {row.reasoning && thinkingShown ? <text fg={theme.text}>{`Thinking: ${row.reasoning}`}</text> : null}
           {row.text ? <text fg={theme.text}>{`JamCLI: ${row.text}`}</text> : null}
         </box>
       );
+    }
     case 'tool':
       return (
         <box flexDirection="column">
@@ -71,8 +79,18 @@ function PlainRow({ row, onToggle }: { row: Row; onToggle?: (id: number) => void
   }
 }
 
-/** One transcript row. A tool's line opens and closes its output when clicked, as the tool detail key does. */
-export function RowView({ row, syntax, onToggle }: { row: Row; syntax: SyntaxStyle; onToggle?: (id: number) => void }) {
+/** One transcript row. A tool's line opens and closes its output when clicked, as the tool detail key does, and a thinking line its thinking. */
+export function RowView({
+  row,
+  syntax,
+  onToggle,
+  thinking = thinkingSize(undefined, 80),
+}: {
+  row: Row;
+  syntax: SyntaxStyle;
+  onToggle?: (id: number) => void;
+  thinking?: ThinkingSize;
+}) {
   const theme = useTheme();
   const click = useClick();
   if (usePlain()) return <PlainRow row={row} onToggle={onToggle} />;
@@ -83,13 +101,30 @@ export function RowView({ row, syntax, onToggle }: { row: Row; syntax: SyntaxSty
           <text fg={theme.user}>{`> ${row.text}`}</text>
         </box>
       );
-    case 'assistant':
+    case 'assistant': {
+      // Thinking arrives fast and in bursts. It runs in a window of a fixed height and a
+      // fixed width so the transcript above it stays still, and leaves one line behind
+      // once the answer starts or the turn ends. A click on that line shows all of it.
+      const live = Boolean(row.reasoning) && row.streaming && !row.text;
+      const thinkingShown = !row.collapsed;
       return (
         <box flexDirection="column">
-          {row.reasoning ? <text fg={theme.dim}>{`thinking: ${row.streaming && !row.text ? row.reasoning.slice(-200) : row.reasoning.split('\n')[0].slice(0, 120)}`}</text> : null}
+          {live ? (
+            <box width={thinking.width} height={thinking.lines} flexShrink={0}>
+              <text fg={theme.dim}>{thinkingWindow(row.reasoning, thinking)}</text>
+            </box>
+          ) : row.reasoning ? (
+            <box flexDirection="column">
+              <text fg={theme.dim} onMouseUp={click(() => onToggle?.(row.id))}>
+                {thinkingLine(row.reasoning, thinkingShown)}
+              </text>
+              {thinkingShown ? <text fg={theme.dim}>{row.reasoning}</text> : null}
+            </box>
+          ) : null}
           {row.text ? <markdown content={row.text} syntaxStyle={syntax} streaming={row.streaming} conceal /> : null}
         </box>
       );
+    }
     case 'tool':
       return (
         <box flexDirection="column">

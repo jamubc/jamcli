@@ -86,3 +86,29 @@ test('a long session resumed from a short one starts at its latest rows', async 
     await close();
   }
 }, 30_000);
+
+test('thinking runs in a window of the size it is given, then leaves one line a click opens', async () => {
+  const { setup, close } = await open({}, { thinking: { lines: 2, width: 30 } });
+  try {
+    const reasoning = 'I should read the file first. Then I should run the tests. Then I should say what changed.';
+    context.server.enqueue({ reasoning, text: 'Read, tested, reported.' });
+    await setup.mockInput.typeText('do the work');
+    setup.mockInput.pressEnter();
+    // Compact by default: the reply leaves one line behind, with none of the thinking's words.
+    const done = await frameWith(setup, (frame) => frame.includes('Read, tested, reported.'));
+    expect(done).toContain('▸ thinking, 1 line');
+    expect(done).not.toContain('read the file first');
+    // A click on that line opens that row's thinking, and another closes it.
+    const rows = done.split('\n');
+    const row = rows.findIndex((line) => line.includes('▸ thinking, 1 line'));
+    const column = rows[row].indexOf('thinking');
+    await setup.mockMouse.click(column, row);
+    const shown = await frameWith(setup, (frame) => frame.includes('▾ thinking, 1 line'));
+    expect(shown).toContain('read the file first');
+    await Bun.sleep(600);
+    await setup.mockMouse.click(column, row);
+    await frameWith(setup, (frame) => frame.includes('▸ thinking, 1 line') && !frame.includes('read the file first'));
+  } finally {
+    await close();
+  }
+}, 20_000);

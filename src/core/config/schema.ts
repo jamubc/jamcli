@@ -233,6 +233,8 @@ export const ConfigFileSchema = z
         theme: z.enum(['dark', 'light', 'high-contrast', 'monochrome']).describe('The interface\'s colors. NO_COLOR forces monochrome. Defaults to dark.'),
         screen_reader: z.boolean().describe('Draw the interface as plain labeled lines, with no boxes, marks, or animation. --screen-reader turns it on for one run.'),
         reduced_motion: z.boolean().describe('Stop the spinner and shimmer. On by itself in screen reader mode.'),
+        thinking_lines: z.number().int().min(1).max(40).describe('How many lines tall the live thinking window is. It keeps that height while the model thinks, so the transcript does not jump. Defaults to 3.'),
+        thinking_width: z.number().int().min(20).max(400).describe('How many columns wide the live thinking window is, narrowed when the terminal is narrower. Defaults to 72.'),
         status_text_style: z
           .string()
           .regex(/^(subtle|rainbow|minimal|aurora|mono|custom:[\w.-]+)$/, 'a built-in text style (subtle, rainbow, minimal, aurora, mono) or custom:<name>')

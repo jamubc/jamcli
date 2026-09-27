@@ -895,6 +895,18 @@
           "type": "boolean",
           "description": "Stop the spinner and shimmer. On by itself in screen reader mode."
         },
+        "thinking_lines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 40,
+          "description": "How many lines tall the live thinking window is. It keeps that height while the model thinks, so the transcript does not jump. Defaults to 3."
+        },
+        "thinking_width": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 400,
+          "description": "How many columns wide the live thinking window is, narrowed when the terminal is narrower. Defaults to 72."
+        },
         "status_text_style": {
           "type": "string",
           "pattern": "^(subtle|rainbow|minimal|aurora|mono|custom:[\\w.-]+)$",

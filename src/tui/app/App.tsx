@@ -8,7 +8,7 @@ import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { anchorsToTop, initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, statusOf, gitBranch } from './controller.js';
-import { statusParts } from './format.js';
+import { statusParts, thinkingSize } from './format.js';
 import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
@@ -45,6 +45,8 @@ export interface AppProps {
   screenReader?: boolean;
   /** No spinner or shimmer, from `ui.reduced_motion`, and always in screen reader mode. */
   reducedMotion?: boolean;
+  /** How large the live thinking window is drawn, from `ui.thinking_lines` and `ui.thinking_width`. */
+  thinking?: { lines?: number; width?: number };
   /** The keys, with what was wrong in the keybindings file. Read from the user's file when absent. */
   keys?: { bindings: Keybindings; problems: string[] };
   /** No user configuration and no model: open setup at the start. */
@@ -114,6 +116,8 @@ export function App(props: AppProps) {
   const size = useTerminalDimensions();
   const micro = isMicro(props.micro ?? microSetting(process.env.JAMCLI_MICRO), size);
   const reducedMotion = screenReader || Boolean(props.reducedMotion) || micro;
+  // The thinking window keeps the size it is given, narrowed only when the terminal is narrower.
+  const thinking = useMemo(() => thinkingSize(props.thinking, Math.max(1, size.width - 2)), [props.thinking, size.width]);
   const keys = useMemo(() => props.keys ?? loadKeybindings(), [props.keys]);
   const bound = (action: KeyAction, key: KeyLike) => matchesAction(keys.bindings, action, key);
   const [showTodos, setShowTodos] = useState(false);
@@ -690,7 +694,7 @@ export function App(props: AppProps) {
                 <text fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
               ) : null}
               {(hidden ? state.rows.slice(hidden) : state.rows).map((row) => (
-                <RowView key={row.id} row={row} syntax={syntax} onToggle={(id) => dispatch({ type: 'toggle', id })} />
+                <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} onToggle={(id) => dispatch({ type: 'toggle', id })} />
               ))}
             </scrollbox>
             {approval ? (

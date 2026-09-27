@@ -185,6 +185,10 @@ export interface UiSettings {
   screen_reader?: boolean;
   /** No spinner or shimmer. */
   reduced_motion?: boolean;
+  /** How many lines tall the live thinking window is. Defaults to 3. */
+  thinking_lines?: number;
+  /** How many columns wide the live thinking window is. Defaults to 72. */
+  thinking_width?: number;
   /** How the working indicator's words shimmer. Defaults to subtle. */
   status_text_style?: StatusTextStyleId;
   /** The working indicator's spinner. Defaults to classic. */

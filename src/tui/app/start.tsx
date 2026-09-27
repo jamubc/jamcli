@@ -80,6 +80,7 @@ export async function startOpenTui(projectRoot: string = resolveJamcliProjectRoo
       theme={resolveTheme(ui.theme, process.env)}
       screenReader={options.screenReader === true || ui.screen_reader === true}
       reducedMotion={ui.reduced_motion === true}
+      thinking={{ ...(ui.thinking_lines ? { lines: ui.thinking_lines } : {}), ...(ui.thinking_width ? { width: ui.thinking_width } : {}) }}
       firstRun={isFirstRun(settings)}
       statusStyle={statusStyle}
       {...(observer ? { observer } : {})}

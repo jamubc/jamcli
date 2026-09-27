@@ -58,11 +58,22 @@ would be saved. An MCP server's request for input is a form in the same place.
   the highlight a row per turn; the list scrolls when the highlight reaches its edge.
 - Click a row in a list, the palette, or the `@` list to choose it; pointing at one marks
   it. Click a choice in a permission prompt to answer it.
-- Click a tool's line to show or hide its output, as the tool detail key does.
+- Click a tool's line to show or hide its output, as the tool detail key does, and a
+  thinking line to show or hide that thinking.
 
 Copying goes to the system clipboard. Over SSH, or where there is none, it goes through
 the terminal (OSC 52), which reaches the machine you sit at if the terminal supports it.
 `/copy` copies whole messages the same way.
+
+## Thinking
+
+A model that thinks before it answers shows that thinking as it arrives, in a window of a
+fixed size: `ui.thinking_lines` tall, 3 by default, and `ui.thinking_width` wide, 72 by
+default and never wider than the terminal. The window keeps that size however fast the
+words arrive, so the transcript above it stays where it is. Once the reply starts, or the
+turn ends, the window leaves one line behind saying how many lines of thinking there
+were. Click that line to read them, and click it again to put it away. In screen reader
+mode the window does not run: the line says only that thinking is under way.
 
 ## The status line
 

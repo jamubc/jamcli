@@ -92,3 +92,66 @@ export function statusParts(status: StatusData): string[] {
   parts.push(phase);
   return parts;
 }
+
+/** Lines the live thinking window keeps on screen, when nothing else is configured. */
+export const THINKING_LINES = 3;
+/** Columns the live thinking window wraps to, when nothing else is configured. */
+export const THINKING_WIDTH = 72;
+/** The narrowest the window wraps to, so a tiny terminal still gives whole words a chance. */
+const THINKING_MIN_WIDTH = 20;
+
+/** How large the live thinking window is drawn: its own box, not the transcript's full width. */
+export interface ThinkingSize {
+  lines: number;
+  width: number;
+}
+
+/** The configured window, held to at least one line and to the room the terminal has. */
+export function thinkingSize(configured: Partial<ThinkingSize> | undefined, available: number): ThinkingSize {
+  const width = configured?.width ?? THINKING_WIDTH;
+  const lines = configured?.lines ?? THINKING_LINES;
+  return { lines: Math.max(1, Math.round(lines)), width: Math.max(THINKING_MIN_WIDTH, Math.min(Math.round(width), available)) };
+}
+
+/** One line of thinking, broken at spaces into pieces no wider than `width`. */
+function wrapLine(line: string, width: number): string[] {
+  const out: string[] = [];
+  let current = '';
+  for (const word of line.split(/\s+/)) {
+    if (!word) continue;
+    if (!current) current = word;
+    else if (current.length + 1 + word.length <= width) current = `${current} ${word}`;
+    else {
+      out.push(current);
+      current = word;
+    }
+    // A word longer than the window is cut where it runs out of room.
+    while (current.length > width) {
+      out.push(current.slice(0, width));
+      current = current.slice(width);
+    }
+  }
+  out.push(current);
+  return out;
+}
+
+/**
+ * The live thinking window: the last lines of the thinking so far, wrapped to the
+ * window's width and padded to exactly its height. The window keeps both, so the
+ * transcript above it does not jump as the model thinks.
+ */
+export function thinkingWindow(reasoning: string, size: ThinkingSize): string {
+  const wrapped = reasoning.split('\n').flatMap((line) => wrapLine(line, size.width));
+  const shown = wrapped.slice(-size.lines);
+  while (shown.length < size.lines) shown.push('');
+  return shown.join('\n');
+}
+
+/** Lines of thinking there are, not counting the blank ones. */
+export const thinkingLines = (reasoning: string): number => reasoning.split('\n').filter((line) => line.trim()).length;
+
+/** The one line the thinking leaves behind once it is done, open or not. */
+export function thinkingLine(reasoning: string, shown: boolean, marks = true): string {
+  const lines = thinkingLines(reasoning);
+  return `${marks ? `${shown ? '▾' : '▸'} ` : ''}thinking, ${lines} line${lines === 1 ? '' : 's'}`;
+}

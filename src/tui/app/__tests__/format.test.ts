@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { diffRows, diffStat, statusParts, toolLine } from '../format.js';
+import { diffRows, diffStat, statusParts, thinkingLine, thinkingSize, thinkingWindow, toolLine } from '../format.js';
 import { initialView } from '../../state/view.js';
 
 const diff = 'Index: a.txt\n===\n--- a.txt\n+++ a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n';
@@ -33,6 +33,34 @@ test('the status line names each fact in words, and marks a cost that misses unp
   // A free model's nothing takes no room; nothing plus requests with no price still shows.
   expect(statusParts({ ...status, costUsd: 0, unpriced: 0 })).not.toContain('$0.00');
   expect(statusParts({ ...status, costUsd: 0, unpriced: 2 })).toContain('$0.00+');
+});
+
+test('the thinking window keeps its height and its width, however much has arrived', () => {
+  const size = thinkingSize({ lines: 3, width: 20 }, 200);
+  const height = (text: string) => thinkingWindow(text, size).split('\n');
+  // Nothing yet, one word, and far more than fits all draw the same three lines of the same width.
+  for (const reasoning of ['', 'I', 'I should read the file before I change it, and then run the tests again.']) {
+    const lines = height(reasoning);
+    expect(lines).toHaveLength(3);
+    expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(20);
+  }
+  // It is the end of the thinking that shows, so the newest words are on screen.
+  expect(height('one\ntwo\nthree\nfour').join('|')).toBe('two|three|four');
+  // A word wider than the window is cut rather than pushing the window wider.
+  expect(height('x'.repeat(45)).every((line) => line.length <= 20)).toBe(true);
+});
+
+test('the thinking window is never wider than the terminal, and never shorter than a line', () => {
+  expect(thinkingSize({ lines: 5, width: 100 }, 40)).toEqual({ lines: 5, width: 40 });
+  expect(thinkingSize({ lines: 0, width: 5 }, 200)).toEqual({ lines: 1, width: 20 });
+  expect(thinkingSize(undefined, 200)).toEqual({ lines: 3, width: 72 });
+});
+
+test('thinking that is done shows as one line saying how much of it there is', () => {
+  const reasoning = 'first\n\nsecond\nthird';
+  expect(thinkingLine(reasoning, false)).toBe('▸ thinking, 3 lines');
+  expect(thinkingLine(reasoning, true)).toBe('▾ thinking, 3 lines');
+  expect(thinkingLine('only this', false, false)).toBe('thinking, 1 line');
 });
 
 test('a diff is drawn in the lines of its hunks, not its headers', () => {
