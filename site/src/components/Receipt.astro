@@ -1,0 +1,30 @@
+---
+/**
+ * Where a claim comes from: a repository path and, when there is one, the symbol in it.
+ * scripts/check-receipts.ts fails the build when the path or the symbol no longer exists,
+ * so a receipt cannot quietly go stale. Line numbers are left out on purpose: they rot.
+ */
+interface Props {
+  path: string;
+  symbol?: string;
+}
+
+const { path, symbol } = Astro.props;
+const href = `https://github.com/jamubc/jamcli/blob/master/${path}`;
+---
+
+<a class="jam-receipt" href={href}><code>{path}</code>{symbol && <span> · <code>{symbol}</code></span>}</a>
+
+<style>
+  .jam-receipt {
+    text-decoration: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .jam-receipt:hover code {
+    text-decoration: underline;
+  }
+  .jam-receipt span {
+    color: var(--sl-color-gray-3);
+  }
+</style>

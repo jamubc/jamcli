@@ -1,0 +1,60 @@
+schema: spec-driven
+
+# Non-negotiables for every OpenSpec request.
+# Depth lives in openspec/project.md (product thesis, stack, conventions) and
+# openspec/SEQUENCE.md (the working rule and the definition of done).
+context: |
+  JamCLI is a terminal-native AI coding agent. Local-first, provider-agnostic,
+  human-in-the-loop. Personal project under jamubc/jamcli, not a Jam-Sw product.
+  Read openspec/project.md for the thesis, stack, and conventions.
+  Read openspec/SEQUENCE.md for the working rule, the open unit, and done.
+
+  Hard rules:
+  - No em dashes (U+2014) in anything authored here: commits, specs, docs,
+    comments, release notes. Use a colon, a comma, or a full stop.
+  - No AI attribution. Commits and documents carry the owner's identity only.
+    No Co-Authored-By trailers, no "generated with" lines.
+  - Conventional commits, lowercase and imperative, scoped when it helps.
+  - One concern per commit. A dependency bump is its own commit. A refactor and
+    a behavior change do not share one.
+  - Secrets never enter the repository. .jamcli/ is gitignored. Provider keys
+    are read from the environment through key_env_var where the provider allows.
+  - The local-first path must keep working. If Ollama with no network is broken,
+    the change is not done, regardless of what else it does.
+  - Learning only as reviewable files, on demand, behind the gates. No
+    background learning, no hidden memory, no user profile.
+
+  Layout:
+  - src/core/ is the harness: agent loop, tools, providers, routing, context,
+    policy, hooks, sessions, rules. It imports neither OpenTUI nor React.
+  - src/tui/ is the OpenTUI interface. It only renders and forwards input.
+  - src/cli/ is the dispatcher and the non-interactive surfaces.
+  - src/services/ holds the pre-core services that have not moved yet.
+  - openspec/specs/jamcli/spec.md is current truth. Do not edit the spec while
+    a change is open; the spec updates at archive time.
+
+  One unit in flight. A unit lives on its branch until it is complete. Stages
+  and slices are committed as checkpoints that must each install, typecheck,
+  test, and build, so the unit can be abandoned safely at any checkpoint.
+
+  Four gates, every change:
+    bun install
+    npx tsc --noEmit
+    bun test
+    bun run build
+  npx tsc --noEmit may not exceed the baseline in the open change's PR
+  description. The type baseline is 0. bun test must pass, and the tests must
+  be capable of failing.
+
+# Per-artifact rules (optional)
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+
+# Per-operation guidance (optional)
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise

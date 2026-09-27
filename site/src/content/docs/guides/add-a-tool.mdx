@@ -1,0 +1,157 @@
+---
+title: Add a built-in tool
+description: Step by step, from an empty module to a tool the model calls. Choosing the class, writing a description the model acts on, registering always or conditionally, testing, and running it.
+sidebar:
+  order: 1
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+
+<Aside title="In short">
+A tool is one module that exports a `RegisteredTool`, plus one line that registers it. The permission
+engine, the agent loop and the providers already handle any registered tool, so they do not change.
+The example below is `utc_time`, a small read-only tool that exists only to show the shape. For a
+full tool to copy from, read `web_fetch` in <Receipt path="src/core/tools/web/index.ts" symbol="WEB_FETCH_TOOL" />.
+</Aside>
+
+Before you start: a new tool is a new capability, so it goes through an openspec change like any
+other. Read `openspec/AGENTS.md` first.
+
+<Steps>
+
+1. **Choose the class.** The class decides what happens when no rule matches. Choose it by what
+   the tool touches, not by how risky it feels:
+
+   | Class | Use it when the tool | With no rule, in default mode |
+   |---|---|---|
+   | `read` | only reads the project or its own state | runs |
+   | `write` | changes files | asks |
+   | `execute` | starts processes | asks |
+   | `network` | talks to anything off the machine | asks, in every mode except bypass |
+   | `delegate` | starts another agent run | asks |
+   | `state` | changes only the agent's own plan | runs |
+
+   The full table is <Receipt path="src/core/permissions/modes.ts" symbol="MODE_DEFAULTS" />.
+
+2. **Write the module.** The schema, the runner and the export. Return refusals and failures as
+   `output` text rather than throwing, so the model can read what went wrong and adjust.
+
+   ```ts title="new file: src/core/tools/utc_time.ts"
+   import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
+
+   const schema: JsonSchema = {
+     type: 'object',
+     properties: {},
+     additionalProperties: false,
+   };
+
+   async function utcTime(_args: Record<string, any>, _ctx: ToolContext): Promise<ToolRunPayload> {
+     return { output: new Date().toISOString() };
+   }
+
+   export const UTC_TIME_TOOL: RegisteredTool = {
+     name: 'utc_time',
+     description:
+       'The current time in UTC, as ISO 8601. Call it before reasoning about anything relative to now, such as "this week" or "an hour ago".',
+     inputSchema: schema,
+     policy: 'read',
+     runner: utcTime,
+   };
+   ```
+
+   The registry checks arguments against the schema before the runner runs. With
+   `additionalProperties: false`, a call with an unexpected argument is refused with a message
+   that names the argument.
+
+   A tool that waits on anything slow should respect `ctx.signal`, so cancelling the turn stops it.
+   `webFetchWith` shows the pattern: it combines the turn's signal with its own timeout using
+   `AbortSignal.any`.
+
+3. **Write the description for _when_, not only _what_.** Unless you add a line to
+   [tool guidance](../../concepts/prompt-assembly/#3-tool-guidance), the description is all the
+   model reads about the tool. A description that only says what the tool does gives the model no
+   reason to reach for it. The second sentence of the example above says when to call it.
+   `web_search`'s `freshness` argument works the same way: its description tells the model which
+   window to use for which kind of question
+   (<Receipt path="src/core/tools/web/providers.ts" symbol="FRESHNESS_PROPERTY" />).
+
+4. **Register it.** If it should always be there, add it to `BUILTIN_TOOLS`:
+
+   ```ts title="src/core/tools/builtins.ts" ins={1,7}
+   import { UTC_TIME_TOOL } from './utc_time.js';
+
+   export const BUILTIN_TOOLS: RegisteredTool[] = [
+     READ_FILE_TOOL,
+     // ...
+     WEB_FETCH_TOOL,
+     UTC_TIME_TOOL,
+     // ...
+   ];
+   ```
+
+   If it depends on something only known at session start, such as a configured key, register it
+   in the runtime once that is resolved. That is how `web_search` works:
+
+   ```ts title="src/core/runtime/index.ts"
+   const searchProviders = new SearchProviders(config.search);
+   if (searchProviders.available.length) registry.register(webSearchTool(searchProviders));
+   ```
+
+5. **Let rules name what it touches, if they should.** Rules match a call by its _subjects_. A call
+   with a `url` argument already yields its host as a `domain` subject, and file tools yield their
+   paths. If the tool touches something else that users should be able to allow or deny, add a
+   branch to `subjectsOf`, as `web_search` does for its provider's host. See
+   <Receipt path="src/core/permissions/subjects.ts" symbol="subjectsOf" />.
+
+6. **Test it.** Test that it is registered with the right class, and that its runner does what the
+   description promises:
+
+   ```ts title="new file: src/core/tools/__tests__/utcTime.test.ts"
+   import { expect, test } from 'bun:test';
+   import { createBuiltinRegistry } from '../registry.js';
+
+   test('utc_time is a registered read tool', () => {
+     expect(createBuiltinRegistry().get('utc_time')?.policy).toBe('read');
+   });
+
+   test('utc_time returns an ISO 8601 time and refuses arguments it does not take', async () => {
+     const registry = createBuiltinRegistry();
+     const ok = await registry.execute('utc_time', {}, { projectRoot: '/tmp' });
+     expect(ok.output).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+     const refused = await registry.execute('utc_time', { zone: 'x' }, { projectRoot: '/tmp' });
+     expect(refused.success).toBe(false);
+   });
+   ```
+
+   <Proof run="bun test utcTime">
+   Two passes. Before step 4 the first test fails, because the registry does not hold the tool.
+   That failure is the test proving it can fail.
+   </Proof>
+
+   A tool that talks to the network should never reach the real network in a test. The web tool
+   tests serve pages from a local `Bun.serve`, as in
+   <Receipt path="src/core/tools/web/__tests__/fetch.test.ts" />.
+
+7. **Run it for real.** Start JamCLI from the repository and ask something the tool answers:
+
+   ```sh
+   bun src/index.tsx
+   ```
+
+   A `read` tool runs without asking. For any other class, a permission prompt that names the new
+   tool confirms three things at once: it is registered, it has the class you meant, and it is
+   offered in this session. If the model answers without calling it, reread the description
+   before changing anything else.
+
+8. **Run the four gates.**
+
+   ```sh
+   bun install
+   npx tsc --noEmit
+   bun test
+   bun run build
+   ```
+
+</Steps>

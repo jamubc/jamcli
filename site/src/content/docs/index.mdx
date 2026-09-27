@@ -1,0 +1,30 @@
+---
+title: JamCLI
+description: A terminal-native AI coding agent. Local-first, provider-agnostic, human-in-the-loop. What these docs cover and how to read them.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+JamCLI is a coding agent that runs in your terminal. It works with local models through Ollama as
+well as hosted providers, and it asks before it changes anything you have not allowed.
+
+These pages explain how it works from the inside: what the model is told, where its tools come
+from, and how to add one.
+
+<CardGrid>
+  <LinkCard title="How the system prompt is assembled" href="concepts/prompt-assembly/" description="The five parts of the prompt, in order, and when each one appears." />
+  <LinkCard title="Where tools come from" href="concepts/tools/" description="Registration, the offered set, and the path of one call." />
+  <LinkCard title="Web tools" href="tools/web/" description="web_fetch and web_search: inputs, limits, configuration, permissions." />
+  <LinkCard title="Add a built-in tool" href="guides/add-a-tool/" description="From an empty file to a tool the model reaches for." />
+</CardGrid>
+
+## How to read these pages
+
+- **Every claim names its source.** A path with a symbol, like
+  `src/core/runtime/prompt.ts · buildRuntimePrompt`, links to the code. The build fails when a named
+  file or symbol no longer exists, so a page cannot quietly go stale. Line numbers are left out
+  because they change with every edit.
+- **Proofs are commands.** A green block gives a command to run from the repository root and says
+  what it should show.
+- **For language models:** [`/llms.txt`](llms.txt) indexes these pages, and
+  [`/llms-full.txt`](llms-full.txt) is all of them as one plain-text file.

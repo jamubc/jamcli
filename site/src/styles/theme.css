@@ -1,0 +1,68 @@
+/*
+ * The prompting-bench palette mapped onto Starlight's tokens. Starlight's dark theme is the
+ * bare :root; light is [data-theme='light']. In the dark theme `white` is the brightest ink
+ * and `black` the page; in the light theme the scale runs the other way.
+ */
+:root {
+  --sl-font: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+  --sl-font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  --sl-color-accent-low: #2e2314;
+  --sl-color-accent: #c98a3a;
+  --sl-color-accent-high: #f2ae55;
+  --sl-color-white: #e6eaee;
+  --sl-color-gray-1: #cdd4da;
+  --sl-color-gray-2: #aab4be;
+  --sl-color-gray-3: #93a0ac;
+  --sl-color-gray-4: #5e6b77;
+  --sl-color-gray-5: #2a333c;
+  --sl-color-gray-6: #181d23;
+  --sl-color-black: #101418;
+
+  --jam-proof: #63c295;
+  --jam-rule: var(--sl-color-gray-5);
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #fcefd8;
+  --sl-color-accent: #9a5b00;
+  --sl-color-accent-high: #5e3700;
+  --sl-color-white: #14181c;
+  --sl-color-gray-1: #252b31;
+  --sl-color-gray-2: #39424b;
+  --sl-color-gray-3: #5a6470;
+  --sl-color-gray-4: #8a939c;
+  --sl-color-gray-5: #cbd0c9;
+  --sl-color-gray-6: #e3e5df;
+  --sl-color-gray-7: #eaece7;
+  --sl-color-black: #f4f5f1;
+
+  --jam-proof: #1f6b47;
+}
+
+/* Headings in the bench's weight: firm, slightly tight. */
+.sl-markdown-content :is(h2, h3) {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Diagrams: inline SVG drawn in currentColor, scrolled rather than squashed on a phone. */
+.jam-diagram {
+  margin-block: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--jam-rule);
+  background: var(--sl-color-gray-6);
+  overflow-x: auto;
+}
+.jam-diagram svg {
+  display: block;
+  min-width: 620px;
+  width: 100%;
+  height: auto;
+  color: var(--sl-color-white);
+}
+.jam-diagram figcaption {
+  margin-top: 0.75rem;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}

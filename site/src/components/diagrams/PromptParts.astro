@@ -1,0 +1,41 @@
+---
+/** The five parts buildRuntimePrompt joins, in order, and where the result goes. */
+const parts = [
+  { n: '1', name: 'identity', from: 'profile override, else JamCLI\'s own', when: 'always', always: true },
+  { n: '2', name: 'project text', from: 'rules · skills · hook context', when: 'when any exists', always: false },
+  { n: '3', name: 'tool guidance', from: 'toolGuidance(offered tools)', when: 'when tools are offered', always: false },
+  { n: '4', name: 'plan note', from: 'PLAN_NOTE', when: 'in plan mode', always: false },
+  { n: '5', name: 'environment', from: 'root · cwd · platform · date', when: 'always', always: true },
+];
+const top = (i: number) => 22 + i * 50;
+---
+
+<figure class="jam-diagram">
+  <svg viewBox="0 0 760 360" role="img" aria-labelledby="pp-t pp-d">
+    <title id="pp-t">The parts of the system prompt, in order</title>
+    <desc id="pp-d">
+      Five parts stacked in order: identity and environment always, project text, tool guidance and the plan
+      note only when they apply. They are joined with blank lines into one system prompt handed to the agent.
+      Tool definitions travel beside the prompt, not inside it.
+    </desc>
+    <g style="font-family: var(--sl-font-mono)" font-size="12" fill="currentColor">
+      <text x="0" y="12" opacity="0.6">buildRuntimePrompt(), top to bottom</text>
+      {parts.map((part, i) => (
+        <g>
+          <rect x="0" y={top(i)} width="440" height="38" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray={part.always ? undefined : '5 4'} />
+          <text x="14" y={top(i) + 24} font-weight="500">{part.n}  {part.name}</text>
+          <text x="170" y={top(i) + 24} opacity="0.65">{part.from}</text>
+          <text x="460" y={top(i) + 24} opacity="0.65">{part.when}</text>
+        </g>
+      ))}
+      <path d="M220 270 V296" stroke="currentColor" stroke-width="1.2" fill="none" />
+      <path d="M220 302 l-4 -8 h8 z" />
+      <rect x="0" y="304" width="440" height="40" fill="none" style="stroke: var(--sl-color-accent)" stroke-width="1.6" />
+      <text x="14" y="329">joined with blank lines: one system message</text>
+      <rect x="560" y="304" width="200" height="40" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 3" />
+      <text x="572" y="321" opacity="0.8">tool definitions</text>
+      <text x="572" y="336" opacity="0.6">sent beside, not inside</text>
+    </g>
+  </svg>
+  <figcaption>Solid boxes are always present. Dashed boxes appear only when they apply. Tool descriptions and schemas are not part of this string.</figcaption>
+</figure>

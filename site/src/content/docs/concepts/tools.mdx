@@ -1,0 +1,88 @@
+---
+title: Where tools come from
+description: How a tool reaches the model in JamCLI. Registration into one registry per session, the offered set, the definitions sent with each request, and the path of one call.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+import ToolPath from '../../../components/diagrams/ToolPath.astro';
+
+<Aside title="In short">
+The model can only call a tool that is in the session's registry and that the permission engine
+offers. Built-in tools are always registered, a few more are registered when their condition holds,
+and MCP server tools join the same registry. Everything after registration treats all tools the
+same way. The tool's own description is the main thing that tells the model when to use it.
+</Aside>
+
+<ToolPath />
+
+## What a tool is
+
+A tool is a `RegisteredTool`: plain data plus a function.
+
+| Field | Meaning |
+|---|---|
+| `name` | What the model calls. |
+| `description` | What the model reads to decide when to call it. |
+| `inputSchema` | JSON Schema for the arguments. Calls that do not match are refused before the runner runs. |
+| `policy` | The class the permission mode judges: `read`, `write`, `execute`, `network`, `delegate` or `state`. |
+| `runner` | `(args, ctx) => { output }`. `ctx.signal` carries cancellation. |
+| `hidden` | Registered and callable, but not shown to the model. Old tool names use this. |
+| `aliasOf` | The tool this one stands in for, so rules and grants for either apply to both. |
+| `alwaysAsks` | Asks every time. No rule, grant or mode allows it ahead. |
+
+Source: <Receipt path="src/types/tools.ts" symbol="RegisteredTool" />.
+
+The class matters before any rule is written. With no rule, each mode has a default for each
+class. For example, a `network` tool asks in every mode except bypass. See
+<Receipt path="src/core/permissions/modes.ts" symbol="MODE_DEFAULTS" />.
+
+## How tools get registered
+
+Each session builds one registry. This is what goes into it, and when:
+
+| Source | When it registers | Source |
+|---|---|---|
+| Built-in tools | Always. `read_file`, `glob`, `grep`, `edit`, `run_command`, `web_fetch` and the rest, plus hidden aliases. | <Receipt path="src/core/tools/builtins.ts" symbol="BUILTIN_TOOLS" /> |
+| `skill` | When at least one skill loads. | <Receipt path="src/core/runtime/index.ts" symbol="skillTool" /> |
+| MCP server tools | One entry per tool of each enabled server. A tool the server marks read-only gets `read`; any other gets `execute`. A server that fails is reported and skipped. | <Receipt path="src/core/runtime/tools.ts" symbol="registerMcpTools" /> |
+| `search_tools` | When MCP servers bring more tools than `tool_search.threshold` (40 by default). | <Receipt path="src/core/tools/toolSearch.ts" symbol="DEFAULT_TOOL_SEARCH_THRESHOLD" /> |
+| `lsp` | When a language server is available. Delegated runs have none. | <Receipt path="src/core/runtime/index.ts" symbol="lspTool" /> |
+| `web_search` | When a search provider key resolves. | <Receipt path="src/core/runtime/index.ts" symbol="webSearchTool" /> |
+
+## Registered is not the same as offered
+
+`createToolSet()` decides what the model sees. It keeps the registry's visible tools that the
+permission engine `offers()`, so a tool that the mode or a rule denies outright never reaches the
+model. From that set it makes two things:
+
+- **Definitions**: `{ name, description, parameters }` for each tool, sent with every request. When
+  `search_tools` is active, MCP tools are held back until the model searches for them and loads
+  them. Loaded tools join the list from the next request on.
+- **Summaries**: the same tools, used by [tool guidance](../prompt-assembly/#3-tool-guidance).
+
+The set is rebuilt with the prompt whenever the mode or the rules change.
+
+Source: <Receipt path="src/core/runtime/tools.ts" symbol="createToolSet" />.
+
+## One call, start to finish
+
+1. The model returns a tool call: a name and arguments.
+2. `dispatcher.decide` asks the permission engine. The answer is allow, ask or deny, and it records
+   what decided it and why.
+3. `registry.execute` checks the arguments against `inputSchema`. A mismatch goes back to the model
+   as an error, and the runner does not run.
+4. The runner runs and returns its output. The agent keeps at most `tool_result_max_chars`
+   (30,000 by default) of it: the beginning and the end, with a note saying how much was cut.
+
+Source: <Receipt path="src/core/tools/registry.ts" symbol="validateAgainstSchema" />,
+<Receipt path="src/core/agent.ts" symbol="truncate" />.
+
+## Proofs
+
+<Proof run="bun test src/core/tools/__tests__/registration.test.ts src/core/tools/__tests__/toolSet.test.ts src/core/tools/__tests__/toolSearch.test.ts">
+All pass. `registration.test.ts` checks the class of each named built-in in the registry.
+</Proof>

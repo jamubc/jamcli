@@ -1,0 +1,107 @@
+---
+title: How the system prompt is assembled
+description: JamCLI builds its system prompt from up to five parts each session. What each part holds, when it appears, and when the prompt is rebuilt.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+import PromptParts from '../../../components/diagrams/PromptParts.astro';
+
+<Aside title="In short">
+There is no fixed system prompt file. `buildRuntimePrompt()` joins up to five parts with blank lines:
+identity, project text, tool guidance, a plan-mode note, and the environment. The result is rebuilt
+whenever the permission mode or the rules change. Tool descriptions travel separately, as tool
+definitions.
+</Aside>
+
+Source: <Receipt path="src/core/runtime/prompt.ts" symbol="buildRuntimePrompt" />, called from
+<Receipt path="src/core/runtime/index.ts" symbol="buildPrompt" />.
+
+<PromptParts />
+
+## The five parts
+
+### 1. Identity
+
+The active profile's `system_prompt_override` when one is set, and JamCLI's own opening otherwise:
+
+```text title="the default identity"
+You are JamCLI, a coding agent working in the user's project. You are precise, you check your work, and you say plainly what you did and did not do.
+```
+
+The profile is chosen by `active_profile` (or `JAMCLI_PROFILE`) and read from `profiles/<name>.json`.
+An override replaces this opening completely.
+
+Source: <Receipt path="src/core/runtime/prompt.ts" symbol="DEFAULT_IDENTITY" />,
+<Receipt path="src/core/config/load.ts" symbol="active_profile" />.
+
+### 2. Project text
+
+Up to three pieces, in this order. Any that are empty are left out:
+
+| Piece | What it holds | Source |
+|---|---|---|
+| Project rules | `AGENTS.md`, `CLAUDE.md`, `.jamcli/rules.md` and `.jamcli/rules/*.md`, read in each directory from the project root down to the working directory, under a `# Project rules` heading. | <Receipt path="src/core/rules/index.ts" symbol="DEFAULT_RULE_FILES" /> |
+| Skills | One line per skill: its name and description. Present only when the `skill` tool is offered. The full instructions load when the model calls that tool. | <Receipt path="src/core/ext/skills.ts" symbol="skillsPromptText" /> |
+| Hook context | Text returned by `session_start` hooks. | <Receipt path="src/core/runtime/index.ts" symbol="hookContext" /> |
+
+### 3. Tool guidance
+
+This part appears only when at least one tool is offered. It is a short list, and each line
+appears only if the tool it mentions is offered in this session:
+
+```text title="tool guidance with every coding tool offered"
+Working with tools:
+- Inspect the project with tools instead of guessing at its contents.
+- Find files with glob and grep, then read what matters with read_file.
+- Read a file before changing it, and prefer edit for changes to existing files.
+- Check your work with the project's own tests or build through run_command when you can.
+- When a tool can do something, call it rather than describing the call.
+- If no tool is needed, answer directly.
+```
+
+The guidance mentions only `glob`, `grep`, `read_file`, `edit` and `run_command`. Every other
+tool, including the web tools, reaches the model only through its own description in the tool
+definitions. See [Where tools come from](../tools/).
+
+Source: <Receipt path="src/core/runtime/prompt.ts" symbol="toolGuidance" />.
+
+### 4. Plan note
+
+Added only in plan mode, so the model knows why it can read but not act:
+
+```text title="PLAN_NOTE"
+Plan mode is on: you can read and search, but not change files, run commands, or delegate. Investigate, then present a plan for the user to approve.
+```
+
+Source: <Receipt path="src/core/permissions/modes.ts" symbol="PLAN_NOTE" />.
+
+### 5. Environment
+
+This part is always last. It holds the project root, the working directory, the platform and
+today's date. It does not include git state, the shell, the OS version or the model name.
+
+## When the prompt is rebuilt
+
+The prompt is built once when the session starts. `reassemble()` rebuilds the tool set and the
+prompt together, because what the model is offered and what it is told both depend on the mode
+and the rules. A rebuild also resets `reasoningSince`, so signed reasoning from before the change
+is not replayed with the new prompt.
+
+Source: <Receipt path="src/core/runtime/index.ts" symbol="reassemble" />.
+
+## See it
+
+<Proof run={`bun -e "import { buildRuntimePrompt } from './src/core/runtime/prompt.ts'; console.log(buildRuntimePrompt({ tools: [{ name: 'read_file', description: '', parameters: {}, policyClass: 'read', source: 'builtin' }, { name: 'edit', description: '', parameters: {}, policyClass: 'write', source: 'builtin' }], projectRoot: '/work/app', cwd: '/work/app', platform: 'darwin', date: new Date('2026-09-26'), mode: 'plan' }))"`}>
+Prints the identity, a four-line tool guidance (only `edit` of the conditional lines, since
+`glob` and `grep` are not offered), the plan note, and the environment. There is no project text,
+because no rules were passed.
+</Proof>
+
+<Proof run="bun test src/core/runtime/__tests__/assembly.test.ts src/core/runtime/__tests__/runtime.test.ts">
+Both files pass. `tool guidance names only the tools that are offered` and `rules and the
+environment are in the system prompt` are the two tests for this page.
+</Proof>

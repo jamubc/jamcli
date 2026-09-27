@@ -1,22 +1,3 @@
-<!-- OPENSPEC:START -->
-# OpenSpec Instructions
-
-These instructions are for AI assistants working in this project.
-
-Always open `@/openspec/AGENTS.md` when the request:
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
-
-Use `@/openspec/AGENTS.md` to learn:
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
-
-Keep this managed block so 'openspec update' can refresh the instructions.
-
-<!-- OPENSPEC:END -->
-
 # JamCLI
 
 A terminal-native AI coding agent. Local-first, provider-agnostic, human-in-the-loop.
@@ -35,7 +16,16 @@ abandoned safely at any checkpoint. It is finished only when its change is archi
 `openspec/SEQUENCE.md` names the open unit and says when it is done.
 
 The path is: read the open change in `openspec/changes/`, work its `tasks.md` in order,
-run the four gates, then archive.
+run the four gates, then archive. OpenSpec drives that path through skills rather than a
+checked-in instruction file: `/opsx:propose` opens a change, `/opsx:apply` works it,
+`/opsx:archive` closes it. `openspec/config.yaml` carries the hard rules below into every
+one of those requests, so they reach planning without a file anyone has to remember to open.
+
+**Executing `tasks.md`.** When a change's tasks are independent, the
+`subagent-driven-development` skill runs them: a fresh implementer per task, a spec and
+quality review after each, a whole-branch review at the end. Its ledger lives under
+`.superpowers/sdd/`, which is gitignored scratch. Tightly coupled tasks stay inline. Either
+way the four gates hold at every checkpoint.
 
 ## Hard rules
 

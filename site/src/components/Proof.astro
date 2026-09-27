@@ -1,0 +1,42 @@
+---
+/**
+ * A command to run from the repository root, and what it should show. The slot says what
+ * to watch for, and what a different result would mean.
+ */
+import { Code } from '@astrojs/starlight/components';
+
+interface Props {
+  run: string;
+}
+
+const { run } = Astro.props;
+---
+
+<div class="jam-proof">
+  <div class="jam-proof-label">Proof · from the repository root</div>
+  <Code code={run} lang="sh" />
+  <div class="jam-proof-expect"><slot /></div>
+</div>
+
+<style>
+  .jam-proof {
+    margin-block: 1.25rem;
+    padding-left: 0.9rem;
+    border-left: 3px solid var(--jam-proof);
+  }
+  .jam-proof-label {
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    color: var(--jam-proof);
+    margin-bottom: 0.4rem;
+  }
+  .jam-proof-expect {
+    margin-top: 0.5rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+  .jam-proof-expect :global(p) {
+    margin: 0;
+  }
+</style>

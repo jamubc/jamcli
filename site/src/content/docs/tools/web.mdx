@@ -1,0 +1,125 @@
+---
+title: Web tools
+description: web_fetch reads one URL as text; web_search queries a configured provider. Inputs, limits, caching, configuration, and the permission rules that govern both.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+
+<Aside title="In short">
+`web_fetch` is always registered. It reads one http or https URL and returns readable text.
+`web_search` is registered only when a search provider key resolves. It returns ranked results
+that already include page text. Both have the `network` class, so both ask before they run unless
+a rule allows them. Both live in `src/core/tools/web/`.
+</Aside>
+
+## web_fetch
+
+| Argument | Required | Meaning |
+|---|---|---|
+| `url` | yes | An http or https URL. Any other scheme is refused. The fragment is dropped. |
+| `prompt` | no | What to look for on the page. It is passed to the refinement stage (see below). |
+
+What it does, in order:
+
+1. **Follows redirects on the same host**, up to 5. A redirect to **another host is not followed**.
+   The model is told where it points and has to fetch that URL in a new call, so the rules judge
+   the new host separately.
+2. **Gives up after 30 seconds**, or when the turn is cancelled.
+3. **Refuses non-text responses.** Text, JSON, XML, JavaScript, YAML and markdown content types are
+   read. Anything else returns only a heading saying it was not fetched.
+4. **Stops reading at 5 MB** and says it cut the response there.
+5. **Turns HTML into text.** It uses `<main>` or `<article>` as the content when the page has one.
+   It drops scripts, styles, navigation, footers and asides, keeps links as markdown, and puts the
+   page title first.
+6. **Caches the result in memory** for 15 minutes, keyed by the URL after redirects, up to 8 MB in
+   total. Nothing is written to disk.
+
+The output starts with a heading line: the final URL, the status, and the content type. Like any
+tool result, the agent then keeps at most `tool_result_max_chars` of it. See
+[One call, start to finish](../../concepts/tools/#one-call-start-to-finish).
+
+Source: <Receipt path="src/core/tools/web/index.ts" symbol="webFetchWith" />,
+<Receipt path="src/core/tools/web/extract.ts" symbol="htmlToText" />,
+<Receipt path="src/core/tools/web/index.ts" symbol="ResponseCache" />.
+
+## web_search
+
+| Argument | Required | Meaning |
+|---|---|---|
+| `query` | yes | The search query. An empty query is refused. |
+| `freshness` | no | `oneDay`, `oneWeek`, `oneMonth`, `oneYear` or `noLimit` (the default). The schema tells the model to use the short windows for prices, news, scores and releases, and `noLimit` for reference material. |
+
+Each call asks the provider for 8 results with page text. Before the results reach the model:
+
+- **Duplicates are removed.** Two results count as duplicates when they have the same canonical URL
+  (tracking parameters, `www.`, trailing slashes, and `/amp` or `/print` suffixes are ignored), or
+  when one result's text mostly repeats another's.
+- **Dates are added.** A result with a known publish date starts with `Published: YYYY-MM-DD`.
+
+Each result is returned as a `## title` line, then the URL, then the page text.
+
+Source: <Receipt path="src/core/tools/web/index.ts" symbol="webSearchWith" />,
+<Receipt path="src/core/tools/web/providers.ts" symbol="dedupeResults" />,
+<Receipt path="src/core/tools/web/providers.ts" symbol="withDateline" />.
+
+### Configuring a provider
+
+LangSearch is built in. `web_search` appears once its key resolves. The key is looked for in
+this order:
+
+1. the variable named by `key_env_var`,
+2. `api_key` in the configuration,
+3. `LANGSEARCH_API_KEY`,
+4. a key stored in JamCLI's credential store under the provider's name.
+
+With only the environment variable set, no configuration is needed. To name your own variable, or
+to point at another endpoint:
+
+```json title=".jamcli/config.json"
+{
+  "search": {
+    "providers": {
+      "langsearch": { "key_env_var": "MY_SEARCH_KEY" }
+    }
+  }
+}
+```
+
+Prefer `key_env_var` to `api_key`, so the key stays out of files. Either way, the key value is
+redacted like other secrets, and its variable is not passed to commands the agent runs.
+
+Source: <Receipt path="src/core/tools/web/providers.ts" symbol="SearchProviders" />,
+<Receipt path="src/core/providers/factory.ts" symbol="resolveApiKey" />,
+<Receipt path="src/core/config/schema.ts" symbol="key_env_var" />.
+
+## Permissions
+
+Both tools have the `network` class. With no rule, they ask in every mode except bypass. Rules
+name a **domain**:
+
+- For `web_fetch`, the domain is the URL's host: `web_fetch(domain:docs.python.org)`, or with a
+  wildcard, `web_fetch(domain:*.python.org)`.
+- For `web_search`, the domain is **the provider's host, not anything in the query**:
+  `web_search(domain:api.langsearch.com)`. Allowing it allows every search sent to that provider.
+
+Source: <Receipt path="src/core/permissions/subjects.ts" symbol="webSearchHost" />.
+
+## The refinement stage
+
+Both tools pass their output through a refinement function before returning it:
+`refineFetch` for a page, with the `prompt` argument, and `refineSearch` for results. **Today both
+return their input unchanged.** The stage exists so filtering can be added later without changing
+either tool.
+
+Source: <Receipt path="src/core/tools/web/refine.ts" symbol="refineFetch" />.
+
+## Proofs
+
+<Proof run="bun test src/core/tools/web/__tests__">
+All pass. Fetches go to a local `Bun.serve` and searches go to a stub runner, so nothing leaves
+the machine. `permissions.test.ts` covers the domain rules, and `redaction.test.ts` covers the key.
+</Proof>

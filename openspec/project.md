@@ -200,8 +200,9 @@ keyword.
 - Third-party code never loads into the JamCLI process. Plugins, hooks, MCP servers,
   and language servers run as subprocesses, sandboxed when a sandbox is available.
 - The local-first path must keep working with no network, no account, and no API key.
-- Markdown is tracked only inside `openspec/` and `docs/`; the rest of the tree keeps
-  scratch notes out of git.
+- Markdown is tracked only inside `openspec/`, `docs/`, and `site/`; the rest of the tree
+  keeps scratch notes out of git. `site/` is the published documentation, a separate
+  Starlight project with its own dependencies; the root gates do not build it.
 
 ## External Dependencies
 

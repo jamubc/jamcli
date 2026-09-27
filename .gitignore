@@ -15,6 +15,7 @@ coverage/
 !AGENTS.md
 !openspec/**
 !docs/**
+!site/**/*.md
 # Production
 build/
 dist/
@@ -50,6 +51,7 @@ Thumbs.db
 
 # Application specific
 .jamcli/
+.superpowers/
 .commandcode/
 agents.config.json
 scripts/test-history.ts
