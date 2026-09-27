@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { breath, resolveColor, sample, sweep, sweepMs, TICK_MS } from './motion.js';
 import { frameRow } from './statusStyle.js';
-import { useTheme } from './theme.js';
+import { useSelectable, useTheme } from './theme.js';
 
 /**
  * The working indicator: a spinner that breathes through the style's color ramp, and
@@ -14,6 +14,7 @@ import { useTheme } from './theme.js';
  */
 export function Indicator({ style, words }: { style: StatusStyleDefinition; words: string }) {
   const theme = useTheme();
+  const sel = useSelectable();
   const started = useRef(Date.now());
   const [now, setNow] = useState(started.current);
   useEffect(() => {
@@ -38,7 +39,7 @@ export function Indicator({ style, words }: { style: StatusStyleDefinition; word
   const colorAt = (index: number) => (colored ? (lit ? sample(wordRamp, lit[index]) : wordRamp[0] ?? theme.text) : theme.text);
 
   return (
-    <text fg={theme.text}>
+    <text {...sel} fg={theme.text}>
       <span fg={spinner}>{frame}</span>
       {' '}
       {chars.map((char, index) => (

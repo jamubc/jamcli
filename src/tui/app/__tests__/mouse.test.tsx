@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
+import { RGBA } from '@opentui/core';
+import { THEMES } from '../theme.js';
 import { frameWith, interfaceHarness, type Setup } from './harness.js';
 
 const { context, open } = interfaceHarness();
@@ -134,6 +136,71 @@ test('the wheel scrolls a long list: the highlight moves a row per turn, and the
     await setup.mockMouse.scroll(over.x, over.y, 'up');
     await frameWith(setup, (frame) => frame.includes(`10 of ${total} ·`));
     expect(rows(setup.captureCharFrame())).toEqual(after.map((row, index) => (index === after.length - 2 ? row.replace('│   ', '│ > ') : row.replace('│ > ', '│   '))));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+/** The colors of the cell at a column and row of the last frame. */
+function cellAt(setup: Setup, x: number, y: number): { bg: RGBA; fg: RGBA; attributes: number } {
+  let column = 0;
+  for (const span of setup.captureSpans().lines[y].spans) {
+    if (x < column + span.width) return span;
+    column += span.width;
+  }
+  throw new Error(`No cell at ${x},${y}.`);
+}
+
+const sameColor = (color: RGBA, hex: string): boolean => color.equals(RGBA.fromHex(hex));
+
+test('pointing at a permission choice draws it as a bar, so what a click would answer is plain before the click', async () => {
+  const { setup, close } = await open();
+  try {
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo pointed' } }] }, { text: 'Done.' });
+    await send(setup, 'run it');
+    await frameWith(setup, (frame) => frame.includes('1  Allow once'));
+    const once = where(setup, '1  Allow once');
+    const session = where(setup, '2  Allow this session');
+    const chosen = THEMES.dark.chosen as string;
+    expect(sameColor(cellAt(setup, once.x + 4, once.y).bg, chosen)).toBe(false);
+    await setup.mockMouse.moveTo(once.x + 4, once.y);
+    await frameWith(setup, () => sameColor(cellAt(setup, once.x + 4, once.y).bg, chosen));
+    // The bar runs the width of the row, not just the words.
+    expect(sameColor(cellAt(setup, once.x + 60, once.y).bg, chosen)).toBe(true);
+    expect(sameColor(cellAt(setup, session.x + 4, session.y).bg, chosen)).toBe(false);
+    await setup.mockMouse.moveTo(session.x + 4, session.y);
+    await frameWith(setup, () => sameColor(cellAt(setup, session.x + 4, session.y).bg, chosen));
+    expect(sameColor(cellAt(setup, once.x + 4, once.y).bg, chosen)).toBe(false);
+    await setup.mockMouse.click(session.x + 4, session.y);
+    await frameWith(setup, (frame) => frame.includes('Done.'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test("a selection is drawn in the theme's selection colors, and stays on its words when the transcript scrolls", async () => {
+  const { setup, copied, close } = await open({}, { size: { width: 80, height: 24 } });
+  try {
+    context.server.enqueue({ text: Array.from({ length: 60 }, (_, index) => `row ${index + 1}`).join('\n\n') });
+    await send(setup, 'long');
+    await frameWith(setup, (frame) => frame.includes('row 60'));
+    const from = where(setup, 'row 55');
+    const selection = (THEMES.dark.selection as { bg: string }).bg;
+    expect(sameColor(cellAt(setup, from.x, from.y).bg, selection)).toBe(false);
+    await setup.mockMouse.drag(from.x, from.y, from.x + 'row 55'.length - 1, from.y);
+    await frameWith(setup, (frame) => frame.includes('Copied'));
+    expect(copied).toEqual(['row 55']);
+    expect(sameColor(cellAt(setup, from.x, from.y).bg, selection)).toBe(true);
+    expect(sameColor(cellAt(setup, from.x + 'row 55'.length, from.y).bg, selection)).toBe(false);
+    // The wheel moves the transcript; the highlight moves with its words, as in a document.
+    await setup.mockMouse.scroll(from.x, from.y, 'up');
+    await setup.mockMouse.scroll(from.x, from.y, 'up');
+    const moved = await frameWith(setup, (frame) => where(setup, 'row 55').y !== from.y);
+    expect(moved).toContain('row 55');
+    const now = where(setup, 'row 55');
+    expect(sameColor(cellAt(setup, now.x, now.y).bg, selection)).toBe(true);
+    expect(sameColor(cellAt(setup, now.x, from.y).bg, selection)).toBe(false);
+    expect(setup.renderer.getSelection()?.getSelectedText()).toBe('row 55');
   } finally {
     await close();
   }

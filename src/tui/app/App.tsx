@@ -20,7 +20,7 @@ import { Palette, ReferencePalette } from './Palette.js';
 import { completeReference, matchReferences, referenceCandidates, referenceToken, type ReferenceItem } from './references.js';
 import { noteCall, noteText } from './note.js';
 import { Picker, shownItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
-import { MotionContext, PlainContext, THEMES, ThemeContext, framed, type Theme } from './theme.js';
+import { MotionContext, PlainContext, THEMES, ThemeContext, framed, selectable, type Theme } from './theme.js';
 import { keysFor, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
 import type { TodoView } from '../state/view.js';
@@ -80,17 +80,18 @@ const TODO_WORDS: Record<TodoView['status'], string> = { pending: 'to do', in_pr
 
 /** The model's todo list, shown and hidden with the todos key. */
 function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; plain: boolean; colors: Theme }) {
+  const sel = selectable(colors);
   return (
     <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
-      <text fg={colors.accent}>Todo list</text>
+      <text {...sel} fg={colors.accent}>Todo list</text>
       {todos?.length ? (
         todos.map((todo, index) => (
-          <text key={index} fg={todo.status === 'completed' ? colors.dim : colors.text}>
+          <text {...sel} key={index} fg={todo.status === 'completed' ? colors.dim : colors.text}>
             {`${TODO_WORDS[todo.status]}: ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}`}
           </text>
         ))
       ) : (
-        <text fg={colors.dim}>No todo list yet. The model writes one with todo_write as it works.</text>
+        <text {...sel} fg={colors.dim}>No todo list yet. The model writes one with todo_write as it works.</text>
       )}
     </box>
   );
@@ -98,11 +99,12 @@ function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; pl
 
 /** The person's sticky notes, newest on top, shown while there are any. */
 function NotesPanel({ notes, plain, colors }: { notes: string[]; plain: boolean; colors: Theme }) {
+  const sel = selectable(colors);
   return (
     <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
-      <text fg={colors.accent}>{`Notes${plain ? ', newest first' : ''}`}</text>
+      <text {...sel} fg={colors.accent}>{`Notes${plain ? ', newest first' : ''}`}</text>
       {notes.map((text, index) => (
-        <text key={notes.length - index} fg={index === 0 ? colors.text : colors.dim}>{`- ${text}`}</text>
+        <text {...sel} key={notes.length - index} fg={index === 0 ? colors.text : colors.dim}>{`- ${text}`}</text>
       ))}
     </box>
   );
@@ -172,6 +174,7 @@ export function App(props: AppProps) {
   const [exitArmed, setExitArmed] = useState(false);
   const branch = useMemo(() => gitBranch(runtime.workRoot), [runtime.workRoot]);
   const [theme, setTheme] = useState<Theme>(startTheme);
+  const sel = selectable(theme);
   const [statusStyle, setStatusStyle] = useState<StatusStyleDefinition>(props.statusStyle ?? DEFAULT_STATUS_STYLE);
   const syntax = useMemo(() => createSyntaxStyle(theme), [theme]);
   useEffect(() => () => syntax.destroy(), [syntax]);
@@ -694,17 +697,17 @@ export function App(props: AppProps) {
         <MotionContext.Provider value={reducedMotion}>
           {micro ? (
             <box height={1} width="100%">
-              <text fg={state.approvals.length ? theme.warn : theme.text}>{fitPhrase(microPhrase(state), Math.max(1, size.width))}</text>
+              <text {...sel} fg={state.approvals.length ? theme.warn : theme.text}>{fitPhrase(microPhrase(state), Math.max(1, size.width))}</text>
             </box>
           ) : null}
           <box flexDirection="column" width="100%" height="100%" visible={!micro} onMouseDrag={dragPast} onMouseUp={endDrag} onMouseDragEnd={endDrag}>
             <box height={1} flexShrink={0}>
-              <text fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
+              <text {...sel} fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
             </box>
             {state.notes.length ? <NotesPanel notes={state.notes} plain={plain} colors={theme} /> : null}
             <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
               {hidden ? (
-                <text fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
+                <text {...sel} fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
               ) : null}
               {(hidden ? state.rows.slice(hidden) : state.rows).map((row) => (
                 <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} expanded={state.status.expanded} onToggle={(id) => dispatch({ type: 'toggle', id })} />
@@ -790,9 +793,9 @@ export function App(props: AppProps) {
               </box>
             )}
             <box height={1} flexShrink={0} flexDirection="row">
-              {flash ? <text fg={theme.accent}>{`${flash}${plain ? '. ' : ' · '}`}</text> : null}
+              {flash ? <text {...sel} fg={theme.accent}>{`${flash}${plain ? '. ' : ' · '}`}</text> : null}
               {moving ? <Indicator style={statusStyle} words={status.at(-1)!} /> : null}
-              <text fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${(moving ? status.slice(0, -1) : status).join(plain ? ', ' : ' · ')}`}</text>
+              <text {...sel} fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${(moving ? status.slice(0, -1) : status).join(plain ? ', ' : ' · ')}`}</text>
             </box>
           </box>
         </MotionContext.Provider>

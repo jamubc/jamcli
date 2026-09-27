@@ -1,4 +1,4 @@
-import { RGBA } from '@opentui/core';
+import { RGBA, TextAttributes } from '@opentui/core';
 import { createContext, useContext } from 'react';
 import type { ThemeName } from '../../types/config.js';
 
@@ -25,6 +25,17 @@ export interface Theme {
   warn: Color;
   error: Color;
   border: Color;
+  /**
+   * Text a drag selected: its background, and its foreground when the tokens' own colors
+   * would not read on that background. Monochrome inverts the text instead.
+   */
+  selection: { bg: Color; fg?: Color } | 'inverse';
+  /**
+   * The row the keys or the pointer chose, in a list and in the permission prompt: a bar
+   * behind it, so what a click would choose is plain before the click. Monochrome
+   * inverts the row instead.
+   */
+  chosen: Color | 'inverse';
   /** Diff lines: backgrounds and the + and - signs. */
   diff: { addedBg: string; removedBg: string; addedSign: Color; removedSign: Color };
   /** Token colors for Markdown, code, and diffs. Monochrome keeps only bold, italic, and underline. */
@@ -54,6 +65,8 @@ export const THEMES: Record<ThemeName, Theme> = {
     warn: '#e0af68',
     error: '#f7768e',
     border: '#3b4261',
+    selection: { bg: '#33467c' },
+    chosen: '#292e42',
     diff: { addedBg: '#1a4d1a', removedBg: '#4d1a1a', addedSign: '#22c55e', removedSign: '#ef4444' },
     tokens: {
       heading: '#7aa2f7',
@@ -79,6 +92,8 @@ export const THEMES: Record<ThemeName, Theme> = {
     warn: '#b35900',
     error: '#d20f39',
     border: '#9ca0b0',
+    selection: { bg: '#c9d4ee' },
+    chosen: '#dce0e8',
     diff: { addedBg: '#dafbe1', removedBg: '#ffebe9', addedSign: '#1a7f37', removedSign: '#cf222e' },
     tokens: {
       heading: '#1e66f5',
@@ -104,6 +119,8 @@ export const THEMES: Record<ThemeName, Theme> = {
     warn: '#ffff00',
     error: '#ff5f5f',
     border: '#ffffff',
+    selection: { bg: '#ffffff', fg: '#000000' },
+    chosen: '#005f87',
     diff: { addedBg: '#003300', removedBg: '#330000', addedSign: '#00ff5f', removedSign: '#ff5f5f' },
     tokens: {
       heading: '#00d7ff',
@@ -129,6 +146,8 @@ export const THEMES: Record<ThemeName, Theme> = {
     warn: TERMINAL,
     error: TERMINAL,
     border: TERMINAL,
+    selection: 'inverse',
+    chosen: 'inverse',
     diff: { addedBg: 'transparent', removedBg: 'transparent', addedSign: TERMINAL, removedSign: TERMINAL },
     tokens: {},
   },
@@ -147,6 +166,24 @@ export function resolveTheme(configured: ThemeName | undefined, env: Record<stri
 
 export const ThemeContext = createContext<Theme>(THEMES.dark);
 export const useTheme = (): Theme => useContext(ThemeContext);
+
+/** What every text element takes so a drag across it is drawn in the theme's selection colors. */
+export type Selectable = { selectionBg?: Color; selectionFg?: Color };
+
+/**
+ * The selection colors of a theme, as the props of a text, markdown, or diff element.
+ * Inverse leaves them unset: OpenTUI then swaps each selected cell's own colors.
+ */
+export const selectable = (theme: Theme): Selectable =>
+  theme.selection === 'inverse' ? {} : { selectionBg: theme.selection.bg, ...(theme.selection.fg ? { selectionFg: theme.selection.fg } : {}) };
+
+export const useSelectable = (): Selectable => selectable(useTheme());
+
+/** How a row is drawn when it is the chosen one: the theme's bar behind it, or inverse video. */
+export const chosenRow = (theme: Theme, chosen: boolean): { bg?: Color; attributes?: number } => {
+  if (!chosen) return {};
+  return theme.chosen === 'inverse' ? { attributes: TextAttributes.INVERSE } : { bg: theme.chosen };
+};
 
 /**
  * Screen reader mode: plain labeled lines, with no boxes, no marks, and no Markdown

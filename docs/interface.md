@@ -53,11 +53,14 @@ would be saved. An MCP server's request for input is a form in the same place.
 - Drag across the transcript to select, across as many rows as you like. Releasing copies
   the selection, and the status line says how much. Dragging above or below the
   transcript keeps it scrolling, so a long reply can be selected whole. A double click
-  selects a word.
+  selects a word. The selection is drawn in the theme's selection colors and stays on its
+  words when the transcript scrolls, as in a document; monochrome inverts it.
 - The wheel scrolls the transcript, and in a list, the palette, or the `@` list it moves
   the highlight a row per turn; the list scrolls when the highlight reaches its edge.
 - Click a row in a list, the palette, or the `@` list to choose it; pointing at one marks
-  it. Click a choice in a permission prompt to answer it.
+  it. Click a choice in a permission prompt to answer it. The row a click would choose is
+  drawn as a bar in the theme's color, in lists and in the prompt alike, so what a click
+  does is plain before the click.
 - Click a tool's line to show or hide that tool's output, and a thinking line to show or
   hide that thinking. These are one block at a time; Ctrl+O is the whole view.
 

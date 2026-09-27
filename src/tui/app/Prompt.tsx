@@ -1,11 +1,12 @@
 /** @jsxImportSource @opentui/react */
 import type { SyntaxStyle } from '@opentui/core';
+import { useState } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
 import type { PendingApproval } from '../state/view.js';
 import { useClick } from './mouse.js';
 import { DiffView } from './Rows.js';
 import { diffRows } from './format.js';
-import { framed, usePlain, useTheme } from './theme.js';
+import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
 
 /** An input's submitted text: OpenTUI's React input hands over the value itself. */
 const submitted = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -37,7 +38,8 @@ type Choice = '1' | '2' | '3' | '4' | '5';
  * choices, the pattern a grant would remember beside the two that use it. Escape, shown
  * as a badge in the corner, denies and stops the turn; the badge turns red when pressed.
  * A deny can instead let the turn go on, or carry feedback for the model, typed on a
- * line of its own.
+ * line of its own. The choice under the pointer is drawn as a bar, so what a click would
+ * answer is plain before the click.
  */
 export function PermissionPrompt(props: {
   approval: PendingApproval;
@@ -54,6 +56,7 @@ export function PermissionPrompt(props: {
 }) {
   const { approval, queued, syntax, file, selected, feedback, escaping } = props;
   const theme = useTheme();
+  const sel = useSelectable();
   const click = useClick();
   const plain = usePlain();
   const { width: columns, height } = useTerminalDimensions();
@@ -61,6 +64,7 @@ export function PermissionPrompt(props: {
   // The frame takes two columns of border and two of padding.
   const room = Math.max(20, columns - 4);
   const choice = (key: Choice) => click(() => props.onChoose?.(key));
+  const [hovered, setHovered] = useState<Choice | undefined>(undefined);
 
   const diff = approval.preview?.kind === 'diff' ? approval.preview.text : undefined;
   // The rows the diff is drawn in: its hunks, or in screen reader mode every line after a label.
@@ -84,11 +88,21 @@ export function PermissionPrompt(props: {
   const label = (key: Choice, what: string, detail?: string) => {
     const head = plain ? `${key}: ` : ` ${key}  `;
     const shownDetail = detail ? `   ${fitTo(detail, room - head.length - what.length - 3)}` : '';
+    const rest = ' '.repeat(Math.max(0, room - head.length - what.length - shownDetail.length));
     return (
-      <text fg={theme.text} onMouseUp={choice(key)}>
+      <text
+        {...sel}
+        {...chosenRow(theme, hovered === key)}
+        width="100%"
+        fg={theme.text}
+        onMouseUp={choice(key)}
+        onMouseOver={() => setHovered(key)}
+        onMouseOut={() => setHovered((now) => (now === key ? undefined : now))}
+      >
         <span fg={theme.accent}>{head}</span>
         <span>{what}</span>
         {shownDetail ? <span fg={theme.dim}>{shownDetail}</span> : null}
+        {rest}
       </text>
     );
   };
@@ -97,8 +111,8 @@ export function PermissionPrompt(props: {
   return (
     <box {...framed(plain, theme.warn)} flexDirection="column" flexShrink={0}>
       <box flexDirection="row" justifyContent="space-between">
-        <text fg={theme.warn}>{title}</text>
-        <text>
+        <text {...sel} fg={theme.warn}>{title}</text>
+        <text {...sel}>
           {waiting ? <span fg={theme.dim}>{waiting}</span> : null}
           <span fg={escaping ? theme.error : theme.dim}>{plain ? `${badge}${escaping ? ' (denying)' : ''}` : `[${escaping ? '✕ Esc' : 'Esc'}]`}</span>
         </text>
@@ -111,24 +125,24 @@ export function PermissionPrompt(props: {
       ) : diff ? (
         <DiffView diff={diff} file={file} syntax={syntax} />
       ) : null}
-      {diffOverflow ? <text fg={theme.dim}>{plain ? 'The diff continues.' : '… the diff continues, wheel scrolls it'}</text> : null}
+      {diffOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The diff continues.' : '… the diff continues, wheel scrolls it'}</text> : null}
       {shown.length ? (
         <box flexDirection="column" paddingLeft={plain ? 0 : 2}>
           {shown.map((line, index) => (
-            <text key={index} fg={theme.tokens.raw ?? theme.text}>
+            <text {...sel} key={index} fg={theme.tokens.raw ?? theme.text}>
               {fitTo(line, room - 2)}
             </text>
           ))}
-          {cut > 0 ? <text fg={theme.dim}>{`… ${cut} more ${cut === 1 ? 'line' : 'lines'}, in the tool row once it runs`}</text> : null}
+          {cut > 0 ? <text {...sel} fg={theme.dim}>{`… ${cut} more ${cut === 1 ? 'line' : 'lines'}, in the tool row once it runs`}</text> : null}
         </box>
       ) : null}
-      <text fg={theme.dim} wrapMode="word">
+      <text {...sel} fg={theme.dim} wrapMode="word">
         {`${reason}.`}
       </text>
-      <text> </text>
+      <text {...sel}> </text>
       {feedback ? (
         <box flexDirection="column">
-          <text fg={theme.text}>Feedback for the model (Enter alone denies):</text>
+          <text {...sel} fg={theme.text}>Feedback for the model (Enter alone denies):</text>
           <input focused placeholder="feedback for the model" onSubmit={(value: unknown) => props.onFeedback(submitted(value))} />
         </box>
       ) : (
@@ -138,7 +152,7 @@ export function PermissionPrompt(props: {
           {pattern ? label('3', 'Allow this project', `${pattern} · .jamcli/config.local.json`) : null}
           {label('4', 'Deny, continue')}
           {label('5', 'Deny with feedback')}
-          {notes ? <text fg={theme.dim}>{fitTo(notes, room)}</text> : null}
+          {notes ? <text {...sel} fg={theme.dim}>{fitTo(notes, room)}</text> : null}
         </box>
       )}
     </box>
@@ -148,12 +162,13 @@ export function PermissionPrompt(props: {
 /** Asks the person to type yes before bypass mode turns on. */
 export function BypassConfirm({ onAnswer }: { onAnswer: (text: string) => void }) {
   const theme = useTheme();
+  const sel = useSelectable();
   const plain = usePlain();
   return (
     <box {...framed(plain, theme.error)} flexDirection="column" flexShrink={0}>
-      <text fg={theme.error}>{`${plain ? 'Confirm: ' : ''}Turn on bypass mode?`}</text>
-      <text fg={theme.text}>Nothing will ask before it runs: every edit and every command goes ahead, and only deny rules stop a call.</text>
-      <text fg={theme.text}>Type yes and press Enter to turn it on. Anything else, or Escape, leaves the mode as it is.</text>
+      <text {...sel} fg={theme.error}>{`${plain ? 'Confirm: ' : ''}Turn on bypass mode?`}</text>
+      <text {...sel} fg={theme.text}>Nothing will ask before it runs: every edit and every command goes ahead, and only deny rules stop a call.</text>
+      <text {...sel} fg={theme.text}>Type yes and press Enter to turn it on. Anything else, or Escape, leaves the mode as it is.</text>
       <input focused placeholder="yes" onSubmit={(value: unknown) => onAnswer(submitted(value))} />
     </box>
   );

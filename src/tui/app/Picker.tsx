@@ -2,7 +2,7 @@
 import { useRef } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
 import { useClick, wheelStep } from './mouse.js';
-import { framed, usePlain, useTheme } from './theme.js';
+import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
 
 /** One choice in an overlay. */
 export interface PickItem {
@@ -95,6 +95,7 @@ export function Picker(props: {
   onScroll?: (step: number) => void;
 }) {
   const theme = useTheme();
+  const sel = useSelectable();
   const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
@@ -111,31 +112,31 @@ export function Picker(props: {
   return (
     <box {...framed(plain, theme.accent)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && props.onScroll?.(wheelStep(event))}>
       <box flexDirection="row" justifyContent="space-between">
-        <text fg={theme.accent}>{fit(`${props.title}${counted}`, room - position.length - badge.length - 2)}</text>
-        <text fg={theme.dim}>{`${position}${badge}`}</text>
+        <text {...sel} fg={theme.accent}>{fit(`${props.title}${counted}`, room - position.length - badge.length - 2)}</text>
+        <text {...sel} fg={theme.dim}>{`${position}${badge}`}</text>
       </box>
-      <text>
+      <text {...sel}>
         <span fg={theme.dim}>Filter: </span>
         {props.filter ? <span fg={theme.text}>{fit(props.filter, room - 'Filter: '.length)}</span> : <span fg={theme.dim}>type to narrow the list</span>}
       </text>
-      <text> </text>
-      {shown === undefined ? <text fg={theme.dim}>Asking…</text> : null}
-      {shown !== undefined && shown.length === 0 ? <text fg={theme.dim}>{fit(props.items?.length ? 'Nothing matches the filter.' : props.empty)}</text> : null}
+      <text {...sel}> </text>
+      {shown === undefined ? <text {...sel} fg={theme.dim}>Asking…</text> : null}
+      {shown !== undefined && shown.length === 0 ? <text {...sel} fg={theme.dim}>{fit(props.items?.length ? 'Nothing matches the filter.' : props.empty)}</text> : null}
       {visible.map((item, index) => {
         const chosen = start + index === props.selected;
         const text = `${item.label}${item.current ? ' (in use)' : ''}`;
         // A label longer than the column keeps two spaces before its detail.
         const label = text.length >= width ? `${text}  ` : text.padEnd(width + 2);
         return (
-          <text key={item.key} fg={chosen ? theme.accent : theme.text} onMouseUp={click(() => props.onPick?.(start + index))} onMouseOver={() => props.onHover?.(start + index)}>
-            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${label}${item.detail ?? ''}`)}
+          <text {...sel} key={item.key} width="100%" {...chosenRow(theme, chosen)} fg={chosen ? theme.accent : theme.text} onMouseUp={click(() => props.onPick?.(start + index))} onMouseOver={() => props.onHover?.(start + index)}>
+            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${label}${item.detail ?? ''}`).padEnd(room)}
           </text>
         );
       })}
-      <text> </text>
+      <text {...sel}> </text>
       {/* A note can carry the fix, so it wraps rather than being cut. */}
-      {props.note ? <text fg={theme.warn} wrapMode="word">{props.note}</text> : null}
-      <text fg={theme.dim}>{fit(`${props.hint ?? 'Enter chooses'} · Up/Down move${plain ? '' : ', or click'}`)}</text>
+      {props.note ? <text {...sel} fg={theme.warn} wrapMode="word">{props.note}</text> : null}
+      <text {...sel} fg={theme.dim}>{fit(`${props.hint ?? 'Enter chooses'} · Up/Down move${plain ? '' : ', or click'}`)}</text>
     </box>
   );
 }

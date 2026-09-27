@@ -4,7 +4,7 @@ import type { SlashCommand } from './commands.js';
 import type { ReferenceItem } from './references.js';
 import { useClick, wheelStep } from './mouse.js';
 import { useListWindow } from './Picker.js';
-import { framed, usePlain, useTheme } from './theme.js';
+import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
 
 /** How many matches the palette shows at once. */
 export const PALETTE_ROWS = 8;
@@ -15,6 +15,7 @@ export const PALETTE_ROWS = 8;
  */
 export function Palette({ matches, selected, onPick, onHover, onScroll }: { matches: SlashCommand[]; selected: number; onPick?: (index: number) => void; onHover?: (index: number) => void; onScroll?: (step: number) => void }) {
   const colors = useTheme();
+  const sel = useSelectable();
   const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
@@ -26,9 +27,9 @@ export function Palette({ matches, selected, onPick, onHover, onScroll }: { matc
   const width = Math.min(28, Math.max(...shown.map((command) => command.name.length + (command.args ? command.args.length + 1 : 0))));
   return (
     <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && onScroll?.(wheelStep(event))}>
-      {plain ? <text fg={colors.text}>{`Commands matching: ${matches.length}`}</text> : null}
+      {plain ? <text {...sel} fg={colors.text}>{`Commands matching: ${matches.length}`}</text> : null}
       {matches.length === 0 ? (
-        <text fg={colors.dim}>No command starts with that. /help lists them.</text>
+        <text {...sel} fg={colors.dim}>No command starts with that. /help lists them.</text>
       ) : (
         shown.map((command, index) => {
           const chosen = start + index === selected;
@@ -36,13 +37,13 @@ export function Palette({ matches, selected, onPick, onHover, onScroll }: { matc
           const head = name.length >= width ? `${name} ` : name.padEnd(width + 1);
           const from = command.source === 'built-in' ? '' : ` (${command.source})`;
           return (
-            <text key={command.name} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
-              {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head} ${command.summary}${from}`)}
+            <text {...sel} key={command.name} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
+              {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head} ${command.summary}${from}`).padEnd(room)}
             </text>
           );
         })
       )}
-      <text fg={colors.dim}>{`${matches.length > PALETTE_ROWS ? `${selected + 1} of ${matches.length} · ` : ''}Up and Down choose · Tab completes · Enter runs · Escape closes`}</text>
+      <text {...sel} fg={colors.dim}>{`${matches.length > PALETTE_ROWS ? `${selected + 1} of ${matches.length} · ` : ''}Up and Down choose · Tab completes · Enter runs · Escape closes`}</text>
     </box>
   );
 }
@@ -50,6 +51,7 @@ export function Palette({ matches, selected, onPick, onHover, onScroll }: { matc
 /** What `@` could name, shown above the composer as a word is typed after it. */
 export function ReferencePalette({ matches, selected, loading, onPick, onHover, onScroll }: { matches: ReferenceItem[]; selected: number; loading: boolean; onPick?: (index: number) => void; onHover?: (index: number) => void; onScroll?: (step: number) => void }) {
   const colors = useTheme();
+  const sel = useSelectable();
   const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
@@ -60,18 +62,18 @@ export function ReferencePalette({ matches, selected, loading, onPick, onHover, 
   const width = Math.min(48, Math.max(0, ...shown.map((item) => item.text.length + 1)));
   return (
     <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && onScroll?.(wheelStep(event))}>
-      {plain ? <text fg={colors.text}>{`References matching: ${matches.length}`}</text> : null}
-      {loading ? <text fg={colors.dim}>Looking…</text> : matches.length === 0 ? <text fg={colors.dim}>Nothing in the project or the MCP resources matches that.</text> : null}
+      {plain ? <text {...sel} fg={colors.text}>{`References matching: ${matches.length}`}</text> : null}
+      {loading ? <text {...sel} fg={colors.dim}>Looking…</text> : matches.length === 0 ? <text {...sel} fg={colors.dim}>Nothing in the project or the MCP resources matches that.</text> : null}
       {shown.map((item, index) => {
         const chosen = start + index === selected;
         const head = `@${item.text}`;
         return (
-          <text key={item.text} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
-            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head.length >= width ? `${head} ` : head.padEnd(width + 1)} ${item.detail}`)}
+          <text {...sel} key={item.text} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
+            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head.length >= width ? `${head} ` : head.padEnd(width + 1)} ${item.detail}`).padEnd(room)}
           </text>
         );
       })}
-      <text fg={colors.dim}>Up and Down choose · Tab or Enter completes · Escape closes</text>
+      <text {...sel} fg={colors.dim}>Up and Down choose · Tab or Enter completes · Escape closes</text>
     </box>
   );
 }
