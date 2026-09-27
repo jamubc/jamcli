@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { frameRow, legacyUi, statusStyleFor } from '../statusStyle.js';
+import { frameRow, legacyUi, statusStyleFor } from '../fromConfig.js';
 
 let dir: string;
 const shared = process.env.JAMCLI_CONFIG_DIR;

@@ -1,7 +1,9 @@
 import { createHostClipboard, type CliRenderer } from '@opentui/core';
 
 /** Put text on the clipboard. Resolves to how it got there, or false when nothing could take it. */
-export type Copier = (text: string) => Promise<'system' | 'terminal' | false>;
+import type { Copier } from '../../commands/types.js';
+
+export type { Copier };
 
 /**
  * The system clipboard first, which works in every terminal on this machine, including
@@ -32,7 +34,3 @@ export function systemCopier(renderer: Pick<CliRenderer, 'copyToClipboardOSC52'>
 }
 
 /** How much was copied and where, for a notice: a terminal copy may be ignored by the terminal. */
-export function copiedLine(text: string, how: 'system' | 'terminal'): string {
-  const size = `${text.length.toLocaleString('en-US')} character${text.length === 1 ? '' : 's'}`;
-  return how === 'system' ? `${size}, to the clipboard.` : `${size}, through the terminal (OSC 52); a terminal that does not support it ignores the request.`;
-}

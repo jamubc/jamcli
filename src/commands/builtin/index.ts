@@ -1,26 +1,24 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { RunOptions, Runtime } from '../../core/runtime/index.js';
+import type { Runtime } from '../../core/runtime/index.js';
 import type { EditableRuleScope } from '../../core/runtime/index.js';
-import { isPermissionMode, type PermissionMode } from '../../core/permissions/modes.js';
+import { isPermissionMode } from '../../core/permissions/modes.js';
 import type { Decision } from '../../core/permissions/rules.js';
 import { displayPath, loadConfig, userConfigFile } from '../../core/config/load.js';
 import { storedKey } from '../../core/config/credentials.js';
 import { userConfigDir } from '../../utils/paths.js';
-import { describeChain } from '../../core/routing/categories.js';
 import { choiceOf, effortFor, EFFORT_LEVELS, isEffortLevel, isThinkingChoice, THINKING_CHOICES, thinkingFor, type ThinkingChoice } from '../../core/routing/capabilities.js';
 import { describeRun, describeSource, loadAgents, type LoadedAgents } from '../../core/ext/agents.js';
 import { readSessionIndex, readTranscript, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from '../../cli/config.js';
 import type { McpCommandRequest } from '../../cli/mcp.js';
-import type { ViewAction } from '../state/view.js';
-import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from './reports.js';
-import type { PickItem, PickRequest } from './Picker.js';
-import { copiedLine, type Copier } from './clipboard.js';
-import { originOf, SCOPE_WORDS, settingsFromSchema, type Setting } from './settings.js';
-import { THEME_NAMES, THEMES, noColor, type Theme } from './theme.js';
-import { keysHelp, type Keybindings } from './keys.js';
+import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from '../reports.js';
+import { originOf, SCOPE_WORDS, settingsFromSchema, type Setting } from '../settings.js';
+import { findCommand, splitWords } from '../parse.js';
+import type { ChoiceItem, CommandContext, SessionChoice, SlashCommand } from '../types.js';
+import { THEME_NAMES, noColor } from '../../styles/themeNames.js';
+import type { ThemeName } from '../../types/config.js';
 import { setup } from './setup.js';
 import { style } from './style.js';
 import { rewind, undo } from './rewind.js';
@@ -30,123 +28,6 @@ import { pr } from './pr.js';
 import { commandsList, hooksCommand, plugins, skills } from './extensions.js';
 import { workflowsCommand } from './workflows.js';
 import { reflect } from './reflect.js';
-import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
-import type { ThemeName } from '../../types/config.js';
-
-/** Where a command comes from. The palette shows a custom command's source. */
-export type CommandSource = 'built-in' | 'user' | 'project' | 'plugin' | 'mcp';
-
-/** A session to open in place of the current one. */
-export interface SessionChoice {
-  /** Continue this session; a new one when absent. */
-  sessionId?: string;
-  /** Open it with this profile, for the rest of the interface's life. */
-  profile?: string;
-}
-
-/** What a command may do. The interface supplies it; commands never touch rendering. */
-export interface CommandContext {
-  readonly runtime: Runtime;
-  readonly projectRoot: string;
-  /** Whether a turn is running. Commands that change the session wait for it to end. */
-  readonly running: boolean;
-  /** The profile chosen with /profile, when one was; otherwise the configured one applies. */
-  readonly profile?: string;
-  /** Add what the command reports to the transcript. */
-  show(text: string): void;
-  notice(level: 'info' | 'warn' | 'error', text: string): void;
-  /** Fold runtime events into the view, as a compaction's. */
-  dispatch(action: ViewAction): void;
-  /** Read the status line's facts from the runtime again. */
-  refresh(): void;
-  /** Close this session and open another. Resolves to why not, when it could not. */
-  openSession(choice: SessionChoice): Promise<string | undefined>;
-  setMode(mode: PermissionMode): void;
-  /** Ask the person to confirm bypass mode. */
-  confirmBypass(): void;
-  /** Put text on the clipboard: the system's, else the terminal's. Resolves false when neither takes it. */
-  copy: Copier;
-  exit(): void;
-  /** Every command, for /help. */
-  commands(): SlashCommand[];
-  /** Open an overlay to choose from. */
-  pick(request: PickRequest): void;
-  readonly theme: Theme;
-  setTheme(theme: Theme): void;
-  /** The working indicator's style. */
-  readonly statusStyle: StatusStyleDefinition;
-  setStatusStyle(style: StatusStyleDefinition): void;
-  /**
-   * Put text in the composer for the person to finish. With `back`, Escape takes it out
-   * again, unsent, and runs `back`, such as reopening the list it came from.
-   */
-  prefill(text: string, back?: () => void): void;
-  /** Send a prompt as a turn, showing `display` as what was typed, as a custom command does. */
-  send(prompt: string, options?: RunOptions & { display?: string }): void;
-  /** The keys in effect, for help. */
-  readonly keys: Keybindings;
-}
-
-export interface SlashCommand {
-  /** Without the slash. */
-  name: string;
-  aliases?: string[];
-  /** What follows the name, as help shows it. */
-  args?: string;
-  summary: string;
-  source: CommandSource;
-  run(ctx: CommandContext, args: string): void | Promise<void>;
-}
-
-/** A command line split into its name and the rest. */
-export function parseCommand(text: string): { name: string; args: string } | undefined {
-  const match = /^\/(\S*)\s*([\s\S]*)$/.exec(text.trim());
-  return match ? { name: match[1].toLowerCase(), args: match[2].trim() } : undefined;
-}
-
-/** Words as a shell would split them: quotes keep spaces, and backslashes escape. */
-export function splitWords(text: string): string[] {
-  const words: string[] = [];
-  let current = '';
-  let quote: string | undefined;
-  let started = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (quote) {
-      if (char === quote) quote = undefined;
-      else if (char === '\\' && quote === '"' && index + 1 < text.length) current += text[++index];
-      else current += char;
-    } else if (char === '"' || char === "'") {
-      quote = char;
-      started = true;
-    } else if (char === '\\' && index + 1 < text.length) {
-      current += text[++index];
-      started = true;
-    } else if (/\s/.test(char)) {
-      if (started) words.push(current);
-      current = '';
-      started = false;
-    } else {
-      current += char;
-      started = true;
-    }
-  }
-  if (started) words.push(current);
-  return words;
-}
-
-/** The commands a typed prefix could mean: names that start with it first, then names that contain it. */
-export function matchCommands(commands: SlashCommand[], typed: string): SlashCommand[] {
-  const wanted = typed.replace(/^\//, '').toLowerCase();
-  const names = (command: SlashCommand) => [command.name, ...(command.aliases ?? [])];
-  const starts = commands.filter((command) => names(command).some((name) => name.startsWith(wanted)));
-  const contains = commands.filter((command) => !starts.includes(command) && names(command).some((name) => name.includes(wanted)));
-  return [...starts, ...contains];
-}
-
-export function findCommand(commands: SlashCommand[], name: string): SlashCommand | undefined {
-  return commands.find((command) => command.name === name || command.aliases?.includes(name));
-}
 
 /** Refuse, and say so, while a turn runs. */
 const waitForTurn = (ctx: CommandContext, what: string): boolean => {
@@ -193,7 +74,7 @@ const help: SlashCommand = {
       const usage = command.name === 'permissions' ? `\n\n${PERMISSIONS_USAGE}` : command.name === 'config' ? `\n\n${CONFIG_USAGE.split('jamcli config').join('/config')}` : '';
       return ctx.show(`/${command.name}${command.args ? ` ${command.args}` : ''}: ${command.summary}.${command.aliases?.length ? ` Also /${command.aliases.join(', /')}.` : ''}${usage}`);
     }
-    ctx.pick({
+    ctx.choose({
       title: 'Commands',
       items: commands.map((command) => ({
         key: command.name,
@@ -201,7 +82,7 @@ const help: SlashCommand = {
         detail: `${command.summary}${command.source === 'built-in' ? '' : ` (${command.source})`}`,
       })),
       empty: 'No commands.',
-      note: keysHelp(ctx.keys),
+      ...(ctx.keyHelp() ? { note: ctx.keyHelp() } : {}),
       hint: 'Enter puts the command in the composer',
       choose: (item) => ctx.prefill(`/${item.key} `),
     });
@@ -231,10 +112,10 @@ const model: SlashCommand = {
     };
     if (args) return void switchTo(args);
     const inUse = `${ctx.runtime.model.provider}:${ctx.runtime.model.model}`;
-    ctx.pick({
+    ctx.choose({
       title: 'Models the configured providers offer',
       items: ctx.runtime.listModels().then(({ models, problems }) => {
-        const items: PickItem[] = models.map((info) => {
+        const items: ChoiceItem[] = models.map((info) => {
           const ref = `${info.provider}:${info.model}`;
           return { key: ref, label: ref, detail: modelDetail(info), ...(ref === inUse ? { current: true } : {}) };
         });
@@ -324,14 +205,14 @@ const compact: SlashCommand = {
   source: 'built-in',
   async run(ctx, args) {
     if (waitForTurn(ctx, 'compact')) return;
-    ctx.dispatch({ type: 'status', patch: { phase: 'compacting' } });
+    ctx.working('compacting');
     try {
-      const compacted = await ctx.runtime.compact(args || undefined, (event) => ctx.dispatch({ type: 'event', event }));
+      const compacted = await ctx.runtime.compact(args || undefined, (event) => ctx.event(event));
       if (!compacted) ctx.notice('info', 'Nothing to compact yet: the conversation is too short.');
     } catch (error: any) {
       ctx.notice('error', `Compaction failed: ${error?.message ?? error}`);
     } finally {
-      ctx.dispatch({ type: 'status', patch: { phase: 'idle' } });
+      ctx.working('idle');
       ctx.refresh();
     }
   },
@@ -372,7 +253,7 @@ const resume: SlashCommand = {
     };
     if (args) return open(args);
     const now = Date.now();
-    ctx.pick({
+    ctx.choose({
       title: 'Sessions in this project, latest first',
       items: sessions().map((session) => ({ key: session.id, label: session.id, detail: sessionDetail(session, now), ...(session.id === ctx.runtime.sessionId ? { current: true } : {}) })),
       empty: 'No earlier sessions in this project.',
@@ -454,8 +335,8 @@ async function pickSetting(ctx: CommandContext, at?: string): Promise<void> {
   // A value set under no setting the schema names, as one entry of a map, is still shown.
   const extra = entries.filter((entry) => !byKey.has(entry.key) && !schema.some((setting) => entry.key.startsWith(`${setting.key}.`) || entry.key.startsWith(`${setting.key}[`)));
   const shorten = (text: string) => (text.length > 40 ? `${text.slice(0, 39)}…` : text);
-  const items: PickItem[] = [
-    ...schema.map((setting): PickItem => {
+  const items: ChoiceItem[] = [
+    ...schema.map((setting): ChoiceItem => {
       const entry = set.get(setting.key);
       const within = entry ? [] : inside(setting.key);
       const origin = originOf(entry?.origin ?? within[0]?.origin, ctx.projectRoot).words;
@@ -465,8 +346,8 @@ async function pickSetting(ctx: CommandContext, at?: string): Promise<void> {
     ...extra.map((entry) => ({ key: entry.key, label: `${entry.key} = ${shorten(JSON.stringify(entry.value))}`, detail: originOf(entry.origin, ctx.projectRoot).words })),
   ];
   // What the person has set comes first; the rest keep the schema's order.
-  const changed = (item: PickItem) => !(item.detail ?? '').startsWith('default');
-  ctx.pick({
+  const changed = (item: ChoiceItem) => !(item.detail ?? '').startsWith('default');
+  ctx.choose({
     title: 'Settings: what each does, its value, and where it comes from',
     items: [...items.filter(changed), ...items.filter((item) => !changed(item))],
     empty: 'No settings.',
@@ -490,7 +371,7 @@ async function pickSetting(ctx: CommandContext, at?: string): Promise<void> {
 /** A yes/no or fixed choice, saved in the file it is set in, or else the person's own settings. */
 function chooseValue(ctx: CommandContext, setting: Setting, entry: { origin: string; value: unknown } | undefined): void {
   const scope = originOf(entry?.origin, ctx.projectRoot).scope ?? 'user';
-  ctx.pick({
+  ctx.choose({
     title: `${setting.key}, saved in ${SCOPE_WORDS[scope]}`,
     items: setting.choices!.map((choice) => ({ key: choice, label: choice, ...(entry && String(entry.value) === choice ? { current: true } : {}) })),
     empty: 'No choices.',
@@ -533,6 +414,12 @@ const config: SlashCommand = {
     if (edited && action === 'set' && rest[0] === edited) await pickSetting(ctx, edited);
   },
 };
+
+/** What a copy did, in a line. */
+export function copiedLine(text: string, how: 'system' | 'terminal'): string {
+  const size = `${text.length.toLocaleString('en-US')} character${text.length === 1 ? '' : 's'}`;
+  return how === 'system' ? `${size}, to the clipboard.` : `${size}, through the terminal (OSC 52); a terminal that does not support it ignores the request.`;
+}
 
 const copy: SlashCommand = {
   name: 'copy',
@@ -598,7 +485,7 @@ const theme: SlashCommand = {
   async run(ctx, args) {
     const apply = async (name: ThemeName) => {
       const forced = noColor(process.env);
-      ctx.setTheme(forced ? THEMES.monochrome : THEMES[name]);
+      ctx.setTheme(name);
       const out: string[] = [];
       const code = await runConfigCommand({ action: 'set', args: ['ui.theme', name, '--scope', 'user'] }, ctx.projectRoot, { out: (line) => out.push(line), err: (line) => out.push(line) });
       const saved = code === 0 ? ' It is saved in your user configuration.' : ` It could not be saved: ${out.join(' ')}`;
@@ -608,9 +495,9 @@ const theme: SlashCommand = {
       if (!THEME_NAMES.includes(args as ThemeName)) return ctx.notice('warn', `${args} is not a theme; choose ${THEME_NAMES.join(', ')}.`);
       return apply(args as ThemeName);
     }
-    ctx.pick({
+    ctx.choose({
       title: 'Themes',
-      items: THEME_NAMES.map((name) => ({ key: name, label: name, detail: THEME_WORDS[name], ...(ctx.theme.name === name ? { current: true } : {}) })),
+      items: THEME_NAMES.map((name) => ({ key: name, label: name, detail: THEME_WORDS[name], ...(ctx.themeName === name ? { current: true } : {}) })),
       empty: 'No themes.',
       hint: 'Enter uses it and saves it',
       choose: (item) => apply(item.key as ThemeName),
@@ -652,7 +539,7 @@ const agentsCommand: SlashCommand = {
     if (word === 'list') return ctx.show(agentReport(loaded, ctx.projectRoot).join('\n'));
     if (word) return choose(word);
     const label = (file: string) => displayPath(file, ctx.projectRoot);
-    ctx.pick({
+    ctx.choose({
       title: 'Agents delegated work runs on',
       items: Object.values(loaded.agents)
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -728,7 +615,7 @@ const effort: SlashCommand = {
       return void choose(word);
     }
     const current = choiceOf(ctx.runtime.thinking);
-    ctx.pick({
+    ctx.choose({
       title: `How ${ctx.runtime.model.provider}:${ctx.runtime.model.model} thinks`,
       items: THINKING_CHOICES.map((choice) => ({
         key: choice,
@@ -768,11 +655,11 @@ const note: SlashCommand = {
   source: 'built-in',
   run(ctx, args) {
     if (args.toLowerCase() === 'clear') {
-      ctx.dispatch({ type: 'clear_notes' });
+      ctx.clearNotes();
       return ctx.notice('info', 'Notes cleared.');
     }
     if (!args) return ctx.notice('warn', 'Usage: /note <text> pins a note; /notes clear removes them all.');
-    ctx.dispatch({ type: 'note', text: args });
+    ctx.note(args);
   },
 };
 

@@ -3,7 +3,7 @@ import path from 'path';
 import type { ChatMessage } from '../../core/types.js';
 import { isSummary } from '../../core/context/compact.js';
 import { projectMessages, readSessionIndex, readTranscript, sessionFileFor } from '../../core/transcript/index.js';
-import type { PickItem } from './Picker.js';
+import type { ChoiceItem } from '../../commands/types.js';
 
 /** How many of the project's other sessions history search reads. */
 export const HISTORY_SESSIONS = 20;
@@ -18,8 +18,8 @@ const typed = (messages: ChatMessage[]): string[] =>
  * What the person has sent before, newest first: this session's messages, then those of
  * the project's latest sessions. Each is listed once, where it was last sent.
  */
-export function earlierMessages(projectRoot: string, current: { id: string; messages: ChatMessage[] }): PickItem[] {
-  const items: PickItem[] = [];
+export function earlierMessages(projectRoot: string, current: { id: string; messages: ChatMessage[] }): ChoiceItem[] {
+  const items: ChoiceItem[] = [];
   const seen = new Set<string>();
   const add = (texts: string[], where: string) => {
     for (const text of texts) {

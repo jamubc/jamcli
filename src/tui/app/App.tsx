@@ -12,16 +12,18 @@ import { statusParts, thinkingSize } from './format.js';
 import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
-import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, type CommandContext, type SessionChoice, type SlashCommand } from './commands.js';
-import { customCommands, slashCommandForPrompt } from './custom.js';
-import { askToTrustHooks } from './extensions.js';
+import { BUILTIN_COMMANDS } from '../../commands/builtin/index.js';
+import { findCommand, matchCommands, parseCommand } from '../../commands/parse.js';
+import type { ChoiceItem, ChoiceRequest, CommandContext, SessionChoice, SlashCommand } from '../../commands/types.js';
+import { customCommands, slashCommandForPrompt } from '../../commands/custom.js';
+import { askToTrustHooks } from '../../commands/builtin/extensions.js';
 import { answerElicitation } from './elicit.js';
 import { Palette, ReferencePalette } from './Palette.js';
 import { completeReference, matchReferences, referenceCandidates, referenceToken, type ReferenceItem } from './references.js';
 import { noteCall, noteText } from './note.js';
-import { Picker, shownItems, PICKER_ROWS, type PickItem, type PickRequest } from './Picker.js';
-import { MotionContext, PlainContext, THEMES, ThemeContext, framed, selectable, type Theme } from './theme.js';
-import { keysFor, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
+import { Picker, shownItems, PICKER_ROWS } from './Picker.js';
+import { MotionContext, PlainContext, THEMES, ThemeContext, framed, resolveTheme, selectable, type Theme } from './theme.js';
+import { KEY_ACTIONS, keysFor, keysHelp, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
 import type { TodoView } from '../state/view.js';
 import { RowView } from './Rows.js';
@@ -346,7 +348,7 @@ export function App(props: AppProps) {
    * The overlay open over the composer: the request, its choices once they arrive, the
    * filter typed so far, and the chosen row. Keys read the ref, which changes at once.
    */
-  type Open = { request: PickRequest; items?: PickItem[]; note?: string; filter: string; index: number };
+  type Open = { request: ChoiceRequest; items?: ChoiceItem[]; note?: string; filter: string; index: number };
   const overlay = useRef<Open | undefined>(undefined);
   const [, setOverlayView] = useState(0);
   const setOverlay = (next: Open | undefined) => {
@@ -358,12 +360,12 @@ export function App(props: AppProps) {
     setOverlayView((count) => count + 1);
   };
   /** The row the request names, or else the choice in use, so the list opens on it. */
-  const startAt = (request: PickRequest, items: PickItem[]) => Math.max(0, items.findIndex((item) => (request.at === undefined ? item.current : item.key === request.at)));
-  const pick = (request: PickRequest) => {
+  const startAt = (request: ChoiceRequest, items: ChoiceItem[]) => Math.max(0, items.findIndex((item) => (request.at === undefined ? item.current : item.key === request.at)));
+  const pick = (request: ChoiceRequest) => {
     const items = Array.isArray(request.items) ? request.items : undefined;
     setOverlay({ request, filter: '', index: items ? startAt(request, items) : 0, ...(items ? { items } : {}) });
     if (items) return;
-    const pending = request.items as Promise<{ items: PickItem[]; note?: string }>;
+    const pending = request.items as Promise<{ items: ChoiceItem[]; note?: string }>;
     const still = () => overlay.current?.request === request;
     pending.then(
       (arrived) => still() && setOverlay({ ...overlay.current!, items: arrived.items, index: startAt(request, arrived.items), ...(arrived.note ? { note: arrived.note } : {}) }),
@@ -385,9 +387,10 @@ export function App(props: AppProps) {
     projectRoot,
     running: controller.running,
     ...(profile.current ? { profile: profile.current } : {}),
-    show: (text) => dispatch({ type: 'output', text }),
+    show: (text, diff) => dispatch({ type: 'output', text, ...(diff ? { diff } : {}) }),
     notice: say,
-    dispatch,
+    event: (event) => dispatch({ type: 'event', event }),
+    working: (phase) => dispatch({ type: 'status', patch: { phase } }),
     refresh: () => controller.refresh(),
     openSession: switchSession,
     setMode: (mode) => void controller.setMode(mode),
@@ -395,18 +398,21 @@ export function App(props: AppProps) {
     copy: (text) => copyText(text),
     exit: onExit,
     commands: () => commands,
-    pick,
-    theme,
-    setTheme,
+    choose: pick,
+    themeName: theme.name,
+    setTheme: (name) => setTheme(resolveTheme(name, process.env)),
     statusStyle,
     setStatusStyle,
+    note: (text) => dispatch({ type: 'note', text }),
+    clearNotes: () => dispatch({ type: 'clear_notes' }),
     prefill: (text, back) => {
       composer.current?.setText(text);
       composer.current?.gotoBufferEnd();
       prefillBack.current = back;
     },
     send: (prompt, options) => void controller.submit(prompt, options),
-    keys: keys.bindings,
+    keyFor: (action) => (KEY_ACTIONS.includes(action as KeyAction) ? keysFor(keys.bindings, action as KeyAction) : undefined),
+    keyHelp: () => keysHelp(keys.bindings),
   });
 
   // An MCP server's request for input is asked in an overlay, with the context as it is then.

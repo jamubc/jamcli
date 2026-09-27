@@ -9,9 +9,8 @@ import {
   resolveStatusStyle,
 } from '../../styles/statusStyles.js';
 import type { StatusSpinnerStyleId, StatusTextStyleId } from '../../types/config.js';
-import type { CommandContext, SlashCommand } from './commands.js';
-import { frameRow, mergedUi } from './statusStyle.js';
-import type { PickItem } from './Picker.js';
+import type { ChoiceItem, CommandContext, SlashCommand } from '../types.js';
+import { frameRow, mergedUi } from '../../styles/fromConfig.js';
 
 type Part = 'words' | 'spinner';
 
@@ -50,7 +49,7 @@ export const style: SlashCommand = {
     }
     const ui = mergedUi(loadConfig({ projectRoot: ctx.projectRoot }).config.ui ?? {});
     const [words, spinners] = await Promise.all([listStatusTextStyleOptions(ui), listStatusSpinnerStyleOptions(ui)]);
-    const items: PickItem[] = [
+    const items: ChoiceItem[] = [
       ...spinners.map((option) => {
         const frames = BUILTIN_SPINNER_STYLES[option.id]?.spinnerFrames.map(frameRow).join(' ');
         return {
@@ -67,7 +66,7 @@ export const style: SlashCommand = {
         ...(ctx.statusStyle.textStyleId === option.id ? { current: true } : {}),
       })),
     ];
-    ctx.pick({
+    ctx.choose({
       title: 'Working indicator styles',
       items,
       empty: 'No styles.',

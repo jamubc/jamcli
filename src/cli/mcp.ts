@@ -3,6 +3,7 @@ import { pathExists, readJson, writeJson } from '../utils/fsx.js';
 import path from 'path';
 import { McpTestService } from '../services/McpTestService.js';
 import type { McpServerConfig, McpTransport } from '../types/mcp.js';
+import { openBrowser } from '../utils/browser.js';
 import { ensureProjectStateDir } from '../core/transcript/log.js';
 
 export interface McpCommandRequest {
@@ -157,17 +158,6 @@ const describeServer = (server: McpServerConfig): string => {
     kind === 'http' ? server.url ?? '' : `${server.command}${server.args?.length ? ` ${server.args.join(' ')}` : ''}`;
   return `${server.id}\t${kind}\t${server.enabled === false ? 'disabled' : 'enabled'}\t${target}`;
 };
-
-/** Open a page in the person's browser; the address is printed as well, in case it cannot. */
-export async function openBrowser(url: URL): Promise<void> {
-  const { spawn } = await import('child_process');
-  const [command, args] = process.platform === 'darwin' ? ['open', [url.toString()]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url.toString()]] : ['xdg-open', [url.toString()]];
-  try {
-    spawn(command, args as string[], { stdio: 'ignore', detached: true }).on('error', () => undefined).unref();
-  } catch {
-    // The printed address is the fallback.
-  }
-}
 
 export const runMcpCommand = async (
   request: McpCommandRequest,

@@ -1,6 +1,6 @@
 import path from 'path';
-import { userConfigFile } from '../../core/config/load.js';
-import { configJsonSchema } from '../../core/config/schema.js';
+import { userConfigFile } from '../core/config/load.js';
+import { configJsonSchema } from '../core/config/schema.js';
 
 /** One setting a person can change, as the configuration schema describes it. */
 export interface Setting {

@@ -1,7 +1,7 @@
 import { loadConfig } from '../../core/config/load.js';
 import { commitChanges, planCommit, type CommitPlan } from '../../core/git/commit.js';
 import { readChanges } from '../../core/git/review.js';
-import type { CommandContext, SlashCommand } from './commands.js';
+import type { CommandContext, SlashCommand } from '../types.js';
 import { diff } from './review.js';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -17,7 +17,7 @@ function confirm(ctx: CommandContext, paths: string[], given: string | undefined
   const attribution = loadConfig({ projectRoot: ctx.projectRoot }).config.git?.attribution;
   const files = plan.files.map((file) => `${file.status} ${file.path}`).join('\n');
   let message = given ?? '';
-  ctx.pick({
+  ctx.choose({
     title: 'Commit this?',
     items: (given ? Promise.resolve(given) : ctx.runtime.draftCommitMessage(paths)).then(
       (text) => {
@@ -65,7 +65,7 @@ export const commit: SlashCommand = {
     const changes = await readChanges(ctx.runtime.workRoot);
     const changed = new Set([...changes.unstaged.map((file) => file.file)]).size;
     if (!changed && !changes.untracked.length) return ctx.notice('info', 'Nothing to commit: the working copy is as the last commit left it.');
-    ctx.pick({
+    ctx.choose({
       title: 'Nothing is staged',
       items: [
         { key: 'all', label: 'Stage everything and commit', detail: `${plural(changed, 'changed file')} and ${plural(changes.untracked.length, 'untracked file')}` },

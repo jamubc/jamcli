@@ -2,7 +2,7 @@ import { commandsReport, hooksReport, skillsReport } from '../../cli/extensions.
 import { loadCommands } from '../../core/ext/commands.js';
 import { loadSkills } from '../../core/ext/skills.js';
 import { needsTrust } from '../../core/hooks/commands.js';
-import type { CommandContext, SlashCommand } from './commands.js';
+import type { CommandContext, SlashCommand } from '../types.js';
 
 export const skills: SlashCommand = {
   name: 'skills',
@@ -44,7 +44,7 @@ export const commandsList: SlashCommand = {
 export function askToTrustHooks(ctx: CommandContext): void {
   const { hooks } = ctx.runtime.hooks();
   const project = hooks.filter(needsTrust);
-  ctx.pick({
+  ctx.choose({
     title: 'This project configures hooks. Run them?',
     items: [
       { key: 'trust', label: 'Trust them and run them', detail: 'for this project, until they change' },

@@ -110,6 +110,10 @@ export class CostLedger {
 }
 
 /** Dollars for people: cents from a dollar up, four places below it so small sessions do not read as free. */
+/** A token count as the status line and reports say it: 950, 9.5k, 12k, 1.2M. */
+export const formatTokens = (count: number): string =>
+  count < 1000 ? String(count) : count < 1_000_000 ? `${(count / 1000).toFixed(count < 10_000 ? 1 : 0)}k` : `${(count / 1_000_000).toFixed(1)}M`;
+
 export function formatUsd(amount: number): string {
   if (amount === 0) return '$0.00';
   return amount >= 1 ? `$${amount.toFixed(2)}` : `$${amount.toFixed(4)}`;

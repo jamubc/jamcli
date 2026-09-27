@@ -1,9 +1,9 @@
-import type { CommandContext, SlashCommand } from './commands.js';
+import type { CommandContext, SlashCommand } from '../types.js';
 
 /** A yes-or-no question in the picker; Escape answers no. */
 const askIn = (ctx: CommandContext) => (question: string) =>
   new Promise<boolean>((resolve) => {
-    ctx.pick({
+    ctx.choose({
       title: question,
       items: [
         { key: 'yes', label: 'Yes', detail: 'go on' },

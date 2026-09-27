@@ -1,10 +1,10 @@
 ## 1. Commands leave the interface (refactor: no behavior change)
 
-- [ ] 1.1 `src/commands/types.ts`: the command, its context, choice requests and items, the session choice, command sources. `src/commands/parse.ts`: parsing, word splitting, matching, lookup. The overlay's `PickItem` and `PickRequest` become the choice types, which the picker imports.
-- [ ] 1.2 Move every built-in command, with the reports, settings, theme names, and style helpers it uses, into `src/commands/builtin/`. Replace `dispatch` with `show(text, diff)`, `event`, `working`, `note`, and `clearNotes`; the key help reads `keyFor`.
-- [ ] 1.3 Custom commands and MCP prompts as commands move to `src/commands/custom.ts`.
-- [ ] 1.4 The interface builds the context, including repainting, the clipboard, notes, and leaving. `src/tui/` no longer imports `src/cli/` for commands.
-- [ ] 1.5 Four gates; the interface tests pass unchanged in what they assert.
+- [x] 1.1 `src/commands/types.ts`: the command, its context, choice requests and items, the session choice, command sources. `src/commands/parse.ts`: parsing, word splitting, matching, lookup. The overlay's `PickItem` and `PickRequest` become the choice types, which the picker imports.
+- [x] 1.2 Move every built-in command, with the reports, settings, theme names, and style helpers it uses, into `src/commands/builtin/`. Replace `dispatch` with `show(text, diff)`, `event`, `working`, `note`, and `clearNotes`; the key help reads `keyFor`.
+- [x] 1.3 Custom commands and MCP prompts as commands move to `src/commands/custom.ts`.
+- [x] 1.4 The interface builds the context, including repainting, the clipboard, notes, and leaving. `src/tui/` no longer imports `src/cli/` for commands.
+- [x] 1.5 Four gates; the interface tests pass unchanged in what they assert.
 
 ## 2. The host for surfaces without a terminal
 

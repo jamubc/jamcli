@@ -3,44 +3,10 @@ import { useRef } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
 import { useClick, wheelStep } from './mouse.js';
 import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
-
-/** One choice in an overlay. */
-export interface PickItem {
-  key: string;
-  label: string;
-  /** A second column: facts about the choice. */
-  detail?: string;
-  /** The choice in effect now, marked as such. */
-  current?: boolean;
-  /** What choosing it gives, when that is more than the label shows. */
-  value?: string;
-}
-
-/** What a command asks the interface to show: a list to choose from, filtered as the person types. */
-export interface PickRequest {
-  title: string;
-  /** The choices, or a promise of them while they are fetched. */
-  items: PickItem[] | Promise<{ items: PickItem[]; note?: string }>;
-  /** Said when there is nothing to choose. */
-  empty: string;
-  /** A line under the list, such as what Enter does. */
-  hint?: string;
-  /** A line above the hint: something to know, such as a provider that could not be asked. */
-  note?: string;
-  choose(item: PickItem): void | Promise<void>;
-  /**
-   * Take what the person types as the answer: the first row is the typed text, labelled
-   * with this, and the other choices are shown whole rather than filtered.
-   */
-  freeText?: string;
-  /** Called when Escape closes the list without a choice. */
-  dismissed?(): void;
-  /** The key of the row the list opens on, when not the one in use. */
-  at?: string;
-}
+import type { ChoiceItem } from '../../commands/types.js';
 
 /** The rows the list shows for a filter: the matching choices, or the typed text first. */
-export function shownItems(items: PickItem[], filter: string, freeText?: string): PickItem[] {
+export function shownItems(items: ChoiceItem[], filter: string, freeText?: string): ChoiceItem[] {
   if (freeText === undefined) return filterItems(items, filter);
   return [{ key: '__typed__', label: filter || '(type the answer)', detail: freeText, value: filter }, ...items];
 }
@@ -63,7 +29,7 @@ export function useListWindow(selected: number, count: number, rows: number): nu
 }
 
 /** The choices that match a filter: every word must appear in the label or the detail. */
-export function filterItems(items: PickItem[], filter: string): PickItem[] {
+export function filterItems(items: ChoiceItem[], filter: string): ChoiceItem[] {
   const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return items;
   return items.filter((item) => {
@@ -80,7 +46,7 @@ export function filterItems(items: PickItem[], filter: string): PickItem[] {
  */
 export function Picker(props: {
   title: string;
-  items: PickItem[] | undefined;
+  items: ChoiceItem[] | undefined;
   note?: string;
   empty: string;
   hint?: string;

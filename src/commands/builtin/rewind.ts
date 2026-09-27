@@ -1,7 +1,6 @@
 import type { CheckpointInfo } from '../../core/runtime/index.js';
 import { SessionLog } from '../../core/transcript/index.js';
-import type { CommandContext, SlashCommand } from './commands.js';
-import type { PickItem } from './Picker.js';
+import type { ChoiceItem, CommandContext, SlashCommand } from '../types.js';
 
 type Restore = 'files' | 'both' | 'conversation';
 
@@ -48,19 +47,16 @@ async function offer(ctx: CommandContext, entry: CheckpointInfo, title: string, 
   const preview = await ctx.runtime.previewCheckpoint(entry.n);
   const prompt = withConversation ? turnPrompt(ctx, entry) : undefined;
   const changes = preview.files.map((file) => `${file.path} ${file.change}`).join(', ');
-  ctx.dispatch(
-    preview.files.length
-      ? { type: 'output', text: `Checkpoint ${entry.n}, taken before ${entry.label}. Restoring it changes: ${changes}.`, diff: preview.diff }
-      : { type: 'output', text: `Checkpoint ${entry.n}, taken before ${entry.label}. The files are as it left them.` }
-  );
-  const items: PickItem[] = [];
+  if (preview.files.length) ctx.show(`Checkpoint ${entry.n}, taken before ${entry.label}. Restoring it changes: ${changes}.`, preview.diff);
+  else ctx.show(`Checkpoint ${entry.n}, taken before ${entry.label}. The files are as it left them.`);
+  const items: ChoiceItem[] = [];
   if (preview.files.length) items.push({ key: 'files', label: 'Restore the files', detail: `${plural(preview.files.length, 'file')}, as shown above` });
   if (prompt !== undefined) {
     if (preview.files.length) items.push({ key: 'both', label: 'Restore the files and the conversation', detail: `back to before "${clip(prompt, 40)}"` });
     items.push({ key: 'conversation', label: 'Restore the conversation only', detail: `back to before "${clip(prompt, 40)}"; the files stay` });
   }
   if (!items.length) return ctx.notice('info', 'Nothing to restore: the files are as that checkpoint left them.');
-  ctx.pick({
+  ctx.choose({
     title,
     items,
     empty: 'Nothing to restore.',
@@ -98,7 +94,7 @@ export const rewind: SlashCommand = {
     if (ctx.running) return ctx.notice('warn', 'A turn is running; rewind when it ends, or press Escape to stop it.');
     const entries = ctx.runtime.checkpoints();
     if (!entries.length) return ctx.notice('info', NO_CHECKPOINTS);
-    ctx.pick({
+    ctx.choose({
       title: 'Checkpoints, latest first',
       items: [...entries].reverse().map((entry) => {
         const prompt = turnPrompt(ctx, entry);

@@ -3,15 +3,13 @@ import { surveySetup, type Survey } from '../../core/onboarding/index.js';
 import { createChatProvider } from '../../core/providers/factory.js';
 import { OllamaProvider, type PullProgress } from '../../core/providers/ollama.js';
 import { runConfigCommand } from '../../cli/config.js';
-import type { CommandContext, SlashCommand } from './commands.js';
-import { keysFor } from './keys.js';
-import type { PickItem } from './Picker.js';
-import { modelDetail } from './reports.js';
+import type { ChoiceItem, CommandContext, SlashCommand } from '../types.js';
+import { modelDetail } from '../reports.js';
 
 const HOSTED_KEYS = 'ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY';
 
 /** What each permission mode lets run without asking, for a first run. */
-export function modesText(cycle: string): string {
+export function modesText(cycle: string | undefined): string {
   return [
     'Permission modes decide what runs without asking:',
     '  default       reads run; edits, commands, and network requests ask',
@@ -19,7 +17,7 @@ export function modesText(cycle: string): string {
     '  plan          nothing changes; the model reads and proposes a plan',
     '  auto          commands run without asking, inside the sandbox',
     '  bypass        everything runs, after you confirm it',
-    `${cycle} moves between them, and /permissions shows the rules.`,
+    `${cycle ? `${cycle} moves between them` : '/mode switches between them'}, and /permissions shows the rules.`,
   ].join('\n');
 }
 
@@ -36,7 +34,7 @@ async function adopt(ctx: CommandContext, ref: string): Promise<void> {
   const io = { out: (line: string) => said.push(line), err: (line: string) => said.push(line) };
   const code = await runConfigCommand({ action: 'set', args: ['model', ref, '--scope', 'user'] }, ctx.projectRoot, io);
   const saved = code === 0 ? `saved in ${userConfigFile()}` : `used for now but not saved: ${said.join(' ')}`;
-  ctx.show(`Model: ${ref}, ${saved}. Nothing was written to this project.\n\n${modesText(keysFor(ctx.keys, 'cycle_mode'))}`);
+  ctx.show(`Model: ${ref}, ${saved}. Nothing was written to this project.\n\n${modesText(ctx.keyFor('cycle_mode'))}`);
 }
 
 /** Download a model through Ollama, saying how far it has come at each quarter, then use it. */
@@ -64,8 +62,8 @@ async function pull(ctx: CommandContext, name: string, sizeGb: number): Promise<
 }
 
 /** The choices a survey allows, and what to say above them. */
-export function setupChoices(survey: Survey): { items: PickItem[]; note: string } {
-  const items: PickItem[] = [];
+export function setupChoices(survey: Survey): { items: ChoiceItem[]; note: string } {
+  const items: ChoiceItem[] = [];
   const { ollama } = survey;
   for (const model of ollama.models.filter((entry) => entry.tools !== false)) {
     const facts = [
@@ -98,7 +96,7 @@ export function setupChoices(survey: Survey): { items: PickItem[]; note: string 
 
 /** A hosted provider's models, to choose from. */
 function chooseHosted(ctx: CommandContext, provider: string): void {
-  ctx.pick({
+  ctx.choose({
     title: `Models ${provider} offers`,
     items: ctx.runtime.listModels().then(({ models, problems }) => {
       const mine = models.filter((info) => info.provider === provider);
@@ -122,7 +120,7 @@ export const setup: SlashCommand = {
     if (ctx.running) return ctx.notice('warn', 'A turn is running; run /setup when it ends, or press Escape to stop it.');
     const registry = loadConfig({ projectRoot: ctx.projectRoot }).config.api_registry;
     let surveyed: Survey | undefined;
-    ctx.pick({
+    ctx.choose({
       title: 'Set up JamCLI: choose the model to work with',
       items: surveySetup({ registry }).then((survey) => {
         surveyed = survey;

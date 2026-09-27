@@ -2,8 +2,8 @@ import { expect, test } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
 import { frameWith, interfaceHarness } from './harness.js';
-import { slashCommandForPrompt } from '../custom.js';
-import type { CommandContext } from '../commands.js';
+import { slashCommandForPrompt } from '../../../commands/custom.js';
+import type { CommandContext } from '../../../commands/types.js';
 
 const { context, open } = interfaceHarness();
 

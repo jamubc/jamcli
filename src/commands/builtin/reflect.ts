@@ -1,6 +1,6 @@
 import { loadSkills } from '../../core/ext/skills.js';
 import { REFLECT_SKILL, REFLECTION_TOOLS, reflectTurn } from '../../core/reflection/index.js';
-import type { SlashCommand } from './commands.js';
+import type { SlashCommand } from '../types.js';
 
 export const reflect: SlashCommand = {
   name: 'reflect',

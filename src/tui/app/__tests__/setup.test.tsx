@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { frameWith, interfaceHarness } from './harness.js';
-import { setupChoices } from '../setup.js';
+import { setupChoices } from '../../../commands/builtin/setup.js';
 
 const GB = 1024 ** 3;
 const { context, open } = interfaceHarness({

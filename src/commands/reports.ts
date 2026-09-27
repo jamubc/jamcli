@@ -1,10 +1,9 @@
-import { formatUsd, type SpendSummary } from '../../core/catalog/cost.js';
-import type { FactSource, ModelInfo } from '../../core/catalog/types.js';
-import type { Rule } from '../../core/permissions/rules.js';
-import type { ContextUsage, ToolSummary } from '../../core/runtime/index.js';
-import type { SessionSummary } from '../../core/transcript/sessions.js';
-import type { ApiRegistry } from '../../types/config.js';
-import { formatTokens } from './format.js';
+import { formatTokens, formatUsd, type SpendSummary } from '../core/catalog/cost.js';
+import type { FactSource, ModelInfo } from '../core/catalog/types.js';
+import type { Rule } from '../core/permissions/rules.js';
+import type { ContextUsage, ToolSummary } from '../core/runtime/index.js';
+import type { SessionSummary } from '../core/transcript/sessions.js';
+import type { ApiRegistry } from '../types/config.js';
 
 /**
  * What the slash commands report, as plain text. Each is a pure function of what the

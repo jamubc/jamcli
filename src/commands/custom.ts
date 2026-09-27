@@ -1,8 +1,8 @@
 import path from 'path';
-import { expandCommand, loadCommands, type CustomCommand } from '../../core/ext/commands.js';
-import { promptArguments, promptHint } from '../../core/mcp/prompts.js';
-import type { McpPrompt } from '../../core/runtime/index.js';
-import type { SlashCommand } from './commands.js';
+import { expandCommand, loadCommands, type CustomCommand } from '../core/ext/commands.js';
+import { promptArguments, promptHint } from '../core/mcp/prompts.js';
+import type { McpPrompt } from '../core/runtime/index.js';
+import type { SlashCommand } from './types.js';
 
 /** A custom command as the palette lists it: its source shown, its prompt sent as a turn. */
 export function slashCommandFor(command: CustomCommand): SlashCommand {

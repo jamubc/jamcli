@@ -1,9 +1,9 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { UiConfig, UiSettings } from '../../types/config.js';
-import { userConfigDir } from '../../utils/paths.js';
-import { DEFAULT_TEXT_STYLE_ID, resolveStatusStyle, type StatusStyleDefinition } from '../../styles/statusStyles.js';
+import type { UiConfig, UiSettings } from '../types/config.js';
+import { userConfigDir } from '../utils/paths.js';
+import { DEFAULT_TEXT_STYLE_ID, resolveStatusStyle, type StatusStyleDefinition } from './statusStyles.js';
 
 /** Where the Ink interface kept its settings. It is read, never written, so a style chosen there carries over. */
 export const legacyUiFile = (home: string = os.homedir()): string => path.join(home, '.jamubc', 'ui.json');

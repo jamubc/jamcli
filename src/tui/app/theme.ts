@@ -1,5 +1,6 @@
 import { RGBA, TextAttributes } from '@opentui/core';
 import { createContext, useContext } from 'react';
+import { noColor } from '../../styles/themeNames.js';
 import type { ThemeName } from '../../types/config.js';
 
 export type Color = string | RGBA;
@@ -152,11 +153,6 @@ export const THEMES: Record<ThemeName, Theme> = {
     tokens: {},
   },
 };
-
-export const THEME_NAMES = Object.keys(THEMES) as ThemeName[];
-
-/** Whether the environment asks for no color: `NO_COLOR` set to anything but empty, as no-color.org says. */
-export const noColor = (env: Record<string, string | undefined>): boolean => Boolean(env.NO_COLOR);
 
 /** The theme to draw with: monochrome whenever NO_COLOR is set, otherwise the configured one, or dark. */
 export function resolveTheme(configured: ThemeName | undefined, env: Record<string, string | undefined>): Theme {

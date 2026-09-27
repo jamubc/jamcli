@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import { testRender } from '@opentui/react/test-utils';
 import { App, type AppProps } from '../App.js';
-import type { SessionChoice } from '../commands.js';
+import type { SessionChoice } from '../../../commands/types.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from '../../../core/runtime/index.js';
 import { startFakeProvider, type FakeProviderOptions, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 

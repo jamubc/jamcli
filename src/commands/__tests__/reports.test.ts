@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test';
-import { BUILTIN_COMMANDS, findCommand, matchCommands, parseCommand, splitWords } from '../commands.js';
+import { BUILTIN_COMMANDS } from '../builtin/index.js';
+import { findCommand, matchCommands, parseCommand, splitWords } from '../parse.js';
 import { contextReport, costReport, modelReport, permissionsReport, providersReport, sessionsReport, toolsReport } from '../reports.js';
-import type { ModelInfo } from '../../../core/catalog/types.js';
-import type { Rule } from '../../../core/permissions/rules.js';
+import type { ModelInfo } from '../../core/catalog/types.js';
+import type { Rule } from '../../core/permissions/rules.js';
 
 test('a command line splits into its name and the rest, and words keep what quotes hold', () => {
   expect(parseCommand('/Compact  keep the API notes ')).toEqual({ name: 'compact', args: 'keep the API notes' });

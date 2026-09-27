@@ -1,5 +1,5 @@
 import { branchState, ghState, openPullRequest, pullRequestPrompt, pushBranch, splitPullRequest, type BranchState } from '../../core/git/pr.js';
-import type { CommandContext, SlashCommand } from './commands.js';
+import type { CommandContext, SlashCommand } from '../types.js';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -10,7 +10,7 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 function offerPullRequest(ctx: CommandContext, ready: Promise<BranchState>, title: string | undefined, head: { branch: string; base: string }): void {
   let drafted = { title: title ?? '', body: '' };
   let state: BranchState | undefined;
-  ctx.pick({
+  ctx.choose({
     title: `Open a pull request from ${head.branch} into ${head.base}?`,
     items: ready
       .then((found) => {
@@ -68,7 +68,7 @@ export const pr: SlashCommand = {
     if (state.upstream && state.ahead === 0) return offerPullRequest(ctx, Promise.resolve(state), title, state);
     if (!state.remote) return ctx.notice('info', 'This repository has no remote to push to. Add one with git remote add origin <url>, then /pr.');
     // The first step: pushing, approved on its own.
-    ctx.pick({
+    ctx.choose({
       title: `Push ${state.branch} to ${state.remote}?`,
       items: [
         {

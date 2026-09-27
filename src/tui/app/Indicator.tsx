@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { breath, resolveColor, sample, sweep, sweepMs, TICK_MS } from './motion.js';
-import { frameRow } from './statusStyle.js';
+import { frameRow } from '../../styles/fromConfig.js';
 import { useSelectable, useTheme } from './theme.js';
 
 /**

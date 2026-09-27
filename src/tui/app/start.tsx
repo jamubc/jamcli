@@ -2,11 +2,11 @@
 import { createInterfaceRuntime } from '../runtime.js';
 import { resolveJamcliProjectRoot } from '../../utils/projectRoot.js';
 import { App } from './App.js';
-import type { SessionChoice } from './commands.js';
+import type { SessionChoice } from '../../commands/types.js';
 import { resolveTheme } from './theme.js';
 import { loadConfig } from '../../core/config/load.js';
 import { isFirstRun } from '../../core/onboarding/index.js';
-import { statusStyleFor } from './statusStyle.js';
+import { statusStyleFor } from '../../styles/fromConfig.js';
 import type { ObserverHub } from '../observer.js';
 
 /**

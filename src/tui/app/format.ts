@@ -1,4 +1,4 @@
-import { formatUsd } from '../../core/catalog/cost.js';
+import { formatTokens, formatUsd } from '../../core/catalog/cost.js';
 import type { Phase, Row, StatusData, ToolPhase } from '../state/view.js';
 
 /**
@@ -32,8 +32,6 @@ const NOTICE_MARKS = { info: 'i', warn: '!', error: '✗' } as const;
 export const formatDuration = (ms: number | undefined): string =>
   ms === undefined ? '' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
 
-export const formatTokens = (count: number): string =>
-  count < 1000 ? String(count) : count < 1_000_000 ? `${(count / 1000).toFixed(count < 10_000 ? 1 : 0)}k` : `${(count / 1_000_000).toFixed(1)}M`;
 
 /** Lines a unified diff adds and removes, not counting its file headers. */
 export function diffStat(diff: string): { added: number; removed: number } {

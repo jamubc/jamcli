@@ -1,6 +1,5 @@
 import { readChanges, revertFile, revertHunk, stageFile, stageHunk, unstageFile, unstageHunk, type Changes, type FileChange, type Hunk } from '../../core/git/review.js';
-import type { CommandContext, SlashCommand } from './commands.js';
-import type { PickItem } from './Picker.js';
+import type { ChoiceItem, CommandContext, SlashCommand } from '../types.js';
 
 /** One thing in the list: a hunk, or a whole file when it has no hunks to take apart. */
 type Entry = { key: string; hunk?: Hunk; file?: FileChange; untracked?: string };
@@ -17,7 +16,7 @@ function entries(changes: Changes): Entry[] {
   return out;
 }
 
-function item(entry: Entry): PickItem {
+function item(entry: Entry): ChoiceItem {
   if (entry.hunk) {
     const { hunk } = entry;
     return { key: entry.key, label: `${hunk.file} ${hunk.header}`, detail: `${hunk.staged ? 'staged' : 'not staged'} · +${hunk.added} -${hunk.removed}` };
@@ -59,7 +58,7 @@ async function act(ctx: CommandContext, changes: Changes, entry: Entry, action: 
 function list(ctx: CommandContext, load: () => Promise<Changes>): void {
   let changes: Changes | undefined;
   let listed: Entry[] = [];
-  ctx.pick({
+  ctx.choose({
     title: 'Changes, by hunk',
     items: load().then((loaded) => {
       changes = loaded;
@@ -71,7 +70,7 @@ function list(ctx: CommandContext, load: () => Promise<Changes>): void {
     choose: (chosen) => {
       const entry = listed.find((candidate) => candidate.key === chosen.key)!;
       const found = changes!;
-      ctx.pick({
+      ctx.choose({
         title: item(entry).label,
         items: actions(entry),
         empty: 'Nothing to do.',
@@ -96,8 +95,8 @@ async function review(ctx: CommandContext): Promise<void> {
   }
   if (!entries(changes).length) return ctx.notice('info', 'No changes: the working copy is as the last commit left it.');
   const count = (files: FileChange[]) => plural(files.reduce((sum, file) => sum + Math.max(1, file.hunks.length), 0), 'change');
-  if (changes.staged.length) ctx.dispatch({ type: 'output', text: `Staged, ${count(changes.staged)}:`, diff: changes.staged.map((file) => file.diff).join('') });
-  if (changes.unstaged.length) ctx.dispatch({ type: 'output', text: `Not staged, ${count(changes.unstaged)}:`, diff: changes.unstaged.map((file) => file.diff).join('') });
+  if (changes.staged.length) ctx.show(`Staged, ${count(changes.staged)}:`, changes.staged.map((file) => file.diff).join(''));
+  if (changes.unstaged.length) ctx.show(`Not staged, ${count(changes.unstaged)}:`, changes.unstaged.map((file) => file.diff).join(''));
   if (changes.untracked.length) ctx.show(`Untracked: ${changes.untracked.join(', ')}`);
   list(ctx, async () => changes);
 }

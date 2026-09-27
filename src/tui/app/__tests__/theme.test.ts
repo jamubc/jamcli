@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { TextAttributes } from '@opentui/core';
-import { TERMINAL, THEMES, THEME_NAMES, chosenRow, framed, noColor, resolveTheme, selectable } from '../theme.js';
+import { TERMINAL, THEMES, chosenRow, framed, resolveTheme, selectable } from '../theme.js';
+import { THEME_NAMES, noColor } from '../../../styles/themeNames.js';
 
 test('NO_COLOR set to anything but empty means monochrome, whatever the configured theme', () => {
   expect(noColor({})).toBe(false);
@@ -12,6 +13,7 @@ test('NO_COLOR set to anything but empty means monochrome, whatever the configur
 });
 
 test('every theme names itself, and monochrome leaves every color to the terminal', () => {
+  expect(Object.keys(THEMES).sort()).toEqual([...THEME_NAMES].sort());
   for (const name of THEME_NAMES) {
     expect(THEMES[name].name).toBe(name);
     // Text with no role is the terminal's own color everywhere, never OpenTUI's plain white.

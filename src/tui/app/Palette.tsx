@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from '@opentui/react';
-import type { SlashCommand } from './commands.js';
+import type { SlashCommand } from '../../commands/types.js';
 import type { ReferenceItem } from './references.js';
 import { useClick, wheelStep } from './mouse.js';
 import { useListWindow } from './Picker.js';

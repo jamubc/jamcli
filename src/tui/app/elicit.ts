@@ -1,13 +1,13 @@
 import type { ElicitationAnswer, ElicitField, ElicitValue } from '../../core/mcp/connect.js';
 import type { AgentEvent } from '../../core/types.js';
-import { openBrowser } from '../../cli/mcp.js';
-import type { CommandContext } from './commands.js';
-import type { PickItem } from './Picker.js';
+import { openBrowser } from '../../utils/browser.js';
+import type { CommandContext } from '../../commands/types.js';
+import type { ChoiceItem } from '../../commands/types.js';
 
 export type ElicitationEvent = Extract<AgentEvent, { type: 'elicitation_request' }>;
 
 /** A field's choices: its enum, yes or no, or nothing when the answer is typed. */
-function choicesFor(field: ElicitField): PickItem[] | undefined {
+function choicesFor(field: ElicitField): ChoiceItem[] | undefined {
   if (field.enum?.length) return field.enum.map((value) => ({ key: `v:${value}`, label: value, value, ...(field.default === value ? { current: true } : {}) }));
   if (field.type === 'boolean') return [{ key: 'v:true', label: 'Yes', value: 'true' }, { key: 'v:false', label: 'No', value: 'false' }];
   return undefined;
@@ -38,7 +38,7 @@ export function answerElicitation(ctx: CommandContext, event: ElicitationEvent):
   const cancelled = () => finish({ action: 'cancel' }, `Cancelled what ${request.server} asked for.`);
 
   if (request.mode === 'url') {
-    ctx.pick({
+    ctx.choose({
       title: `${request.server} asks you to open a page`,
       note: `${request.message}\n${request.url}`,
       items: [
@@ -65,7 +65,7 @@ export function answerElicitation(ctx: CommandContext, event: ElicitationEvent):
     const [name, field] = fields[index];
     const choices = choicesFor(field);
     const optional = !required.has(name);
-    ctx.pick({
+    ctx.choose({
       title: `${request.server} asks: ${field.title ?? name}${optional ? ' (optional)' : ''}`,
       note: [problem, index === 0 ? request.message : undefined, field.description].filter(Boolean).join('\n'),
       items: [...(choices ?? []), ...(optional ? [{ key: 'skip', label: 'Leave it out' }] : [])],
@@ -84,7 +84,7 @@ export function answerElicitation(ctx: CommandContext, event: ElicitationEvent):
   };
   const confirm = () => {
     const lines = Object.entries(answers).map(([name, value]) => `${request.schema.properties[name]?.title ?? name}: ${String(value)}`);
-    ctx.pick({
+    ctx.choose({
       title: `Send these answers to ${request.server}?`,
       note: lines.join('\n') || '(no answers)',
       items: [
