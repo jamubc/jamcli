@@ -52,7 +52,7 @@ Here is the first part,
 │commands.                                                                     │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
-⠋ writing · default mode · ollama:fake-model · context N% · no sandbox
+● writing · default mode · ollama:fake-model · context N% · no sandbox
 "
 `;
 

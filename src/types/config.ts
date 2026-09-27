@@ -189,9 +189,9 @@ export interface UiSettings {
   thinking_lines?: number;
   /** How many columns wide the live thinking window is. Defaults to 72. */
   thinking_width?: number;
-  /** How the working indicator's words shimmer. Defaults to subtle. */
+  /** How the working indicator's words are lit. Defaults to glow. */
   status_text_style?: StatusTextStyleId;
-  /** The working indicator's spinner. Defaults to classic. */
+  /** The working indicator's spinner. Defaults to pulse. */
   status_spinner_style?: StatusSpinnerStyleId;
   /** Styles of the person's own, by name, each read from a JSON file. */
   custom_status_styles?: Record<string, StatusIndicatorStyleRef>;
@@ -202,11 +202,15 @@ export interface ContextSettings {
   auto_compact?: boolean;
 }
 
-export type StatusTextStyleId = 'rainbow' | 'subtle' | 'minimal' | 'aurora' | 'mono' | `custom:${string}`;
+/** `subtle` is the Ink interface's name for glow, and still accepted. */
+export type StatusTextStyleId = 'glow' | 'mono' | 'aurora' | 'rainbow' | 'minimal' | 'subtle' | `custom:${string}`;
+/** The `big_` ids are the Ink interface's tall spinners, and still accepted as the spinner each stood on. */
 export type StatusSpinnerStyleId =
-  | 'classic'
-  | 'orbit'
   | 'pulse'
+  | 'bloom'
+  | 'orbit'
+  | 'quad'
+  | 'classic'
   | 'big_classic'
   | 'big_orbit'
   | 'big_pulse'

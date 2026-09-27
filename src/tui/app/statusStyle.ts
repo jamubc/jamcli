@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import type { UiConfig, UiSettings } from '../../types/config.js';
 import { userConfigDir } from '../../utils/paths.js';
-import { resolveStatusStyle, type StatusStyleDefinition } from '../../styles/statusStyles.js';
+import { DEFAULT_TEXT_STYLE_ID, resolveStatusStyle, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 
 /** Where the Ink interface kept its settings. It is read, never written, so a style chosen there carries over. */
 export const legacyUiFile = (home: string = os.homedir()): string => path.join(home, '.jamubc', 'ui.json');
@@ -29,7 +29,7 @@ export function mergedUi(ui: UiSettings, legacy: Partial<UiConfig> = legacyUi())
     custom[name] = { ...ref, path: path.isAbsolute(ref.path) ? ref.path : path.join(userConfigDir(), ref.path) };
   }
   return {
-    status_indicator_style: legacy.status_indicator_style ?? 'subtle',
+    status_indicator_style: legacy.status_indicator_style ?? DEFAULT_TEXT_STYLE_ID,
     ...((ui.status_text_style ?? legacy.status_text_style) ? { status_text_style: ui.status_text_style ?? legacy.status_text_style } : {}),
     ...((ui.status_spinner_style ?? legacy.status_spinner_style) ? { status_spinner_style: ui.status_spinner_style ?? legacy.status_spinner_style } : {}),
     custom_status_styles: custom,

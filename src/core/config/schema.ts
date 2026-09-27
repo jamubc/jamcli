@@ -237,14 +237,14 @@ export const ConfigFileSchema = z
         thinking_width: z.number().int().min(20).max(400).describe('How many columns wide the live thinking window is, narrowed when the terminal is narrower. Defaults to 72.'),
         status_text_style: z
           .string()
-          .regex(/^(subtle|rainbow|minimal|aurora|mono|custom:[\w.-]+)$/, 'a built-in text style (subtle, rainbow, minimal, aurora, mono) or custom:<name>')
-          .describe('How the working indicator\'s words shimmer: subtle, rainbow, minimal, aurora, mono, or custom:<name>. Defaults to subtle.'),
+          .regex(/^(glow|mono|aurora|rainbow|minimal|subtle|custom:[\w.-]+)$/, 'a built-in text style (glow, mono, aurora, rainbow, minimal) or custom:<name>')
+          .describe('How the working indicator\'s words are lit: glow, mono, aurora, rainbow, minimal, or custom:<name>. Defaults to glow.'),
         status_spinner_style: z
           .string()
-          .regex(/^(classic|orbit|pulse|big_classic|big_orbit|big_pulse|custom:[\w.-]+)$/, 'a built-in spinner (classic, orbit, pulse, big_classic, big_orbit, big_pulse) or custom:<name>')
-          .describe('The working indicator\'s spinner: classic, orbit, pulse, big_classic, big_orbit, big_pulse, or custom:<name>. Defaults to classic.'),
+          .regex(/^(pulse|bloom|orbit|quad|classic|big_classic|big_orbit|big_pulse|custom:[\w.-]+)$/, 'a built-in spinner (pulse, bloom, orbit, quad, classic) or custom:<name>')
+          .describe('The working indicator\'s spinner: pulse, bloom, orbit, quad, classic, or custom:<name>. Defaults to pulse.'),
         custom_status_styles: z
-          .record(z.string(), z.strictObject({ path: z.string().describe('A JSON file with label, shimmerColors, shimmer, spinnerFrames, spinnerColors, and spinnerIntervalMs.'), label: z.string().optional() }))
+          .record(z.string(), z.strictObject({ path: z.string().describe('A JSON file with label, shimmerColors (the words\' ramp from resting to lit), shimmer, spinnerFrames, spinnerColors (the ramp the spinner breathes through), and spinnerIntervalMs. A color is hex, or a theme role: text, dim, accent, warn, or error.'), label: z.string().optional() }))
           .describe('Styles of your own, by name, each read from a JSON file. Name one as custom:<name>.'),
       })
       .partial()

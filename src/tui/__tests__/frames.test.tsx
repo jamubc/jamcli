@@ -18,7 +18,7 @@ const normalize = (frame: string): string =>
     .replace(/\d{4}-\d{2}-\d{2}-[0-9a-f]{8}/g, '<session>')
     .replace(/context \d+%/g, 'context N%')
     .replace(/\d+ ms/g, 'N ms')
-    .replace(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/g, '⠋')
+    .replace(/[∙•●] (writing|thinking)/g, '● $1')
     .split('\n')
     .map((line) => line.trimEnd())
     .join('\n');

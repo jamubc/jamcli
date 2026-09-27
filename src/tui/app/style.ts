@@ -3,6 +3,7 @@ import { runConfigCommand } from '../../cli/config.js';
 import {
   BUILTIN_SPINNER_STYLES,
   BUILTIN_TEXT_STYLES,
+  canonicalStyleId,
   listStatusSpinnerStyleOptions,
   listStatusTextStyleOptions,
   resolveStatusStyle,
@@ -42,8 +43,9 @@ export const style: SlashCommand = {
   source: 'built-in',
   async run(ctx, args) {
     if (args) {
-      if (BUILTIN_TEXT_STYLES[args]) return apply(ctx, 'words', args);
-      if (BUILTIN_SPINNER_STYLES[args]) return apply(ctx, 'spinner', args);
+      const id = canonicalStyleId(args);
+      if (BUILTIN_TEXT_STYLES[id]) return apply(ctx, 'words', id);
+      if (BUILTIN_SPINNER_STYLES[id]) return apply(ctx, 'spinner', id);
       return ctx.notice('warn', `${args} is not a built-in style; /style lists them, with your own.`);
     }
     const ui = mergedUi(loadConfig({ projectRoot: ctx.projectRoot }).config.ui ?? {});

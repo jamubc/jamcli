@@ -43,117 +43,112 @@ export type StatusStyleDefinition = {
   path?: string;
 };
 
-const defaultSpinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const defaultSpinnerColors = ['cyan', 'magenta'];
+const defaultSpinnerFrames = ['∙', '∙', '•', '●', '●', '●', '•', '∙'];
+const defaultSpinnerColors = ['dim', 'accent'];
 
+/**
+ * Colors in a style are hex colors, or a theme role (`text`, `dim`, `accent`, `warn`,
+ * `error`) so a style follows the theme. The words' colors are a ramp from resting to lit:
+ * the first is the words at rest and the last the center of the band of light that sweeps
+ * across them. The spinner's colors are the ramp it breathes through over one cycle.
+ */
 export const BUILTIN_TEXT_STYLES: Record<string, StatusTextStyleDefinition> = {
-  subtle: {
-    id: 'subtle',
-    label: 'Subtle (default)',
-    shimmerColors: ['cyan', 'white', 'gray'],
+  glow: {
+    id: 'glow',
+    label: 'Glow (default)',
+    shimmerColors: ['dim', 'accent'],
+    shimmer: true,
+    source: 'builtin',
+  },
+  mono: {
+    id: 'mono',
+    label: 'Mono',
+    shimmerColors: ['dim', 'text'],
+    shimmer: true,
+    source: 'builtin',
+  },
+  aurora: {
+    id: 'aurora',
+    label: 'Aurora',
+    shimmerColors: ['dim', '#7aa2f7', '#bb9af7'],
     shimmer: true,
     source: 'builtin',
   },
   rainbow: {
     id: 'rainbow',
     label: 'Prism',
-    shimmerColors: ['cyan', 'magenta', 'yellow', 'green', 'blue'],
+    shimmerColors: ['dim', '#f7768e', '#e0af68', '#9ece6a', '#7dcfff', '#bb9af7'],
     shimmer: true,
     source: 'builtin',
   },
   minimal: {
     id: 'minimal',
-    label: 'Minimal',
-    shimmerColors: ['gray'],
+    label: 'Still',
+    shimmerColors: ['dim'],
     shimmer: false,
-    source: 'builtin',
-  },
-  aurora: {
-    id: 'aurora',
-    label: 'Aurora',
-    shimmerColors: ['blue', 'cyan', 'magenta'],
-    shimmer: true,
-    source: 'builtin',
-  },
-  mono: {
-    id: 'mono',
-    label: 'Monochrome Glow',
-    shimmerColors: ['white'],
-    shimmer: true,
     source: 'builtin',
   },
 };
 
 export const BUILTIN_SPINNER_STYLES: Record<string, StatusSpinnerStyleDefinition> = {
-  classic: {
-    id: 'classic',
-    label: 'Classic Spinner',
+  pulse: {
+    id: 'pulse',
+    label: 'Pulse (default)',
     spinnerFrames: defaultSpinnerFrames,
-    spinnerColors: ['cyan', 'white'],
-    intervalMs: 80,
+    spinnerColors: defaultSpinnerColors,
+    intervalMs: 110,
+    source: 'builtin',
+  },
+  bloom: {
+    id: 'bloom',
+    label: 'Bloom',
+    spinnerFrames: ['·', '✢', '✳', '✶', '✷', '✸', '✷', '✶', '✳', '✢'],
+    spinnerColors: ['dim', 'accent'],
+    intervalMs: 90,
     source: 'builtin',
   },
   orbit: {
     id: 'orbit',
     label: 'Orbit',
-    spinnerFrames: ['◐', '◓', '◑', '◒'],
-    spinnerColors: ['cyan', 'blue'],
-    intervalMs: 90,
+    spinnerFrames: ['◜', '◠', '◝', '◞', '◡', '◟'],
+    spinnerColors: ['accent'],
+    intervalMs: 100,
     source: 'builtin',
   },
-  pulse: {
-    id: 'pulse',
-    label: 'Pulse',
-    spinnerFrames: ['∙', '•', '●', '•'],
-    spinnerColors: ['yellow'],
-    intervalMs: 120,
+  quad: {
+    id: 'quad',
+    label: 'Quad',
+    spinnerFrames: ['▖', '▘', '▝', '▗'],
+    spinnerColors: ['accent'],
+    intervalMs: 130,
     source: 'builtin',
   },
-  big_classic: {
-    id: 'big_classic',
-    label: 'Classic (Big)',
-    spinnerFrames: [
-      '  ┃  \n  ┃  \n  ┃  ',
-      '    ╱\n   ╱ \n  ╱  ',
-      '     \n━━━━━\n     ',
-      '╲    \n ╲   \n  ╲  ',
-    ],
-    spinnerColors: ['cyan', 'white'],
+  classic: {
+    id: 'classic',
+    label: 'Braille',
+    spinnerFrames: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
+    spinnerColors: ['dim', 'accent'],
     intervalMs: 80,
-    source: 'builtin',
-  },
-  big_orbit: {
-    id: 'big_orbit',
-    label: 'Orbit (Big)',
-    spinnerFrames: [
-      '██   \n██   \n██   ',
-      '▀▀▀▀▀\n     \n     ',
-      '   ██\n   ██\n   ██',
-      '     \n     \n▄▄▄▄▄',
-    ],
-    spinnerColors: ['cyan', 'blue'],
-    intervalMs: 90,
-    source: 'builtin',
-  },
-  big_pulse: {
-    id: 'big_pulse',
-    label: 'Pulse (Big)',
-    spinnerFrames: [
-      '     \n  ·  \n     ',
-      '     \n  ●  \n     ',
-      ' ▄▄▄ \n █ █ \n ▀▀▀ ',
-      '     \n  ●  \n     ',
-    ],
-    spinnerColors: ['yellow'],
-    intervalMs: 120,
     source: 'builtin',
   },
 };
 
+/** Ids the Ink interface's styles were saved under, and the style each means now. */
+export const LEGACY_STYLE_IDS: Record<string, string> = {
+  subtle: 'glow',
+  big_classic: 'classic',
+  big_orbit: 'orbit',
+  big_pulse: 'pulse',
+};
+
+/** A style id with a legacy name mapped to the style it means now. */
+export const canonicalStyleId = <T extends string>(id: T): T => (LEGACY_STYLE_IDS[id] ?? id) as T;
+
 export const DEFAULT_CUSTOM_STYLE: StatusIndicatorCustomDefinition = {
   label: 'Custom style',
-  shimmerColors: ['cyan', 'white'],
+  shimmerColors: ['dim', 'accent'],
   spinnerFrames: defaultSpinnerFrames,
+  spinnerColors: defaultSpinnerColors,
   shimmer: true,
 };
 
@@ -179,8 +174,8 @@ export const buildStatusStyle = (
   };
 };
 
-export const DEFAULT_TEXT_STYLE_ID: StatusTextStyleId = 'subtle';
-export const DEFAULT_SPINNER_STYLE_ID: StatusSpinnerStyleId = 'classic';
+export const DEFAULT_TEXT_STYLE_ID: StatusTextStyleId = 'glow';
+export const DEFAULT_SPINNER_STYLE_ID: StatusSpinnerStyleId = 'pulse';
 export const DEFAULT_STATUS_STYLE: StatusStyleDefinition = buildStatusStyle(
   BUILTIN_TEXT_STYLES[DEFAULT_TEXT_STYLE_ID],
   BUILTIN_SPINNER_STYLES[DEFAULT_SPINNER_STYLE_ID]
@@ -204,10 +199,8 @@ export const resolveTextStyle = async (
 ): Promise<StatusTextStyleDefinition> => {
   const fallback = BUILTIN_TEXT_STYLES[DEFAULT_TEXT_STYLE_ID];
   if (!styleId) return fallback;
-
-  if (BUILTIN_TEXT_STYLES[styleId]) {
-    return BUILTIN_TEXT_STYLES[styleId];
-  }
+  const builtin = BUILTIN_TEXT_STYLES[canonicalStyleId(styleId)];
+  if (builtin) return builtin;
 
   if (!uiConfig || !styleId.startsWith('custom:')) return fallback;
   const name = styleId.replace(/^custom:/, '');
@@ -233,10 +226,8 @@ export const resolveSpinnerStyle = async (
 ): Promise<StatusSpinnerStyleDefinition> => {
   const fallback = BUILTIN_SPINNER_STYLES[DEFAULT_SPINNER_STYLE_ID];
   if (!styleId) return fallback;
-
-  if (BUILTIN_SPINNER_STYLES[styleId]) {
-    return BUILTIN_SPINNER_STYLES[styleId];
-  }
+  const builtin = BUILTIN_SPINNER_STYLES[canonicalStyleId(styleId)];
+  if (builtin) return builtin;
 
   if (!uiConfig || !styleId.startsWith('custom:')) return fallback;
   const name = styleId.replace(/^custom:/, '');
@@ -284,13 +275,9 @@ export const resolveStatusStyle = async ({
 export const listStatusTextStyleOptions = async (
   uiConfig: UiConfig | null
 ): Promise<Array<{ id: StatusTextStyleId; label: string; source: 'builtin' | 'custom'; path?: string }>> => {
-  const options: Array<{ id: StatusTextStyleId; label: string; source: 'builtin' | 'custom'; path?: string }> = [
-    { id: 'subtle', label: BUILTIN_TEXT_STYLES.subtle.label, source: 'builtin' },
-    { id: 'rainbow', label: BUILTIN_TEXT_STYLES.rainbow.label, source: 'builtin' },
-    { id: 'minimal', label: BUILTIN_TEXT_STYLES.minimal.label, source: 'builtin' },
-    { id: 'aurora', label: BUILTIN_TEXT_STYLES.aurora.label, source: 'builtin' },
-    { id: 'mono', label: BUILTIN_TEXT_STYLES.mono.label, source: 'builtin' },
-  ];
+  const options: Array<{ id: StatusTextStyleId; label: string; source: 'builtin' | 'custom'; path?: string }> = Object.values(BUILTIN_TEXT_STYLES).map(
+    (style) => ({ id: style.id, label: style.label, source: 'builtin' })
+  );
 
   const customEntries = uiConfig?.custom_status_styles ? Object.entries(uiConfig.custom_status_styles) : [];
   for (const [name, ref] of customEntries) {
@@ -308,14 +295,9 @@ export const listStatusTextStyleOptions = async (
 export const listStatusSpinnerStyleOptions = async (
   uiConfig: UiConfig | null
 ): Promise<Array<{ id: StatusSpinnerStyleId; label: string; source: 'builtin' | 'custom'; path?: string }>> => {
-  const options: Array<{ id: StatusSpinnerStyleId; label: string; source: 'builtin' | 'custom'; path?: string }> = [
-    { id: 'classic', label: BUILTIN_SPINNER_STYLES.classic.label, source: 'builtin' },
-    { id: 'orbit', label: BUILTIN_SPINNER_STYLES.orbit.label, source: 'builtin' },
-    { id: 'pulse', label: BUILTIN_SPINNER_STYLES.pulse.label, source: 'builtin' },
-    { id: 'big_classic', label: BUILTIN_SPINNER_STYLES.big_classic.label, source: 'builtin' },
-    { id: 'big_orbit', label: BUILTIN_SPINNER_STYLES.big_orbit.label, source: 'builtin' },
-    { id: 'big_pulse', label: BUILTIN_SPINNER_STYLES.big_pulse.label, source: 'builtin' },
-  ];
+  const options: Array<{ id: StatusSpinnerStyleId; label: string; source: 'builtin' | 'custom'; path?: string }> = Object.values(BUILTIN_SPINNER_STYLES).map(
+    (style) => ({ id: style.id, label: style.label, source: 'builtin' })
+  );
 
   const customEntries = uiConfig?.custom_status_styles ? Object.entries(uiConfig.custom_status_styles) : [];
   for (const [name, ref] of customEntries) {

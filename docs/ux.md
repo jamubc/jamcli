@@ -69,8 +69,9 @@ Tool blocks collapse to one line when finished. Ctrl+O toggles full detail.
 6. MCP servers connected over configured;
 7. language servers.
 
-The owner's status indicator styles (shimmer, spinners, and custom styles) animate the
-mode segment while a turn runs, unless reduced motion is on.
+While a turn runs, the working indicator (a breathing spinner and a band of light
+sweeping the phase's word, in the chosen style) leads the line, unless reduced motion is
+on. The styles are in `interface.md`.
 
 ## Permission prompt
 

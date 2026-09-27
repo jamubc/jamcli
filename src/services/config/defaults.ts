@@ -48,9 +48,9 @@ export const DEFAULT_CONFIG: Config = {
 };
 
 export const DEFAULT_UI_CONFIG: UiConfig = {
-  status_indicator_style: 'subtle',
-  status_text_style: 'subtle',
-  status_spinner_style: 'classic',
+  status_indicator_style: 'glow',
+  status_text_style: 'glow',
+  status_spinner_style: 'pulse',
   custom_status_styles: {},
 };
 

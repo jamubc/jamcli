@@ -1,32 +1,48 @@
 /** @jsxImportSource @opentui/react */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
+import { breath, resolveColor, sample, sweep, sweepMs, TICK_MS } from './motion.js';
 import { frameRow } from './statusStyle.js';
 import { useTheme } from './theme.js';
 
 /**
- * The working indicator: a spinner and the phase's words in the style's colors. It moves
- * only while shown; with reduced motion or in screen reader mode the interface does not
- * draw it, and the status line's words say the same thing.
+ * The working indicator: a spinner that breathes through the style's color ramp, and
+ * the phase's words with a soft band of light sweeping across them. Both run on one
+ * clock from the moment the indicator is shown, so the motion is continuous rather than
+ * stepped. It is drawn only while shown; with reduced motion or in screen reader mode the
+ * interface does not draw it, and the status line's words say the same thing.
  */
 export function Indicator({ style, words }: { style: StatusStyleDefinition; words: string }) {
   const theme = useTheme();
-  const [tick, setTick] = useState(0);
+  const started = useRef(Date.now());
+  const [now, setNow] = useState(started.current);
   useEffect(() => {
-    const timer = setInterval(() => setTick((count) => count + 1), style.spinnerIntervalMs);
+    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(timer);
-  }, [style.spinnerIntervalMs]);
+  }, []);
+  const elapsed = now - started.current;
+
   // Monochrome, or NO_COLOR, keeps the motion and drops the colors.
   const colored = theme.name !== 'monochrome';
-  const frame = frameRow(style.spinnerFrames[tick % style.spinnerFrames.length]);
-  const spinner = colored ? style.spinnerColors[tick % style.spinnerColors.length] : theme.text;
-  const palette = style.shimmerColors;
+  const frames = useMemo(() => style.spinnerFrames.map(frameRow), [style.spinnerFrames]);
+  const spinnerRamp = useMemo(() => style.spinnerColors.map((color) => resolveColor(color, theme)), [style.spinnerColors, theme]);
+  const wordRamp = useMemo(() => style.shimmerColors.map((color) => resolveColor(color, theme)), [style.shimmerColors, theme]);
+
+  const cycle = Math.max(TICK_MS, style.spinnerIntervalMs) * frames.length;
+  const phase = (elapsed % cycle) / cycle;
+  const frame = frames[Math.min(frames.length - 1, Math.floor(phase * frames.length))];
+  const spinner = colored ? sample(spinnerRamp, breath(phase)) : theme.text;
+
+  const chars = [...words];
+  const lit = style.shimmer ? sweep(chars.length, (elapsed % sweepMs(chars.length)) / sweepMs(chars.length)) : undefined;
+  const colorAt = (index: number) => (colored ? (lit ? sample(wordRamp, lit[index]) : wordRamp[0] ?? theme.text) : theme.text);
+
   return (
     <text fg={theme.text}>
       <span fg={spinner}>{frame}</span>
       {' '}
-      {[...words].map((char, index) => (
-        <span key={index} fg={colored ? palette[style.shimmer ? (index + tick) % palette.length : 0] : theme.text}>
+      {chars.map((char, index) => (
+        <span key={index} fg={colorAt(index)}>
           {char}
         </span>
       ))}

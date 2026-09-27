@@ -72,9 +72,9 @@ test('/style lists the spinners and word styles, and a choice is used and saved'
   try {
     await send(setup, '/style');
     const listed = await frameWith(setup, (frame) => frame.includes('Working indicator styles'));
-    expect(listed).toContain('> Spinner: Classic Spinner (in use)');
+    expect(listed).toContain('> Spinner: Pulse (default) (in use)');
     expect(listed).toContain('Spinner: Orbit');
-    expect(listed).toContain('◐ ◓ ◑ ◒');
+    expect(listed).toContain('◜ ◠ ◝ ◞ ◡ ◟');
     await setup.mockInput.typeText('orbit');
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('Indicator spinner: orbit. It is saved in your user configuration.'));
@@ -82,7 +82,7 @@ test('/style lists the spinners and word styles, and a choice is used and saved'
     expect(saved.ui.status_spinner_style).toBe('orbit');
     context.server.enqueue({ text: 'Done.', delayMs: 400 });
     await send(setup, 'go');
-    await frameWith(setup, (frame) => /[◐◓◑◒] thinking/.test(frame));
+    await frameWith(setup, (frame) => /[◜◠◝◞◡◟] thinking/.test(frame));
     await send(setup, '/style aurora');
     await frameWith(setup, (frame) => frame.includes('Indicator words: aurora.'));
     expect(BUILTIN_TEXT_STYLES.aurora).toBeDefined();

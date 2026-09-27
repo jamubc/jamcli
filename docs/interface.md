@@ -88,8 +88,43 @@ view are two ways of reading the same rows.
 
 The status line names the mode, the model, the context share, the cost and tokens, the
 sandbox, the MCP server count, the language server count, the expanded view while it is
-on, and the phase. `/style` chooses a style; styles are described in `configuration.md`.
-With reduced motion, or in screen reader mode, nothing moves.
+on, and the phase. While a turn works, the phase leads the line as the working indicator:
+a spinner and the phase's word. With reduced motion, or in screen reader mode, nothing
+moves.
+
+### The working indicator
+
+The indicator runs on one clock from the moment it appears, so its motion is continuous.
+The spinner breathes through a ramp of colors over each cycle, and a soft band of light
+sweeps across the phase's word, rests, and comes back. By default both take their colors
+from the theme, so they fit dark, light, and high contrast alike; monochrome keeps the
+motion and leaves the colors to the terminal.
+
+`/style` lists the spinners and word styles, previews each, and saves a choice for every
+project. `/style <name>` picks one directly.
+
+| Spinner | Motion |
+|---------|--------|
+| `pulse` (default) | a dot that swells and settles, breathing from dim to accent |
+| `bloom` | a dot that opens into a star and closes again |
+| `orbit` | an arc circling a point |
+| `quad` | a quarter block turning through the corners of the cell |
+| `classic` | braille dots |
+
+| Words | Light |
+|-------|-------|
+| `glow` (default) | dim at rest, the theme's accent at the center of the band |
+| `mono` | dim at rest, the terminal's foreground at the center |
+| `aurora` | dim rising through blue to violet |
+| `rainbow` | dim rising through a spectrum |
+| `minimal` | dim, and still |
+
+A style of your own is a JSON file named in `ui.custom_status_styles` and chosen as
+`custom:<name>`. It carries `spinnerFrames`, `spinnerColors` (the ramp the spinner
+breathes through), `spinnerIntervalMs`, `shimmerColors` (the words' ramp from resting to
+lit), and `shimmer`. A color is hex, or a theme role: `text`, `dim`, `accent`, `warn`, or
+`error`. The Ink interface's names (`subtle`, `big_classic`, `big_orbit`, `big_pulse`) and
+its 16 terminal color names are still accepted.
 
 ## Micro mode
 
