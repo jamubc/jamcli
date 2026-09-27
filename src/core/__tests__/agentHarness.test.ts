@@ -123,3 +123,37 @@ test('a throwing hook becomes a notice, never answer text, and the turn finishes
   expect(notice.message).toContain('hook exploded');
   expect(events.filter((e) => e.type === 'text').map((e: any) => e.delta).join('')).toBe('fine');
 });
+
+test("the trust gate leaves the session's own state alone: the todo list is never screened", async () => {
+  const sent: string[] = [];
+  const dispatcher: ToolDispatcher = {
+    listTools: () => [{ name: 'todo_read' }, { name: 'read_file' }],
+    requiresApproval: () => false,
+    isReadOnly: () => true,
+    policyClass: (name) => (name === 'todo_read' ? 'state' : 'read'),
+    async execute(call): Promise<ToolResult> {
+      return { tool: call.name, success: true, output: call.name === 'todo_read' ? '1. [ ] Fix the build' : 'unrelated text', durationMs: 1 };
+    },
+  };
+  const provider = createScriptedProvider([
+    { toolCalls: [{ id: 'c1', name: 'todo_read', arguments: {} }, { id: 'c2', name: 'read_file', arguments: { path: 'a.md' } }] },
+    { text: 'done' },
+  ]);
+  const agent = new CoreAgent({
+    provider,
+    dispatcher,
+    toolDefinitions: [{ type: 'function' as const, function: { name: 'todo_read' } }, ...readFileTool],
+    // A classifier that finds everything it is shown irrelevant.
+    trustClassifier: {
+      async classify(_task, candidates) {
+        sent.push(...candidates.map((candidate) => candidate.tool));
+        return { verdicts: candidates.map((_, index) => ({ index, relevance: 0, injection: false })) };
+      },
+    },
+    model: 'm',
+  });
+  await agent.run(createSession('/tmp/state-project', 'state-test'), 'what is left?', () => undefined);
+  expect(sent).toEqual(['read_file']);
+  const toolMessages = provider.calls[1].messages.filter((message) => message.role === 'tool');
+  expect(toolMessages.map((message) => message.content)).toEqual(['1. [ ] Fix the build', '[This result was withheld by the trust gate: not relevant to this turn (score 0).]']);
+});

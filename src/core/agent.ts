@@ -606,6 +606,8 @@ export class CoreAgent implements Agent {
   ): Promise<{ results: ToolResult[]; usage?: TokenUsage }> {
     const candidates: (ScreeningCandidate & { result: number })[] = [];
     results.forEach((result, index) => {
+      // A tool that reports only the session's own state, such as the todo list, has nothing from outside to screen.
+      if (this.options.dispatcher?.policyClass?.(calls[index].name) === 'state') return;
       if (result.status === 'ok' || result.status === 'error') candidates.push({ tool: calls[index].name, output: result.output, result: index });
     });
     if (!candidates.length) return { results };
