@@ -76,20 +76,50 @@ export function compactionLine(row: Extract<Row, { kind: 'compaction' }>): strin
 }
 
 /** The status line's parts, left to right. */
-export function statusParts(status: StatusData): string[] {
-  const parts = [status.mode === 'bypass' ? 'BYPASS mode' : `${status.mode} mode`, status.model || 'no model'];
-  if (status.contextPercent !== undefined) parts.push(`context ${Math.round(status.contextPercent)}%`);
+/** One fact on the status line, and how soon it is given up when the line does not fit: lowest first, never when absent. */
+interface StatusPart {
+  text: string;
+  drop?: number;
+}
+
+function statusEntries(status: StatusData): StatusPart[] {
+  const parts: StatusPart[] = [{ text: status.mode === 'bypass' ? 'BYPASS mode' : `${status.mode} mode` }, { text: status.model || 'no model' }];
+  if (status.contextPercent !== undefined) parts.push({ text: `context ${Math.round(status.contextPercent)}%`, drop: 7 });
   // Nothing is billed for a free model, so a cost of nothing takes no room; /cost still says it.
-  if (status.costUsd !== null && (status.costUsd > 0 || status.unpriced)) parts.push(`${formatUsd(status.costUsd)}${status.unpriced ? '+' : ''}`);
-  else if (status.inputTokens || status.outputTokens) parts.push('cost unknown');
-  if (status.inputTokens || status.outputTokens) parts.push(`${formatTokens(status.inputTokens)} in, ${formatTokens(status.outputTokens)} out`);
-  parts.push(status.sandbox === 'none' ? 'no sandbox' : `sandbox ${status.sandbox}`);
-  if (status.mcpServers) parts.push(`MCP ${status.mcpServers}`);
-  if (status.lspServers) parts.push(`LSP ${status.lspServers}`);
-  if (status.expanded) parts.push('expanded view');
+  if (status.costUsd !== null && (status.costUsd > 0 || status.unpriced)) parts.push({ text: `${formatUsd(status.costUsd)}${status.unpriced ? '+' : ''}`, drop: 5 });
+  else if (status.inputTokens || status.outputTokens) parts.push({ text: 'cost unknown', drop: 5 });
+  if (status.inputTokens || status.outputTokens) parts.push({ text: `${formatTokens(status.inputTokens)} in, ${formatTokens(status.outputTokens)} out`, drop: 3 });
+  parts.push({ text: status.sandbox === 'none' ? 'no sandbox' : `sandbox ${status.sandbox}`, drop: 4 });
+  if (status.mcpServers) parts.push({ text: `MCP ${status.mcpServers}`, drop: 2 });
+  if (status.lspServers) parts.push({ text: `LSP ${status.lspServers}`, drop: 1 });
+  if (status.expanded) parts.push({ text: 'expanded view', drop: 6 });
   const phase = status.phase === 'retrying' && status.retry ? `retrying (${status.retry.attempt}): ${status.retry.reason}` : PHASE_WORDS[status.phase];
-  parts.push(phase);
+  parts.push({ text: phase });
   return parts;
+}
+
+export function statusParts(status: StatusData): string[] {
+  return statusEntries(status).map((part) => part.text);
+}
+
+/**
+ * The status line fitted to `width`: the least useful facts are given up first, and the
+ * mode and what JamCLI is doing never are, so a narrow terminal still says whether it is
+ * working or waiting for you. Without the phase when the indicator already shows it.
+ */
+export function fitStatus(status: StatusData, width: number, options: { separator: string; withoutPhase?: boolean }): string {
+  const parts = statusEntries(status);
+  if (options.withoutPhase) parts.pop();
+  const line = () => parts.map((part) => part.text).join(options.separator);
+  while (line().length > width) {
+    const droppable = parts.filter((part) => part.drop !== undefined);
+    if (!droppable.length) break;
+    parts.splice(parts.indexOf(droppable.reduce((least, part) => (part.drop! < least.drop! ? part : least))), 1);
+  }
+  // Last, the model's name is shortened, since the rest of the line is what changes.
+  const over = line().length - width;
+  if (over > 0 && parts[1]) parts[1] = { text: `${parts[1].text.slice(0, Math.max(1, parts[1].text.length - over - 1))}…` };
+  return line();
 }
 
 /** Lines the live thinking window keeps on screen, when nothing else is configured. */

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { diffRows, diffStat, statusParts, thinkingLine, thinkingSize, thinkingWindow, toolLine } from '../format.js';
+import { diffRows, diffStat, fitStatus, statusParts, thinkingLine, thinkingSize, thinkingWindow, toolLine } from '../format.js';
 import { initialView } from '../../state/view.js';
 
 const diff = 'Index: a.txt\n===\n--- a.txt\n+++ a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n';
@@ -74,4 +74,24 @@ test('a diff is drawn in the lines of its hunks, not its headers', () => {
   const twoHunks = `${diff}@@ -20,2 +21,2 @@\n-twenty\n+TWENTY\n`;
   expect(diffRows(twoHunks)).toBe(7);
   expect(diffRows('')).toBe(0);
+});
+
+test('a status line that does not fit gives up the least useful facts first, and never the mode or what JamCLI is doing', () => {
+  const status = { ...initialView().status, mode: 'default', model: 'opencode-go:deepseek-v4.1-flash', sandbox: 'seatbelt', contextPercent: 1, costUsd: 0.0011, unpriced: 0, inputTokens: 15_000, outputTokens: 558, lspServers: 4, phase: 'waiting' as const };
+  const whole = fitStatus(status, 500, { separator: ' · ' });
+  expect(whole).toBe('default mode · opencode-go:deepseek-v4.1-flash · context 1% · $0.0011 · 15k in, 558 out · sandbox seatbelt · LSP 4 · waiting for you');
+  // At 110 columns, as seen on a real run, the phase was cut off; now the LSP count and the tokens go instead.
+  const fitted = fitStatus(status, 110, { separator: ' · ' });
+  expect(fitted.length).toBeLessThanOrEqual(110);
+  expect(fitted).toStartWith('default mode · ');
+  expect(fitted).toEndWith('waiting for you');
+  expect(fitted).not.toContain('LSP 4');
+  expect(fitted).toContain('context 1%');
+  // Narrower still, only the mode, a shortened model, and the phase are left.
+  const narrow = fitStatus(status, 50, { separator: ' · ' });
+  expect(narrow.length).toBeLessThanOrEqual(50);
+  expect(narrow).toStartWith('default mode · opencode-go:');
+  expect(narrow).toEndWith('… · waiting for you');
+  // While the indicator shows the phase, the line leaves it out.
+  expect(fitStatus({ ...status, phase: 'thinking' }, 500, { separator: ' · ', withoutPhase: true })).not.toContain('thinking');
 });

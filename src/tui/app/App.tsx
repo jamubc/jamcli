@@ -8,7 +8,7 @@ import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { anchorsToTop, initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, statusOf, gitBranch } from './controller.js';
-import { statusParts, thinkingSize } from './format.js';
+import { fitStatus, statusParts, thinkingSize } from './format.js';
 import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
@@ -698,6 +698,8 @@ export function App(props: AppProps) {
   // The indicator moves while JamCLI works, not while it waits for the person. Screen
   // reader mode implies reduced motion, so it never draws there.
   const moving = !reducedMotion && WORKING.has(state.status.phase);
+  // What the status line's words have left of the width, beside the flash and the indicator (its spinner, a space, the words, and a separator).
+  const statusRoom = Math.max(1, size.width - (flash ? flash.length + 3 : 0) - (moving ? status.at(-1)!.length + 5 : 0) - (plain ? 'Status: '.length : 0));
   return (
     <ThemeContext.Provider value={theme}>
       <PlainContext.Provider value={plain}>
@@ -802,7 +804,7 @@ export function App(props: AppProps) {
             <box height={1} flexShrink={0} flexDirection="row">
               {flash ? <text {...sel} fg={theme.accent}>{`${flash}${plain ? '. ' : ' · '}`}</text> : null}
               {moving ? <Indicator style={statusStyle} words={status.at(-1)!} /> : null}
-              <text {...sel} fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${(moving ? status.slice(0, -1) : status).join(plain ? ', ' : ' · ')}`}</text>
+              <text {...sel} fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${fitStatus(state.status, statusRoom, { separator: plain ? ', ' : ' · ', withoutPhase: moving })}`}</text>
             </box>
           </box>
         </MotionContext.Provider>

@@ -176,7 +176,7 @@ Default mode asks before tools that run commands.
 4: Deny, continue
 5: Deny with feedback
 Up/Down pattern 1/2
-Status: default mode, ollama:fake-model, context N%, no sandbox, waiting for
+Status: default mode, ollama:fake-model, context N%, waiting for you
 "
 `;
 
