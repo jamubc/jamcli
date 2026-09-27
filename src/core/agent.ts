@@ -40,6 +40,8 @@ export interface AgentOptions {
   trustPrice?: ModelPrice;
   /** Relevance below which the trust gate removes a result. */
   trustThreshold?: number;
+  /** Whether identical results are sent to the classifier once. On by default. */
+  trustDedupe?: boolean;
   trustOffNote?: boolean;
   hooks?: HookBus;
   reasoning?: ProviderRequestOptions['reasoning'];
@@ -617,6 +619,7 @@ export class CoreAgent implements Agent {
       prompt,
       classifier: this.options.trustClassifier,
       threshold: this.options.trustThreshold,
+      dedupe: this.options.trustDedupe,
       signal,
       candidates,
     });

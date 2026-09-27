@@ -22,6 +22,12 @@ test('dedupe runs before classification: a duplicate is sent once and names its 
   expect([...twins]).toEqual([[1, 0]]);
 });
 
+test('with dedupe off, every result is sent, duplicates too', () => {
+  const { unique, twins } = dedupeCandidates([{ tool: 'read_file', output: 'same' }, { tool: 'read_file', output: 'same' }], false);
+  expect(unique).toHaveLength(2);
+  expect(twins.size).toBe(0);
+});
+
 test("a duplicate shares its twin's verdict instead of being withheld for being a duplicate", async () => {
   const candidates = [
     { tool: 'lsp', output: 'The language server could not answer.' },

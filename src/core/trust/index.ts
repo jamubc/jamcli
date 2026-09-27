@@ -50,6 +50,8 @@ export interface ScreenOptions {
   candidates: ScreeningCandidate[];
   classifier?: Classifier;
   threshold?: number;
+  /** Send each result once and give a duplicate its twin's verdict; `false` sends every result. On by default. */
+  dedupe?: boolean;
   signal?: AbortSignal;
 }
 
@@ -67,12 +69,12 @@ const normalize = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase
  * The candidates the classifier is sent, each once, and each duplicate's first twin by index,
  * so a duplicate costs nothing to judge and shares its twin's verdict.
  */
-export const dedupeCandidates = (candidates: ScreeningCandidate[]) => {
+export const dedupeCandidates = (candidates: ScreeningCandidate[], dedupe = true) => {
   const first = new Map<string, number>();
   const unique: ScreeningCandidate[] = [];
   const twins = new Map<number, number>();
   candidates.forEach((candidate, index) => {
-    const key = `${candidate.tool}:${normalize(candidate.output)}`;
+    const key = dedupe ? `${candidate.tool}:${normalize(candidate.output)}` : String(index);
     const twin = first.get(key);
     if (twin !== undefined) {
       twins.set(index, twin);
@@ -144,8 +146,8 @@ export const chatClassifier = (provider: ChatProvider, model?: string): Classifi
   },
 });
 
-export const screenToolResults = async ({ prompt, candidates, classifier, threshold = DEFAULT_THRESHOLD, signal }: ScreenOptions): Promise<ScreeningOutcome> => {
-  const { unique, twins } = dedupeCandidates(candidates);
+export const screenToolResults = async ({ prompt, candidates, classifier, threshold = DEFAULT_THRESHOLD, dedupe = true, signal }: ScreenOptions): Promise<ScreeningOutcome> => {
+  const { unique, twins } = dedupeCandidates(candidates, dedupe);
   const notes: string[] = [];
 
   if (!unique.length) {

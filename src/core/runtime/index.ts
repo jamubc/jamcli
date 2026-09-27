@@ -758,6 +758,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       alwaysThinks: modelInfo.alwaysThinks,
       reasoningSince,
       trustThreshold: config.trust?.threshold,
+      trustDedupe: config.trust?.dedupe,
       trustOffNote: gated(),
       redact,
       signal: options.signal,

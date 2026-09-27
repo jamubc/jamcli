@@ -187,13 +187,13 @@ export const ConfigFileSchema = z
       .partial(),
     trust: z
       .strictObject({
-        enabled: z.boolean(),
-        model: z.string(),
-        threshold: z.number().min(0).max(1),
-        dedupe: z.boolean(),
+        enabled: z.boolean().describe('false turns the trust gate off in every mode. It screens only in auto mode, and only once trust.model names a classifier.'),
+        model: z.string().describe('The classifier, as provider:model on any configured provider, or typesafe:jev-latest. Nothing is chosen for you.'),
+        threshold: z.number().min(0).max(1).describe('Relevance below which a result is withheld as not relevant; 0 keeps every result that is not an injection. Defaults to 0.3.'),
+        dedupe: z.boolean().describe('Send identical results to the classifier once, each duplicate taking its twin\'s verdict. On by default.'),
       })
       .partial()
-      .describe('The classifier that screens tool output before the model reads it.'),
+      .describe('The classifier that screens tool output before the model reads it, in auto mode.'),
     telemetry: z.boolean().describe('The legacy interface\'s telemetry switch. Traces are sent only when otel.enabled is true.'),
     otel: z
       .strictObject({
