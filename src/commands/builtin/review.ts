@@ -1,5 +1,6 @@
 import { readChanges, revertFile, revertHunk, stageFile, stageHunk, unstageFile, unstageHunk, type Changes, type FileChange, type Hunk } from '../../core/git/review.js';
 import type { ChoiceItem, CommandContext, SlashCommand } from '../types.js';
+import { reasonOf } from '../../utils/reason.js';
 
 /** One thing in the list: a hunk, or a whole file when it has no hunks to take apart. */
 type Entry = { key: string; hunk?: Hunk; file?: FileChange; untracked?: string };
@@ -46,7 +47,7 @@ async function act(ctx: CommandContext, changes: Changes, entry: Entry, action: 
     // A revert changes the working copy, so it is checkpointed like the model's changes.
     else await ctx.runtime.withCheckpoint(`revert ${name}`, () => (entry.hunk ? revertHunk(root, entry.hunk) : revertFile(root, entry.file!.file)));
   } catch (error: any) {
-    return ctx.notice('warn', `Not done: ${error?.message ?? error}. The list shows the changes as they are now.`);
+    return ctx.notice('warn', `Not done: ${reasonOf(error)}. The list shows the changes as they are now.`);
   }
   ctx.notice('info', `${action === 'stage' ? 'Staged' : action === 'unstage' ? 'Unstaged' : 'Reverted'} ${name}.`);
 }

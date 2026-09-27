@@ -3,6 +3,7 @@ import { commitChanges, planCommit, type CommitPlan } from '../../core/git/commi
 import { readChanges } from '../../core/git/review.js';
 import type { CommandContext, SlashCommand } from '../types.js';
 import { diff } from './review.js';
+import { reasonOf } from '../../utils/reason.js';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -30,7 +31,7 @@ function confirm(ctx: CommandContext, paths: string[], given: string | undefined
           note: `${text}\n\n${files}\n${plan.stat}${attribution ? `\n\nWith the trailer ${attribution}, from git.attribution.` : ''}`,
         };
       },
-      (error: any) => ({ items: [], note: `No message was drafted: ${error?.message ?? error}. Write one with /commit <message>.` })
+      (error: any) => ({ items: [], note: `No message was drafted: ${reasonOf(error)}. Write one with /commit <message>.` })
     ),
     empty: 'Nothing to commit.',
     hint: 'Enter chooses · Escape leaves everything as it is',

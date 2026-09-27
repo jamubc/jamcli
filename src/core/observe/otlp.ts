@@ -1,5 +1,6 @@
 import { JAMCLI_VERSION } from '../version.js';
 import type { AttributeValue, SpanData, SpanSink } from './observer.js';
+import { reasonOf } from '../../utils/reason.js';
 
 /** The `otel` block of configuration. */
 export interface OtelSettings {
@@ -132,7 +133,7 @@ export function otlpExporter(options: OtlpExporterOptions): SpanSink {
       } catch (error: any) {
         if (!reported) {
           reported = true;
-          options.onError?.(`Traces could not be sent to ${options.url}: ${error?.message ?? error}. Later failures are not reported.`);
+          options.onError?.(`Traces could not be sent to ${options.url}: ${reasonOf(error)}. Later failures are not reported.`);
         }
       }
     })();

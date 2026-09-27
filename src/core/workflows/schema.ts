@@ -5,6 +5,7 @@ import YAML from 'yaml';
 import { z } from 'zod';
 import { userConfigDir } from '../../utils/paths.js';
 import { parseExpr, templatePaths } from './expr.js';
+import { reasonOf } from '../../utils/reason.js';
 
 const ID = /^[a-z0-9][a-z0-9_-]*$/i;
 
@@ -110,7 +111,7 @@ export function validateWorkflow(raw: unknown, file: string): Workflow {
       try {
         expr = parseExpr(step.when);
       } catch (error: any) {
-        throw new Error(`${file}: step ${step.id} has a condition that does not parse: ${error?.message ?? error}.`);
+        throw new Error(`${file}: step ${step.id} has a condition that does not parse: ${reasonOf(error)}.`);
       }
       const paths: string[] = [];
       const collect = (node: any) => {

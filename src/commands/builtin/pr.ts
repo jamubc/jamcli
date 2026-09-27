@@ -1,5 +1,6 @@
 import { branchState, ghState, openPullRequest, pullRequestPrompt, pushBranch, splitPullRequest, type BranchState } from '../../core/git/pr.js';
 import type { CommandContext, SlashCommand } from '../types.js';
+import { reasonOf } from '../../utils/reason.js';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -29,7 +30,7 @@ function offerPullRequest(ctx: CommandContext, ready: Promise<BranchState>, titl
           note: `${drafted.title}\n\n${drafted.body || '(no description)'}`,
         };
       },
-      (error: any) => ({ items: [], note: state ? `No description was drafted: ${error?.message ?? error}. Give a title with /pr <title>.` : `${error?.message ?? error}` })
+      (error: any) => ({ items: [], note: state ? `No description was drafted: ${reasonOf(error)}. Give a title with /pr <title>.` : `${error?.message ?? error}` })
       ),
     empty: 'Nothing to open.',
     hint: 'Enter chooses · Escape leaves the branch pushed and no pull request open',
