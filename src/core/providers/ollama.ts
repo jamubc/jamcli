@@ -185,7 +185,8 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       model,
       messages: messages.map(toOllamaMessage),
       stream,
-      ...(wantReasoning ? { think: ollamaThink(model, options.effort) } : {}),
+      // Thinking models think by default, so `off` must be sent, not left out.
+      ...(wantReasoning ? { think: ollamaThink(model, options.effort) } : options.reasoning === 'off' ? { think: false } : {}),
       ...(options.tools?.length ? { tools: options.tools } : {}),
       options: nativeOptions,
       ...(options.extraParams || {}),

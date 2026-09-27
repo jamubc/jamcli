@@ -167,8 +167,8 @@ test("a chain entry's reasoning reaches the child, and the call's level replaces
   const parent = await start({ allowTools: ['task'] });
   server.enqueue({ toolCalls: [delegateCall('think less')] }, { text: 'child done' }, { text: 'ok' });
   await parent.run('go');
-  // Before agents, the level was computed and dropped, and the child thought anyway.
-  expect(server.completions().at(-2)!.body.think).toBeUndefined();
+  // Ollama's thinking models think unless told not to, so `off` is sent as `think: false`.
+  expect(server.completions().at(-2)!.body.think).toBe(false);
 
   server.enqueue({ toolCalls: [{ id: 't2', name: 'task', arguments: { agent: 'quick', prompt: 'think more', reasoning: 'on' } }] }, { text: 'child done' }, { text: 'ok' });
   await parent.run('again');

@@ -138,7 +138,7 @@ export const screenToolResults = async ({
   try {
     const completion = await provider.complete(
       [{ role: 'user', content: buildClassifierPrompt(prompt, unique), timestamp: Date.now() }],
-      { model, signal }
+      { model, signal, reasoning: 'off' }
     );
     usage = completion.usage;
     verdicts = parseVerdicts(completion.content ?? '', unique.length);
