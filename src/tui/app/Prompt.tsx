@@ -127,7 +127,7 @@ export function PermissionPrompt(props: {
       ) : diff ? (
         <DiffView diff={diff} file={file} syntax={syntax} />
       ) : null}
-      {diffOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The diff continues.' : '… the diff continues, wheel scrolls it'}</text> : null}
+      {diffOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The diff continues.' : '… the diff continues, [↕ scroll]'}</text> : null}
       {text ? (
         <scrollbox height={Math.min(textRows, previewRows)} flexShrink={0} paddingLeft={indent} verticalScrollbarOptions={{ visible: false }}>
           <text {...sel} fg={theme.tokens.raw ?? theme.text} wrapMode="char">
@@ -135,7 +135,7 @@ export function PermissionPrompt(props: {
           </text>
         </scrollbox>
       ) : null}
-      {textOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The command continues.' : `… ${textRows - previewRows} more ${textRows - previewRows === 1 ? 'row' : 'rows'}, wheel scrolls it`}</text> : null}
+      {textOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The command continues.' : `… ${textRows - previewRows} more ${textRows - previewRows === 1 ? 'row' : 'rows'}, [↕ scroll]`}</text> : null}
       <text {...sel} fg={theme.dim} wrapMode="word">
         {`${reason}.`}
       </text>

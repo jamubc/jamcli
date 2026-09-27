@@ -155,7 +155,7 @@ test('the prompt leaves the transcript its rows, and Page Up scrolls it behind t
     const prompt = await frameWith(setup, (value) => value.includes('1  Allow once') && value.includes('Step 10 of the plan.'));
     expect(prompt).toMatch(/^│ {3}echo line-9/m);
     expect(prompt).not.toMatch(/^│ {3}echo line-10/m);
-    expect(prompt).toContain('31 more rows, wheel scrolls it');
+    expect(prompt).toContain('31 more rows, [↕ scroll]');
     expect(prompt).not.toContain('> list them');
     const paged = await pageUntil(setup, 'pageup', (value) => value.includes('> list them'));
     expect(paged).toContain('1  Allow once');
@@ -240,7 +240,7 @@ test('a long command wraps in the prompt, so all of it is read before it is allo
     // Joined back up, the wrapped rows hold the whole command, and nothing says it goes on.
     const whole = (value: string) => value.replace(/[│\s]/g, '').includes(long.replace(/\s/g, ''));
     const prompt = await frameWith(setup, (value) => value.includes('1  Allow once') && whole(value));
-    expect(prompt).not.toContain('wheel scrolls it');
+    expect(prompt).not.toContain('[↕ scroll]');
     setup.mockInput.pressKey('1');
     await frameWith(setup, (value) => value.includes('Echoed.'));
   } finally {
