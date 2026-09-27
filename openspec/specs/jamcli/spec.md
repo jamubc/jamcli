@@ -40,8 +40,12 @@ every other surface receives.
 
 #### Scenario: Keep the transcript in view behind a prompt
 - **WHEN** a permission prompt is open
-- **THEN** the transcript keeps rows above it, and a preview too long for the rest is cut with a note of how much remains
+- **THEN** the transcript keeps rows above it, and a preview too long for the rest scrolls in its space with a note of how much more there is
 - **AND** the page keys scroll the transcript while the prompt waits
+
+#### Scenario: Read a command whole before allowing it
+- **WHEN** a permission prompt shows a command
+- **THEN** the whole command is shown, its long lines wrapped rather than cut
 
 #### Scenario: Pin a note
 - **WHEN** the user runs `/note` with text
@@ -892,7 +896,12 @@ delimit the output it sends to the classifier.
 
 #### Scenario: Deduplicate before classifying
 - **WHEN** tool results are prepared for screening
-- **THEN** locally duplicated content is removed before the classification request is made
+- **THEN** locally duplicated content is sent to the classifier once
+- **AND** each duplicate takes the verdict of the result it repeats, and is never withheld for being a duplicate
+
+#### Scenario: Leave the session's own state alone
+- **WHEN** a result comes from a tool that reports only the session's own state, such as the todo list
+- **THEN** it is not screened and enters context unmodified
 
 #### Scenario: Disable the gate
 - **WHEN** the trust gate is disabled by configuration
@@ -1412,6 +1421,11 @@ by default.
 - **WHEN** nothing is configured
 - **THEN** no telemetry leaves the machine
 
+#### Scenario: The default log says what went wrong
+- **WHEN** the log is at its default level
+- **THEN** a failed tool call is logged with the first line of why it failed
+- **AND** a prompt left unanswered when its turn ended, or a turn stopped after a long wait on a prompt, is logged as a warning with how long it waited
+
 ### Requirement: Diagnostics Command
 JamCLI SHALL provide `jamcli doctor`, which checks the environment and reports each
 problem with a fix.
@@ -1922,3 +1936,17 @@ through configuration files, as one store, and SHALL show where each agent came 
 #### Scenario: Default names no agent
 - **WHEN** the configured default agent is not one of the agents in effect
 - **THEN** JamCLI names the file, the key, and the agents that exist
+
+### Requirement: Delegated Approvals
+JamCLI SHALL ask the person about a foreground child's call that needs a decision on the
+surface of the session that delegated, and SHALL show there what the call went on to do.
+
+#### Scenario: Answer a child's prompts in turn
+- **WHEN** a foreground child's calls need a person's decision, one after another
+- **THEN** each prompt is shown on the delegating session's surface
+- **AND** each is taken down once answered, so the next can be read and answered
+
+#### Scenario: Show what an answered call did
+- **WHEN** a child's call the person answered finishes
+- **THEN** the delegating surface shows its result where the prompt was
+- **AND** the delegating session's transcript records the person's answer

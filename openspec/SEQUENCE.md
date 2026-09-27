@@ -58,12 +58,35 @@ per-surface clauses above were added for that reason. The record is in
 `add-session-reflection`. Its code is committed and its task 6.1 ran end to end on
 OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real sessions,
 the approved novel edits counted against the 0 of 26 baseline, which only the owner's
-approvals can produce. `add-agents` and `reconcile-shipped-behavior` closed 2026-09-27;
-see Closed units below. `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to approve it before
+approvals can produce. `add-agents`, `reconcile-shipped-behavior`, and
+`fix-observed-session-defects` closed 2026-09-27; see Closed units below. `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to approve it before
 any task begins, and `git checkout 9d9f5c6 -- openspec/changes/add-windows-support`
 restores its proposal from the commit that recorded it.
 
 ## Closed units
+
+### 6. `fix-observed-session-defects`
+
+Archived as `2026-09-27-fix-observed-session-defects`: 1 requirement added (Delegated
+Approvals), 3 modified (Terminal User Interface, Tool Output Trust Gate, Observability).
+It came from reading the logs of the owner's latest session in `monaco-code-editor`
+(`2026-09-27-5c20fef9`), in auto mode on OpenCode Go, rather than from a plan. Every fix
+has a test that fails on the code before it: `fba0ded` to `7439f21`.
+
+**What the session showed.** Twice a subagent's command needed a person, and its prompt
+could not be answered; the owner stopped both turns, after 4 and 12 minutes. A child's
+answered prompt was never announced, so the first stayed on screen and each later one
+queued behind it (fixed in `fba0ded`). The prompt also cut each line of a command to
+one row, so the command being allowed could not be read. The trust gate withheld the
+model's own todo list as irrelevant and withheld results for being duplicates, and
+`trust.dedupe` was read by nothing. The TypeScript language server died three seconds
+in under Seatbelt: it watched JamCLI's process, which the sandbox hides, and took it for
+gone. The global log recorded none of it beyond a bare "tool call" warning, so it now
+names why a call failed, how long each prompt waited, and any prompt left unanswered.
+
+**Left alone, on purpose.** Command substitution, `$(...)`, still asks in auto mode:
+the engine cannot see what it runs, so no rule can be checked against it. That is why
+the child's commands asked at all, and it is the design, not a defect.
 
 ### 5. `reconcile-shipped-behavior`
 
