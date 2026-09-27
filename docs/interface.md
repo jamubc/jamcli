@@ -48,6 +48,21 @@ move, Enter chooses, Escape closes, and typing filters. A permission prompt offe
 once, allow for the session, reject, or reject with a reason, and shows the rule that
 would be saved. An MCP server's request for input is a form in the same place.
 
+## The mouse
+
+- Drag across the transcript to select, across as many rows as you like. Releasing copies
+  the selection, and the status line says how much. Dragging above or below the
+  transcript keeps it scrolling, so a long reply can be selected whole. A double click
+  selects a word.
+- The wheel scrolls the transcript.
+- Click a row in a list, the palette, or the `@` list to choose it; pointing at one marks
+  it. Click a choice in a permission prompt to answer it.
+- Click a tool's line to show or hide its output, as the tool detail key does.
+
+Copying goes to the system clipboard. Over SSH, or where there is none, it goes through
+the terminal (OSC 52), which reaches the machine you sit at if the terminal supports it.
+`/copy` copies whole messages the same way.
+
 ## The status line
 
 The status line names the mode, the model, the context share, the cost and tokens, the

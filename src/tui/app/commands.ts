@@ -17,6 +17,7 @@ import type { McpCommandRequest } from '../../cli/mcp.js';
 import type { ViewAction } from '../state/view.js';
 import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from './reports.js';
 import type { PickItem, PickRequest } from './Picker.js';
+import { copiedLine, type Copier } from './clipboard.js';
 import { THEME_NAMES, THEMES, noColor, type Theme } from './theme.js';
 import { keysHelp, type Keybindings } from './keys.js';
 import { setup } from './setup.js';
@@ -62,8 +63,8 @@ export interface CommandContext {
   setMode(mode: PermissionMode): void;
   /** Ask the person to confirm bypass mode. */
   confirmBypass(): void;
-  /** Put text on the clipboard through the terminal. Resolves false when the terminal cannot. */
-  copy(text: string): boolean;
+  /** Put text on the clipboard: the system's, else the terminal's. Resolves false when neither takes it. */
+  copy: Copier;
   exit(): void;
   /** Every command, for /help. */
   commands(): SlashCommand[];
@@ -465,7 +466,7 @@ const copy: SlashCommand = {
   args: '[o] [count]',
   summary: 'Copy the conversation to the clipboard; o copies only replies, and a count the last few',
   source: 'built-in',
-  run(ctx, args) {
+  async run(ctx, args) {
     const words = args.split(/\s+/).filter(Boolean);
     const onlyReplies = words[0] === 'o';
     const limitText = onlyReplies ? words[1] : words[0];
@@ -477,7 +478,8 @@ const copy: SlashCommand = {
     const text = chosen.map((message) => (onlyReplies ? message.content : `${message.role === 'user' ? 'You' : 'JamCLI'}: ${message.content}`)).join('\n\n');
     const noun = onlyReplies ? (chosen.length === 1 ? 'reply' : 'replies') : chosen.length === 1 ? 'message' : 'messages';
     const what = `${chosen.length} ${noun}`;
-    if (ctx.copy(text)) ctx.notice('info', `Copied ${what}, ${text.length.toLocaleString('en-US')} characters, through the terminal (OSC 52). A terminal that does not support it ignores the request.`);
+    const how = await ctx.copy(text);
+    if (how) ctx.notice('info', `Copied ${what}, ${copiedLine(text, how)}`);
     else ctx.notice('warn', `This terminal cannot take text for the clipboard, so nothing was copied. /export writes the session to a file instead.`);
   },
 };

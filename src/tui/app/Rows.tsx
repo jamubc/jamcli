@@ -2,6 +2,7 @@
 import type { SyntaxStyle } from '@opentui/core';
 import type { Row } from '../state/view.js';
 import { compactionLine, noticeLine, toolLine } from './format.js';
+import { useClick } from './mouse.js';
 import { filetypeOf } from './syntax.js';
 import { usePlain, useTheme } from './theme.js';
 
@@ -33,8 +34,9 @@ export function DiffView({ diff, file, syntax }: { diff: string; file?: string; 
 const NOTICE_LABELS = { info: 'Note', warn: 'Warning', error: 'Error' } as const;
 
 /** A row as plain labeled lines, for screen reader mode: who or what, then the words. */
-function PlainRow({ row }: { row: Row }) {
+function PlainRow({ row, onToggle }: { row: Row; onToggle?: (id: number) => void }) {
   const theme = useTheme();
+  const click = useClick();
   switch (row.kind) {
     case 'user':
       return <text fg={theme.text}>{`You: ${row.text}`}</text>;
@@ -48,7 +50,7 @@ function PlainRow({ row }: { row: Row }) {
     case 'tool':
       return (
         <box flexDirection="column">
-          <text fg={theme.text}>{`Tool ${toolLine(row, false)}`}</text>
+          <text fg={theme.text} onMouseUp={click(() => onToggle?.(row.id))}>{`Tool ${toolLine(row, false)}`}</text>
           {!row.collapsed && row.diff ? <text fg={theme.text}>{`Diff:\n${row.diff}`}</text> : null}
           {!row.collapsed && !row.diff && row.output ? <text fg={theme.text}>{`Output:\n${row.output}`}</text> : null}
         </box>
@@ -69,9 +71,11 @@ function PlainRow({ row }: { row: Row }) {
   }
 }
 
-export function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
+/** One transcript row. A tool's line opens and closes its output when clicked, as the tool detail key does. */
+export function RowView({ row, syntax, onToggle }: { row: Row; syntax: SyntaxStyle; onToggle?: (id: number) => void }) {
   const theme = useTheme();
-  if (usePlain()) return <PlainRow row={row} />;
+  const click = useClick();
+  if (usePlain()) return <PlainRow row={row} onToggle={onToggle} />;
   switch (row.kind) {
     case 'user':
       return (
@@ -89,7 +93,9 @@ export function RowView({ row, syntax }: { row: Row; syntax: SyntaxStyle }) {
     case 'tool':
       return (
         <box flexDirection="column">
-          <text fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent}>{toolLine(row)}</text>
+          <text fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent} onMouseUp={click(() => onToggle?.(row.id))}>
+            {toolLine(row)}
+          </text>
           {!row.collapsed && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}
           {!row.collapsed && !row.diff && row.output ? <text fg={theme.dim}>{row.output}</text> : null}
         </box>

@@ -26,6 +26,7 @@ import { earlierMessages } from './history.js';
 import type { TodoView } from '../state/view.js';
 import { RowView } from './Rows.js';
 import { BypassConfirm, PermissionPrompt } from './Prompt.js';
+import { systemCopier, type Copier } from './clipboard.js';
 import type { ObserverHub } from '../observer.js';
 
 export interface AppProps {
@@ -54,7 +55,12 @@ export interface AppProps {
   micro?: 'auto' | 'always' | 'never';
   /** Hears every event and each session opened, for the ACP observer endpoint. */
   observer?: Pick<ObserverHub, 'event' | 'attach'>;
+  /** Where copied text goes. Defaults to the system clipboard, then the terminal's. */
+  copy?: Copier;
 }
+
+/** How long a short confirmation, such as a copy, stays on the status line. */
+const FLASH_MS = 2_500;
 
 /**
  * How many transcript rows are drawn at first. A long session resumes with its latest
@@ -184,6 +190,53 @@ export function App(props: AppProps) {
   }, [renderer]);
   const hidden = Math.max(0, state.rows.length - drawn);
 
+  /** A short confirmation on the status line, such as what a selection copied. */
+  const [flash, setFlash] = useState<string | undefined>(undefined);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flashFor = (text: string) => {
+    setFlash(text);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(undefined), FLASH_MS);
+  };
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+  const ownCopier = useMemo(() => (props.copy ? undefined : systemCopier(renderer)), [renderer, props.copy]);
+  useEffect(() => () => ownCopier?.dispose(), [ownCopier]);
+  const copyText: Copier = props.copy ?? ownCopier!.copy;
+  const copyRef = useRef(copyText);
+  copyRef.current = copyText;
+  // Releasing a drag copies what it selected, as a terminal does; the selection stays
+  // marked until the next click.
+  useEffect(() => {
+    const copySelection = (selection: { getSelectedText(): string } | null) => {
+      const text = selection?.getSelectedText() ?? '';
+      if (!text.trim()) return;
+      void copyRef.current(text).then((how) =>
+        flashFor(how ? `Copied ${text.length.toLocaleString('en-US')} character${text.length === 1 ? '' : 's'}${how === 'terminal' ? ' through the terminal' : ''}` : 'This terminal cannot take text for the clipboard')
+      );
+    };
+    renderer.on('selection', copySelection);
+    return () => {
+      renderer.off('selection', copySelection);
+    };
+  }, [renderer]);
+  /**
+   * A selection started in the transcript keeps scrolling it while the pointer is dragged
+   * above or below it, over the header or the composer, so a long reply can be selected
+   * whole. The transcript scrolls itself while the pointer is on its edge rows.
+   */
+  const selectingTranscript = useRef(false);
+  const dragPast = (event: { x: number; y: number }) => {
+    const box = transcript.current;
+    if (!selectingTranscript.current || !box) return;
+    const bottom = box.y + box.height - 1;
+    if (event.y < box.y || event.y > bottom) box.updateAutoScroll(event.x, Math.min(Math.max(event.y, box.y), bottom));
+  };
+  const endDrag = () => {
+    if (!selectingTranscript.current) return;
+    selectingTranscript.current = false;
+    transcript.current?.stopAutoScroll();
+  };
+
   const approval = state.approvals[0];
   /**
    * Which suggested pattern the prompt offers, and whether it is taking feedback, for the
@@ -209,6 +262,16 @@ export function App(props: AppProps) {
     },
     [approval, controller]
   );
+
+  /** One of the prompt's four choices, by its key or a click on it. */
+  const answerWith = (key: '1' | '2' | '3' | '4') => {
+    if (!approval || selection().feedback) return;
+    const pattern = approval.suggestions[selection().selected];
+    if (key === '1') answer({ allow: true, scope: 'once' });
+    else if (key === '2' && pattern) answer({ allow: true, scope: 'session', pattern });
+    else if (key === '3' && pattern) answer({ allow: true, scope: 'project', pattern });
+    else if (key === '4') choose(() => ({ feedback: true }));
+  };
 
   /** The profile chosen with /profile, kept for every session opened after it. */
   const profile = useRef<string | undefined>(undefined);
@@ -260,6 +323,14 @@ export function App(props: AppProps) {
   };
 
   const say = (level: 'info' | 'warn' | 'error', text: string) => dispatch({ type: 'notice', level, text });
+  /** Choose the overlay's row at this index among those shown, by Enter or a click. */
+  const chooseOverlay = (index: number) => {
+    const open = overlay.current;
+    const item = open?.items ? shownItems(open.items, open.filter, open.request.freeText)[index] : undefined;
+    if (!open || !item) return;
+    setOverlay(undefined);
+    Promise.resolve(open.request.choose(item)).catch((error: any) => say('error', error?.message ?? String(error)));
+  };
   const context = (): CommandContext => ({
     runtime,
     projectRoot,
@@ -272,7 +343,7 @@ export function App(props: AppProps) {
     openSession: switchSession,
     setMode: (mode) => void controller.setMode(mode),
     confirmBypass: () => setConfirmBypass(true),
-    copy: (text) => renderer.copyToClipboardOSC52(text),
+    copy: (text) => copyText(text),
     exit: onExit,
     commands: () => commands,
     pick,
@@ -439,13 +510,11 @@ export function App(props: AppProps) {
     }
     if (approval) {
       const now = selection();
-      const pattern = approval.suggestions[now.selected];
       if (key.name === 'escape') answer({ allow: false });
       else if (now.feedback) return;
-      else if (key.name === '1' || key.name === 'y') answer({ allow: true, scope: 'once' });
-      else if (key.name === '2' && pattern) answer({ allow: true, scope: 'session', pattern });
-      else if (key.name === '3' && pattern) answer({ allow: true, scope: 'project', pattern });
-      else if (key.name === '4' || key.name === 'n') choose(() => ({ feedback: true }));
+      else if (key.name === '1' || key.name === 'y') answerWith('1');
+      else if (key.name === '2' || key.name === '3') answerWith(key.name);
+      else if (key.name === '4' || key.name === 'n') answerWith('4');
       else if (key.name === 'down') choose((from) => ({ selected: Math.min(from.selected + 1, Math.max(0, approval.suggestions.length - 1)) }));
       else if (key.name === 'up') choose((from) => ({ selected: Math.max(0, from.selected - 1) }));
       return;
@@ -462,12 +531,8 @@ export function App(props: AppProps) {
         open.request.dismissed?.();
       }
       else if (step) setOverlay({ ...open, index: Math.min(Math.max(0, open.index + step), last) });
-      else if (key.name === 'return') {
-        const item = shown[open.index];
-        if (!item) return;
-        setOverlay(undefined);
-        Promise.resolve(open.request.choose(item)).catch((error: any) => say('error', error?.message ?? String(error)));
-      } else if (key.name === 'backspace') setOverlay({ ...open, filter: open.filter.slice(0, -1), index: 0 });
+      else if (key.name === 'return') chooseOverlay(open.index);
+      else if (key.name === 'backspace') setOverlay({ ...open, filter: open.filter.slice(0, -1), index: 0 });
       else if (!key.ctrl && !key.meta && key.sequence && key.sequence.length === 1 && key.sequence >= ' ') setOverlay({ ...open, filter: open.filter + key.sequence, index: 0 });
       return;
     }
@@ -571,16 +636,16 @@ export function App(props: AppProps) {
               <text fg={state.approvals.length ? theme.warn : theme.text}>{fitPhrase(microPhrase(state), Math.max(1, size.width))}</text>
             </box>
           ) : null}
-          <box flexDirection="column" width="100%" height="100%" visible={!micro}>
+          <box flexDirection="column" width="100%" height="100%" visible={!micro} onMouseDrag={dragPast} onMouseUp={endDrag} onMouseDragEnd={endDrag}>
             <box height={1} flexShrink={0}>
               <text fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
             </box>
-            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling {...(plain ? { verticalScrollbarOptions: { visible: false } } : {})}>
+            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : {})}>
               {hidden ? (
                 <text fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
               ) : null}
               {(hidden ? state.rows.slice(hidden) : state.rows).map((row) => (
-                <RowView key={row.id} row={row} syntax={syntax} />
+                <RowView key={row.id} row={row} syntax={syntax} onToggle={(id) => dispatch({ type: 'toggle', id })} />
               ))}
             </scrollbox>
             {approval ? (
@@ -592,6 +657,7 @@ export function App(props: AppProps) {
                 selected={selected}
                 feedback={feedback}
                 onFeedback={(text) => answer({ allow: false, ...(text.trim() ? { feedback: text.trim() } : {}) })}
+                onChoose={answerWith}
               />
             ) : confirmBypass ? (
               <BypassConfirm
@@ -612,12 +678,28 @@ export function App(props: AppProps) {
                     hint={overlay.current.request.hint}
                     filter={overlay.current.filter}
                     selected={overlay.current.index}
+                    onPick={chooseOverlay}
+                    onHover={(index) => overlay.current && overlay.current.index !== index && setOverlay({ ...overlay.current, index })}
                     {...(overlay.current.request.freeText !== undefined ? { freeText: overlay.current.request.freeText } : {})}
                   />
                 ) : matches ? (
-                  <Palette matches={matches} selected={palette.current.index} />
+                  <Palette
+                    matches={matches}
+                    selected={palette.current.index}
+                    onHover={(index) => index !== palette.current.index && setPalette({ ...palette.current, index })}
+                    onPick={(index) => {
+                      setPalette({ ...palette.current, index });
+                      submit();
+                    }}
+                  />
                 ) : referenceMatches ? (
-                  <ReferencePalette matches={referenceMatches} selected={palette.current.index} loading={!referenceItems} />
+                  <ReferencePalette
+                    matches={referenceMatches}
+                    selected={palette.current.index}
+                    loading={!referenceItems}
+                    onHover={(index) => index !== palette.current.index && setPalette({ ...palette.current, index })}
+                    onPick={(index) => referenceMatches[index] && completeWith(referenceMatches[index])}
+                  />
                 ) : null}
                 {showTodos ? <TodoPanel todos={state.todos} plain={plain} colors={theme} /> : null}
                 <box {...framed(plain, theme.border)} paddingLeft={0} paddingRight={0} flexShrink={0} height={plain ? 3 : 5}>
@@ -637,6 +719,7 @@ export function App(props: AppProps) {
               </box>
             )}
             <box height={1} flexShrink={0} flexDirection="row">
+              {flash ? <text fg={theme.accent}>{`${flash}${plain ? '. ' : ' · '}`}</text> : null}
               {moving ? <Indicator style={statusStyle} words={status.at(-1)!} /> : null}
               <text fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${(moving ? status.slice(0, -1) : status).join(plain ? ', ' : ' · ')}`}</text>
             </box>

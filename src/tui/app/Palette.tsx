@@ -2,6 +2,7 @@
 import { useTerminalDimensions } from '@opentui/react';
 import type { SlashCommand } from './commands.js';
 import type { ReferenceItem } from './references.js';
+import { useClick } from './mouse.js';
 import { framed, usePlain, useTheme } from './theme.js';
 
 /** How many matches the palette shows at once. */
@@ -11,8 +12,9 @@ export const PALETTE_ROWS = 8;
  * The commands a typed `/name` could mean, shown above the composer. The chosen one is
  * marked with a word as well as a color. A custom command names where it comes from.
  */
-export function Palette({ matches, selected }: { matches: SlashCommand[]; selected: number }) {
+export function Palette({ matches, selected, onPick, onHover }: { matches: SlashCommand[]; selected: number; onPick?: (index: number) => void; onHover?: (index: number) => void }) {
   const colors = useTheme();
+  const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   // Inside the border and padding; a line longer than that is cut, not wrapped.
@@ -33,7 +35,7 @@ export function Palette({ matches, selected }: { matches: SlashCommand[]; select
           const head = name.length >= width ? `${name} ` : name.padEnd(width + 1);
           const from = command.source === 'built-in' ? '' : ` (${command.source})`;
           return (
-            <text key={command.name} fg={chosen ? colors.accent : colors.text}>
+            <text key={command.name} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
               {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head} ${command.summary}${from}`)}
             </text>
           );
@@ -45,8 +47,9 @@ export function Palette({ matches, selected }: { matches: SlashCommand[]; select
 }
 
 /** What `@` could name, shown above the composer as a word is typed after it. */
-export function ReferencePalette({ matches, selected, loading }: { matches: ReferenceItem[]; selected: number; loading: boolean }) {
+export function ReferencePalette({ matches, selected, loading, onPick, onHover }: { matches: ReferenceItem[]; selected: number; loading: boolean; onPick?: (index: number) => void; onHover?: (index: number) => void }) {
   const colors = useTheme();
+  const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   const room = Math.max(20, columns - 4);
@@ -62,7 +65,7 @@ export function ReferencePalette({ matches, selected, loading }: { matches: Refe
         const chosen = start + index === selected;
         const head = `@${item.text}`;
         return (
-          <text key={item.text} fg={chosen ? colors.accent : colors.text}>
+          <text key={item.text} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
             {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head.length >= width ? `${head} ` : head.padEnd(width + 1)} ${item.detail}`)}
           </text>
         );

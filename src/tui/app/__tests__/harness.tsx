@@ -10,7 +10,7 @@ import { createRuntime, type Runtime, type RuntimeOptions } from '../../../core/
 import { startFakeProvider, type FakeProviderOptions, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 
 /** How the interface is opened: its size, and the props a person's settings would give it. */
-export interface ViewOptions extends Pick<AppProps, 'theme' | 'screenReader' | 'reducedMotion' | 'keys' | 'firstRun' | 'statusStyle' | 'observer'> {
+export interface ViewOptions extends Pick<AppProps, 'theme' | 'screenReader' | 'reducedMotion' | 'keys' | 'firstRun' | 'statusStyle' | 'observer' | 'copy'> {
   onExit?: () => void;
   size?: { width: number; height: number };
 }
@@ -76,10 +76,14 @@ export function interfaceHarness(provider: FakeProviderOptions = {}) {
       return made;
     };
     const runtime = await make();
-    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} openSession={make} {...shown} />, { ...size, exitOnCtrlC: false });
+    // What was copied, in order: a test never writes to the developer's clipboard.
+    const copied: string[] = [];
+    const copy = shown.copy ?? (async (text: string) => (copied.push(text), 'system' as const));
+    const setup = await testRender(<App runtime={runtime} projectRoot={context.root} onExit={onExit} openSession={make} {...shown} copy={copy} />, { ...size, exitOnCtrlC: false });
     await setup.renderOnce();
     return {
       runtime,
+      copied,
       /** The session on screen: the last one opened. */
       current: () => opened.at(-1)!,
       setup,

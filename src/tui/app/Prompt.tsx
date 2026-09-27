@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import type { SyntaxStyle } from '@opentui/core';
 import type { PendingApproval } from '../state/view.js';
+import { useClick } from './mouse.js';
 import { DiffView } from './Rows.js';
 import { framed, usePlain, useTheme } from './theme.js';
 
@@ -20,9 +21,13 @@ export function PermissionPrompt(props: {
   selected: number;
   feedback: boolean;
   onFeedback: (text: string) => void;
+  /** A choice was clicked: 1 to 4, as its key would. */
+  onChoose?: (key: '1' | '2' | '3' | '4') => void;
 }) {
   const { approval, queued, syntax, file, selected, feedback } = props;
   const theme = useTheme();
+  const click = useClick();
+  const choice = (key: '1' | '2' | '3' | '4') => click(() => props.onChoose?.(key));
   const plain = usePlain();
   const preview = approval.preview?.kind === 'diff' ? undefined : approval.preview?.text.split('\n').slice(0, 12).join('\n');
   const pattern = approval.suggestions[selected];
@@ -40,10 +45,10 @@ export function PermissionPrompt(props: {
         </box>
       ) : (
         <box flexDirection="column">
-          <text fg={theme.text}>1 allow once</text>
-          {pattern ? <text fg={theme.text}>{`2 allow ${pattern} for this session${others}`}</text> : null}
-          {pattern ? <text fg={theme.text}>{`3 allow ${pattern} for this project, saved in .jamcli/config.local.json`}</text> : null}
-          <text fg={theme.text}>4 deny, and say why · Escape denies</text>
+          <text fg={theme.text} onMouseUp={choice('1')}>1 allow once</text>
+          {pattern ? <text fg={theme.text} onMouseUp={choice('2')}>{`2 allow ${pattern} for this session${others}`}</text> : null}
+          {pattern ? <text fg={theme.text} onMouseUp={choice('3')}>{`3 allow ${pattern} for this project, saved in .jamcli/config.local.json`}</text> : null}
+          <text fg={theme.text} onMouseUp={choice('4')}>4 deny, and say why · Escape denies</text>
         </box>
       )}
     </box>

@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from '@opentui/react';
+import { useClick } from './mouse.js';
 import { framed, usePlain, useTheme } from './theme.js';
 
 /** One choice in an overlay. */
@@ -58,8 +59,22 @@ export function filterItems(items: PickItem[], filter: string): PickItem[] {
  * An overlay over the composer: a title, a filter the person types into, and the
  * matching choices, the chosen one marked with a word as well as a color.
  */
-export function Picker(props: { title: string; items: PickItem[] | undefined; note?: string; empty: string; hint?: string; filter: string; selected: number; freeText?: string }) {
+export function Picker(props: {
+  title: string;
+  items: PickItem[] | undefined;
+  note?: string;
+  empty: string;
+  hint?: string;
+  filter: string;
+  selected: number;
+  freeText?: string;
+  /** A row was clicked: choose it, as Enter would. The index is among the shown rows. */
+  onPick?: (index: number) => void;
+  /** The pointer is over a row: mark it chosen. */
+  onHover?: (index: number) => void;
+}) {
   const theme = useTheme();
+  const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   const room = Math.max(20, columns - 4);
@@ -80,14 +95,14 @@ export function Picker(props: { title: string; items: PickItem[] | undefined; no
         // A label longer than the column keeps two spaces before its detail.
         const label = text.length >= width ? `${text}  ` : text.padEnd(width + 2);
         return (
-          <text key={item.key} fg={chosen ? theme.accent : theme.text}>
+          <text key={item.key} fg={chosen ? theme.accent : theme.text} onMouseUp={click(() => props.onPick?.(start + index))} onMouseOver={() => props.onHover?.(start + index)}>
             {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${label}${item.detail ?? ''}`)}
           </text>
         );
       })}
       {/* A note can carry the fix, so it wraps rather than being cut. */}
       {props.note ? <text fg={theme.warn} wrapMode="word">{props.note}</text> : null}
-      <text fg={theme.dim}>{fit(`${shown && shown.length > PICKER_ROWS ? `${props.selected + 1} of ${shown.length} · ` : ''}${props.hint ?? 'Enter chooses'} · Up and Down move · Escape closes`)}</text>
+      <text fg={theme.dim}>{fit(`${shown && shown.length > PICKER_ROWS ? `${props.selected + 1} of ${shown.length} · ` : ''}${props.hint ?? 'Enter chooses'} · Up and Down move${plain ? '' : ', or click'} · Escape closes`)}</text>
     </box>
   );
 }
