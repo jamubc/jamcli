@@ -278,3 +278,15 @@ test('finished background tasks do not count against the concurrency limit', asy
   const next = await taskRunner({ agent: 'quick', prompt: 'b', background: true }, ctx);
   expect(next.output).toContain('Started background task');
 });
+
+test("a run can offer a tool under a description of its own, and only that run", async () => {
+  const custom = await start({ allowTools: ['read_file'], toolDescriptions: { read_file: 'TRIAL-DESCRIPTION: read one file.' } });
+  server.enqueue({ text: 'ok' });
+  await custom.run('hi');
+  const offered = (request: any) => request.body.tools.find((tool: any) => tool.function.name === 'read_file').function.description;
+  expect(offered(server.completions().at(-1))).toBe('TRIAL-DESCRIPTION: read one file.');
+  const plain = await start({ allowTools: ['read_file'] });
+  server.enqueue({ text: 'ok' });
+  await plain.run('hi');
+  expect(offered(server.completions().at(-1))).not.toContain('TRIAL-DESCRIPTION');
+});

@@ -84,6 +84,8 @@ export interface RuntimeOptions {
   reasoning?: ReasoningLevel;
   /** How hard the model thinks on every request, where it takes a level. */
   effort?: EffortLevel;
+  /** Descriptions to offer instead of tools' own, by name: how a trial compares tool prompts. */
+  toolDescriptions?: Record<string, string>;
   /** A delegated run's agent rules, read before the project's, which win a conflict. */
   agentRules?: { agent: string; source: string; text: string };
   /** `--allow-tool` names for this run. */
@@ -539,9 +541,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       grantProject,
       ...(searching ? { deferred: (name: string) => Boolean(mcpServers?.has(name)) && !loadedTools.has(name) } : {}),
       ...(options.dryRun ? { dryRun: recordDryRun } : {}),
-      descriptions: taskTool
-        ? { task: taskDescription(routableAgents(agents.agents, config.api_registry), agents.defaultAgent) }
-        : undefined,
+      descriptions: {
+        ...(taskTool ? { task: taskDescription(routableAgents(agents.agents, config.api_registry), agents.defaultAgent) } : {}),
+        ...options.toolDescriptions,
+      },
       context: () => ({
         projectRoot: workRoot,
         ignorePatterns: mcpConfig.ignore_patterns,
