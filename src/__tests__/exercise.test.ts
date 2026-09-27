@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { startFakeProvider, type FakeProviderServer } from '../testing/fakeProvider.js';
-import { KEYS, openTerminal, type TerminalSession } from '../testing/terminal.js';
+import { KEYS, openTerminal, type TerminalSession } from '../terminal/terminal.js';
 
 /**
  * The interface as a person meets it: the real entry point in a pseudo-terminal, read
