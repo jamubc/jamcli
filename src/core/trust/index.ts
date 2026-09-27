@@ -24,7 +24,6 @@ export interface Removal {
 export interface ScreeningOutcome {
   kept: ScreeningCandidate[];
   dropped: Removal[];
-  deduped: Removal[];
   notes: string[];
   screened: boolean;
   /** What the classifier request used, when the provider reported it. */
@@ -64,20 +63,25 @@ const MAX_TASK_CHARS = 2_000;
 
 const normalize = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
 
+/**
+ * The candidates the classifier is sent, each once, and each duplicate's first twin by index,
+ * so a duplicate costs nothing to judge and shares its twin's verdict.
+ */
 export const dedupeCandidates = (candidates: ScreeningCandidate[]) => {
-  const seen = new Set<string>();
+  const first = new Map<string, number>();
   const unique: ScreeningCandidate[] = [];
-  const deduped: Removal[] = [];
+  const twins = new Map<number, number>();
   candidates.forEach((candidate, index) => {
     const key = `${candidate.tool}:${normalize(candidate.output)}`;
-    if (seen.has(key)) {
-      deduped.push({ index, tool: candidate.tool, reason: 'duplicate of an earlier result in this turn' });
+    const twin = first.get(key);
+    if (twin !== undefined) {
+      twins.set(index, twin);
       return;
     }
-    seen.add(key);
+    first.set(key, index);
     unique.push(candidate);
   });
-  return { unique, deduped };
+  return { unique, twins };
 };
 
 export const parseVerdicts = (raw: string, length: number): ScreeningVerdict[] => {
@@ -141,16 +145,16 @@ export const chatClassifier = (provider: ChatProvider, model?: string): Classifi
 });
 
 export const screenToolResults = async ({ prompt, candidates, classifier, threshold = DEFAULT_THRESHOLD, signal }: ScreenOptions): Promise<ScreeningOutcome> => {
-  const { unique, deduped } = dedupeCandidates(candidates);
+  const { unique, twins } = dedupeCandidates(candidates);
   const notes: string[] = [];
 
   if (!unique.length) {
-    return { kept: [], dropped: [], deduped, notes, screened: false };
+    return { kept: [], dropped: [], notes, screened: false };
   }
 
   if (!classifier) {
     notes.push(TRUST_UNSET_NOTE);
-    return { kept: unique, dropped: [], deduped, notes, screened: false };
+    return { kept: candidates, dropped: [], notes, screened: false };
   }
 
   let verdicts: ScreeningVerdict[] = [];
@@ -161,7 +165,7 @@ export const screenToolResults = async ({ prompt, candidates, classifier, thresh
     usage = classified.usage;
   } catch (error: any) {
     notes.push(`The trust gate failed open: ${error?.message ?? String(error)}`);
-    return { kept: unique, dropped: [], deduped, notes, screened: false };
+    return { kept: candidates, dropped: [], notes, screened: false };
   }
 
   const byIndex = new Map(verdicts.map((verdict) => [verdict.index, verdict]));
@@ -196,9 +200,17 @@ export const screenToolResults = async ({ prompt, candidates, classifier, thresh
     kept.push(candidate);
   });
 
+  // A duplicate goes the way its first twin went.
+  const droppedAt = new Map(dropped.map((removal) => [removal.index, removal]));
+  for (const [index, twin] of twins) {
+    const removal = droppedAt.get(twin);
+    if (removal) dropped.push({ ...removal, index });
+    else kept.push(candidates[index]);
+  }
+
   if (!kept.length) {
     notes.push('Every tool result this turn was removed by the trust gate.');
   }
 
-  return { kept, dropped, deduped, notes, screened: true, ...(usage ? { usage } : {}) };
+  return { kept, dropped, notes, screened: true, ...(usage ? { usage } : {}) };
 };

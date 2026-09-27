@@ -625,7 +625,7 @@ export class CoreAgent implements Agent {
       for (const note of screening.notes) emit({ type: 'notice', level: 'info', message: note });
     }
     const out = [...results];
-    for (const removal of [...screening.deduped, ...screening.dropped]) {
+    for (const removal of screening.dropped) {
       const candidate = candidates[removal.index];
       emit({ type: 'notice', level: 'warn', code: 'trust_gate', message: `Removed ${candidate.tool} result: ${removal.reason}` });
       out[candidate.result] = { ...out[candidate.result], output: `[This result was withheld by the trust gate: ${removal.reason}.]` };
