@@ -1,10 +1,24 @@
 import { expect, test } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
-import { frameWith, interfaceHarness } from './harness.js';
+import { frameWith, interfaceHarness, type Setup } from './harness.js';
 
 const { context, open } = interfaceHarness();
 const command = (id: string, text: string) => ({ toolCalls: [{ id, name: 'run_command', arguments: { command: text } }] });
+
+const PAGE_KEYS = { pageup: '\x1b[5~', pagedown: '\x1b[6~' } as const;
+
+/** Presses a page key until the frame satisfies `done`, rendering between presses. */
+async function pageUntil(setup: Setup, key: keyof typeof PAGE_KEYS, done: (frame: string) => boolean): Promise<string> {
+  for (let press = 0; press < 20; press += 1) {
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    if (done(frame)) return frame;
+    setup.mockInput.pressKey(PAGE_KEYS[key]);
+    await Bun.sleep(5);
+  }
+  throw new Error(`${key} never got there.`);
+}
 
 test('2 allows the chosen pattern for the session, so the same call no longer asks', async () => {
   const { runtime, setup, close } = await open();
@@ -124,6 +138,62 @@ test('4 denies and the turn goes on: the model reads that the call did not run',
     expect(after).not.toContain('Stopped because a tool call was denied.');
     const toolMessage = context.server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
     expect(toolMessage.content).toBe('Tool call was denied.');
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('the prompt leaves the transcript its rows, and Page Up scrolls it behind the prompt', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const long = Array.from({ length: 40 }, (_, index) => `echo line-${index + 1}`).join('\n');
+    const preamble = Array.from({ length: 12 }, (_, index) => `Step ${index + 1} of the plan.`).join('\n\n');
+    context.server.enqueue({ text: preamble, toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: long } }] }, { text: 'Listed.' });
+    await setup.mockInput.typeText('list them');
+    setup.mockInput.pressEnter();
+    // 30 rows: 2 of chrome, 8 kept for the transcript, 11 fixed in the prompt, so 9 lines of the command show.
+    const prompt = await frameWith(setup, (value) => value.includes('1  Allow once') && value.includes('Step 10 of the plan.'));
+    expect(prompt).toMatch(/^│ {3}echo line-9/m);
+    expect(prompt).not.toMatch(/^│ {3}echo line-10/m);
+    expect(prompt).toContain('31 more lines');
+    expect(prompt).not.toContain('> list them');
+    const paged = await pageUntil(setup, 'pageup', (value) => value.includes('> list them'));
+    expect(paged).toContain('1  Allow once');
+    await pageUntil(setup, 'pagedown', (value) => !value.includes('> list them') && value.includes('? asking: run_command'));
+    setup.mockInput.pressKey('1');
+    await frameWith(setup, (value) => value.includes('Listed.'));
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('an edit prompt shows a short diff whole, and holds a long one to its rows with a note that it goes on', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    fs.writeFileSync(path.join(context.root, 'short.txt'), 'one\ntwo\nthree\n');
+    context.server.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'short.txt', find_string: 'two', replace_string: 'TWO' } }] }, { text: 'Changed.' });
+    await setup.mockInput.typeText('change the short one');
+    setup.mockInput.pressEnter();
+    const short = await frameWith(setup, (value) => value.includes('Allow edit short.txt?') && value.includes('TWO'));
+    expect(short).not.toContain('the diff continues');
+    // Nothing is padded out below the diff: the reason follows its last line.
+    const rows = short.split('\n');
+    expect(rows.findIndex((row) => row.includes('Default mode asks'))).toBe(rows.findIndex((row) => row.includes('three')) + 1);
+    setup.mockInput.pressKey('1');
+    await frameWith(setup, (value) => value.includes('Changed.'));
+
+    const before = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n');
+    fs.writeFileSync(path.join(context.root, 'long.txt'), `${before}\n`);
+    context.server.enqueue({ toolCalls: [{ id: 'e2', name: 'edit', arguments: { path: 'long.txt', find_string: before, replace_string: before.toUpperCase() } }] }, { text: 'Shouted.' });
+    await setup.mockInput.typeText('change the long one');
+    setup.mockInput.pressEnter();
+    const long = await frameWith(setup, (value) => value.includes('Allow edit long.txt?') && value.includes('the diff continues'));
+    // 30 rows leave the diff 9, so its first lines show and the rest waits for the wheel.
+    expect(long).toContain('- line 1');
+    expect(long).not.toContain('LINE 40');
+    expect(long).toContain('1  Allow once');
+    setup.mockInput.pressKey('1');
+    await frameWith(setup, (value) => value.includes('Shouted.'));
   } finally {
     await close();
   }

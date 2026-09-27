@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { diffStat, statusParts, toolLine } from '../format.js';
+import { diffRows, diffStat, statusParts, toolLine } from '../format.js';
 import { initialView } from '../../state/view.js';
 
 const diff = 'Index: a.txt\n===\n--- a.txt\n+++ a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n';
@@ -33,4 +33,11 @@ test('the status line names each fact in words, and marks a cost that misses unp
   // A free model's nothing takes no room; nothing plus requests with no price still shows.
   expect(statusParts({ ...status, costUsd: 0, unpriced: 0 })).not.toContain('$0.00');
   expect(statusParts({ ...status, costUsd: 0, unpriced: 2 })).toContain('$0.00+');
+});
+
+test('a diff is drawn in the lines of its hunks, not its headers', () => {
+  expect(diffRows(diff)).toBe(5);
+  const twoHunks = `${diff}@@ -20,2 +21,2 @@\n-twenty\n+TWENTY\n`;
+  expect(diffRows(twoHunks)).toBe(7);
+  expect(diffRows('')).toBe(0);
 });

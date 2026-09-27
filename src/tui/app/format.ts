@@ -47,6 +47,17 @@ export function diffStat(diff: string): { added: number; removed: number } {
   return { added, removed };
 }
 
+/** The rows a unified diff is drawn in: the lines of its hunks, without the file headers. */
+export function diffRows(diff: string): number {
+  let rows = 0;
+  let inHunk = false;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('@@')) inHunk = true;
+    else if (inHunk && /^[ +-]/.test(line)) rows += 1;
+  }
+  return rows;
+}
+
 /** The one line a tool block shows when collapsed. */
 export function toolLine(row: Extract<Row, { kind: 'tool' }>, marks = true): string {
   const phase = TOOL_PHASES[row.phase];

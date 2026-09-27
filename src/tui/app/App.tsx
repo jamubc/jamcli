@@ -536,7 +536,9 @@ export function App(props: AppProps) {
       }
       return;
     }
-    if (approval) {
+    // Page keys still scroll the transcript behind a prompt, so what the model said
+    // before the call can be read before it is answered.
+    if (approval && !bound('page_up', key) && !bound('page_down', key)) {
       const now = selection();
       if (key.name === 'escape') {
         // The Esc badge turns red first, so the no is seen before the prompt goes.

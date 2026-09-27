@@ -4,6 +4,7 @@ import { useTerminalDimensions } from '@opentui/react';
 import type { PendingApproval } from '../state/view.js';
 import { useClick } from './mouse.js';
 import { DiffView } from './Rows.js';
+import { diffRows } from './format.js';
 import { framed, usePlain, useTheme } from './theme.js';
 
 /** An input's submitted text: OpenTUI's React input hands over the value itself. */
@@ -12,8 +13,20 @@ const submitted = (value: unknown): string => (typeof value === 'string' ? value
 /** A line cut to a width, with an ellipsis where it was cut. */
 const fitTo = (line: string, room: number): string => (line.length > room ? `${line.slice(0, Math.max(0, room - 1))}…` : line);
 
-/** The most lines of a command the prompt shows. */
-const PREVIEW_LINES = 12;
+/**
+ * Rows the transcript keeps while a prompt is up, so the model's words before the call
+ * stay in view beside the choice. The prompt's preview takes what is left.
+ */
+const TRANSCRIPT_ROWS_KEPT = 8;
+
+/** The header and the status line. */
+const CHROME_ROWS = 2;
+
+/** The prompt's rows besides the preview: borders, heading, reason, spacer, five choices, and a hint. */
+const FIXED_ROWS = 11;
+
+/** The fewest preview rows worth showing. */
+const MIN_PREVIEW_ROWS = 3;
 
 /** The keyed choices. Escape is the sixth: deny and stop the turn. */
 type Choice = '1' | '2' | '3' | '4' | '5';
@@ -43,15 +56,20 @@ export function PermissionPrompt(props: {
   const theme = useTheme();
   const click = useClick();
   const plain = usePlain();
-  const { width: columns } = useTerminalDimensions();
+  const { width: columns, height } = useTerminalDimensions();
+  const previewRows = Math.max(MIN_PREVIEW_ROWS, height - CHROME_ROWS - TRANSCRIPT_ROWS_KEPT - FIXED_ROWS);
   // The frame takes two columns of border and two of padding.
   const room = Math.max(20, columns - 4);
   const choice = (key: Choice) => click(() => props.onChoose?.(key));
 
   const diff = approval.preview?.kind === 'diff' ? approval.preview.text : undefined;
+  // The rows the diff is drawn in: its hunks, or in screen reader mode every line after a label.
+  const diffHeight = diff ? (plain ? diff.split('\n').length + 1 : diffRows(diff)) : 0;
+  const diffOverflow = diffHeight > previewRows;
   const text = approval.preview && approval.preview.kind !== 'diff' ? approval.preview.text : undefined;
   const lines = text ? text.split('\n') : [];
-  const shown = lines.slice(0, PREVIEW_LINES);
+  const shown = lines.slice(0, previewRows);
+  const cut = lines.length - shown.length;
   // The heading names the call. When the preview carries the whole command, the heading
   // does not repeat it past one line.
   const heading = `${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?`;
@@ -85,7 +103,15 @@ export function PermissionPrompt(props: {
           <span fg={escaping ? theme.error : theme.dim}>{plain ? `${badge}${escaping ? ' (denying)' : ''}` : `[${escaping ? '✕ Esc' : 'Esc'}]`}</span>
         </text>
       </box>
-      {diff ? <DiffView diff={diff} file={file} syntax={syntax} /> : null}
+      {diff && diffOverflow ? (
+        // A diff taller than the rows the transcript leaves it scrolls with the wheel inside them.
+        <scrollbox height={previewRows} flexShrink={0} verticalScrollbarOptions={{ visible: false }}>
+          <DiffView diff={diff} file={file} syntax={syntax} />
+        </scrollbox>
+      ) : diff ? (
+        <DiffView diff={diff} file={file} syntax={syntax} />
+      ) : null}
+      {diffOverflow ? <text fg={theme.dim}>{plain ? 'The diff continues.' : '… the diff continues, wheel scrolls it'}</text> : null}
       {shown.length ? (
         <box flexDirection="column" paddingLeft={plain ? 0 : 2}>
           {shown.map((line, index) => (
@@ -93,6 +119,7 @@ export function PermissionPrompt(props: {
               {fitTo(line, room - 2)}
             </text>
           ))}
+          {cut > 0 ? <text fg={theme.dim}>{`… ${cut} more ${cut === 1 ? 'line' : 'lines'}, in the tool row once it runs`}</text> : null}
         </box>
       ) : null}
       <text fg={theme.dim} wrapMode="word">
