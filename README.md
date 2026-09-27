@@ -26,7 +26,7 @@ Protocol.
 
 ## Install
 
-Once a release is published, download the binary for your system and check it against
+Download the binary for your system from the latest release and check it against
 `SHA256SUMS`:
 
 ```bash
@@ -34,7 +34,8 @@ sha256sum -c SHA256SUMS --ignore-missing
 chmod +x jamcli-linux-x64 && mv jamcli-linux-x64 ~/.local/bin/jamcli
 ```
 
-Binaries are built for Linux (x64, arm64), macOS (x64, arm64), and Windows (x64).
+Binaries are built for Linux (x64, arm64) and macOS (x64, arm64). Windows is not
+supported yet; see `openspec/SEQUENCE.md`.
 
 From source, with [Bun](https://bun.sh) 1.4.2:
 
