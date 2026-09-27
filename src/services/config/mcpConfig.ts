@@ -1,6 +1,3 @@
-import fs from 'fs';
-import { pathExists, readJson, writeJson } from '../../utils/fsx.js';
-import path from 'path';
 import type { McpConfig, ToolPermission, ToolPermissionValue } from '../../types/config.js';
 import type { ToolName } from '../../types/tools.js';
 import { ALL_TOOL_NAMES } from '../../types/tools.js';
@@ -38,17 +35,6 @@ export const toolPermissionsOf = (mcp: McpConfig): Record<ToolName, ToolPermissi
   }
   return permissions;
 };
-
-export const readMcp = async (mcpPath: string, fallback: McpConfig): Promise<McpConfig> => {
-  if (!(await pathExists(mcpPath))) return fallback;
-  return (await readJson(mcpPath)) as McpConfig;
-};
-
-export const writeMcp = async (mcpPath: string, mcp: McpConfig): Promise<void> => {
-  await writeJson(mcpPath, mcp, { spaces: 2 });
-};
-
-export const mcpConfigPath = (jamDir: string, fileName: string) => path.join(jamDir, fileName);
 
 export const upsertServer = <T extends { id: string }>(existing: T[] | undefined, server: T): T[] => {
   const servers = Array.isArray(existing) ? [...existing] : [];

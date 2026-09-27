@@ -1,22 +1,9 @@
-import type {
-  Config,
-  ContextManagementConfig,
-  McpConfig,
-  Profile,
-  StatusIndicatorCustomDefinition,
-  ToolPermission,
-  UiConfig,
-} from '../../types/config.js';
+import type { Config, ContextManagementConfig, McpConfig, ToolPermission } from '../../types/config.js';
 import type { ToolName } from '../../types/tools.js';
 import { ALL_TOOL_NAMES, TOOL_DEFINITIONS } from '../../types/tools.js';
 
 export const JAMCLI_DIR = '.jamcli';
-export const CONFIG_FILE = 'config.json';
 export const MCP_FILE = 'mcp.json';
-export const PROFILES_DIR = 'profiles';
-export const GLOBAL_DIR = '.jamubc';
-export const UI_CONFIG_FILE = 'ui.json';
-export const STATUS_STYLES_DIR = 'status-styles';
 
 export const TOOL_DEFAULTS = Object.fromEntries(
   ALL_TOOL_NAMES.map((name) => [
@@ -47,13 +34,6 @@ export const DEFAULT_CONFIG: Config = {
   context_management: DEFAULT_CONTEXT_MANAGEMENT,
 };
 
-export const DEFAULT_UI_CONFIG: UiConfig = {
-  status_indicator_style: 'glow',
-  status_text_style: 'glow',
-  status_spinner_style: 'pulse',
-  custom_status_styles: {},
-};
-
 export const DEFAULT_MCP: McpConfig = {
   context_window_limit: 16000,
   ignore_patterns: ['node_modules/**', 'dist/**', '*.lock'],
@@ -63,14 +43,3 @@ export const DEFAULT_MCP: McpConfig = {
   },
   servers: [],
 };
-
-export const DEFAULT_PROFILE: Profile = {
-  name: 'Default',
-  system_prompt_override: 'You are a helpful AI assistant.',
-  preferred_model: 'gpt-4o',
-  temperature: 0.7,
-};
-
-export type ProviderName = 'ollama' | 'openrouter';
-
-export type { StatusIndicatorCustomDefinition };
