@@ -135,7 +135,7 @@ export function sessionsReport(sessions: SessionSummary[], current: string, now 
   if (sessions.length === 0) return 'No earlier sessions in this project.';
   const lines = ['Sessions in this project, latest first:'];
   for (const session of sessions) lines.push(`- ${session.id}${session.id === current ? ' (this one)' : ''}: ${sessionDetail(session, now)}`);
-  lines.push('', 'Open one with /resume <id>.');
+  lines.push('', 'Open one with /resume <id> in the interface, or jamcli --resume <id>.');
   return lines.join('\n');
 }
 

@@ -130,7 +130,7 @@ test('the sessions report lists the latest first, marks this one, and says how o
   const text = sessionsReport([session('b', '2026-09-24T11:30:00Z', 'Fix the parser'), session('a', '2026-09-22T12:00:00Z')], 'b', now);
   expect(text).toContain('- b (this one): Fix the parser, 4 messages, 30 minutes ago');
   expect(text).toContain('- a: untitled, 4 messages, 2 days ago');
-  expect(text).toContain('Open one with /resume <id>.');
+  expect(text).toContain('Open one with /resume <id> in the interface, or jamcli --resume <id>.');
   expect(sessionsReport([], 'x')).toBe('No earlier sessions in this project.');
 });
 
