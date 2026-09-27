@@ -55,13 +55,25 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-session-reflection`. Its code is committed and its task 6.1 ran end to end on
-OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real sessions,
-the approved novel edits counted against the 0 of 26 baseline, which only the owner's
-approvals can produce. `add-agents`, `reconcile-shipped-behavior`, and
-`fix-observed-session-defects` closed 2026-09-27; see Closed units below. `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to approve it before
-any task begins, and `git checkout 9d9f5c6 -- openspec/changes/add-windows-support`
-restores its proposal from the commit that recorded it.
+`add-surface-parity`, on `feat/surface-parity`. The owner opened it on 2026-09-27 while
+`add-session-reflection` waits at its task 6.2, an exception to the working rule made by
+the owner and recorded here. The reason: 6.2 asks for `/reflect` on 10 or more real
+sessions, `/reflect` exists only in the interface, and nothing let anyone but the person at
+the terminal use the interface. Every "run jamcli and try this" handed back to the owner
+came from the same gap. `add-surface-parity` moves the built-in commands out of the
+interface so every surface runs the same set, and adds `jamcli drive`, which lets a program
+drive the interface itself. With it, 6.2 can be run by an agent driving `/reflect`, the
+owner still approving each lesson.
+
+`add-session-reflection` stays open. Its code is committed and its task 6.1 ran end to end
+on OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real
+sessions, the approved novel edits counted against the 0 of 26 baseline, which only the
+owner's approvals can produce. `add-agents`, `reconcile-shipped-behavior`, and
+`fix-observed-session-defects` closed 2026-09-27; see Closed units below.
+`add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
+approve it before any task begins, and `git checkout 9d9f5c6 --
+openspec/changes/add-windows-support` restores its proposal from the commit that recorded
+it.
 
 ## Closed units
 
