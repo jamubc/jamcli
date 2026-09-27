@@ -60,6 +60,7 @@ test('answers given in advance answer the lists in order, and a list with none l
   const { host, entries } = await open({ answers: ['medium'], laterInput: false });
   await host.run('/effort');
   expect(userConfig().effort).toBe('medium');
+  expect(entries.find((entry) => entry.kind === 'choice')).toMatchObject({ answer: 'Answered in advance: medium.' });
   await host.run('/effort');
   expect(host.waiting).toBeUndefined();
   expect(said(entries)).toContain('no answer was given for it');

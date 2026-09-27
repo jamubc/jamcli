@@ -153,6 +153,8 @@ export class CommandHost {
             note = error?.message ?? String(error);
           }
         }
+        // An answer given in advance was decided before the question was seen, so it is never the person's answer to one that is theirs.
+        const given = items.length || request.freeText !== undefined ? (request.personOnly ? undefined : this.answers.shift()) : undefined;
         this.emit({
           kind: 'choice',
           title: request.title,
@@ -161,11 +163,9 @@ export class CommandHost {
           ...(request.hint ? { hint: request.hint } : {}),
           ...(request.freeText !== undefined ? { freeText: request.freeText } : {}),
           ...(request.personOnly ? { personOnly: true } : {}),
-          answer: items.length || request.freeText !== undefined ? this.options.answerHint : request.empty,
+          answer: !items.length && request.freeText === undefined ? request.empty : given !== undefined ? `Answered in advance: ${given}.` : this.options.answerHint,
         });
         if (!items.length && request.freeText === undefined) return request.dismissed?.();
-        // An answer given in advance was decided before the question was seen, so it is never the person's answer to one that is theirs.
-        const given = request.personOnly ? undefined : this.answers.shift();
         if (given !== undefined) return this.answer({ request, items }, given);
         if (this.options.laterInput) {
           this.pending = { request, items };
