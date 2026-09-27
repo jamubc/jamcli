@@ -18,6 +18,7 @@ import type { ViewAction } from '../state/view.js';
 import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from './reports.js';
 import type { PickItem, PickRequest } from './Picker.js';
 import { copiedLine, type Copier } from './clipboard.js';
+import { originOf, SCOPE_WORDS, settingsFromSchema, type Setting } from './settings.js';
 import { THEME_NAMES, THEMES, noColor, type Theme } from './theme.js';
 import { keysHelp, type Keybindings } from './keys.js';
 import { setup } from './setup.js';
@@ -423,19 +424,68 @@ const mcp: SlashCommand = {
   },
 };
 
-/** Every value set, with the file it comes from; choosing one starts a /config set for it. */
+/** A value as a person would type it after /config set: text bare, anything else as JSON. */
+const typed = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value));
+
+/**
+ * Every setting the schema describes, with what it does, its value, and where that comes
+ * from. A yes/no or fixed choice opens its choices, which apply at once; anything else is
+ * put in the composer as a /config set with its current value, to edit.
+ */
 async function pickSetting(ctx: CommandContext): Promise<void> {
   const lines: string[] = [];
   const problems: string[] = [];
   await runConfigCommand({ action: 'list', args: ['--json'] }, ctx.projectRoot, { out: (line) => lines.push(line), err: (line) => problems.push(line) });
   const entries = JSON.parse(lines.join('\n') || '[]') as { key: string; origin: string; value: unknown }[];
+  const set = new Map(entries.map((entry) => [entry.key, entry]));
+  const schema = settingsFromSchema();
+  const byKey = new Map(schema.map((setting) => [setting.key, setting]));
+  const inside = (key: string) => entries.filter((entry) => entry.key.startsWith(`${key}.`) || entry.key.startsWith(`${key}[`));
+  // A value set under no setting the schema names, as one entry of a map, is still shown.
+  const extra = entries.filter((entry) => !byKey.has(entry.key) && !schema.some((setting) => entry.key.startsWith(`${setting.key}.`) || entry.key.startsWith(`${setting.key}[`)));
+  const shorten = (text: string) => (text.length > 40 ? `${text.slice(0, 39)}…` : text);
+  const items: PickItem[] = [
+    ...schema.map((setting): PickItem => {
+      const entry = set.get(setting.key);
+      const within = entry ? [] : inside(setting.key);
+      const origin = originOf(entry?.origin ?? within[0]?.origin, ctx.projectRoot).words;
+      const value = entry ? ` = ${shorten(JSON.stringify(entry.value))}` : within.length ? ` (${within.length} set)` : '';
+      return { key: setting.key, label: `${setting.key}${value}`, detail: [origin, setting.description].filter(Boolean).join(' · ') };
+    }),
+    ...extra.map((entry) => ({ key: entry.key, label: `${entry.key} = ${shorten(JSON.stringify(entry.value))}`, detail: originOf(entry.origin, ctx.projectRoot).words })),
+  ];
+  // What the person has set comes first; the rest keep the schema's order.
+  const changed = (item: PickItem) => !(item.detail ?? '').startsWith('default');
   ctx.pick({
-    title: 'Settings, each with the file it comes from',
-    items: entries.map((entry) => ({ key: entry.key, label: `${entry.key} = ${JSON.stringify(entry.value)}`, detail: entry.origin })),
-    empty: 'Nothing is set beyond the defaults.',
+    title: 'Settings: what each does, its value, and where it comes from',
+    items: [...items.filter(changed), ...items.filter((item) => !changed(item))],
+    empty: 'No settings.',
     ...(problems.length ? { note: problems.join('; ') } : {}),
-    hint: 'Enter starts /config set for it · /config provider shows the providers',
-    choose: (item) => ctx.prefill(`/config set ${item.key} `),
+    hint: 'Enter changes it · type to find one, such as sandbox · /config provider shows the providers',
+    choose: (item) => {
+      const setting = byKey.get(item.key);
+      const entry = set.get(item.key);
+      if (setting?.choices) return chooseValue(ctx, setting, entry);
+      ctx.prefill(`/config set ${item.key} ${entry && setting?.kind !== 'map' ? typed(entry.value) : ''}`);
+    },
+  });
+}
+
+/** A yes/no or fixed choice, saved in the file it is set in, or else the person's own settings. */
+function chooseValue(ctx: CommandContext, setting: Setting, entry: { origin: string; value: unknown } | undefined): void {
+  const scope = originOf(entry?.origin, ctx.projectRoot).scope ?? 'user';
+  ctx.pick({
+    title: `${setting.key}, saved in ${SCOPE_WORDS[scope]}`,
+    items: setting.choices!.map((choice) => ({ key: choice, label: choice, ...(entry && String(entry.value) === choice ? { current: true } : {}) })),
+    empty: 'No choices.',
+    ...(setting.description ? { note: setting.description } : {}),
+    hint: 'Enter sets it, and this session reopens with it',
+    choose: async (item) => {
+      if (waitForTurn(ctx, 'change settings')) return;
+      const request = { action: 'set' as ConfigAction, args: [setting.key, item.key, '--scope', scope] };
+      const code = await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
+      if (code === 0) await reopen(ctx);
+    },
   });
 }
 

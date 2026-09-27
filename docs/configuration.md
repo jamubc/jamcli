@@ -31,7 +31,12 @@ jamcli config unset sandbox.network --scope local
 jamcli config migrate [--dry-run]    # move 1.x tool settings into permission rules
 ```
 
-In the interface, `/config` shows the same view.
+In the interface, `/config` lists every setting with what it does, its value, and where
+that comes from, the ones you have changed first. Type to find one, such as `sandbox`. A
+yes/no or fixed choice is chosen right there and applies at once; it is saved in the file
+it is set in, or else in your own settings. Anything else is put in the composer as a
+`/config set` with its current value, to edit. Keys are never shown or edited there:
+`jamcli auth` keeps them.
 
 ## Editor completion
 
