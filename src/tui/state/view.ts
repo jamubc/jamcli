@@ -113,6 +113,15 @@ export const OUTPUT_TAIL_CHARS = 4_000;
 /** Lines of a tool's output a block keeps, from the end. */
 export const OUTPUT_TAIL_LINES = 40;
 
+/**
+ * Whether a row just appended to the transcript should pull the view to the row's own
+ * top rather than let sticky-bottom scrolling settle at its end. A report taller than
+ * the viewport would otherwise open with its first line already scrolled out of view.
+ */
+export function anchorsToTop(rowLines: number, viewportRows: number): boolean {
+  return viewportRows > 0 && rowLines > viewportRows;
+}
+
 export const tail = (text: string): string => {
   const recent = text.length > OUTPUT_TAIL_CHARS ? text.slice(-OUTPUT_TAIL_CHARS) : text;
   const lines = recent.split('\n');

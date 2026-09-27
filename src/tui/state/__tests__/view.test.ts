@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { OUTPUT_TAIL_LINES, initialView, reduceView, tail, type Row, type TodoView, type ViewAction, type ViewState } from '../view.js';
+import { anchorsToTop, OUTPUT_TAIL_LINES, initialView, reduceView, tail, type Row, type TodoView, type ViewAction, type ViewState } from '../view.js';
 import type { AgentEvent, ChatMessage } from '../../../core/types.js';
 
 const run = (actions: ViewAction[], from: ViewState = initialView({ model: 'ollama:qwen', mode: 'default', sandbox: 'bwrap' })) => actions.reduce(reduceView, from);
@@ -199,4 +199,13 @@ test('the todo list is the one the model last wrote, and another session has non
   state = reduceView(state, event({ type: 'tool_result', result: { tool: 'read_file', success: true, output: 'x', durationMs: 1, callId: 'r1', metadata: { todos: [] } } }));
   expect(state.todos).toEqual(todos);
   expect(reduceView(state, { type: 'load', messages: [] }).todos).toBeUndefined();
+});
+
+test('a report taller than the viewport anchors to its own top, not the viewport bottom', () => {
+  // A /tools report with more lines than the terminal can show: without anchoring to the
+  // row's top, sticky-bottom scrolling would settle past the report's first line.
+  expect(anchorsToTop(60, 24)).toBe(true);
+  // A short report, or an unknown/zero viewport height, keeps the normal sticky-bottom behavior.
+  expect(anchorsToTop(10, 24)).toBe(false);
+  expect(anchorsToTop(60, 0)).toBe(false);
 });

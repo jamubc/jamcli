@@ -6,7 +6,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react'
 import { fitPhrase, isMicro, microPhrase, microSetting } from './micro.js';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
-import { initialView, reduceView, type ViewState } from '../state/view.js';
+import { anchorsToTop, initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, statusOf, gitBranch } from './controller.js';
 import { statusParts } from './format.js';
 import { Indicator } from './Indicator.js';
@@ -189,6 +189,18 @@ export function App(props: AppProps) {
     return () => renderer.removePostProcessFn(keep);
   }, [renderer]);
   const hidden = Math.max(0, state.rows.length - drawn);
+  const lastRow = state.rows[state.rows.length - 1];
+  // A report (e.g. /tools) taller than the viewport would otherwise open scrolled to its
+  // bottom under stickyStart="bottom", hiding its first line. Anchor to the row's own top
+  // instead when it alone exceeds what the viewport can show.
+  useEffect(() => {
+    const box = transcript.current;
+    if (!box || !lastRow || lastRow.kind !== 'output') return;
+    const rowLines = lastRow.text.split('\n').length;
+    if (anchorsToTop(rowLines, box.height)) {
+      anchor.current = { fromBottom: rowLines, until: Date.now() + ANCHOR_MS };
+    }
+  }, [lastRow]);
 
   /** A short confirmation on the status line, such as what a selection copied. */
   const [flash, setFlash] = useState<string | undefined>(undefined);

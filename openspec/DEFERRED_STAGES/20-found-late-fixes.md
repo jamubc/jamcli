@@ -41,7 +41,7 @@ Small items found late. Each is one task. Attach to the module that touches the 
 **Description:** Long reports scroll their top out of view. Mouse works but has no test.
 
 **Acceptance criteria:**
-- [ ] Long report opens at its top or pages; `/tools` first line visible without scrolling
+- [x] Long report opens at its top or pages; `/tools` first line visible without scrolling
 - [ ] Mouse wheel scroll covered by a test or stays marked partial in the feature matrix with a reason
 
 **Verification:**
