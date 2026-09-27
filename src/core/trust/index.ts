@@ -31,11 +31,25 @@ export interface ScreeningOutcome {
   usage?: TokenUsage;
 }
 
+/** What the classifier said about one request's candidates, and what it cost when known. */
+export interface Classification {
+  verdicts: ScreeningVerdict[];
+  usage?: TokenUsage;
+}
+
+/**
+ * Something that judges tool results. A chat model does it by reading a prompt and answering
+ * JSON; a judgment model such as TypeSafe's Jev answers typed questions. The gate treats both
+ * the same way, and a verdict it never receives keeps its result.
+ */
+export interface Classifier {
+  classify(task: string, candidates: ScreeningCandidate[], signal?: AbortSignal): Promise<Classification>;
+}
+
 export interface ScreenOptions {
   prompt: string;
   candidates: ScreeningCandidate[];
-  provider?: ChatProvider;
-  model?: string;
+  classifier?: Classifier;
   threshold?: number;
   signal?: AbortSignal;
 }
@@ -115,14 +129,18 @@ export const buildClassifierPrompt = (prompt: string, candidates: ScreeningCandi
   ].join('\n');
 };
 
-export const screenToolResults = async ({
-  prompt,
-  candidates,
-  provider,
-  model,
-  threshold = DEFAULT_THRESHOLD,
-  signal,
-}: ScreenOptions): Promise<ScreeningOutcome> => {
+/** A chat model as the classifier: one prompt holding every result, one JSON object back per result. */
+export const chatClassifier = (provider: ChatProvider, model?: string): Classifier => ({
+  async classify(task, candidates, signal) {
+    const completion = await provider.complete(
+      [{ role: 'user', content: buildClassifierPrompt(task, candidates), timestamp: Date.now() }],
+      { model, signal, reasoning: 'off' }
+    );
+    return { verdicts: parseVerdicts(completion.content ?? '', candidates.length), ...(completion.usage ? { usage: completion.usage } : {}) };
+  },
+});
+
+export const screenToolResults = async ({ prompt, candidates, classifier, threshold = DEFAULT_THRESHOLD, signal }: ScreenOptions): Promise<ScreeningOutcome> => {
   const { unique, deduped } = dedupeCandidates(candidates);
   const notes: string[] = [];
 
@@ -130,7 +148,7 @@ export const screenToolResults = async ({
     return { kept: [], dropped: [], deduped, notes, screened: false };
   }
 
-  if (!provider) {
+  if (!classifier) {
     notes.push(TRUST_UNSET_NOTE);
     return { kept: unique, dropped: [], deduped, notes, screened: false };
   }
@@ -138,12 +156,9 @@ export const screenToolResults = async ({
   let verdicts: ScreeningVerdict[] = [];
   let usage: TokenUsage | undefined;
   try {
-    const completion = await provider.complete(
-      [{ role: 'user', content: buildClassifierPrompt(prompt, unique), timestamp: Date.now() }],
-      { model, signal, reasoning: 'off' }
-    );
-    usage = completion.usage;
-    verdicts = parseVerdicts(completion.content ?? '', unique.length);
+    const classified = await classifier.classify(prompt, unique, signal);
+    verdicts = classified.verdicts.filter((verdict) => verdict.index >= 0 && verdict.index < unique.length);
+    usage = classified.usage;
   } catch (error: any) {
     notes.push(`The trust gate failed open: ${error?.message ?? String(error)}`);
     return { kept: unique, dropped: [], deduped, notes, screened: false };

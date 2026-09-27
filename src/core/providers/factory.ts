@@ -22,6 +22,7 @@ const FALLBACK_ENV: Record<string, string> = {
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
+  typesafe: 'TYPESAFE_API_KEY',
 };
 
 const readEnv = (name: string): string | undefined => {
@@ -50,7 +51,7 @@ export const resolveApiKey = (config: KeyConfig | undefined, fallbackEnv?: strin
 /** Where a provider's key would come from now, in words, without the key itself. */
 export function keySource(name: string, registry: ApiRegistry = {}): { from: 'env' | 'config' | 'store' | 'none'; detail: string } {
   const entry: KeyConfig | undefined =
-    name === 'openrouter' || name === 'openai' || name === 'anthropic' ? registry[name] : registry.endpoints?.find((endpoint) => endpoint.id === name);
+    name === 'openrouter' || name === 'openai' || name === 'anthropic' || name === 'typesafe' ? registry[name] : registry.endpoints?.find((endpoint) => endpoint.id === name);
   const fallback = FALLBACK_ENV[name] ?? `${name.toUpperCase()}_API_KEY`;
   if (entry?.key_env_var && readEnv(entry.key_env_var)) return { from: 'env', detail: `the ${entry.key_env_var} environment variable` };
   if (entry?.api_key?.trim()) {

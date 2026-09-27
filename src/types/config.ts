@@ -18,6 +18,8 @@ export interface ApiRegistry {
     referer?: string;
     title?: string;
   };
+  /** TypeSafe, whose Jev judgment model can be the trust gate's classifier. Not a chat provider. */
+  typesafe?: { api_key?: string; key_env_var?: string; base_url?: string };
   endpoints?: EndpointConfig[];
 }
 

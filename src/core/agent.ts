@@ -3,7 +3,7 @@ import { addModelUsage, addUsage, appendMessages } from './state.js';
 import { clockPast, prefixSetNow, type ChatProvider, type ProviderRequestOptions, type StreamChunk, type ToolDefinition } from './providers/types.js';
 import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';
 import { HeadTailBuffer } from './tools/command.js';
-import { screenToolResults, type ScreeningCandidate } from './trust/index.js';
+import { screenToolResults, type Classifier, type ScreeningCandidate } from './trust/index.js';
 import { requestCost } from './catalog/cost.js';
 import type { ModelPrice } from './catalog/types.js';
 import { KEEP_SHARE, compact, estimateRequest, isContextOverflow, type ContextBudget, type TokenCounter } from './context/index.js';
@@ -32,8 +32,8 @@ export interface AgentOptions {
   truncationLimit?: number;
   systemPrompt?: string;
   loop?: AgentLoopConfig;
-  trustProvider?: ChatProvider;
-  trustModel?: string;
+  /** What screens tool output in auto mode: a chat model or a judgment model behind one seam. */
+  trustClassifier?: Classifier;
   /** `provider:model` of the trust gate's classifier, which its usage is recorded under. */
   trustUsageKey?: string;
   /** What the classifier costs per million tokens, when known. */
@@ -610,11 +610,10 @@ export class CoreAgent implements Agent {
     });
     if (!candidates.length) return { results };
     // Outside auto mode the person reads every result, so nothing is screened or reported.
-    if (!this.options.trustProvider && !this.options.trustOffNote) return { results };
+    if (!this.options.trustClassifier && !this.options.trustOffNote) return { results };
     const screening = await screenToolResults({
       prompt,
-      provider: this.options.trustProvider,
-      model: this.options.trustModel,
+      classifier: this.options.trustClassifier,
       threshold: this.options.trustThreshold,
       signal,
       candidates,

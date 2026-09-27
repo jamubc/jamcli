@@ -650,9 +650,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const observed = (target: ChatProvider, name: string, purpose?: string) =>
     instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose, includeContent });
   // The trust gate screens tool output only in auto mode, where no one reads it first.
-  const trust = trustClassifier(config);
+  const trust = trustClassifier(config, (target, name) => observed(target, name, 'trust'));
   if (trust.note && permissions.mode === 'auto') notices.push(trust.note);
-  if (trust.provider && trust.choice) trust.provider = observed(trust.provider, trust.choice.provider, 'trust');
   const gated = () => permissions.mode === 'auto';
   // An agent's rules come before the project's, so a project's AGENTS.md has the last word.
   const agentRulesText = options.agentRules
@@ -733,7 +732,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       truncationLimit: loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars,
       systemPrompt,
       hooks,
-      ...(gated() ? { trustProvider: trust.provider, trustModel: trust.model, trustUsageKey: trustKey, trustPrice: trustInfo?.price } : {}),
+      ...(gated() ? { trustClassifier: trust.classifier, trustUsageKey: trustKey, trustPrice: trustInfo?.price } : {}),
       price: modelInfo.price,
       thinkingStyle: modelInfo.thinking,
       alwaysThinks: modelInfo.alwaysThinks,
@@ -914,7 +913,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   };
   let modelReady = resolveModelInfo();
   // The classifier is fixed for the session, so it is asked about once.
-  const trustReady = trust.choice
+  const trustReady = trust.choice && trust.provider
     ? catalog.resolve(trust.choice.provider, trust.choice.model, trust.provider).then(
         (info) => {
           trustInfo = info;

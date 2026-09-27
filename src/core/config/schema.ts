@@ -46,6 +46,10 @@ export const ApiRegistrySchema = z
       .partial(),
     openai: z.strictObject(keyed).partial(),
     anthropic: z.strictObject(keyed).partial(),
+    typesafe: z
+      .strictObject(keyed)
+      .partial()
+      .describe('TypeSafe, whose Jev judgment model can screen tool output as trust.model "typesafe:jev-latest". Not a chat provider.'),
     openrouter: z
       .strictObject({
         ...keyed,

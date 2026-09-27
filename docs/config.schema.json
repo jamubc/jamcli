@@ -88,6 +88,25 @@
           },
           "additionalProperties": false
         },
+        "typesafe": {
+          "type": "object",
+          "properties": {
+            "api_key": {
+              "type": "string",
+              "description": "A key stored in the file. Prefer key_env_var, so the key stays out of files."
+            },
+            "key_env_var": {
+              "type": "string",
+              "description": "The environment variable holding the key."
+            },
+            "base_url": {
+              "type": "string",
+              "description": "The API base URL."
+            }
+          },
+          "additionalProperties": false,
+          "description": "TypeSafe, whose Jev judgment model can screen tool output as trust.model \"typesafe:jev-latest\". Not a chat provider."
+        },
         "openrouter": {
           "type": "object",
           "properties": {

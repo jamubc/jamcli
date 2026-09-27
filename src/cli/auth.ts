@@ -31,11 +31,11 @@ export const AUTH_USAGE = `Usage:
   jamcli auth list                           Where each configured provider's key comes from
   jamcli auth login openrouter [--no-browser]  Sign in to OpenRouter in the browser and store the key it issues
 
-A provider is openrouter, openai, anthropic, or the id of an entry in api_registry.endpoints.
+A provider is openrouter, openai, anthropic, typesafe, or the id of an entry in api_registry.endpoints.
 Keys are stored in the macOS keychain, the Secret Service on Linux, or, where neither exists,
 a file in ~/.config/jamcli readable only by you. JAMCLI_CREDENTIAL_STORE=keychain|secret-service|file chooses.`;
 
-const BUILT_IN = ['openrouter', 'openai', 'anthropic'];
+const BUILT_IN = ['openrouter', 'openai', 'anthropic', 'typesafe'];
 
 /** Read a line from the terminal without echoing it; with a pipe, read all of standard input. */
 export async function readKeyFromStdin(prompt: string): Promise<string> {
