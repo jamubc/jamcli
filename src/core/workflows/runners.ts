@@ -65,16 +65,19 @@ export function runtimeRunners(options: RuntimeRunnerOptions): StepRunners {
         const { agents } = loadAgents(options.projectRoot, config);
         const agent = agents[spec.category];
         if (!agent) return { ok: false, output: `There is no agent ${spec.category}. The agents are ${Object.keys(agents).sort().join(', ')}.` };
-        const route = await resolveRoute({
-          registry: config.api_registry,
-          categories: chainsOf(agents),
-          category: spec.category,
-          isReachable: (candidate) => isChainReachable(candidate, config.api_registry),
-        });
-        if (!route?.model) return { ok: false, output: route?.notes.join(' ') ?? `No model in ${spec.category} can serve it.` };
-        model = route.model;
+        // An agent without a chain runs the step on the session's model, as it would a child.
+        const route = agent.inherits
+          ? undefined
+          : await resolveRoute({
+              registry: config.api_registry,
+              categories: chainsOf(agents),
+              category: spec.category,
+              isReachable: (candidate) => isChainReachable(candidate, config.api_registry),
+            });
+        if (route && !route.model) return { ok: false, output: route.notes.join(' ') };
+        if (route?.model) model = route.model;
         agentOptions = {
-          ...(route.reasoning ? { reasoning: route.reasoning } : {}),
+          ...(route?.reasoning ? { reasoning: route.reasoning } : {}),
           ...(agent.rules ? { agentRules: { agent: agent.name, source: describeSource(agent.source, (file) => displayPath(file, options.projectRoot)), text: agent.rules } } : {}),
         };
       }

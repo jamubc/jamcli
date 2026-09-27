@@ -68,10 +68,10 @@ registry as the parent, and SHALL resolve each child's model and rules from its 
 - **WHEN** a child run needs to read, edit, or run a command
 - **THEN** it has the same tools as the parent, governed by the delegated policy
 
-#### Scenario: Never inherit the parent model
-- **WHEN** a child run starts
-- **THEN** its model is resolved from its agent's chain
-- **AND** it does not inherit the parent session's model
+#### Scenario: Resolve the child's model from its agent
+- **WHEN** a child runs on an agent with a model chain
+- **THEN** its model is resolved from that chain, not from the parent session
+- **AND** when the agent has no chain, as the built-ins do not, the child runs on the model the parent session is using, whatever provider serves it
 
 #### Scenario: Run a task in the background
 - **WHEN** a task is requested in the background
@@ -111,8 +111,8 @@ file of the same name replaces.
 
 #### Scenario: Built-in agents
 - **WHEN** no file or configuration defines `quick`, `intelligent`, `explore`, or `writing`
-- **THEN** each is offered with its built-in description and the local-first chain
-- **AND** they work with no key and no network
+- **THEN** each is offered with its built-in description and runs on the session's model
+- **AND** they name no provider, so they work with whichever provider serves the session, a local one with no key and no network included
 
 #### Scenario: Reject an unusable file
 - **WHEN** an agent file has no description, an empty chain, or a name that breaks the naming rules

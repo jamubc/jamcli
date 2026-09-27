@@ -31,13 +31,12 @@ export function resolveModel(ref: string | undefined, profile: Profile | undefin
 
 /** The trust gate's classifier, when one is configured and enabled. */
 /**
- * The model the trust gate runs on: its own, or a configured quick agent's first model.
- * The built-in quick does not count, so the gate stays off until someone chooses a model.
+ * The model the trust gate runs on: its own, or the quick agent's first model. The built-in
+ * quick has no chain, so the gate stays off until someone chooses a model.
  */
 export function trustModelRef(config: Config, agents: Record<string, Agent>): string | undefined {
   if (config.trust?.enabled === false) return undefined;
-  const quick = agents.quick?.source.kind === 'builtin' ? undefined : agents.quick;
-  return config.trust?.model ?? quick?.chain[0]?.model;
+  return config.trust?.model ?? agents.quick?.chain[0]?.model;
 }
 
 export function trustClassifier(config: Config, agents: Record<string, Agent>): { provider?: ChatProvider; model?: string; choice?: ModelChoice; note?: string } {

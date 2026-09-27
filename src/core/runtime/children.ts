@@ -4,7 +4,7 @@ import { displayPath } from '../config/load.js';
 import { downgradeReasoning } from '../routing/capabilities.js';
 import { resolveRoute } from '../routing/resolve.js';
 import { isChainReachable } from '../routing/reachable.js';
-import type { Delegate, DelegationOutcome } from '../delegation/types.js';
+import type { Delegate, DelegationOutcome, DelegationRequest } from '../delegation/types.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import type { McpSource } from './tools.js';
 import type { PermissionEngine } from '../permissions/engine.js';
@@ -21,6 +21,8 @@ export interface ParentSession {
   depth: number;
   /** The parent's permission engine, which the child decides with. */
   permissions: PermissionEngine;
+  /** The model the parent is on now, as `provider:model`, which an agent without a chain runs on. */
+  model: string;
 }
 
 export interface ChildLauncherOptions {
@@ -65,16 +67,22 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
     if (!name) return refuse(`Name an agent: none is the default. The agents are ${names}.`);
     const agent = agents[name];
     if (!agent) return refuse(`No agent named "${name}". The agents are ${names}.`);
-    const route = await resolveRoute({
-      registry: options.config.api_registry,
-      categories: chainsOf(agents),
-      category: name,
-      isReachable: (model) => isChainReachable(model, options.config.api_registry),
-    });
-    if (!route?.model) return refuse(route?.notes.join(' ') || `No model in "${name}" can serve it.`);
-    const model = route.model;
+    const parent = options.parent();
+    let model = parent.model;
+    let chainReasoning: DelegationRequest['reasoning'];
+    if (!agent.inherits) {
+      const route = await resolveRoute({
+        registry: options.config.api_registry,
+        categories: chainsOf(agents),
+        category: name,
+        isReachable: (candidate) => isChainReachable(candidate, options.config.api_registry),
+      });
+      if (!route?.model) return refuse(route?.notes.join(' ') || `No model in "${name}" can serve it.`);
+      model = route.model;
+      chainReasoning = route.reasoning;
+    }
     // The call's level replaces the chain entry's, and is held to what the model accepts.
-    const reasoning = request.reasoning ? downgradeReasoning(request.reasoning, model).level : route.reasoning;
+    const reasoning = request.reasoning ? downgradeReasoning(request.reasoning, model).level : chainReasoning;
 
     let tree: Worktree | undefined;
     if (request.isolation === 'worktree') {
@@ -100,7 +108,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         env: options.env,
         ...(options.configService ? { configService: options.configService } : {}),
         sandbox: options.sandbox,
-        parent: options.parent(),
+        parent,
         observer: options.observer?.(),
       });
     } catch (error: any) {

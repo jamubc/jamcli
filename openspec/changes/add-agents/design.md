@@ -80,20 +80,20 @@ With no agent files and no `categories`, the built-in list reads:
 
 ```
 - quick: Small, well-specified jobs with a short answer: a lookup, a single-file check,
-  one piece of a fan-out. (runs on ollama:llama3)
+  one piece of a fan-out. (runs on the same model as you)
 - intelligent: Hard problems where getting it right matters more than speed: a subtle
-  bug, a change that crosses several modules. (runs on ollama:llama3)
+  bug, a change that crosses several modules. (runs on the same model as you)
 - explore: Investigation across the codebase: where something lives, how two parts
-  connect, what calls what. Ask it to report, not to edit. (runs on ollama:llama3)
+  connect, what calls what. Ask it to report, not to edit. (runs on the same model as you)
 - writing: Prose: documentation, a commit message, a summary for the person.
-  (runs on ollama:llama3)
+  (runs on the same model as you)
 If you omit agent, quick is used.
 ```
 
-Every built-in line ends with `(runs on ollama:llama3)`. That suffix is how the model learns
-the four defaults share one small model. A description never claims a capability the
-chain does not have: the suffix is generated and the description is written, and where
-they disagree the suffix is the truth.
+The built-ins have no chain and run on the session's model, so the suffix says so. That
+is how the model learns the four defaults are itself, briefed differently. A description
+never claims a capability the chain does not have: the suffix is generated and the
+description is written, and where they disagree the suffix is the truth.
 
 ## The file a person writes
 
@@ -192,9 +192,14 @@ files are then ignored with a notice naming them, and `categories` still routes.
 
 - **Built-in agent names are `quick`, `intelligent`, `explore`, and `writing`**
   (2026-09-26). `deep` is renamed `intelligent`. Nothing outside tests names the built-in
-  `deep`: the tests that use that string configure it themselves. On the default chain
-  all four run on `ollama:llama3`, and the generated "runs on" suffix keeps `intelligent`
+  `deep`: the tests that use that string configure it themselves. Unconfigured, all four
+  run on the session's model, and the generated "runs on" suffix keeps `intelligent`
   honest there.
+- **Built-ins run on the session's model** (2026-09-26). Ollama is one provider among
+  many, not the default a person must have. The built-ins had routed to `ollama:llama3`,
+  and `providerConfigured` counts Ollama as always configured, so a person who had never
+  installed it was offered four agents that could not run. Claude Code's default for a
+  subagent without a model is `inherit`; the built-ins now do the same.
 - **A project's rules win over an agent's rules** (2026-09-26). A person who writes an
   `AGENTS.md` means it to be the real one; without one, jamcli runs as it does. So the
   agent's body goes before the project's rules in the child's system prompt, and the

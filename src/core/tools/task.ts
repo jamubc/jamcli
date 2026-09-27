@@ -206,6 +206,8 @@ export interface OfferedAgent {
   name: string;
   description?: string;
   chain: CategoryChain;
+  /** Runs on the session's model rather than a chain. */
+  inherits?: boolean;
 }
 
 const GUIDANCE = `Delegate when:
@@ -229,7 +231,8 @@ export function taskDescription(agents: OfferedAgent[], defaultAgent?: string): 
   const intro =
     'Delegate a self-contained piece of work to a child agent. It runs on its own model and session with the same tools as you, under your permissions, and returns one final message. The person does not see that message, so tell them what matters in it.';
   if (!agents.length) return `${intro}\n\nNo agent can run: none has a model on a configured provider.`;
-  const lines = agents.map((agent) => `- ${agent.name}: ${agent.description ? `${agent.description} ` : ''}(runs on ${describeChain(agent.chain)})`);
+  const runsOn = (agent: OfferedAgent) => (agent.inherits ? 'the same model as you' : describeChain(agent.chain));
+  const lines = agents.map((agent) => `- ${agent.name}: ${agent.description ? `${agent.description} ` : ''}(runs on ${runsOn(agent)})`);
   const offered = defaultAgent && agents.some((agent) => agent.name === defaultAgent);
   const rule = offered ? `If you omit agent, ${defaultAgent} is used.` : 'Always name an agent.';
   return [intro, ['Agents (choose by what the work needs):', ...lines, rule].join('\n'), GUIDANCE].join('\n\n');

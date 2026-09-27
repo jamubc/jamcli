@@ -7,10 +7,10 @@ test('the built-ins render one line each with the chain they run on, and the def
   expect(text).toContain(
     [
       'Agents (choose by what the work needs):',
-      '- explore: Investigation across the codebase: where something lives, how two parts connect, what calls what. Ask it to report, not to edit. (runs on ollama:llama3)',
-      '- intelligent: Hard problems where getting it right matters more than speed: a subtle bug, a change that crosses several modules. (runs on ollama:llama3)',
-      '- quick: Small, well-specified jobs with a short answer: a lookup, a single-file check, one piece of a fan-out. (runs on ollama:llama3)',
-      '- writing: Prose: documentation, a commit message, a summary for the person. (runs on ollama:llama3)',
+      '- explore: Investigation across the codebase: where something lives, how two parts connect, what calls what. Ask it to report, not to edit. (runs on the same model as you)',
+      '- intelligent: Hard problems where getting it right matters more than speed: a subtle bug, a change that crosses several modules. (runs on the same model as you)',
+      '- quick: Small, well-specified jobs with a short answer: a lookup, a single-file check, one piece of a fan-out. (runs on the same model as you)',
+      '- writing: Prose: documentation, a commit message, a summary for the person. (runs on the same model as you)',
       'If you omit agent, quick is used.',
     ].join('\n')
   );

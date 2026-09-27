@@ -6,12 +6,14 @@ import { parseFrontMatter } from './frontmatter.js';
 import { skillNameProblem } from './skills.js';
 import { pluginAgentDirs } from '../plugins/load.js';
 import { providerConfigured, providerOf } from '../routing/capabilities.js';
+import { describeChain } from '../routing/categories.js';
 
 /**
  * Delegation agents: `agents/<name>.md`, whose front matter gives the agent's
  * `description` and `models`, the chain it runs on, and whose body is its rules, which
- * only a child running on it reads. The four built-ins are agents too, and a file of the
- * same name replaces one. The earlier `categories` configuration loads as agents with no
+ * only a child running on it reads. The four built-ins are agents too: they have no chain
+ * and run on the session's model, whatever provider serves it, and a file of the same
+ * name replaces one. The earlier `categories` configuration loads as agents with no
  * description and no rules, so a file written before agents existed routes as it did.
  */
 
@@ -23,7 +25,10 @@ export interface Agent {
   name: string;
   /** What the model reads when choosing. A category has none. */
   description?: string;
+  /** Tried in order. Empty for an agent that runs on the session's model. */
   chain: CategoryChain;
+  /** No chain of its own: the child runs on whatever model the session is using. */
+  inherits?: boolean;
   /** The body of the agent's file: rules its child reads before the project's. */
   rules?: string;
   source: AgentSource;
@@ -36,37 +41,33 @@ export interface LoadedAgents {
   problems: string[];
 }
 
-const LOCAL_CHAIN: CategoryChain = [{ model: 'ollama:llama3' }];
-
 /**
- * The built-ins route to a local model so delegation works with no key and no network.
- * llama3 must be pulled for them; without it the provider's own error names it. Each
- * description says what work the agent is for; the chain says what will do it.
+ * The built-ins run on the session's model, as Claude Code's subagents do by default, so
+ * delegation works with whichever provider the person uses, a local one included, with
+ * nothing to configure. A file of the same name gives one a chain of its own.
  */
+const inherited = { chain: [] as CategoryChain, inherits: true, source: { kind: 'builtin' } as const };
+
 export const BUILTIN_AGENTS: readonly Agent[] = [
   {
     name: 'quick',
     description: 'Small, well-specified jobs with a short answer: a lookup, a single-file check, one piece of a fan-out.',
-    chain: LOCAL_CHAIN,
-    source: { kind: 'builtin' },
+    ...inherited,
   },
   {
     name: 'intelligent',
     description: 'Hard problems where getting it right matters more than speed: a subtle bug, a change that crosses several modules.',
-    chain: LOCAL_CHAIN,
-    source: { kind: 'builtin' },
+    ...inherited,
   },
   {
     name: 'explore',
     description: 'Investigation across the codebase: where something lives, how two parts connect, what calls what. Ask it to report, not to edit.',
-    chain: LOCAL_CHAIN,
-    source: { kind: 'builtin' },
+    ...inherited,
   },
   {
     name: 'writing',
     description: 'Prose: documentation, a commit message, a summary for the person.',
-    chain: LOCAL_CHAIN,
-    source: { kind: 'builtin' },
+    ...inherited,
   },
 ];
 
@@ -175,11 +176,17 @@ export function loadAgents(projectRoot: string, config: Pick<Config, 'categories
 export const chainsOf = (agents: Record<string, Agent>): Record<string, CategoryChain> =>
   Object.fromEntries(Object.values(agents).map((agent) => [agent.name, agent.chain]));
 
-/** Agents with a chain entry on a configured provider: the ones worth offering. No network. */
+/**
+ * The agents worth offering: one on the session's model, or one with a chain entry on a
+ * configured provider. No network.
+ */
 export const routableAgents = (agents: Record<string, Agent>, registry: Config['api_registry']): Agent[] =>
   Object.values(agents)
-    .filter((agent) => agent.chain.some((entry) => providerConfigured(registry, providerOf(entry.model))))
+    .filter((agent) => agent.inherits || agent.chain.some((entry) => providerConfigured(registry, providerOf(entry.model))))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+/** What an agent runs on, in words. */
+export const describeRun = (agent: Pick<Agent, 'chain' | 'inherits'>): string => (agent.inherits ? 'the session model' : describeChain(agent.chain));
 
 /** Where an agent came from, in words. */
 export const describeSource = (source: AgentSource, label: (file: string) => string = (file) => file): string =>

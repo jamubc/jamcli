@@ -14,7 +14,7 @@
   `src/core/ext/skills.ts:39-47`, with `agents` for `skills`), `readAgent` (frontmatter
   through `parseFrontMatter`; `description` required; `models` required, string entries
   become `{ model }`; body is `rules`; unknown keys reported), `BUILTIN_AGENTS` (the four,
-  with descriptions, chain `ollama:llama3`), and `loadAgents(projectRoot, config)` merging
+  with descriptions and no chain, running on the session's model), and `loadAgents(projectRoot, config)` merging
   files over `categories` over built-ins into `Record<string, Agent>`. Tests: each
   directory scope wins in order; a category loads without description or rules; each
   rejection reason; an unknown key is reported and the file loads.

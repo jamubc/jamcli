@@ -69,8 +69,9 @@ Write plainly. Short sentences. No em dashes, no emojis.
   reasoning }` with `reasoning` of `off`, `on`, or `auto`.
 - The body is the agent's rules. Only a child running on the agent reads them, before the
   project's rules, so a project's `AGENTS.md` wins a conflict.
-- The built-ins are `quick`, `intelligent`, `explore`, and `writing`, each on
-  `ollama:llama3`, which must be pulled. A file of the same name replaces one.
+- The built-ins are `quick`, `intelligent`, `explore`, and `writing`. They have no chain
+  and run on the session's model, whatever provider serves it. A file of the same name
+  gives one a chain of its own.
 - `delegation.default_agent` names the agent a `task` without one runs on; with only the
   built-ins it is `quick`. `/agents` lists every agent with where it came from and sets
   the default.

@@ -61,9 +61,12 @@ depends on them:
   a conflict, and read by nothing else. Parsing
   reuses `parseFrontMatter`.
 - **The four built-ins are agents.** `quick`, `intelligent`, `explore`, and `writing`
-  (owner decision: `deep` is renamed), each with a description and the `ollama:llama3`
-  chain, no body. A file of the same name replaces one entirely, the way a user skill
-  replaces a plugin skill.
+  (owner decision: `deep` is renamed), each with a description, no body, and no chain:
+  they run on the session's model, as Claude Code's subagents default to `inherit`
+  (`utils/model/agent.ts:25-27`). They name no provider, so a person who has never
+  installed Ollama is never offered an agent that cannot run, which is what failed in
+  session `2026-09-26-de8c4d4a`. A file of the same name replaces one entirely, the way a
+  user skill replaces a plugin skill.
 - **`categories` keeps loading.** A configured category is an agent with that name, that
   chain, and no description or body. One loader, `loadAgents`, merges files over
   `categories` over built-ins and returns one shape; every reader goes through it. Files
@@ -117,9 +120,8 @@ depends on them:
 - **Reused unchanged:** `parseFrontMatter`, the skills directory order, `resolveRoute` and
   its skip-and-report path, `downgradeReasoning`, `providerConfigured`, `describeChain`,
   the layered loader, the `/config` writer, and the refusal path in `task.ts:98-99`.
-- **Not affected:** the local-first path. The built-ins still route to `ollama:llama3`
-  with no key and no network, `ollama` always counts as configured, so they are always
-  offered.
+- **Not affected:** the local-first path. A session on a local model delegates to the
+  built-ins on that same local model, with no key and no network.
 - **Deliberately not done:** letting the model name a raw `provider:model` (owner
   decision). Graded effort. Reloading configuration in a running session. Per-agent tool
   allowlists. Input and output stages on an agent file: that is `add-stages`, the fourth

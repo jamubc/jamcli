@@ -9,7 +9,7 @@ import { displayPath, loadConfig, userConfigFile } from '../../core/config/load.
 import { storedKey } from '../../core/config/credentials.js';
 import { userConfigDir } from '../../utils/paths.js';
 import { describeChain } from '../../core/routing/categories.js';
-import { describeSource, loadAgents, type LoadedAgents } from '../../core/ext/agents.js';
+import { describeRun, describeSource, loadAgents, type LoadedAgents } from '../../core/ext/agents.js';
 import { readSessionIndex, readTranscript, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from '../../cli/config.js';
 import type { McpCommandRequest } from '../../cli/mcp.js';
@@ -548,7 +548,7 @@ const agentReport = (loaded: LoadedAgents, projectRoot: string): string[] => {
   for (const agent of Object.values(loaded.agents).sort((a, b) => a.name.localeCompare(b.name))) {
     const marks = [agent.name === loaded.defaultAgent ? 'default' : '', agent.rules ? 'has rules' : ''].filter(Boolean).join(', ');
     lines.push(`- ${agent.name}${marks ? ` (${marks})` : ''}: ${agent.description ?? 'no description'}`);
-    lines.push(`    runs on ${describeChain(agent.chain)} · from ${describeSource(agent.source, label)}`);
+    lines.push(`    runs on ${describeRun(agent)} · from ${describeSource(agent.source, label)}`);
   }
   lines.push('', loaded.defaultAgent ? `A task that names no agent runs on ${loaded.defaultAgent}.` : 'No agent is the default, so every task must name one.');
   lines.push('Define or replace one with .jamcli/agents/<name>.md; the session keeps its own model.');
@@ -582,7 +582,7 @@ const agentsCommand: SlashCommand = {
         .map((agent) => ({
           key: agent.name,
           label: agent.name,
-          detail: [agent.description, `runs on ${describeChain(agent.chain)}`, describeSource(agent.source, label), agent.rules ? 'has rules' : '']
+          detail: [agent.description, `runs on ${describeRun(agent)}`, describeSource(agent.source, label), agent.rules ? 'has rules' : '']
             .filter(Boolean)
             .join(' · '),
           ...(agent.name === loaded.defaultAgent ? { current: true } : {}),

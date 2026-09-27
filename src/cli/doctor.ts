@@ -116,8 +116,8 @@ function modelsInUse(settings: LoadedConfig, agents: Record<string, Agent>): { r
   out.push({ ref: session.model ? `${session.provider}:${session.model}` : `${session.provider}:`, role: 'session model' });
   const trust = trustModelRef(config, agents);
   if (trust) out.push({ ref: trust, role: 'trust classifier' });
-  // The built-ins are checked when someone chooses to rely on them, not by default.
-  for (const agent of Object.values(agents).filter((entry) => entry.source.kind !== 'builtin')) {
+  // An agent on the session's model has no chain, so the session model check covers it.
+  for (const agent of Object.values(agents)) {
     for (const entry of agent.chain) out.push({ ref: entry.model, role: `agent ${agent.name}` });
   }
   const seen = new Map<string, string[]>();

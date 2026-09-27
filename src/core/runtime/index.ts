@@ -485,7 +485,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     mcp,
     env: options.env,
     sandbox,
-    parent: () => ({ sessionId: log.id, depth: depth + 1, permissions }),
+    parent: () => ({ sessionId: log.id, depth: depth + 1, permissions, model: `${choice.provider}:${choice.model}` }),
     create: createRuntime,
     // While a turn runs, a child's request reaches this session's surface too; a background
     // child that outlives the turn is still counted and recorded.

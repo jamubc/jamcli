@@ -46,9 +46,10 @@ test('with nothing configured, the four built-ins are the agents and quick is th
   expect(Object.keys(loaded.agents).sort()).toEqual(['explore', 'intelligent', 'quick', 'writing']);
   expect(loaded.defaultAgent).toBe('quick');
   expect(loaded.problems).toEqual([]);
+  // They name no provider: each runs on whatever model the session uses.
   for (const agent of BUILTIN_AGENTS) {
     expect(agent.description).toBeTruthy();
-    expect(agent.chain).toEqual([{ model: 'ollama:llama3' }]);
+    expect(agent).toMatchObject({ chain: [], inherits: true });
   }
 });
 

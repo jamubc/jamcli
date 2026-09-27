@@ -94,7 +94,7 @@ test('what the parent would ask about, the child asks the parent surface, under 
 test('a child cannot widen the policy it inherits', async () => {
   const deny = (parseRule('run_command', 'deny', 'flag', '--deny-tool run_command') as { rule: Rule }).rule;
   const inherited = new PermissionEngine({ projectRoot: root, rules: [deny], ...toolNaming(createBuiltinRegistry()) });
-  const child = await start({ surface: 'child', allowTools: ['edit', 'run_command'], parent: { sessionId: 'parent', depth: 1, permissions: inherited } });
+  const child = await start({ surface: 'child', allowTools: ['edit', 'run_command'], parent: { sessionId: 'parent', depth: 1, permissions: inherited, model: 'ollama:fake-model' } });
   expect(child.tools.map((tool) => tool.name)).not.toContain('run_command');
   server.enqueue({ toolCalls: [editCall] }, { text: 'asked' });
   const asked: string[] = [];
@@ -141,6 +141,25 @@ test('a task that names no agent runs on the default, and with no default it is 
   server.enqueue({ toolCalls: [{ id: 't2', name: 'task', arguments: { prompt: 'look' } }] }, { text: 'ok' });
   await bare.run('go');
   expect(lastTool(server.completions().at(-1))).toBe('Delegation refused: Name an agent: none is the default. The agents are quick.');
+});
+
+test('a built-in agent runs on the model the session is using, whatever provider serves it', async () => {
+  // No categories, no agent files: only the built-ins, and the session on OpenAI.
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({ api_registry: { openai: { base_url: server.openaiBaseUrl } }, active_profile: 'default', trust: { enabled: false } })
+  );
+  fs.writeFileSync(path.join(root, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_provider: 'openai', preferred_model: 'session-model' }));
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { prompt: 'look' } }] }, { text: 'child done' }, { text: 'ok' });
+  await parent.run('go');
+  const [first, child, back] = server.completions().slice(-3);
+  expect(child.dialect).toBe('openai');
+  expect(child.body.model).toBe('session-model');
+  expect(lastTool(back)).toContain('Delegated to agent "quick" on openai:session-model');
+  const description = first.body.tools.find((tool: any) => tool.function.name === 'task').function.description;
+  expect(description).toContain('(runs on the same model as you)');
+  expect(description).not.toContain('ollama');
 });
 
 test("a chain entry's reasoning reaches the child, and the call's level replaces it", async () => {
