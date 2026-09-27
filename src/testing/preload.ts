@@ -13,6 +13,9 @@ process.env.JAMCLI_STATE_DIR = path.join(base, 'state');
 process.env.JAMCLI_CACHE_DIR = path.join(base, 'cache');
 // Keys a test stores go to a file in that directory, never to the developer's keychain.
 process.env.JAMCLI_CREDENTIAL_STORE = 'file';
+// The developer's own provider keys never configure a provider a test did not ask for,
+// and never send a test to a real API. A test that needs one sets it.
+for (const name of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'LANGSEARCH_API_KEY']) delete process.env[name];
 // The models.dev directory is never fetched: a test that wants it gives the catalog its own.
 process.env.JAMCLI_MODELS_DIRECTORY = 'off';
 process.on('exit', () => fs.rmSync(base, { recursive: true, force: true }));
