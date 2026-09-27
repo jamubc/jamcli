@@ -96,7 +96,7 @@ test('in a list, the pointer marks a row and a click chooses it; in the palette 
     await setup.mockMouse.moveTo(light.x, light.y);
     await frameWith(setup, (frame) => frame.split('\n').some((row) => /> light/.test(row)));
     await setup.mockMouse.click(light.x, light.y);
-    await frameWith(setup, (frame) => !frame.includes('Up and Down move'));
+    await frameWith(setup, (frame) => !frame.includes('Up/Down move'));
     const saved = () => JSON.parse(fs.readFileSync(path.join(process.env.JAMCLI_CONFIG_DIR!, 'config.json'), 'utf8')).ui?.theme;
     for (let wait = 0; wait < 50 && saved() !== 'light'; wait += 1) await Bun.sleep(20);
     expect(saved()).toBe('light');

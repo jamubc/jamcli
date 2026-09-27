@@ -71,8 +71,10 @@ export function filterItems(items: PickItem[], filter: string): PickItem[] {
 }
 
 /**
- * An overlay over the composer: a title, a filter the person types into, and the
- * matching choices, the chosen one marked with a word as well as a color.
+ * An overlay over the composer, laid out like the permission prompt: the title, with the
+ * position in a long list and the Escape badge in its corner; the filter the person types
+ * into; the matching choices, the chosen one marked with a word as well as a color; then,
+ * set apart, anything to know and what the keys do.
  */
 export function Picker(props: {
   title: string;
@@ -94,16 +96,27 @@ export function Picker(props: {
   const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
+  // The frame takes two columns of border and two of padding.
   const room = Math.max(20, columns - 4);
-  const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
+  const fit = (line: string, width = room) => (line.length > width ? `${line.slice(0, Math.max(0, width - 1))}…` : line);
   const shown = props.items ? shownItems(props.items, props.filter, props.freeText) : undefined;
   const start = useListWindow(props.selected, shown?.length ?? 0, PICKER_ROWS);
   const visible = shown?.slice(start, start + PICKER_ROWS) ?? [];
   const width = Math.min(48, Math.max(0, ...visible.map((item) => item.label.length + (item.current ? ' (in use)'.length : 0))));
+  const counted = shown && props.items && shown.length !== props.items.length ? ` (${shown.length} of ${props.items.length})` : '';
+  const position = shown && shown.length > PICKER_ROWS ? `${props.selected + 1} of ${shown.length} · ` : '';
+  const badge = plain ? 'Escape closes' : '[Esc]';
   return (
     <box {...framed(plain, theme.accent)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && props.onScroll?.(wheelStep(event))}>
-      <text fg={theme.accent}>{fit(`${props.title}${shown && props.items && shown.length !== props.items.length ? ` (${shown.length} of ${props.items.length})` : ''}`)}</text>
-      <text fg={theme.dim}>{fit(`Filter: ${props.filter}${props.filter ? '' : '(type to narrow the list)'}`)}</text>
+      <box flexDirection="row" justifyContent="space-between">
+        <text fg={theme.accent}>{fit(`${props.title}${counted}`, room - position.length - badge.length - 2)}</text>
+        <text fg={theme.dim}>{`${position}${badge}`}</text>
+      </box>
+      <text>
+        <span fg={theme.dim}>Filter: </span>
+        {props.filter ? <span fg={theme.text}>{fit(props.filter, room - 'Filter: '.length)}</span> : <span fg={theme.dim}>type to narrow the list</span>}
+      </text>
+      <text> </text>
       {shown === undefined ? <text fg={theme.dim}>Asking…</text> : null}
       {shown !== undefined && shown.length === 0 ? <text fg={theme.dim}>{fit(props.items?.length ? 'Nothing matches the filter.' : props.empty)}</text> : null}
       {visible.map((item, index) => {
@@ -117,9 +130,10 @@ export function Picker(props: {
           </text>
         );
       })}
+      <text> </text>
       {/* A note can carry the fix, so it wraps rather than being cut. */}
       {props.note ? <text fg={theme.warn} wrapMode="word">{props.note}</text> : null}
-      <text fg={theme.dim}>{fit(`${shown && shown.length > PICKER_ROWS ? `${props.selected + 1} of ${shown.length} · ` : ''}${props.hint ?? 'Enter chooses'} · Up and Down move${plain ? '' : ', or click'} · Escape closes`)}</text>
+      <text fg={theme.dim}>{fit(`${props.hint ?? 'Enter chooses'} · Up/Down move${plain ? '' : ', or click'}`)}</text>
     </box>
   );
 }

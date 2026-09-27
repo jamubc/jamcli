@@ -39,7 +39,7 @@ test('/model lists what the providers offer with what is known of each, filters 
     const listed = await frameWith(setup, (frame) => frame.includes('ollama:other-model') && frame.includes('Not listed: down:'));
     expect(listed).toMatch(/> ollama:fake-model \(in use\)\s+\d+k window · tools · free/);
     expect(listed).toMatch(/ollama:other-model\s+window unknown · free/);
-    expect(listed).toContain('Filter: (type to narrow the list)');
+    expect(listed).toContain('Filter: type to narrow the list');
     await setup.mockInput.typeText('other');
     const filtered = await frameWith(setup, (frame) => frame.includes('Filter: other') && !frame.includes('ollama:fake-model (in use)'));
     expect(filtered).toContain('(1 of 2)');
@@ -78,7 +78,8 @@ test('? on an empty composer opens help; Enter puts the chosen command in the co
   try {
     await setup.mockInput.typeText('?');
     const help = await frameWith(setup, (frame) => frame.includes('Keys: Enter sends'));
-    expect(help).toMatch(/1 of \d+ · Enter puts the command in the composer/);
+    expect(help).toMatch(/1 of \d+ · \[Esc\]/);
+    expect(help).toContain('Enter puts the command in the composer · Up/Down move');
     // Typing narrows the list and never reaches the composer.
     await setup.mockInput.typeText('spent');
     await frameWith(setup, (frame) => frame.includes('Filter: spent') && frame.includes('> /cost'));

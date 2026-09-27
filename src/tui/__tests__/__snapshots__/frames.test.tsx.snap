@@ -229,16 +229,16 @@ exports[`an overlay: the list, the one chosen, and how to move 1`] = `
 
 
 
-
-
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ Themes                                                                       │
-│ Filter: (type to narrow the list)                                            │
+│ Themes                                                                 [Esc] │
+│ Filter: type to narrow the list                                              │
+│                                                                              │
 │ > dark (in use)  light text on a dark background                             │
 │   light          dark text on a light background                             │
 │   high-contrast  the brightest colors, for low vision or bright rooms        │
 │   monochrome     no color at all; every state is still a word                │
-│ Enter uses it and saves it · Up and Down move, or click · Escape closes      │
+│                                                                              │
+│ Enter uses it and saves it · Up/Down move, or click                          │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │

@@ -77,7 +77,7 @@ test('setup offers the hosted providers whose key is set, with only that provide
     await setup.mockInput.typeText('anthropic');
     setup.mockInput.pressEnter();
     const offered = await frameWith(setup, (frame) => frame.includes('Models anthropic offers') && frame.includes('anthropic:coder:7b'));
-    expect(offered.slice(offered.indexOf('Models anthropic offers'), offered.indexOf('Escape closes'))).not.toContain('ollama:');
+    expect(offered.slice(offered.indexOf('Models anthropic offers'), offered.indexOf('Up/Down move'))).not.toContain('ollama:');
     await setup.mockInput.typeText('coder');
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('Model: anthropic:coder:7b, saved in'));
