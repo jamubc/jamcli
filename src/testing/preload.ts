@@ -13,4 +13,6 @@ process.env.JAMCLI_STATE_DIR = path.join(base, 'state');
 process.env.JAMCLI_CACHE_DIR = path.join(base, 'cache');
 // Keys a test stores go to a file in that directory, never to the developer's keychain.
 process.env.JAMCLI_CREDENTIAL_STORE = 'file';
+// The models.dev directory is never fetched: a test that wants it gives the catalog its own.
+process.env.JAMCLI_MODELS_DIRECTORY = 'off';
 process.on('exit', () => fs.rmSync(base, { recursive: true, force: true }));

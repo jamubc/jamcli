@@ -19,7 +19,7 @@ import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type Too
 import { childLauncher, type ParentSession } from './children.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
-import type { EffortLevel, ReasoningLevel } from '../routing/capabilities.js';
+import { effortFor, type EffortLevel, type ReasoningLevel } from '../routing/capabilities.js';
 import { sessionPermissions } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
@@ -701,7 +701,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       model: choice.model,
       temperature: profile.temperature,
       ...(options.reasoning ? { reasoning: options.reasoning } : {}),
-      ...(options.effort ? { effort: options.effort, acceptsEffort: modelInfo.effort } : {}),
+      ...(options.effort ? { effort: effortFor(options.effort, modelInfo.efforts), acceptsEffort: modelInfo.effort } : {}),
       modelUsageKey: `${choice.provider}:${choice.model}`,
       maxOutputTokens: requestedOutputTokens(modelInfo, loop?.max_output_tokens),
       context: { budget: budgetFor(), counter, auto: autoCompact, proactive: windowKnown() },
@@ -1152,6 +1152,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     async listModels(timeoutMs = LIST_TIMEOUT_MS) {
       const problems: string[] = [];
+      await catalog.refreshDirectory();
       const lists = await Promise.all(
         listConfiguredProviders(config.api_registry).map(async (id): Promise<ModelInfo[]> => {
           let timer: ReturnType<typeof setTimeout> | undefined;

@@ -7,6 +7,18 @@ export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 export const isEffortLevel = (value: unknown): value is EffortLevel => (EFFORT_LEVELS as readonly unknown[]).includes(value);
 
+/**
+ * The level to send for the one asked: itself when the model takes it or lists nothing,
+ * else the nearest it takes, the higher on a tie. DeepSeek v4.1 Flash, for one, takes low,
+ * high, and max, so medium goes as high.
+ */
+export function effortFor(asked: EffortLevel, takes: readonly EffortLevel[] | undefined): EffortLevel {
+  if (!takes?.length || takes.includes(asked)) return asked;
+  const at = EFFORT_LEVELS.indexOf(asked);
+  const distance = (level: EffortLevel) => Math.abs(EFFORT_LEVELS.indexOf(level) - at) - (EFFORT_LEVELS.indexOf(level) > at ? 0.5 : 0);
+  return [...takes].sort((a, b) => distance(a) - distance(b))[0]!;
+}
+
 export const reasoningSupported = (model: string): boolean =>
   /(^|[:/-])(o1|o3|o4|deepseek-r1|qwq|magistral|reasoning)/i.test(model);
 

@@ -4,7 +4,8 @@ import type { ModelFacts, ModelPrice } from './types.js';
  * One model's entry, as the `models` configuration block and the bundled table both write
  * it: snake_case keys, prices in US dollars per million tokens.
  */
-const FIELDS: Record<string, keyof ModelFacts> = {
+/** The list of effort levels comes only from a directory that lists them. */
+const FIELDS: Record<string, Exclude<keyof ModelFacts, 'efforts'>> = {
   context_window: 'contextWindow',
   max_output: 'maxOutput',
   tools: 'tools',

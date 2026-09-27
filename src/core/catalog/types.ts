@@ -1,3 +1,5 @@
+import type { EffortLevel } from '../routing/capabilities.js';
+
 /** Prices in US dollars per million tokens. */
 export interface ModelPrice {
   input: number;
@@ -28,16 +30,18 @@ export interface ModelFacts {
   alwaysThinks?: boolean;
   /** The model takes an effort setting. */
   effort?: boolean;
+  /** The effort levels it takes, when a source lists them. */
+  efforts?: EffortLevel[];
   /** Absent when no source knows it: the model is unpriced, never guessed. */
   price?: ModelPrice;
 }
 
 /**
  * Where a fact came from: the `models` configuration block, the provider's own metadata,
- * the table bundled with JamCLI, the rule that local models cost nothing, or a
+ * the models.dev directory, the table bundled with JamCLI, the rule that local models cost nothing, or a
  * conservative default standing in for a fact no source knows.
  */
-export type FactSource = 'config' | 'provider' | 'bundled' | 'local' | 'default';
+export type FactSource = 'config' | 'provider' | 'directory' | 'bundled' | 'local' | 'default';
 
 export interface ModelInfo extends ModelFacts {
   provider: string;
@@ -56,5 +60,6 @@ export const FACT_NAMES = [
   'thinking',
   'alwaysThinks',
   'effort',
+  'efforts',
   'price',
 ] as const satisfies readonly (keyof ModelFacts)[];

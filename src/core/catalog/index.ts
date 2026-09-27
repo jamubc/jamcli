@@ -3,12 +3,14 @@ import type { ProviderFamily } from '../providers/types.js';
 import { DEFAULT_OLLAMA_CONTEXT_CAP } from '../providers/ollama.js';
 import { bundledFacts } from './bundled.js';
 import { MetadataCache } from './cache.js';
+import { ModelDirectory } from './directory.js';
 import { parseModelsBlock } from './entries.js';
 import { FACT_NAMES, type FactSource, type ModelFacts, type ModelInfo } from './types.js';
 
 export * from './types.js';
 export { BUNDLED_VERIFIED, bundledFacts, bundledModels, bundledProblems } from './bundled.js';
 export { METADATA_TTL_MS, MetadataCache } from './cache.js';
+export { DIRECTORY_TTL_MS, DIRECTORY_URL, ModelDirectory, directoryFacts } from './directory.js';
 export { parseEntry, parseModelsBlock, splitModelKey } from './entries.js';
 
 /**
@@ -40,6 +42,8 @@ export interface CatalogOptions {
   registry?: ApiRegistry;
   /** Where provider metadata is kept between sessions. `false` keeps nothing. */
   cache?: MetadataCache | false;
+  /** The models.dev directory of limits and prices. `false` leaves it out. */
+  directory?: ModelDirectory | false;
   /** How long to wait for a provider's metadata before going on without it. */
   timeoutMs?: number;
 }
@@ -54,7 +58,8 @@ const endpointOf = (provider: string, registry: ApiRegistry | undefined): string
 /**
  * What JamCLI knows about a model: its context window, output limit, capabilities, and
  * prices. Each fact comes from the first source that knows it: the `models` configuration
- * block, then the provider's own metadata, then the bundled table. A context window no
+ * block, then the provider's own metadata, then the models.dev directory, then the bundled
+ * table. A context window no
  * source knows is a conservative default, a price no source knows stays unknown, and
  * models served by Ollama cost nothing.
  */
@@ -64,6 +69,7 @@ export class ModelCatalog {
   private readonly configured: Map<string, ModelFacts>;
   private readonly registry?: ApiRegistry;
   private readonly cache?: MetadataCache;
+  private readonly directory?: ModelDirectory;
   private readonly timeoutMs: number;
 
   constructor(options: CatalogOptions = {}) {
@@ -72,6 +78,7 @@ export class ModelCatalog {
     this.configured = parsed.entries;
     this.registry = options.registry;
     this.cache = options.cache === false ? undefined : (options.cache ?? new MetadataCache());
+    this.directory = options.directory === false ? undefined : (options.directory ?? new ModelDirectory());
     this.timeoutMs = options.timeoutMs ?? METADATA_TIMEOUT_MS;
   }
 
@@ -87,11 +94,22 @@ export class ModelCatalog {
   async resolve(provider: string, model: string, source?: MetadataSource): Promise<ModelInfo> {
     const key = this.key(provider, model);
     let reported = this.cache?.get(key);
-    if (!reported && source?.describeModel) {
-      reported = await this.ask(source, model);
-      if (reported) this.cache?.set(key, reported);
-    }
+    const asking = !reported && source?.describeModel ? this.ask(source, model) : undefined;
+    await Promise.all([asking?.then((facts) => (reported = facts)), this.refreshDirectory()]);
+    if (asking && reported) this.cache?.set(key, reported);
     return this.combine(provider, model, source?.family, reported);
+  }
+
+  /** Read the directory again when its copy is over an hour old, within the same wait as a provider. */
+  async refreshDirectory(): Promise<void> {
+    if (!this.directory?.stale()) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      await this.directory.refresh(controller.signal);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private key(provider: string, model: string): string {
@@ -115,6 +133,7 @@ export class ModelCatalog {
     const layers: [FactSource, ModelFacts][] = [
       ['config', configured],
       ['provider', reported ?? {}],
+      ['directory', (provider !== 'ollama' && this.directory?.facts(provider, endpointOf(provider, this.registry), model)) || {}],
       ['bundled', bundledFacts(provider, model, family) ?? {}],
     ];
     const info: ModelInfo = { provider, model, contextWindow: DEFAULT_CONTEXT_WINDOW, sources: {} };

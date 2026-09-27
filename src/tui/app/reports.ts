@@ -18,6 +18,7 @@ const plural = (value: number, one: string, many = `${one}s`) => `${count(value)
 const SOURCE_WORDS: Record<FactSource, string> = {
   config: 'from the models block',
   provider: 'from the provider',
+  directory: 'from models.dev',
   bundled: 'from the bundled table',
   local: 'local models cost nothing',
   default: 'a default, since no source knows it',
@@ -31,9 +32,10 @@ export function modelReport(info: ModelInfo): string {
   const can = [info.tools ? 'tools' : '', info.reasoning ? 'reasoning' : '', info.images ? 'images' : ''].filter(Boolean);
   if (can.length) lines.push(`Takes: ${can.join(', ')}`);
   if (info.thinking) lines.push(`Thinking: ${info.thinking}${info.alwaysThinks ? ', always on' : ''}${info.effort ? ', with an effort setting' : ''}`);
+  else if (info.effort) lines.push(`Effort: ${info.efforts?.length ? info.efforts.join(', ') : 'takes a level'}${info.alwaysThinks ? ', always thinks' : ''}${from('effort')}`);
   lines.push(
     info.price
-      ? `Price per million tokens: ${formatUsd(info.price.input)} in, ${formatUsd(info.price.output)} out${from('price')}`
+      ? `Price per million tokens: ${formatUsd(info.price.input)} in, ${formatUsd(info.price.output)} out${info.price.cacheRead !== undefined ? `, ${formatUsd(info.price.cacheRead)} cached read` : ''}${info.price.cacheWrite !== undefined ? `, ${formatUsd(info.price.cacheWrite)} cache write` : ''}${from('price')}`
       : 'Price: unknown, so its requests are counted as unpriced'
   );
   lines.push('', 'Switch with /model provider:model, such as /model ollama:qwen3-coder.');

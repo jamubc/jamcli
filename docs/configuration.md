@@ -85,7 +85,8 @@ A profile is a named file in `profiles/` with `name`, `preferred_model`,
 | `JAMCLI_CONFIG_DIR` | The user configuration directory. |
 | `JAMCLI_STATE_DIR` | Logs, traces, consent and trust records. |
 | `JAMCLI_DATA_DIR` | Installed plugins. |
-| `JAMCLI_CACHE_DIR` | Model metadata fetched from providers. |
+| `JAMCLI_CACHE_DIR` | Model metadata fetched from providers and models.dev. |
+| `JAMCLI_MODELS_DIRECTORY` | The models.dev URL to read model limits and prices from, or `off`. |
 | `JAMCLI_CREDENTIAL_STORE` | Where keys are stored: `keychain`, `secret-service`, or `file` (readable only by you). |
 | `JAMCLI_LOG_LEVEL`, `JAMCLI_LOG_FILE`, `JAMCLI_TRACE_FILE` | Logging, as `-v`, `--log-file`, and `--trace-file`. |
 | `JAMCLI_ACP_ENDPOINT` | `unix:<path>`: let an editor watch the interface. See [protocols.md](protocols.md). |

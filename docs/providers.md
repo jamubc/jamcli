@@ -62,8 +62,17 @@ Keys never enter project files, and a subprocess gets none unless a setting name
   switches the session's model. `/model info` describes the one in use.
 - `--model provider:model` runs one turn on another model; `/profile` and profiles set
   the session's model.
-- The catalog carries context windows, prices, and reasoning support. `models` in the
-  configuration overrides or adds entries: `{ "models": { "openai:gpt-5": { "context_window": 400000, "price": { "input": 2, "output": 8 } } } }`.
+- The catalog carries context windows, output limits, prices (input, output, cache read
+  and write), and thinking support. Each fact comes from the first source that knows it:
+  - the `models` block in the configuration, which overrides the rest:
+    `{ "models": { "openai:gpt-5": { "context_window": 400000, "price": { "input": 2, "output": 8 } } } }`;
+  - the provider itself, where it reports them (OpenRouter, Ollama, Anthropic's limits);
+  - [models.dev](https://models.dev), the open directory other tools read, fetched when
+    needed and kept for an hour. A custom endpoint is matched by its id or its URL;
+  - the table bundled with JamCLI.
+
+  `/model info` names the source of each fact. `JAMCLI_MODELS_DIRECTORY=off` never
+  fetches the directory; Ollama sessions never ask it.
 - A model whose price is unknown reports a cost as a lower bound; `/cost` says what is
   unpriced.
 
