@@ -68,10 +68,8 @@ description. `bun test` must pass, and the tests must be capable of failing.
 - `openspec/specs/jamcli/spec.md` is current truth. `openspec/changes/` is what should
   change. Do not edit the spec while a change is open; the spec updates at archive time.
 
-## Known state
+## Current state
 
-`add-session-reflection` is open: its code is committed, and it waits on `/reflect` run
-over 10 or more real sessions with the owner approving (task 6.2). `add-agents`,
-`reconcile-shipped-behavior`, and `fix-observed-session-defects` closed 2026-09-27, and
-`improve-web-tools` closed 2026-09-26. The type baseline is 0. `add-windows-support` is shelved. `openspec/ROADMAP.md` names the units
-after these, and `openspec/SEQUENCE.md` what closing each found and left open.
+`openspec/SEQUENCE.md` names the open unit, what closed before it, and what closing each
+found and left open. `openspec/ROADMAP.md` names the units after it. Read those rather
+than trusting a copy here, and update them, not this file, when a unit opens or closes.
