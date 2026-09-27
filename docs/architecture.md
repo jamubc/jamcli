@@ -10,6 +10,9 @@ afterward.
 ```
  surfaces     interface (OpenTUI)   headless (-p)   ACP server   workflow steps   child runs
                     │                    │              │              │               │
+ commands     src/commands/: every built-in command, defined once, and the host that
+              runs them where there is no screen (headless, ACP)
+                    │                    │              │              │               │
                     └──────────── createRuntime(): commands in, typed events out ────────┘
  core
    runtime/       the only place a session is assembled
@@ -37,7 +40,8 @@ afterward.
    config/        layered configuration, schemas, credentials
 ```
 
-`src/core/` imports no interface code. A test fails if it does.
+`src/core/` imports no interface code. A test fails if it does. `src/commands/` imports
+neither OpenTUI nor React, and `src/core/` does not import it.
 
 ## A turn, end to end
 

@@ -29,6 +29,12 @@ terminal manager.
 - `session/prompt` streams updates; every update is flushed before the prompt reply.
   A call that asks becomes `session/request_permission` with allow once, allow for the
   session, reject, and reject-with-a-reason. A rejection with no feedback stops the turn.
+- `available_commands_update` offers every built-in command, beside custom commands and
+  MCP prompts. A prompt naming one runs it, as the interface would: what it shows arrives
+  as message chunks, and a turn it sends is the prompt's turn. A list it offers is printed
+  with a key per choice and answered with `/choose <key or number>` in the next prompt.
+  `/mode` sends `current_mode_update`, `/model` sends `config_option_update`, and `/exit`
+  closes the session.
 - `session/set_mode` takes `plan`, `default`, `accept-edits`, or `auto` (never `bypass`);
   `session/set_config_option` switches the model. `apply_patch` reports every file it
   touches as a tool location, and a tool result past 20,000 characters is cut with a note.
@@ -52,7 +58,10 @@ terminal manager.
 socket beside the interface, so a terminal manager can watch what is on screen. It
 refuses a path in a directory others can write, and its socket is 0600 from creation. It
 lists and loads the interface's session, streams its updates and state (`running`,
-`requires_action`, `idle`), and cannot open sessions, prompt, or approve. A client that
+`requires_action`, `idle`), and cannot open sessions, prompt, or approve. A
+`requires_action` update names the waiting call's tool in `_meta.jamcli.tool`, and
+`_meta.jamcli.alwaysAsks` is true when that tool always asks, such as a commit or a
+lesson from `/reflect`: an answer only the person gives. A client that
 stops reading is dropped rather than slowing the interface, and a client that dies leaves
 the turn running to its end.
 

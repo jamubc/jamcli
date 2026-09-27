@@ -62,6 +62,9 @@ description. `bun test` must pass, and the tests must be capable of failing.
 
 - `src/core/` is the harness: the agent loop, tools, providers, routing, context,
   policy, hooks, sessions, rules. It imports neither OpenTUI nor React.
+- `src/commands/` is every built-in command, defined once, and the host that runs them
+  where there is no screen. Every surface runs the same set. It imports neither OpenTUI
+  nor React, and `src/core/` does not import it.
 - `src/tui/` is the OpenTUI interface, and it only renders and forwards input.
 - `src/cli/` is the dispatcher and the non-interactive surfaces.
 - `src/services/` holds the pre-core services that have not moved yet.

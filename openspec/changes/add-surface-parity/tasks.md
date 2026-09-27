@@ -26,8 +26,8 @@
 
 ## 5. Docs
 
-- [ ] 5.1 `docs/headless.md`, `docs/protocols.md`, `docs/commands-and-skills.md`, and `docs/architecture.md`.
-- [ ] 5.2 `AGENTS.md` and `openspec/config.yaml`: `src/commands/` in the layout.
+- [x] 5.1 `docs/headless.md`, `docs/protocols.md`, `docs/commands-and-skills.md`, and `docs/architecture.md`.
+- [x] 5.2 `AGENTS.md` and `openspec/config.yaml`: `src/commands/` in the layout.
 
 ## 6. Proof and close
 

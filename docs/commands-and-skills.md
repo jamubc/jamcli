@@ -4,16 +4,27 @@
 
 Type `/` in the composer; the palette lists these and what they take.
 
-- Session: `/help`, `/clear`, `/resume`, `/fork`, `/export`, `/exit`, `/copy`.
-- Model and context: `/model`, `/effort`, `/profile`, `/context`, `/compact`, `/cost`,
-  `/agents`.
+- Session: `/help`, `/choose`, `/clear`, `/resume`, `/fork`, `/rewind`, `/undo`,
+  `/export`, `/note`, `/copy`, `/exit`.
+- Model and context: `/setup`, `/model`, `/effort`, `/profile`, `/context`, `/compact`,
+  `/cost`, `/agents`, `/reflect`.
 - Permissions and modes: `/mode`, `/permissions`.
 - Extensions: `/tools`, `/mcp`, `/hooks`, `/plugins`, `/skills`, `/commands`,
   `/workflows`.
-- Project: `/commit`, `/pr`, `/diff`, `/doctor`, `/config`, `/theme`.
+- Project: `/commit`, `/pr`, `/diff`, `/doctor`, `/config`, `/theme`, `/style`.
 
 `/help` also lists the keys in effect. A command's output is added to the transcript as
 a report, and a command that asks uses the same picker as everything else.
+
+Every one of these runs on every surface, from the one definition in `src/commands/`:
+the interface, `jamcli -p "/<command>"` (see `headless.md`), and a prompt over ACP (see
+`protocols.md`). Where there is no screen, a command's list is printed with a key per
+choice and answered with `/choose <key or number>`, or `/choose none` to close it; headless
+takes the answers in advance with `--choose`. What only a screen does, such as repainting
+in a new theme, happens where there is one, and the rest of the command, such as saving
+the theme, happens everywhere. Opening another session is the surface's own: `/resume`
+in the interface, `--resume` headlessly, and the editor's session list over ACP. Bypass
+mode is entered only in the interface or from its flag.
 
 ## Custom commands
 

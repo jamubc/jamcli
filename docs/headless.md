@@ -10,6 +10,22 @@ jamcli -p "run the tests" --allowed-tools "run_command(bun test *)" --output-for
 jamcli -p "plan the fix" --dry-run --output-format json
 ```
 
+## Commands
+
+A prompt that names a command runs it, as the interface would: `jamcli -p "/compact"`,
+`-p "/context"`, `-p "/resume list"`, `-p "/reflect"`, and custom commands and MCP
+prompts alike. Its output is the response; a turn it sends runs as a headless turn, under
+the same permissions. A list the command offers is printed with a key per choice, and
+each `--choose <key or number>` answers the next list in order:
+
+```
+jamcli -p "/commit fix the parser" --choose commit
+```
+
+A list with no answer given is shown and closed. A command that ends refused, in error, or
+wanting an argument fails the run with exit code 1 and its reason as `error`. Text that
+names no command, such as a path like `/tmp/x`, is sent to the model as written.
+
 ## Output
 
 - `text` (the default): the answer on stdout, notices and denials on stderr.
