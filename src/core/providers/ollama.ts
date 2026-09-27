@@ -37,6 +37,15 @@ const DEFAULT_ENDPOINT = 'http://localhost:11434';
 export const DEFAULT_OLLAMA_CONTEXT_CAP = 16_384;
 const FALLBACK_CONTEXT = 8_192;
 
+/**
+ * What Ollama's `think` takes: gpt-oss models take a level of `low`, `medium`, or `high`,
+ * and every other thinking model takes only `true`.
+ */
+export const ollamaThink = (model: string, effort: ProviderRequestOptions['effort']): boolean | 'low' | 'medium' | 'high' => {
+  if (!effort || !/gpt-oss/i.test(model)) return true;
+  return effort === 'xhigh' || effort === 'max' ? 'high' : effort;
+};
+
 /** A local server that refuses connections is rarely transient, so retry once, quickly. */
 const LOCAL_RETRY_POLICY: RetryPolicy = { maxAttempts: 2, baseDelayMs: 300, maxDelayMs: 2_000 };
 
@@ -159,7 +168,7 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       model,
       messages: messages.map(toOllamaMessage),
       stream,
-      ...(wantReasoning ? { think: true } : {}),
+      ...(wantReasoning ? { think: ollamaThink(model, options.effort) } : {}),
       ...(options.tools?.length ? { tools: options.tools } : {}),
       options: nativeOptions,
       ...(options.extraParams || {}),

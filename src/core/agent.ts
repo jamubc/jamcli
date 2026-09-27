@@ -38,6 +38,9 @@ export interface AgentOptions {
   trustOffNote?: boolean;
   hooks?: HookBus;
   reasoning?: ProviderRequestOptions['reasoning'];
+  effort?: ProviderRequestOptions['effort'];
+  /** The model takes an effort setting, from the catalog. */
+  acceptsEffort?: boolean;
   maxOutputTokens?: number;
   contextLength?: number;
   /** What the session's model costs per million tokens. Without it, requests are unpriced. */
@@ -522,6 +525,7 @@ export class CoreAgent implements Agent {
         signal,
         tools,
         reasoning: this.options.reasoning ?? 'auto',
+        ...(this.options.effort ? { effort: this.options.effort, acceptsEffort: this.options.acceptsEffort } : {}),
         maxOutputTokens: this.options.maxOutputTokens,
         contextLength: this.options.contextLength,
         thinkingStyle: this.options.thinkingStyle,

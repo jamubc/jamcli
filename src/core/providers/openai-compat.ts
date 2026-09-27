@@ -25,6 +25,11 @@ export interface OpenAICompatOptions {
    * stream reasoning deltas unconditionally, so this is opt-in configuration.
    */
   reasoningParam?: string;
+  /**
+   * How an effort level is sent: OpenAI's `reasoning_effort`, the default, or OpenRouter's
+   * `reasoning: { effort }`, which takes no level above `high`.
+   */
+  effortStyle?: 'reasoning_effort' | 'openrouter';
   /** Provider id used in errors, such as `openrouter` or a custom endpoint id. */
   name?: string;
   /** The environment variable the key comes from, named in authentication errors. */
@@ -47,6 +52,7 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
   private readonly extraHeaders: Record<string, string>;
   private readonly dialect: ProviderDialect;
   private readonly reasoningParam?: string;
+  private readonly effortStyle: 'reasoning_effort' | 'openrouter';
   private readonly name: string;
   private readonly keyVariable?: string;
   private readonly retryPolicy?: RetryPolicy;
@@ -62,6 +68,7 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     this.extraHeaders = { ...(options.headers || {}) };
     this.dialect = options.dialect || 'openai';
     this.reasoningParam = options.reasoningParam;
+    this.effortStyle = options.effortStyle ?? 'reasoning_effort';
     this.name = options.name || 'openai';
     this.keyVariable = options.keyVariable;
     this.retryPolicy = options.retryPolicy;
@@ -112,6 +119,13 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     const wantReasoning = options.reasoning === 'on' || options.reasoning === 'auto';
     if (wantReasoning && this.reasoningParam && body[this.reasoningParam] === undefined) {
       body[this.reasoningParam] = true;
+    }
+    if (options.effort && options.reasoning !== 'off') {
+      if (this.effortStyle === 'openrouter') {
+        if (body.reasoning === undefined) body.reasoning = { effort: options.effort === 'xhigh' || options.effort === 'max' ? 'high' : options.effort };
+      } else if (body.reasoning_effort === undefined) {
+        body.reasoning_effort = options.effort;
+      }
     }
 
     if (options.tools?.length) {

@@ -197,6 +197,11 @@ export class AnthropicProvider implements ChatProvider, ListableProvider {
     };
     const thinking = thinkingFor(options, body.max_tokens as number);
     if (thinking && body.thinking === undefined) body.thinking = thinking;
+    // Effort is refused by a model that does not take it, so it is sent only where the catalog says one does.
+    if (options.effort && options.acceptsEffort && options.reasoning !== 'off') {
+      const config = (body.output_config as Record<string, unknown> | undefined) ?? {};
+      if (config.effort === undefined) body.output_config = { ...config, effort: options.effort };
+    }
     // The cache prefix runs tools, then system, then messages: a breakpoint closes each, so
     // an unchanged system prompt and tool list are read from the cache even when the
     // conversation is not, and the conversation up to the latest turn is read next time.

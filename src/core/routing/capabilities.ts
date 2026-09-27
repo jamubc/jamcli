@@ -2,6 +2,11 @@ import type { ApiRegistry } from '../../types/config.js';
 
 export type ReasoningLevel = 'off' | 'on' | 'auto';
 
+/** How hard a model thinks, where it takes a level: the names Anthropic and OpenAI use. */
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type EffortLevel = (typeof EFFORT_LEVELS)[number];
+export const isEffortLevel = (value: unknown): value is EffortLevel => (EFFORT_LEVELS as readonly unknown[]).includes(value);
+
 export const reasoningSupported = (model: string): boolean =>
   /(^|[:/-])(o1|o3|o4|deepseek-r1|qwq|magistral|reasoning)/i.test(model);
 

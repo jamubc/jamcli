@@ -97,6 +97,7 @@ const buildOpenRouter = (config: ApiRegistry['openrouter']): ChatProvider => {
     },
     dialect: 'openai',
     reasoningParam: 'include_reasoning',
+    effortStyle: 'openrouter',
     name: 'openrouter',
     keyVariable: config?.key_env_var || FALLBACK_ENV.openrouter,
   });

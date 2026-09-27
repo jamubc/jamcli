@@ -1,3 +1,4 @@
+import type { EffortLevel } from '../routing/capabilities.js';
 import type { ChatMessage, ProviderToolCall, ReasoningBlock, TokenUsage } from '../types.js';
 import type { RetryInfo } from './http.js';
 import type { ModelFacts, ThinkingStyle } from '../catalog/types.js';
@@ -56,6 +57,10 @@ export interface ProviderRequestOptions {
   thinkingStyle?: ThinkingStyle;
   /** The model thinks whatever the request says, so thinking cannot be turned off. */
   alwaysThinks?: boolean;
+  /** How hard to think. Ignored when reasoning is off; each provider sends it in its own form. */
+  effort?: EffortLevel;
+  /** The catalog says the model takes an effort setting; a provider that errors otherwise checks it. */
+  acceptsEffort?: boolean;
   /**
    * Replay signed reasoning only from messages created at or after this time. A signature
    * holds only while the system prompt, the tools, and the messages before it are as they
