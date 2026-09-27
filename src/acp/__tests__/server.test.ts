@@ -163,6 +163,42 @@ test('a rejected permission turns the prompt into a refusal and no tool result i
   expect(messages.find((message) => message.id === 2).result.stopReason).toBe('refusal');
 });
 
+test('a provider error reaches the client as a message before the refusal', async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const messages = collect(output);
+  const server = new AcpServer({
+    input,
+    output,
+    projectRoot: '/tmp/project',
+    createSession: async () => ({
+      id: 'session-3',
+      cwd: '/tmp/project',
+      model: 'test-model',
+      profile: 'default',
+      configOptions: [],
+      async run(): Promise<RunResult> {
+        return { status: 'error', sessionId: 'session-3', response: '', turns: 0, usage, error: "model 'nope' not found" };
+      },
+      cancel() {
+        // The erroring controller finishes at once, so nothing to do here.
+      },
+    }),
+  });
+  void server.start();
+  const send = (message: unknown) => input.write(`${JSON.stringify(message)}\n`);
+
+  send({ jsonrpc: '2.0', id: 1, method: 'session/new', params: { cwd: '/tmp/project', mcpServers: [] } });
+  await waitFor(() => messages.some((message) => message.id === 1 && message.result));
+  send({ jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-3', prompt: [{ type: 'text', text: 'go' }] } });
+  await waitFor(() => messages.some((message) => message.id === 2 && message.result));
+  input.end();
+
+  const updates = messages.filter((message) => message.method === 'session/update').map((message) => message.params.update);
+  expect(updates).toEqual([{ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: "model 'nope' not found\n" } }]);
+  expect(messages.find((message) => message.id === 2).result.stopReason).toBe('refusal');
+});
+
 test('session/cancel stops the in-flight turn and reports cancelled', async () => {
   const input = new PassThrough();
   const output = new PassThrough();

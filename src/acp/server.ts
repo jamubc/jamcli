@@ -202,6 +202,8 @@ export class AcpServer {
           for (const item of mapper.map(event)) void update(controller.id, item);
         };
         const result = await controller.run(context ? `${expanded.prompt}\n\n${context}` : expanded.prompt, onEvent, expanded.turn);
+        // A failed turn says why, as the interface does, so the editor shows the cause and not a bare refusal.
+        if (result.status === 'error' && result.error) await update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${result.error}\n` } });
         await queue;
         return { stopReason: stopReasonFor(result.status) };
       },
