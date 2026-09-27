@@ -95,3 +95,17 @@ test('a stale anchor is rejected, the file is left byte-identical, and fresh anc
   );
   expect(await fs.promises.readFile(filePath)).toEqual(before);
 });
+
+test("a line's text passed as its anchor is called a malformed anchor, not a change to the file", async () => {
+  const before = await fs.promises.readFile(filePath);
+  let thrown: any;
+  try {
+    await editRunner({ path: 'file.txt', find_string: 'beta', replace_string: 'gamma', anchors: [{ line: 2, anchor: 'beta' }] }, { projectRoot });
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).not.toBeInstanceOf(StaleAnchorError);
+  expect(thrown.message).toContain('is not an anchor');
+  expect(thrown.message).not.toContain('changed since it was read');
+  expect(await fs.promises.readFile(filePath)).toEqual(before);
+});

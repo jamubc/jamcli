@@ -1,6 +1,6 @@
 import { createTwoFilesPatch } from 'diff';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
-import { anchorAtLine, type LineAnchor } from './anchors.js';
+import { ANCHOR_LENGTH, anchorAtLine, type LineAnchor } from './anchors.js';
 import { readText, writeText } from './files.js';
 import { resolveProjectPath } from './paths.js';
 import { AmbiguousMatchError, replaceLiteral } from './textEdit.js';
@@ -58,6 +58,12 @@ function normalizeAnchors(raw: unknown): AnchorInput[] {
     }
     if (typeof anchor !== 'string' || !anchor.length) {
       throw new Error(`edit anchor at index ${index} needs a non-empty "anchor" string.`);
+    }
+    // A malformed anchor is the call's mistake, not a change to the file, and is said so: models often pass the line's text.
+    if (!new RegExp(`^[0-9a-f]{${ANCHOR_LENGTH}}$`).test(anchor)) {
+      throw new Error(
+        `edit anchor at index ${index} is not an anchor: an anchor is the ${ANCHOR_LENGTH}-character hash between the bars of a line read_file returned, such as 47dc214d34fd in "1|47dc214d34fd|...", not the line's text. The file was not changed. Pass the hash, or leave anchors out.`
+      );
     }
     return { line, anchor };
   });
@@ -150,7 +156,7 @@ const editSchema: JsonSchema = {
         type: 'object',
         properties: {
           line: { type: 'integer', minimum: 1, description: '1-indexed line number the anchor belongs to.' },
-          anchor: { type: 'string', description: 'Anchor content returned by read_file for that line.' },
+          anchor: { type: 'string', description: `The line's anchor from read_file: the ${ANCHOR_LENGTH}-character hash between the bars, such as 47dc214d34fd in "1|47dc214d34fd|...". Not the line's text.` },
         },
         required: ['line', 'anchor'],
         additionalProperties: false,
