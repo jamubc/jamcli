@@ -51,7 +51,11 @@ Recorded once here. A unit that needs to revisit one says so in its proposal.
 Each unit is one openspec change. Its number is its order. A unit may start only when the
 one before it is archived.
 
-### 1. `add-agents`
+### 1. `add-agents` (archived 2026-09-27)
+
+Done as below, with one change: the built-ins have no chain and run on the session's
+model, not a local one. See `openspec/SEQUENCE.md`.
+
 
 The open proposal, reframed. An agent is one markdown file, `agents/<name>.md` under the
 user or project `.jamcli` directory, the way skills already load

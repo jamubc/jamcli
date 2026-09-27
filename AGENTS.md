@@ -80,8 +80,8 @@ description. `bun test` must pass, and the tests must be capable of failing.
 
 ## Known state
 
-No unit is open. `rehaul-jamcli` closed 2026-09-26 as `2026-09-26-rehaul-jamcli` (35
-added, 30 modified) and is tagged `v2.0.0`; its type baseline of 22 errors reached 0 when
-Ink was removed (6.15) and stays 0. `add-windows-support` is shelved, `improve-web-tools`
-is proposed and not started; see `openspec/SEQUENCE.md` for what closing the last unit
-found and left open.
+`add-session-reflection` is open: its code is committed, and it waits on `/reflect` run
+over 10 or more real sessions with the owner approving (task 6.2). `add-agents` closed
+2026-09-27 as `2026-09-27-add-agents`, and `improve-web-tools` closed 2026-09-26. The type
+baseline is 0. `add-windows-support` is shelved. `openspec/ROADMAP.md` names the units
+after these, and `openspec/SEQUENCE.md` what closing each found and left open.

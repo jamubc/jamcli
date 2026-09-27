@@ -55,12 +55,46 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. `improve-web-tools` closed 2026-09-26; see Closed units below. `add-windows-support`
+`add-session-reflection`. Its code is committed and its task 6.1 ran end to end on
+OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real sessions,
+the approved novel edits counted against the 0 of 26 baseline, which only the owner's
+approvals can produce. `add-agents` closed 2026-09-27; see Closed units below.
+`add-windows-support`
 is shelved, not in the active changes tree: it waits for the owner to approve it before
 any task begins, and `git checkout 9d9f5c6 -- openspec/changes/add-windows-support`
 restores its proposal from the commit that recorded it.
 
 ## Closed units
+
+### 4. `add-agents`
+
+Archived as `2026-09-27-add-agents`: 3 requirements added (Agent Definitions, Delegation
+Choice Presentation, Delegation Settings), 2 modified (Category-Based Model Routing,
+Delegated Task Execution). An agent is `agents/<name>.md` in the project, the user
+directory, or a plugin: a description the model reads, a model chain, and a rules body
+only its child reads, before the project's rules. The `task` tool lists each routable
+agent with its description and the chain it runs on, names the default
+(`delegation.default_agent`), and says when and how to delegate; `reasoning` on a call
+reaches the child, which it had not. The built-ins `quick`, `intelligent`, `explore`, and
+`writing` have no chain and run on the session's model, whatever provider serves it.
+`/agents` replaced `/categories`. Configured `categories` still load, as agents without
+descriptions or rules.
+
+**What closing it found.** Session `2026-09-26-de8c4d4a` in `monaco-code-editor` started
+it: three background delegations each failed raw on a local Ollama that was not running.
+`resolveRoute` had a reachability check nothing passed (fixed for delegation in `9272739`
+and workflows in `0f86978`). Building on it found a `delegation` block that set only some
+keys left the rest unbounded (`7c03fa9`). Testing on a real endpoint, OpenCode Go, found
+jamcli sent no user agent of its own and no per-conversation id, both of which that
+provider requires (`141abac`, `30d76de`); `${session_id}` in an endpoint header now
+carries the session's id.
+
+**Owner decisions recorded with it**: the model chooses among configured agents, never a
+raw `provider:model`; built-in names `quick`, `intelligent`, `explore`, `writing`; a
+project's `AGENTS.md` wins over an agent's rules; the built-ins run on the session's
+model, since Ollama is one provider among many, not one a person must have; tests on a
+real provider use OpenCode Go, not Ollama. Work stayed on `feat/agentic-harness-core`, as
+for the last unit.
 
 ### 3. `improve-web-tools`
 
