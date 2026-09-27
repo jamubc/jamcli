@@ -9,7 +9,9 @@ import {
   type PermissionOption,
   type SessionUpdate,
 } from '@agentclientprotocol/sdk';
-import type { AgentEvent, ApprovalDecision } from '../core/types.js';
+import type { AgentEvent, ApprovalDecision, RunResult } from '../core/types.js';
+import type { RunOptions } from '../core/runtime/index.js';
+import { entryText } from '../commands/host.js';
 import type { EditorBridge } from '../types/tools.js';
 import { editorBridge } from './editor.js';
 import { createAcpSession, type AcpSessionController, type CreateAcpSessionOptions } from './session.js';
@@ -203,12 +205,6 @@ export class AcpServer {
       prompt: async (params) => {
         const { controller, mapper } = this.session(params.sessionId);
         const { text, context } = promptText(params.prompt);
-        let expanded: { prompt: string; turn: object } = { prompt: text, turn: {} };
-        try {
-          expanded = (await controller.expand?.(text)) ?? expanded;
-        } catch (error: any) {
-          throw RequestError.invalidParams(undefined, error?.message ?? String(error));
-        }
         const onEvent = (event: AgentEvent) => {
           if (event.type === 'approval_request') {
             void this.ask(client, controller.id, mapper, event);
@@ -216,11 +212,32 @@ export class AcpServer {
           }
           for (const item of mapper.map(event)) void update(controller.id, item);
         };
-        const result = await controller.run(context ? `${expanded.prompt}\n\n${context}` : expanded.prompt, onEvent, expanded.turn);
+        const runTurn = (prompt: string, turn: RunOptions = {}) => controller.run(context ? `${prompt}\n\n${context}` : prompt, onEvent, turn);
+        let result: RunResult | undefined;
+        if (controller.isCommand?.(text)) {
+          // A command runs as it does in the interface: what it shows is the reply, and a turn it sends is this prompt's turn.
+          await controller.runCommand!(text, {
+            entry: (entry) => {
+              if (entry.kind === 'event') for (const item of mapper.map(entry.event)) void update(controller.id, item);
+              else void update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${entryText(entry)}\n\n` } });
+            },
+            turn: async (prompt, turn) => {
+              result = await runTurn(prompt, turn);
+            },
+            mode: (mode) => void update(controller.id, { sessionUpdate: 'current_mode_update', currentModeId: mode }),
+            refresh: () => void update(controller.id, { sessionUpdate: 'config_option_update', configOptions: controller.configOptions }),
+          });
+          if (controller.exited) {
+            this.sessions.delete(controller.id);
+            await controller.close?.().catch(() => undefined);
+          }
+        } else {
+          result = await runTurn(text);
+        }
         // A failed turn says why, as the interface does, so the editor shows the cause and not a bare refusal.
-        if (result.status === 'error' && result.error) await update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${result.error}\n` } });
+        if (result?.status === 'error' && result.error) await update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${result.error}\n` } });
         await queue;
-        return { stopReason: stopReasonFor(result.status) };
+        return { stopReason: result ? stopReasonFor(result.status) : 'end_turn' };
       },
 
       cancel: async (params) => {

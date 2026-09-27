@@ -14,8 +14,8 @@
 ## 3. Headless and ACP
 
 - [x] 3.1 Headless: a prompt naming a built-in command runs it through the host; `--choose` answers its choices in order; text, json, and stream-json carry its output.
-- [ ] 3.2 ACP: offer every built-in command; a prompt naming one runs it through the host, with output as message chunks, compaction events mapped, and `/choose` for choices.
-- [ ] 3.3 Tests on the assembled surfaces with the fake provider.
+- [x] 3.2 ACP: offer every built-in command; a prompt naming one runs it through the host, with output as message chunks, compaction events mapped, and `/choose` for choices.
+- [x] 3.3 Tests on the assembled surfaces with the fake provider.
 - [x] 3.4 `src/commands/__tests__/parity.test.ts`.
 
 ## 4. Whose answer it is

@@ -1,9 +1,8 @@
 import type { AvailableCommand, SessionConfigOption, SessionModeState } from '@agentclientprotocol/sdk';
 import { createRuntime, type RunOptions, type RuntimeOptions } from '../core/runtime/index.js';
 import { ConfigService } from '../services/ConfigService.js';
-import { loadCommands } from '../core/ext/commands.js';
-import { customCommandTurn } from '../core/ext/commandTurn.js';
-import { promptHint } from '../core/mcp/prompts.js';
+import { CommandHost, type HostEntry } from '../commands/host.js';
+import { hostClipboard } from '../utils/clipboard.js';
 import { PERMISSION_MODES, type PermissionMode } from '../core/permissions/modes.js';
 import type { AgentEvent, ChatMessage, RunResult } from '../core/types.js';
 import type { EditorBridge } from '../types/tools.js';
@@ -21,16 +20,31 @@ export interface AcpSessionController {
   cancel(): void;
   /** Release what the session holds, such as MCP server processes. */
   close?(): Promise<void>;
-  /** The custom commands and MCP prompts a client can offer after `/`. */
+  /** Every command a client can offer after `/`: the built-in ones, custom commands, and MCP prompts. */
   commands?(): Promise<AvailableCommand[]>;
-  /** A prompt naming a command, as its prompt and how the turn differs. */
-  expand?(text: string): Promise<{ prompt: string; turn: RunOptions }>;
+  /** Whether a prompt names a command, which then runs as it does in the interface. */
+  isCommand?(text: string): boolean;
+  /** Run a command line: what it shows, the turns it sends, and what it changes go through `handlers`. */
+  runCommand?(text: string, handlers: CommandHandlers): Promise<void>;
+  /** A command asked to leave; the server closes the session. */
+  readonly exited?: boolean;
   /** The recorded conversation, for `session/load`. */
   history?(): ChatMessage[];
   /** Switch the permission mode; returns why not when it cannot. */
   setMode?(mode: string): string | undefined;
   /** Switch the model, as `provider:model`. Throws when it cannot. */
   setModel?(ref: string): void;
+}
+
+/** Where a command's effects go, for the prompt that ran it. */
+export interface CommandHandlers {
+  entry(entry: HostEntry): void;
+  /** Run a turn the command sends, as the prompt's own turn. */
+  turn(prompt: string, turn: RunOptions): Promise<unknown>;
+  /** The permission mode changed. */
+  mode(mode: PermissionMode): void;
+  /** The session's settings may have changed, such as its model. */
+  refresh(): void;
 }
 
 export interface CreateAcpSessionOptions {
@@ -86,6 +100,27 @@ export const createAcpSession = async (options: CreateAcpSessionOptions): Promis
     return { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: current, options: [{ value: current, name: current }] };
   };
 
+  // A command runs through the same host headless uses; each prompt that runs one lends it where its effects go.
+  let handlers: CommandHandlers | undefined;
+  let exited = false;
+  const clipboard = hostClipboard();
+  const host = new CommandHost({
+    runtime,
+    projectRoot: options.projectRoot,
+    onEntry: (entry) => handlers?.entry(entry),
+    runTurn: (prompt, { display: _display, ...turn }) => handlers?.turn(prompt, turn) ?? Promise.resolve(),
+    openRefusal: 'Your editor opens sessions: load one from its session list, or start a new one there.',
+    answerHint: 'Answer with /choose <number or key>, or /choose none.',
+    laterInput: true,
+    copy: async (text) => ((await clipboard.write(text)) ? 'system' : false),
+    onMode: (mode) => handlers?.mode(mode),
+    onRefresh: () => handlers?.refresh(),
+    onExit: () => {
+      exited = true;
+    },
+  });
+  await host.load();
+
   const controller: AcpSessionController = {
     id: runtime.sessionId,
     cwd: options.cwd,
@@ -99,21 +134,29 @@ export const createAcpSession = async (options: CreateAcpSessionOptions): Promis
     },
     run: (prompt, onEvent, turn) => runtime.run(prompt, onEvent, turn),
     cancel: () => runtime.cancel(),
-    close: () => runtime.close(),
-    async commands() {
-      const custom = loadCommands(options.projectRoot).commands.map((command) => ({
-        name: command.name,
-        description: command.description ?? `A ${command.scope} command`,
-        ...(command.argumentHint ? { input: { hint: command.argumentHint } } : {}),
-      }));
-      const prompts = (await runtime.mcpPrompts().catch(() => [])).map((prompt) => ({
-        name: `${prompt.serverId}:${prompt.name}`,
-        description: prompt.description ?? `A prompt from MCP server ${prompt.serverId}`,
-        ...(prompt.arguments.length ? { input: { hint: promptHint(prompt) } } : {}),
-      }));
-      return [...custom, ...prompts];
+    close: async () => {
+      clipboard.dispose();
+      await runtime.close();
     },
-    expand: (text) => customCommandTurn(text, options.projectRoot, runtime),
+    async commands() {
+      return host.commands().map((command) => ({
+        name: command.name,
+        description: command.summary,
+        ...(command.args ? { input: { hint: command.args } } : {}),
+      }));
+    },
+    isCommand: (text) => Boolean(host.commandFor(text)),
+    async runCommand(text, given) {
+      handlers = given;
+      try {
+        await host.run(text);
+      } finally {
+        handlers = undefined;
+      }
+    },
+    get exited() {
+      return exited;
+    },
     history: () => runtime.session.messages,
     setMode: (mode) => (PERMISSION_MODES.includes(mode as PermissionMode) && mode !== 'bypass' ? runtime.setPermissionMode(mode as PermissionMode) : `There is no mode ${mode} here.`),
     setModel: (ref) => runtime.setModel(ref),

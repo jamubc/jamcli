@@ -137,7 +137,11 @@ test('a session offers modes, a model setting, and its commands; a mode can be s
   const commandsMessage = client.messages.find((message) => message.method === 'session/update' && message.params.update.sessionUpdate === 'available_commands_update');
   // The list names the session, so it arrives after the reply that named it.
   expect(client.messages.indexOf(commandsMessage)).toBeGreaterThan(client.messages.indexOf(createdReply));
-  expect(client.updates('available_commands_update')[0].availableCommands).toEqual([{ name: 'review', description: 'Review a file', input: { hint: '<file>' } }]);
+  const offered = client.updates('available_commands_update')[0].availableCommands;
+  expect(offered).toContainEqual({ name: 'review', description: 'Review a file', input: { hint: '<file>' } });
+  // Every built-in command is offered, the same set the interface lists.
+  const { BUILTIN_COMMANDS } = await import('../../commands/builtin/index.js');
+  for (const command of BUILTIN_COMMANDS) expect(offered.map((entry: { name: string }) => entry.name)).toContain(command.name);
 
   expect((await client.request('session/set_mode', { sessionId: created.sessionId, modeId: 'plan' })).error).toBeUndefined();
   await waitFor(() => client.updates('current_mode_update').length > 0);
@@ -400,3 +404,67 @@ test('an editor that cannot start the terminal leaves the command to run here', 
   expect(toolMessage.content).toContain('ran-here');
   await client.close();
 }, 30_000);
+
+/** The text of every message chunk since `from`, joined. */
+const chunks = (client: ReturnType<typeof connect>, from = 0) =>
+  client
+    .updates('agent_message_chunk')
+    .slice(from)
+    .map((update) => update.content.text)
+    .join('');
+
+test('a prompt naming a built-in command runs it, and its output is the reply, with no model asked', async () => {
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  const before = server.completions().length;
+  const reply = await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/context' }] });
+  expect(reply.result.stopReason).toBe('end_turn');
+  expect(chunks(client)).toContain('Context:');
+  expect(server.completions().length).toBe(before);
+  expect(client.problems).toEqual([]);
+  await client.close();
+});
+
+test('a list a command offers is answered with /choose in the next prompt', async () => {
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/mode' }] });
+  await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/agents' }] });
+  const offered = chunks(client);
+  expect(offered).toContain('Answer with /choose <number or key>, or /choose none.');
+  const seen = client.updates('agent_message_chunk').length;
+  await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/choose none' }] });
+  await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/choose 1' }] });
+  expect(chunks(client, seen)).toContain('No list is waiting for an answer.');
+  expect(client.problems).toEqual([]);
+  await client.close();
+});
+
+test('/mode and /model over ACP tell the editor what changed', async () => {
+  // /model saves the model for new sessions in the user's configuration, so this test has its own.
+  const shared = process.env.JAMCLI_CONFIG_DIR;
+  process.env.JAMCLI_CONFIG_DIR = path.join(root, '.user');
+  try {
+    const client = connect();
+    const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+    await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/mode plan' }] });
+    await waitFor(() => client.updates('current_mode_update').length > 0);
+    expect(client.updates('current_mode_update').at(-1).currentModeId).toBe('plan');
+    await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/model ollama:other-model' }] });
+    await waitFor(() => client.updates('config_option_update').length > 0);
+    expect(client.updates('config_option_update').at(-1).configOptions[0].currentValue).toBe('ollama:other-model');
+    expect(JSON.parse(fs.readFileSync(path.join(root, '.user', 'config.json'), 'utf8')).model).toBe('ollama:other-model');
+    expect(client.problems).toEqual([]);
+    await client.close();
+  } finally {
+    process.env.JAMCLI_CONFIG_DIR = shared;
+  }
+});
+
+test('/exit over ACP closes the session', async () => {
+  const client = connect();
+  const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  expect((await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/exit' }] })).result.stopReason).toBe('end_turn');
+  expect((await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: '/context' }] })).error).toBeDefined();
+  await client.close();
+});
