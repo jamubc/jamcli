@@ -72,6 +72,8 @@ test('a failure becomes a lesson only with a real citation and the person\'s app
   const signals = (await turn(runtime, 'reflect')).results[0].output;
   const id = Number(/\[(\d+)\] tool_error/.exec(signals)?.[1]);
   expect(Number.isInteger(id)).toBe(true);
+  // The request to reflect follows the failure, and is not a correction of it.
+  expect(signals).not.toContain('correction');
 
   server.enqueue({ toolCalls: [lesson('l1', [id + 1000])] }, { text: 'refused' });
   const invented = await turn(runtime, 'propose');

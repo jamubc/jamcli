@@ -28,8 +28,21 @@ const describe = (events: TranscriptEvent[], signal: Signal) => {
   return [`[${signal.id}] ${signal.kind}${signal.confidence === 'low' ? ' (low confidence)' : ''}: ${signal.detail}`, ...(belief ? [`    model had said: ${belief}`] : [])].join('\n');
 };
 
+/**
+ * The session up to the request to reflect. That request is the last person's message, and
+ * following a failure it would otherwise read as a correction of it.
+ */
+const reflectedOn = (sources: ReflectionSources): TranscriptEvent[] => {
+  const events = sources.events();
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === 'message' && event.message.role === 'user') return events.slice(0, index);
+  }
+  return events;
+};
+
 export const lessonFor = (sources: ReflectionSources, args: Record<string, unknown>) =>
-  planLesson(args as unknown as LessonArgs, { projectRoot: sources.projectRoot, signals: signalsOf(sources.events()), known: sources.known() });
+  planLesson(args as unknown as LessonArgs, { projectRoot: sources.projectRoot, signals: signalsOf(reflectedOn(sources)), known: sources.known() });
 
 /** The tools a reflection turn is offered; no other turn sees them. */
 export const REFLECTION_TOOLS = ['session_signals', 'propose_lesson'];
@@ -42,7 +55,7 @@ export function reflectionTools(sources: ReflectionSources): RegisteredTool[] {
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       policy: 'read',
       runner: async () => {
-        const events = sources.events();
+        const events = reflectedOn(sources);
         const signals = signalsOf(events);
         if (!signals.length) return { output: 'This session has no signals: nothing failed, was denied, or was cancelled.' };
         return { output: signals.map((signal) => describe(events, signal)).join('\n') };
