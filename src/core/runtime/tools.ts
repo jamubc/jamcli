@@ -192,6 +192,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
         signal: context?.signal,
         onProgress: context?.onProgress,
         requestApproval: context?.requestApproval,
+        onNestedResult: context?.onNestedResult,
         callId: call.id,
       });
       return {

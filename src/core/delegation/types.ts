@@ -1,4 +1,4 @@
-import type { ApprovalDecision, ApprovalRequest, ToolCall } from '../types.js';
+import type { ApprovalDecision, ApprovalRequest, ToolCall, ToolResult } from '../types.js';
 import type { EffortLevel, ReasoningLevel } from '../routing/capabilities.js';
 
 /** Ask whoever answers a call's approvals about a call nested inside it, such as a child run's. */
@@ -19,6 +19,8 @@ export interface DelegationRequest {
   /** The child's reply as it streams. */
   onText?: (delta: string) => void;
   requestApproval?: NestedApproval;
+  /** A call the child asked about through `requestApproval`, once it has a result. */
+  onResult?: (result: ToolResult) => void;
   /** `worktree`: the child works in a git worktree of its own, apart from the parent's files. */
   isolation?: 'worktree';
 }

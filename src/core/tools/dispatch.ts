@@ -29,6 +29,8 @@ export interface DispatchContext {
   onProgress?: (chunk: string) => void;
   /** Asks the surface about a call nested inside this one, such as a child run's. */
   requestApproval?: NestedApproval;
+  /** What a nested call the surface was asked about went on to do, so it is shown there too. */
+  onNestedResult?: (result: ToolResult) => void;
 }
 
 export interface ToolDispatcher {
@@ -92,6 +94,18 @@ export interface BatchOutcome {
   denial?: { feedback?: string; proceed: boolean };
 }
 
+/** How a call that asked was answered, as the surfaces and the transcript hear it. */
+const answered = (call: ToolCall, read: ReturnType<typeof readDecision>): AgentEvent => ({
+  type: 'approval_decision',
+  callId: call.id,
+  tool: call.name,
+  allow: read.allow,
+  scope: read.scope,
+  by: read.by,
+  ...(read.feedback ? { feedback: read.feedback } : {}),
+  ...(read.pattern ? { rule: read.pattern } : {}),
+});
+
 export const resultFor = (call: ToolCall, status: ToolStatus, output: string, durationMs = 0): ToolResult => ({
   tool: call.name,
   callId: call.id,
@@ -150,11 +164,15 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       result = await ctx.dispatcher.execute(call, {
         signal: ctx.signal,
         onProgress: (chunk) => ctx.emit({ type: 'tool_progress', callId: call.id, tool: call.name, chunk: redact(chunk) }),
-        requestApproval: ({ call: nested, request }) => {
+        requestApproval: async ({ call: nested, request }) => {
           // A nested call is shown under the call it came from, so its id cannot collide.
           const scoped: ToolCall = { ...nested, id: `${call.id}/${nested.id}` };
-          return waitForDecision(scoped, request && { ...request, id: scoped.id, call: scoped });
+          const decision = await waitForDecision(scoped, request && { ...request, id: scoped.id, call: scoped });
+          // The answer is announced as for the session's own calls, so the surface takes the prompt down.
+          if (decision !== 'cancelled') ctx.emit(answered(scoped, readDecision(decision)));
+          return decision;
         },
+        onNestedResult: (result) => ctx.emit({ type: 'tool_result', result: { ...result, callId: `${call.id}/${result.callId ?? result.tool}` } }),
       });
     } catch (error: any) {
       const cancelled = ctx.signal.aborted || error?.name === 'AbortError';
@@ -305,16 +323,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         continue;
       }
       const read = readDecision(decision);
-      ctx.emit({
-        type: 'approval_decision',
-        callId: call.id,
-        tool: call.name,
-        allow: read.allow,
-        scope: read.scope,
-        by: read.by,
-        ...(read.feedback ? { feedback: read.feedback } : {}),
-        ...(read.pattern ? { rule: read.pattern } : {}),
-      });
+      ctx.emit(answered(call, read));
       if (!read.allow) {
         const output =
           read.by !== 'user'

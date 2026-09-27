@@ -112,6 +112,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
     signal: ctx.signal,
     onText: ctx.onProgress,
     requestApproval: ctx.requestApproval,
+    onResult: ctx.onNestedResult,
   });
   if (outcome.status === 'refused' && !outcome.childSessionId) {
     return { output: `Delegation refused: ${outcome.reason ?? 'no model in the chain can serve it'}`, status: 'error' };

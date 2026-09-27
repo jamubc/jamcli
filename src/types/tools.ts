@@ -1,4 +1,5 @@
 import type { Delegate, NestedApproval } from '../core/delegation/types.js';
+import type { ToolResult as CoreToolResult } from '../core/types.js';
 import type { DelegationConfig } from './config.js';
 
 /**
@@ -176,6 +177,8 @@ export interface ToolContext {
   delegationConfig?: DelegationConfig;
   /** Ask whoever answers this call's approvals about a nested call, such as a child run's. */
   requestApproval?: NestedApproval;
+  /** Report what a nested call that was asked about went on to do. */
+  onNestedResult?: (result: CoreToolResult) => void;
   /** The tool call this context runs, so what the tool starts can be shown under it. */
   callId?: string;
   /** The editor's files and terminal, when the session runs in an ACP editor that lends them. */

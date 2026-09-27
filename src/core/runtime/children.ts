@@ -121,8 +121,11 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
     }
 
     try {
+      // The calls the parent's surface was asked about, whose results it shows under the prompt it gave.
+      const asked = new Set<string>();
       const result = await child.run(request.prompt, (event) => {
         if (event.type === 'text') request.onText?.(event.delta);
+        if (event.type === 'tool_result' && asked.has(event.result.callId ?? '')) request.onResult?.(event.result);
         // A grandchild's request keeps the session that made it.
         if (event.type === 'usage') options.onUsage?.({ ...event, delegatedSession: event.delegatedSession ?? child.sessionId });
         if (event.type !== 'approval_request') return;
@@ -130,6 +133,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
           event.decide({ allow: false, by: 'mode', feedback: 'a background task cannot ask for approval, so this call was not made.' });
           return;
         }
+        asked.add(event.call.id);
         void request.requestApproval({ call: event.call, request: event.request }).then((decision) =>
           event.decide(decision === 'cancelled' ? { allow: false, by: 'mode', feedback: 'the parent turn was cancelled.' } : decision)
         );

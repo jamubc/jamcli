@@ -198,3 +198,33 @@ test('an edit prompt shows a short diff whole, and holds a long one to its rows 
     await close();
   }
 }, 20_000);
+
+test("a subagent's prompts can each be answered, and each goes once it is", async () => {
+  const { runtime, setup, close } = await open({ allowTools: ['task'] }, { size: { width: 100, height: 40 } });
+  try {
+    // Command substitution always asks, so the child asks twice in a row, as in the session that found this.
+    context.server.enqueue(
+      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'count the files' } }] },
+      command('c1', 'echo $(echo one)'),
+      command('c2', 'echo $(echo two)'),
+      { text: 'Counted.' },
+      { text: 'The child counted.' }
+    );
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (value) => value.includes('Allow run_command echo $(echo one)?'));
+    setup.mockInput.pressKey('1');
+    // The answered prompt goes, and the child's next one can be reached and answered.
+    await frameWith(setup, (value) => value.includes('Allow run_command echo $(echo two)?') && !value.includes('Allow run_command echo $(echo one)?'));
+    setup.mockInput.pressKey('1');
+    const done = await frameWith(setup, (value) => value.includes('The child counted.'));
+    // Each call the person answered shows what it did, not a run that never ends.
+    expect(done).toMatch(/done: run_command echo \$\(echo one\)/);
+    expect(done).toMatch(/done: run_command echo \$\(echo two\)/);
+    // The session that showed the prompts records how the person answered them.
+    const log = fs.readFileSync(path.join(context.root, '.jamcli', 'history', `${runtime.sessionId}.jsonl`), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    expect(log.filter((entry) => entry.type === 'approval' && entry.by === 'user').map((entry) => entry.callId)).toEqual(['t1/c1', 't1/c2']);
+  } finally {
+    await close();
+  }
+}, 30_000);
