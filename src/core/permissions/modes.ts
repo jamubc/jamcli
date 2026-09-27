@@ -21,6 +21,14 @@ const table = (read: ModeDefault, write: ModeDefault, execute: ModeDefault, netw
   unknown: execute,
 });
 
+// policy matrix, default tools for each mode as a baseline.
+/**
+ * Plan: Read Is allowed. Network Asks.
+ * Default: Read Allowed. Everything Asks.
+ * Accept-Edits: Writes inside CWD. Outside CWD, asks.
+ * Auto: CWD Writes and sandboxed commands, network asks, delegation allowed. -- Mode W.I.P
+ * Bypass: Everything is allowed, doesnt bypass config exceptions.
+ */
 export const MODE_DEFAULTS: Record<PermissionMode, Record<Classes, ModeDefault>> = {
   plan: table('allow', 'deny', 'deny', 'ask', 'deny'),
   default: table('allow', 'ask', 'ask', 'ask', 'ask'),
