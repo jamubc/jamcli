@@ -99,6 +99,8 @@ export class SessionController {
     this.busy = true;
     const { display, ...turn } = options;
     this.dispatch({ type: 'submit', text: display ?? text });
+    // Errors already shown as a `notice` during the turn are not repeated as the final result's error.
+    const shownErrors = new Set<string>();
     try {
       const result = await this.runtime.run(
         text,
@@ -111,6 +113,7 @@ export class SessionController {
             else event.respond({ action: 'decline' });
             return;
           }
+          if (event.type === 'notice' && event.level === 'error') shownErrors.add(event.message);
           this.dispatch({ type: 'event', event });
         },
         turn
@@ -118,7 +121,7 @@ export class SessionController {
       // A turn that did not finish says why, since no reply may have been written.
       if (result.status === 'refused' || result.status === 'limit') this.dispatch({ type: 'notice', level: 'warn', text: result.response || result.error || 'The turn stopped.' });
       else if (result.status === 'cancelled') this.dispatch({ type: 'notice', level: 'info', text: 'Stopped.' });
-      else if (result.status === 'error' && result.error) this.dispatch({ type: 'notice', level: 'error', text: result.error });
+      else if (result.status === 'error' && result.error && !shownErrors.has(result.error)) this.dispatch({ type: 'notice', level: 'error', text: result.error });
     } catch (error: any) {
       this.dispatch({ type: 'notice', level: 'error', text: error?.message ?? String(error) });
     } finally {
