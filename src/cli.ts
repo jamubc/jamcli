@@ -504,7 +504,8 @@ const resultToJson = (outcome: HeadlessResult, durationMs: number): Record<strin
   session_id: outcome.sessionId,
   status: outcome.result.status,
   response: outcome.result.response,
-  ...(outcome.result.error ? { error: outcome.result.error } : {}),
+  // Always present, so a consumer reads one shape: null when the turn had no error.
+  error: outcome.result.error ?? null,
   provider: outcome.provider,
   model: outcome.model,
   duration_ms: durationMs,

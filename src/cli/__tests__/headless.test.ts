@@ -58,7 +58,7 @@ test('jamcli -p edits a file with --allow-tool edit and reports it as JSON', asy
   expect(code).toBe(0);
   expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
   const result = lastLine(out);
-  expect(result).toMatchObject({ type: 'result', status: 'ok', response: 'Changed it.', provider: 'ollama', model: 'fake-model', permission_denials: [] });
+  expect(result).toMatchObject({ type: 'result', status: 'ok', response: 'Changed it.', error: null, provider: 'ollama', model: 'fake-model', permission_denials: [] });
 
   const request = server.completions().at(-2)!.body;
   const offered = request.tools.map((tool: any) => tool.function.name);
