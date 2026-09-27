@@ -194,6 +194,11 @@ export interface Runtime {
   readonly session: JamSession;
   /** Problems found while assembling, also reported as notices by the first turn. */
   readonly notices: string[];
+  /**
+   * The notices the first turn would report, handed over now instead: a surface that
+   * shows them when the session opens takes them, so the turn does not report them again.
+   */
+  takeNotices(): string[];
   /** The skills found, which the system prompt lists and the skill tool loads. */
   readonly skills: Skill[];
   /** The language servers that can run here, by name. */
@@ -1025,6 +1030,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return session;
     },
     notices,
+    takeNotices: () => pending.splice(0),
     get permissionMode() {
       return permissions.mode;
     },

@@ -157,9 +157,16 @@ export function App(props: AppProps) {
   const syntax = useMemo(() => createSyntaxStyle(theme), [theme]);
   useEffect(() => () => syntax.destroy(), [syntax]);
 
+  /** Notices already on screen: a session reopened, as a settings change does, does not repeat them. */
+  const noticed = useRef(new Set<string>());
   useEffect(() => {
     controller.refresh();
-    for (const notice of runtime.notices) dispatch({ type: 'notice', level: 'warn', text: notice });
+    // Taken here, so the first turn does not report them a second time.
+    for (const notice of new Set([...runtime.notices, ...runtime.takeNotices()])) {
+      if (noticed.current.has(notice)) continue;
+      noticed.current.add(notice);
+      dispatch({ type: 'notice', level: 'warn', text: notice });
+    }
   }, [controller, runtime]);
   useEffect(() => {
     for (const problem of keys.problems) dispatch({ type: 'notice', level: 'warn', text: problem });

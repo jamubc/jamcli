@@ -238,6 +238,20 @@ test('the configured effort goes out on each request, as the nearest level model
   }
 });
 
+test('notices a surface takes when the session opens are not reported again by the first turn', async () => {
+  configure({ active_profile: 'nowhere' });
+  const runtime = await start();
+  const taken = runtime.takeNotices();
+  expect(taken.some((notice) => notice.includes('names the profile "nowhere"'))).toBe(true);
+  expect(runtime.notices).toEqual(expect.arrayContaining(taken));
+  server.enqueue({ text: 'ok' });
+  const notices: string[] = [];
+  await runtime.run('hi', (event) => {
+    if (event.type === 'notice') notices.push(event.message);
+  });
+  expect(notices.filter((notice) => taken.includes(notice))).toEqual([]);
+});
+
 test("a key in the project's files draws a notice that says how to move it", async () => {
   configure({ api_registry: { openrouter: { api_key: 'sk-or-v1-in-the-project' } } });
   const runtime = await start();
