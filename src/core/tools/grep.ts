@@ -70,8 +70,8 @@ const grepSchema: JsonSchema = {
     context: {
       type: 'integer',
       minimum: 0,
-      maximum: MAX_CONTEXT_LINES,
-      description: `Lines of context around each match (0-${MAX_CONTEXT_LINES}). Content mode only.`,
+      // No schema maximum: a larger ask is clamped by the runner rather than failing the call.
+      description: `Lines of context around each match, up to ${MAX_CONTEXT_LINES}; more is treated as ${MAX_CONTEXT_LINES}. Content mode only.`,
     },
     output_mode: {
       type: 'string',

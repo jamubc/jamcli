@@ -72,3 +72,10 @@ test('grep respects the ignore patterns carried on the context', async () => {
   expect(result.output).toContain('sample.txt:2:beta');
   expect(result.output).not.toContain('ignored');
 });
+
+test('a context beyond the limit is clamped, not refused', async () => {
+  const registry = createBuiltinRegistry();
+  const result = await registry.execute('grep', { pattern: 'beta', context: 25, glob: '*.txt' }, { projectRoot });
+  expect(result.success).toBe(true);
+  expect(result.output).toContain('omega');
+});
