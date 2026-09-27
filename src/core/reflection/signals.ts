@@ -1,27 +1,17 @@
 import type { TranscriptEvent } from '../transcript/events.js';
 
-/**
- * What went wrong in a session, read from its log. Nothing here calls a model or records
- * anything new: every signal is a fact the log already holds. A signal's `id` is the index
- * of the event it came from in `SessionLog.events()`, so any citation of it can be checked
- * against the log.
- */
 
 export type SignalKind = 'tool_error' | 'denied' | 'cancelled' | 'retry' | 'correction' | 'waste';
 
 export interface Signal {
   id: number;
   kind: SignalKind;
-  /** One line a person or a model can read, such as `edit_file failed: no match`. */
   detail: string;
-  /** Low when the signal is a guess, as a correction read from a user's words is. */
   confidence: 'high' | 'low';
   tool?: string;
 }
 
-/** A usage this many times the session's median counts as a spike. */
 const SPIKE_FACTOR = 3;
-/** Spikes are not judged on fewer requests than this; the median means nothing yet. */
 const SPIKE_MIN_REQUESTS = 4;
 const DETAIL_MAX = 160;
 
