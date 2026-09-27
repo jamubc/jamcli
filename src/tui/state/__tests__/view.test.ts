@@ -209,3 +209,25 @@ test('a report taller than the viewport anchors to its own top, not the viewport
   expect(anchorsToTop(10, 24)).toBe(false);
   expect(anchorsToTop(60, 0)).toBe(false);
 });
+
+test('the expanded view is one switch for the whole transcript, and a row still opens on its own', () => {
+  const state = run([
+    event({ type: 'reasoning', delta: 'I should read it.' }),
+    event({ type: 'text', delta: 'Reading.' }),
+    event({ type: 'tool_call', call: call('c7') }),
+  ]);
+  const row = state.rows[0] as Extract<Row, { kind: 'assistant' }>;
+  expect(row).toMatchObject({ reasoning: 'I should read it.', collapsed: true });
+  expect(state.status.expanded).toBe(false);
+  // The switch changes nothing about the rows: it is the view that expands, not each row.
+  const wide = reduceView(state, { type: 'expand' });
+  expect(wide.status.expanded).toBe(true);
+  expect(wide.rows).toEqual(state.rows);
+  expect(reduceView(wide, { type: 'expand' }).status.expanded).toBe(false);
+  expect(reduceView(wide, { type: 'expand', on: true }).status.expanded).toBe(true);
+  // A row of either kind still opens and closes by itself.
+  expect(reduceView(state, { type: 'toggle', id: row.id }).rows[0]).toMatchObject({ collapsed: false });
+  expect(reduceView(state, { type: 'toggle', id: tool(state, 'c7').id }).rows[1]).toMatchObject({ kind: 'tool', collapsed: false });
+  const loaded = run([{ type: 'load', messages: [{ role: 'assistant', content: 'Read it.', reasoning: 'I should read it.' } as ChatMessage] }]);
+  expect(loaded.rows[0]).toMatchObject({ kind: 'assistant', reasoning: 'I should read it.', collapsed: true });
+});

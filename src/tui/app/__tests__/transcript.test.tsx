@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import fs from 'fs';
+import path from 'path';
 import { SessionLog } from '../../../core/transcript/index.js';
 import { TRANSCRIPT_ROWS } from '../App.js';
 import { frameWith, interfaceHarness, type Setup } from './harness.js';
@@ -108,6 +110,34 @@ test('thinking runs in a window of the size it is given, then leaves one line a 
     await Bun.sleep(600);
     await setup.mockMouse.click(column, row);
     await frameWith(setup, (frame) => frame.includes('▸ thinking, 1 line') && !frame.includes('read the file first'));
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('the expanded view shows every block whole, and the compact view puts them back', async () => {
+  const { setup, close } = await open();
+  try {
+    const reasoning = 'I should read the file, then say what is in it.';
+    context.server.enqueue({ reasoning, toolCalls: [{ id: 'c1', name: 'read_file', arguments: { path: 'a.txt' } }] }, { text: 'It has one line.' });
+    fs.writeFileSync(path.join(context.root, 'a.txt'), 'the only line\n');
+    await setup.mockInput.typeText('read a.txt');
+    setup.mockInput.pressEnter();
+    const compact = await frameWith(setup, (frame) => frame.includes('It has one line.'));
+    expect(compact).toContain('✓ done: read_file a.txt');
+    expect(compact).not.toContain('the only line');
+    expect(compact).not.toContain('then say what is in it');
+    expect(compact).not.toContain('expanded view');
+    // One key opens everything at once: the thinking and the tool's output, with no row touched.
+    setup.mockInput.pressKey('o', { ctrl: true });
+    const wide = await frameWith(setup, (frame) => frame.includes('the only line'));
+    expect(wide).toContain('then say what is in it');
+    expect(wide).toContain('expanded view');
+    // And the same key puts the compact view back.
+    setup.mockInput.pressKey('o', { ctrl: true });
+    const back = await frameWith(setup, (frame) => !frame.includes('the only line'));
+    expect(back).not.toContain('then say what is in it');
+    expect(back).toContain('It has one line.');
   } finally {
     await close();
   }

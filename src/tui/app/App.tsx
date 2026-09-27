@@ -652,10 +652,10 @@ export function App(props: AppProps) {
       controller.cycleMode();
       return;
     }
+    // The expanded view: every block shows everything it has, until it is turned off again.
     if (bound('tool_detail', key)) {
-      const last = [...state.rows].reverse().find((row) => row.kind === 'tool');
-      if (last) dispatch({ type: 'toggle', id: last.id });
-      return;
+      key.preventDefault();
+      return dispatch({ type: 'expand' });
     }
     if (bound('history', key)) {
       key.preventDefault();
@@ -694,7 +694,7 @@ export function App(props: AppProps) {
                 <text fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
               ) : null}
               {(hidden ? state.rows.slice(hidden) : state.rows).map((row) => (
-                <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} onToggle={(id) => dispatch({ type: 'toggle', id })} />
+                <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} expanded={state.status.expanded} onToggle={(id) => dispatch({ type: 'toggle', id })} />
               ))}
             </scrollbox>
             {approval ? (

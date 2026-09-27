@@ -12,7 +12,7 @@ the transcript, the composer, the palettes, and the status line.
 | Escape | Stops a running turn; closes a list or a picker |
 | Shift+Tab | Changes the permission mode |
 | Ctrl+R | Searches earlier messages |
-| Ctrl+O | Opens or closes the last tool block |
+| Ctrl+O | Expanded view: every block whole, and again for the compact view |
 | Ctrl+T | Shows or hides the todo list |
 | Page Up, Page Down | Scrolls the transcript; at the top, Page Up shows earlier rows |
 | Ctrl+L | Redraws the screen |
@@ -58,8 +58,8 @@ would be saved. An MCP server's request for input is a form in the same place.
   the highlight a row per turn; the list scrolls when the highlight reaches its edge.
 - Click a row in a list, the palette, or the `@` list to choose it; pointing at one marks
   it. Click a choice in a permission prompt to answer it.
-- Click a tool's line to show or hide its output, as the tool detail key does, and a
-  thinking line to show or hide that thinking.
+- Click a tool's line to show or hide that tool's output, and a thinking line to show or
+  hide that thinking. These are one block at a time; Ctrl+O is the whole view.
 
 Copying goes to the system clipboard. Over SSH, or where there is none, it goes through
 the terminal (OSC 52), which reaches the machine you sit at if the terminal supports it.
@@ -75,12 +75,21 @@ turn ends, the window leaves one line behind saying how many lines of thinking t
 were. Click that line to read them, and click it again to put it away. In screen reader
 mode the window does not run: the line says only that thinking is under way.
 
+## The compact and expanded views
+
+The transcript is compact by default: a tool call is its one line, and thinking is the
+line it left behind. Ctrl+O is the expanded view, where every block shows everything it
+has, whatever each block's own state: all the thinking, every tool's output, and the
+diffs. The status line says `expanded view` while it is on, and Ctrl+O again returns to
+the compact one. Nothing is lost either way, because a block's own line and the expanded
+view are two ways of reading the same rows.
+
 ## The status line
 
 The status line names the mode, the model, the context share, the cost and tokens, the
-sandbox, the MCP server count, the language server count, and the phase. `/style` chooses
-a style; styles are described in `configuration.md`. With reduced motion, or in screen
-reader mode, nothing moves.
+sandbox, the MCP server count, the language server count, the expanded view while it is
+on, and the phase. `/style` chooses a style; styles are described in `configuration.md`.
+With reduced motion, or in screen reader mode, nothing moves.
 
 ## Micro mode
 

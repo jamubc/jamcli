@@ -20,7 +20,7 @@ export const ACTION_WORDS: Record<KeyAction, string> = {
   interrupt: 'stops a running turn',
   cycle_mode: 'changes the permission mode',
   history: 'searches earlier messages',
-  tool_detail: 'opens or closes the last tool block',
+  tool_detail: 'shows every block whole: thinking, tool output, and diffs; again for the compact view',
   todos: 'shows or hides the todo list',
   page_up: 'scrolls the transcript up a page, and at the top shows earlier rows',
   page_down: 'scrolls it down a page',
