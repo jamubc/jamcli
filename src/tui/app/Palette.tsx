@@ -2,7 +2,8 @@
 import { useTerminalDimensions } from '@opentui/react';
 import type { SlashCommand } from './commands.js';
 import type { ReferenceItem } from './references.js';
-import { useClick } from './mouse.js';
+import { useClick, wheelStep } from './mouse.js';
+import { useListWindow } from './Picker.js';
 import { framed, usePlain, useTheme } from './theme.js';
 
 /** How many matches the palette shows at once. */
@@ -12,7 +13,7 @@ export const PALETTE_ROWS = 8;
  * The commands a typed `/name` could mean, shown above the composer. The chosen one is
  * marked with a word as well as a color. A custom command names where it comes from.
  */
-export function Palette({ matches, selected, onPick, onHover }: { matches: SlashCommand[]; selected: number; onPick?: (index: number) => void; onHover?: (index: number) => void }) {
+export function Palette({ matches, selected, onPick, onHover, onScroll }: { matches: SlashCommand[]; selected: number; onPick?: (index: number) => void; onHover?: (index: number) => void; onScroll?: (step: number) => void }) {
   const colors = useTheme();
   const click = useClick();
   const plain = usePlain();
@@ -20,11 +21,11 @@ export function Palette({ matches, selected, onPick, onHover }: { matches: Slash
   // Inside the border and padding; a line longer than that is cut, not wrapped.
   const room = Math.max(20, columns - 4);
   const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
-  const start = Math.min(Math.max(0, selected - PALETTE_ROWS + 1), Math.max(0, matches.length - PALETTE_ROWS));
+  const start = useListWindow(selected, matches.length, PALETTE_ROWS);
   const shown = matches.slice(start, start + PALETTE_ROWS);
   const width = Math.min(28, Math.max(...shown.map((command) => command.name.length + (command.args ? command.args.length + 1 : 0))));
   return (
-    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
+    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && onScroll?.(wheelStep(event))}>
       {plain ? <text fg={colors.text}>{`Commands matching: ${matches.length}`}</text> : null}
       {matches.length === 0 ? (
         <text fg={colors.dim}>No command starts with that. /help lists them.</text>
@@ -47,18 +48,18 @@ export function Palette({ matches, selected, onPick, onHover }: { matches: Slash
 }
 
 /** What `@` could name, shown above the composer as a word is typed after it. */
-export function ReferencePalette({ matches, selected, loading, onPick, onHover }: { matches: ReferenceItem[]; selected: number; loading: boolean; onPick?: (index: number) => void; onHover?: (index: number) => void }) {
+export function ReferencePalette({ matches, selected, loading, onPick, onHover, onScroll }: { matches: ReferenceItem[]; selected: number; loading: boolean; onPick?: (index: number) => void; onHover?: (index: number) => void; onScroll?: (step: number) => void }) {
   const colors = useTheme();
   const click = useClick();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   const room = Math.max(20, columns - 4);
   const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
-  const start = Math.min(Math.max(0, selected - PALETTE_ROWS + 1), Math.max(0, matches.length - PALETTE_ROWS));
+  const start = useListWindow(selected, matches.length, PALETTE_ROWS);
   const shown = matches.slice(start, start + PALETTE_ROWS);
   const width = Math.min(48, Math.max(0, ...shown.map((item) => item.text.length + 1)));
   return (
-    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
+    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && onScroll?.(wheelStep(event))}>
       {plain ? <text fg={colors.text}>{`References matching: ${matches.length}`}</text> : null}
       {loading ? <text fg={colors.dim}>Looking…</text> : matches.length === 0 ? <text fg={colors.dim}>Nothing in the project or the MCP resources matches that.</text> : null}
       {shown.map((item, index) => {

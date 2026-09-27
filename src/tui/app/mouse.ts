@@ -1,3 +1,4 @@
+import type { MouseEvent } from '@opentui/core';
 import { useRenderer } from '@opentui/react';
 
 /**
@@ -10,4 +11,10 @@ export function useClick(): (act: () => void) => () => void {
     if (renderer.getSelection()?.getSelectedText()) return;
     act();
   };
+}
+
+/** The rows one turn of the wheel moves a list: down is forward, up is back. */
+export function wheelStep(event: MouseEvent): number {
+  const direction = event.scroll?.direction;
+  return direction === 'down' ? 1 : direction === 'up' ? -1 : 0;
 }

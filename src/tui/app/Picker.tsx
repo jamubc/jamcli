@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
+import { useRef } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
-import { useClick } from './mouse.js';
+import { useClick, wheelStep } from './mouse.js';
 import { framed, usePlain, useTheme } from './theme.js';
 
 /** One choice in an overlay. */
@@ -45,6 +46,20 @@ export function shownItems(items: PickItem[], filter: string, freeText?: string)
 /** How many choices the overlay shows at once. */
 export const PICKER_ROWS = 10;
 
+/**
+ * The first row a list shows: it stays where it was until the selection leaves it, so
+ * moving the selection, by key or by wheel, scrolls the list only at its edges.
+ */
+export function useListWindow(selected: number, count: number, rows: number): number {
+  const top = useRef(0);
+  let start = top.current;
+  if (selected < start) start = selected;
+  if (selected >= start + rows) start = selected - rows + 1;
+  start = Math.min(Math.max(0, start), Math.max(0, count - rows));
+  top.current = start;
+  return start;
+}
+
 /** The choices that match a filter: every word must appear in the label or the detail. */
 export function filterItems(items: PickItem[], filter: string): PickItem[] {
   const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
@@ -72,6 +87,8 @@ export function Picker(props: {
   onPick?: (index: number) => void;
   /** The pointer is over a row: mark it chosen. */
   onHover?: (index: number) => void;
+  /** The wheel turned over the list: move the selection by this many rows. */
+  onScroll?: (step: number) => void;
 }) {
   const theme = useTheme();
   const click = useClick();
@@ -80,11 +97,11 @@ export function Picker(props: {
   const room = Math.max(20, columns - 4);
   const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
   const shown = props.items ? shownItems(props.items, props.filter, props.freeText) : undefined;
-  const start = shown ? Math.min(Math.max(0, props.selected - PICKER_ROWS + 1), Math.max(0, shown.length - PICKER_ROWS)) : 0;
+  const start = useListWindow(props.selected, shown?.length ?? 0, PICKER_ROWS);
   const visible = shown?.slice(start, start + PICKER_ROWS) ?? [];
   const width = Math.min(48, Math.max(0, ...visible.map((item) => item.label.length + (item.current ? ' (in use)'.length : 0))));
   return (
-    <box {...framed(plain, theme.accent)} flexDirection="column" flexShrink={0}>
+    <box {...framed(plain, theme.accent)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && props.onScroll?.(wheelStep(event))}>
       <text fg={theme.accent}>{fit(`${props.title}${shown && props.items && shown.length !== props.items.length ? ` (${shown.length} of ${props.items.length})` : ''}`)}</text>
       <text fg={theme.dim}>{fit(`Filter: ${props.filter}${props.filter ? '' : '(type to narrow the list)'}`)}</text>
       {shown === undefined ? <text fg={theme.dim}>Asking…</text> : null}

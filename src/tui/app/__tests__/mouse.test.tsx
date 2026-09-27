@@ -110,3 +110,31 @@ test('in a list, the pointer marks a row and a click chooses it; in the palette 
     await close();
   }
 }, 30_000);
+
+test('the wheel scrolls a long list: the highlight moves a row per turn, and the list moves only at its edge', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 40 } });
+  try {
+    await send(setup, '/config');
+    const listed = await frameWith(setup, (frame) => /(\d+) of (\d+) ·/.test(frame));
+    const total = Number(/\d+ of (\d+) ·/.exec(listed)![1]);
+    expect(total).toBeGreaterThan(12);
+    const over = where(setup, 'Filter:');
+    // Nine turns keep the list where it was; the highlight reaches its last row.
+    for (let turn = 0; turn < 9; turn += 1) await setup.mockMouse.scroll(over.x, over.y, 'down');
+    await frameWith(setup, (frame) => frame.includes(`10 of ${total} ·`));
+    const rows = (frame: string) => frame.split('\n').filter((row) => /^│ ( {2}|> )\S/.test(row));
+    const before = rows(setup.captureCharFrame());
+    expect(before[before.length - 1]).toContain('> ');
+    // The tenth scrolls it by one row, and the highlight stays on the edge.
+    await setup.mockMouse.scroll(over.x, over.y, 'down');
+    await frameWith(setup, (frame) => frame.includes(`11 of ${total} ·`));
+    const after = rows(setup.captureCharFrame());
+    expect(after[0]).toBe(before[1]);
+    // Up moves the highlight back without moving the list.
+    await setup.mockMouse.scroll(over.x, over.y, 'up');
+    await frameWith(setup, (frame) => frame.includes(`10 of ${total} ·`));
+    expect(rows(setup.captureCharFrame())).toEqual(after.map((row, index) => (index === after.length - 2 ? row.replace('│   ', '│ > ') : row.replace('│ > ', '│   '))));
+  } finally {
+    await close();
+  }
+}, 30_000);

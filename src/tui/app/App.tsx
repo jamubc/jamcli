@@ -680,6 +680,12 @@ export function App(props: AppProps) {
                     selected={overlay.current.index}
                     onPick={chooseOverlay}
                     onHover={(index) => overlay.current && overlay.current.index !== index && setOverlay({ ...overlay.current, index })}
+                    onScroll={(step) => {
+                      const open = overlay.current;
+                      if (!open?.items) return;
+                      const last = Math.max(0, shownItems(open.items, open.filter, open.request.freeText).length - 1);
+                      setOverlay({ ...open, index: Math.min(Math.max(0, open.index + step), last) });
+                    }}
                     {...(overlay.current.request.freeText !== undefined ? { freeText: overlay.current.request.freeText } : {})}
                   />
                 ) : matches ? (
@@ -687,6 +693,7 @@ export function App(props: AppProps) {
                     matches={matches}
                     selected={palette.current.index}
                     onHover={(index) => index !== palette.current.index && setPalette({ ...palette.current, index })}
+                    onScroll={(step) => setPalette({ ...palette.current, index: Math.min(Math.max(0, palette.current.index + step), Math.max(0, matches.length - 1)) })}
                     onPick={(index) => {
                       setPalette({ ...palette.current, index });
                       submit();
@@ -698,6 +705,7 @@ export function App(props: AppProps) {
                     selected={palette.current.index}
                     loading={!referenceItems}
                     onHover={(index) => index !== palette.current.index && setPalette({ ...palette.current, index })}
+                    onScroll={(step) => setPalette({ ...palette.current, index: Math.min(Math.max(0, palette.current.index + step), Math.max(0, referenceMatches.length - 1)) })}
                     onPick={(index) => referenceMatches[index] && completeWith(referenceMatches[index])}
                   />
                 ) : null}

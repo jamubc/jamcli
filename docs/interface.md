@@ -54,7 +54,8 @@ would be saved. An MCP server's request for input is a form in the same place.
   the selection, and the status line says how much. Dragging above or below the
   transcript keeps it scrolling, so a long reply can be selected whole. A double click
   selects a word.
-- The wheel scrolls the transcript.
+- The wheel scrolls the transcript, and in a list, the palette, or the `@` list it moves
+  the highlight a row per turn; the list scrolls when the highlight reaches its edge.
 - Click a row in a list, the palette, or the `@` list to choose it; pointing at one marks
   it. Click a choice in a permission prompt to answer it.
 - Click a tool's line to show or hide its output, as the tool detail key does.
