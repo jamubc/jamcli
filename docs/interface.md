@@ -19,7 +19,7 @@ the transcript, the composer, the palettes, and the status line.
 | Ctrl+C twice | Leaves |
 | `?` on an empty composer | Lists the commands and keys |
 
-Keys a prompt or a list uses (1 to 4, Up and Down, Tab, Escape) are fixed. The rest can
+Keys a prompt or a list uses (1 to 5, Up and Down, Tab, Escape) are fixed. The rest can
 be rebound in `~/.config/jamcli/keybindings.json`, which maps an action to a key or a
 list: `{ "cycle_mode": "ctrl+y", "history": ["ctrl+r", "ctrl+s"] }`. The actions are
 `send`, `newline`, `interrupt`, `cycle_mode`, `history`, `tool_detail`, `todos`,
@@ -45,8 +45,12 @@ list: `{ "cycle_mode": "ctrl+y", "history": ["ctrl+r", "ctrl+s"] }`. The actions
 
 The command palette, the reference list, and every picker read the same way: Up and Down
 move, Enter chooses, Escape closes, and typing filters. A permission prompt offers allow
-once, allow for the session, reject, or reject with a reason, and shows the rule that
-would be saved. An MCP server's request for input is a form in the same place.
+once, allow for the session, allow for the project, deny and let the turn go on, or deny
+with feedback for the model, and shows the rule a grant would save; Escape denies and stops
+the turn. It shows a command whole, wrapped, and a command or a diff longer than the rows
+the transcript leaves scrolls with the wheel. A subagent's prompt is answered the same way,
+and each prompt goes once it is answered. An MCP server's request for input is a form in the
+same place.
 
 ## The mouse
 

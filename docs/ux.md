@@ -86,16 +86,19 @@ visible above it.
    1  Allow once
    2  Allow "npm install*" for this session
    3  Allow "npm install*" for this project        (writes .jamcli/config.local.json)
-   4  Deny and tell jamcli what to do instead
+   4  Deny, and let the turn go on
+   5  Deny and tell jamcli what to do instead
                                                             ↑↓ choose · enter · esc deny
 ```
 
 - For edits, the preview is the diff. For MCP tools, it is the arguments as JSON.
 - The "asked by" line names the mode or the rule and its scope.
 - A command that needs network access in the sandbox says so before it fails.
-- Choosing 4 opens a one-line feedback field. The model receives the feedback and the
+- Choosing 4 denies the call and the turn goes on; the model reads that it did not run.
+- Choosing 5 opens a one-line feedback field. The model receives the feedback and the
   turn continues.
 - Escape denies without feedback and returns control to the user.
+- A command is shown whole, wrapped, so what is allowed is read before it is allowed.
 
 ## Command palette
 
