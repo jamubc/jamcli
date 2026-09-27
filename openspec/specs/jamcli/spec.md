@@ -73,7 +73,8 @@ every other surface receives.
 ### Requirement: Slash Command Surface
 JamCLI SHALL provide slash commands through the composer, with a palette shown when the
 user types `/`, including built-in commands, custom commands, skill-provided commands,
-and MCP prompts.
+and MCP prompts. Built-in commands SHALL be defined once, outside the interface, and every
+one SHALL be reachable on every surface.
 
 #### Scenario: List available commands
 - **WHEN** the user types `/` in the composer
@@ -88,6 +89,16 @@ and MCP prompts.
 #### Scenario: Manage tool permissions
 - **WHEN** the user runs `/permissions`
 - **THEN** the interface lists the active mode and every rule with its scope, and lets the user add or remove rules
+
+#### Scenario: Every built-in command has one definition
+- **WHEN** any built-in command is run in the interface, headlessly, or over ACP
+- **THEN** the same definition of it runs
+- **AND** what only a terminal can do, such as repainting in a new theme, is done where there is one, while the rest of the command, such as saving the theme, is done everywhere
+
+#### Scenario: A choice without a terminal
+- **WHEN** a command offers a choice on a surface with no terminal
+- **THEN** the choices are listed with their keys
+- **AND** `/choose <key>` answers it, or headless `--choose <key>` answers it in advance
 
 ### Requirement: Project Root Discovery
 JamCLI SHALL resolve the project root by walking up from the current directory until it
@@ -994,12 +1005,17 @@ hooks, plugins, tool permissions, and stored credentials for unsafe combinations
 
 ### Requirement: Command Line Invocation
 JamCLI SHALL support non-interactive invocation with machine-readable output and the same
-tools, modes, and rules as the interactive surface.
+tools, modes, rules, and built-in commands as the interactive surface.
 
 #### Scenario: Run a prompt headlessly
 - **WHEN** the user runs `jamcli -p "<prompt>"`, or pipes a prompt on standard input with `-p`
 - **THEN** the turn runs without the terminal UI and the response is printed
 - **AND** the process exits when the turn completes
+
+#### Scenario: Run a built-in command headlessly
+- **WHEN** the prompt names a built-in command, such as `jamcli -p "/compact"`
+- **THEN** the command runs, its output is the response, and any turn it sends runs as a headless turn
+- **AND** each `--choose <key>` answers the next choice the command offers
 
 #### Scenario: Select the output format
 - **WHEN** the user selects a text, json, or stream-json output format
@@ -1074,8 +1090,8 @@ servers that require OAuth.
 
 ### Requirement: ACP Agent Surface
 JamCLI SHALL serve the Agent Client Protocol over stdio through the protocol's reference
-SDK so editors and orchestrators can drive it with the same runtime as every other
-surface.
+SDK so editors and orchestrators can drive it with the same runtime and the same built-in
+commands as every other surface.
 
 #### Scenario: Start the ACP server
 - **WHEN** the user runs `jamcli acp`
@@ -1102,6 +1118,11 @@ surface.
 - **WHEN** the client sends a prompt
 - **THEN** JamCLI streams message chunks, thought chunks, tool calls with diffs for edits, tool call updates, and plans
 - **AND** completes the request when the turn ends
+
+#### Scenario: Offer and run built-in commands
+- **WHEN** a session is created or loaded
+- **THEN** JamCLI offers every built-in command, beside custom commands and MCP prompts
+- **AND** a prompt naming one runs it, its output streamed as message chunks
 
 #### Scenario: Map permission decisions
 - **WHEN** a tool call needs approval
@@ -1796,6 +1817,10 @@ without making that client an approver.
 - **WHEN** a call waits for the person's approval
 - **THEN** within a second the client receives the call with status `pending` and a `requires_action` state
 - **AND** only the person, in the interface, can answer it
+
+#### Scenario: Say whose answer it is
+- **WHEN** the waiting call's tool always asks, such as a lesson from `/reflect`
+- **THEN** the `requires_action` state names the tool and says that it always asks
 
 #### Scenario: A client goes away
 - **WHEN** the observing client disconnects or crashes during a turn

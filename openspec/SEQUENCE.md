@@ -55,15 +55,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-surface-parity`, on `feat/surface-parity`. The owner opened it on 2026-09-27 while
-`add-session-reflection` waits at its task 6.2, an exception to the working rule made by
-the owner and recorded here. The reason: 6.2 asks for `/reflect` on 10 or more real
-sessions, `/reflect` exists only in the interface, and nothing lets anyone but the person
-at the terminal use JamCLI. Every "run jamcli and try this" handed back to the owner came
-from the same gap. `add-surface-parity` moves the built-in commands out of the interface so
-every surface runs one set. `add-mcp-server`, next in `ROADMAP.md`, lets other agents
-delegate to JamCLI and use its interface through the same program a person runs, and its
-acceptance is 6.2 run that way, the owner approving each lesson. Both are stacked on
+`add-session-reflection`, waiting at its task 6.2. `add-surface-parity`, which the owner
+opened on 2026-09-27 as an exception to the working rule while 6.2 waited, is archived; see
+Closed units below. The next unit in `ROADMAP.md` is `add-mcp-server`: other agents
+delegating to JamCLI and using its interface through the same program a person runs. Its
+acceptance is 6.2 run that way, the owner approving each lesson, which is why it comes
+before 6.2 closes. `add-surface-parity` and `add-mcp-server` are stacked on
 `feat/agentic-harness-core`, which is not yet merged to `master`.
 
 `add-session-reflection` stays open. Its code is committed and its task 6.1 ran end to end
@@ -77,6 +74,50 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it.
 
 ## Closed units
+
+### 7. `add-surface-parity`
+
+Archived as `2026-09-27-add-surface-parity`: 4 requirements modified (Slash Command Surface,
+Command Line Invocation, ACP Agent Surface, ACP Observer Endpoint). Every built-in command
+moved out of the interface into `src/commands/`, one set that the interface, headless `-p`,
+and ACP all run. Where no screen shows a list, `/choose` answers it, and headless takes
+`--choose` in advance. The observer says when a waiting call's tool always asks. A parity
+test runs every built-in command without a screen, with no list of exceptions, and a
+layering test holds `src/commands/` apart from the interface and the core.
+
+**How it was shaped.** It began as a way for an agent to test JamCLI, and the owner's
+corrections moved it three times: one command set, not one per surface; no driven mode,
+since a special path for agents hides the bugs it is meant to find; and JamCLI offering the
+interaction itself rather than tooling wrapped around it. What remains of that is
+`add-mcp-server`, next in `ROADMAP.md`. The repository already held the honest way to use
+the interface from a program, `src/testing/terminal.ts`: the real `jamcli` in a
+pseudo-terminal read through a terminal emulator.
+
+**What the real model found.** 6.1 ran headless, ACP, and the interface on OpenCode Go
+(`deepseek-v4.1-flash`) in a throwaway fixture repository, and turned up six defects, each
+fixed with a test that fails without it:
+
+- A commit message drafted by a model that always thinks came back empty about one time in
+  six: its thinking spent the 400-token cap (`79f8376`).
+- The edit tool described an anchor as the "anchor content", so the model passed the line's
+  text; the rejection then said the file had changed, which it had not, and the model told
+  the person that false cause (`3c09697`).
+- The status line cut off its last word, the phase, so "waiting for you" was what a
+  110-column terminal did not show; the screen reader snapshot had recorded the cut
+  (`f9952e6`).
+- Every tool that always asks was explained as "a commit is always asked for" (`870cd3e`).
+- An error quoted inside a sentence ended it twice, and `/choose none`, a list answered in
+  advance, and `/resume list` without the interface each said something untrue or nothing
+  (`76c8e57`, `323871a`, `772c638`, `80d7a32`).
+
+**Found and left.** `/reflect`'s `waste` signal called a read unused when the answer came
+from it; the reflection itself showed the signal was wrong. That belongs to
+`add-session-reflection`. `src/testing/terminal.ts` launches JamCLI without the shipped
+build's `--config=/dev/null`, and the owner's own `jamcli` shim launches it with neither
+that nor `--no-env-file`, so it reads a project's `.env`; `add-mcp-server` aligns the
+harness, and the shim is the owner's. The run also wrote `effort: low` to the owner's own
+configuration through `/effort` over ACP before its fixture had a configuration directory
+of its own; it was removed, and later runs used a copy.
 
 ### 6. `fix-observed-session-defects`
 

@@ -31,5 +31,5 @@
 
 ## 6. Proof and close
 
-- [ ] 6.1 On a real model, in a throwaway fixture project: headless `/context`, `/compact`, `/resume list`, `/commit` answered with `--choose`, and `/reflect`; over ACP, the same through a prompt, and a list answered with `/choose`; and the interface's own commands unchanged. Record what it found and fix what is JamCLI's.
-- [ ] 6.2 Four gates, `openspec validate --strict`, then archive.
+- [x] 6.1 On a real model, in a throwaway fixture project: headless `/context`, `/compact`, `/resume list`, `/commit` answered with `--choose`, and `/reflect`; over ACP, the same through a prompt, and a list answered with `/choose`; and the interface's own commands unchanged. Record what it found and fix what is JamCLI's.
+- [x] 6.2 Four gates, `openspec validate --strict`, then archive.

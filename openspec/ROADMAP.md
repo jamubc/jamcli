@@ -75,9 +75,9 @@ them and sets the default through the configuration writer.
 Why first: it is the smallest unit, it fixes the session that started this, and every
 later unit hangs fields off the agent file.
 
-### 2. `add-surface-parity` (open)
+### 2. `add-surface-parity` (archived 2026-09-27)
 
-Opened by the owner on 2026-09-27, ahead of the units below. Built-in commands move out of
+Opened by the owner on 2026-09-27, ahead of the units below. See `openspec/SEQUENCE.md`. Built-in commands move out of
 the interface into `src/commands/`, one set every surface runs: the interface, headless
 `-p`, and ACP. Where no screen offers a list, `/choose` answers it. The ACP observer says
 when a waiting call's tool always asks. See the change for the whole of it.
@@ -104,6 +104,9 @@ is to be verified before the spec claims it. The bypass confirmation and the hoo
 question show only on screen and are the person's by rule. A driven JamCLI never runs in
 JamCLI's own checkout: it runs in a throwaway worktree of a fixture project, so its sessions
 do not land in this repository's history and `/reflect` never learns from its experiments.
+
+The harness it builds on launches JamCLI without the shipped build's `--config=/dev/null`;
+it launches exactly as the shipped build does before any agent relies on it.
 
 Acceptance: task 6.2 of `add-session-reflection` runs through `jamcli mcp serve`, an agent
 driving `/reflect` over the owner's sessions and the owner approving each lesson by
