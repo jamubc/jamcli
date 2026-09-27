@@ -97,7 +97,7 @@ test('? on an empty composer opens help; Enter puts the chosen command in the co
   }
 }, 30_000);
 
-test('/config lists every setting with what it does and where it comes from; a yes/no applies at once, anything else starts a /config set', async () => {
+test('/config lists every setting with what it does and where it comes from; a yes/no applies at once, anything else starts a /config set, and either returns to the list', async () => {
   const { setup, close } = await open({}, { size: tall });
   try {
     await send(setup, '/config');
@@ -109,20 +109,31 @@ test('/config lists every setting with what it does and where it comes from; a y
     // The value comes along, to edit.
     await frameWith(setup, (frame) => /│\/config set model ollama:fake-model/.test(frame));
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => frame.includes('This session was reopened'));
+    // Once set, the list opens again on the setting just changed.
+    await frameWith(setup, (frame) => frame.includes('This session was reopened') && frame.includes('> model = "ollama:fake-model"') && frame.includes('Filter: type to narrow'));
+
+    // Escape takes an edit back out of the composer, unsent, and returns to the list.
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => /│\/config set model ollama:fake-model/.test(frame));
+    setup.mockInput.pressEscape();
+    const backed = await frameWith(setup, (frame) => frame.includes('> model = "ollama:fake-model"') && !/│\/config set/.test(frame));
+    expect(backed).toContain('Filter: type to narrow');
 
     // A setting set nowhere is still listed, and a yes/no is chosen here and saved in the person's settings.
-    await send(setup, '/config');
-    await frameWith(setup, (frame) => frame.includes('Settings: what each does'));
     await setup.mockInput.typeText('sandbox.network');
     await frameWith(setup, (frame) => /> sandbox\.network\s+default · Let sandboxed commands reach the network/.test(frame));
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('sandbox.network, saved in your settings, for every project'));
+    // Escape goes back to the settings, on the same one.
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => /> sandbox\.network\s+default/.test(frame));
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => frame.includes('This session was reopened'));
+    await frameWith(setup, (frame) => frame.includes('sandbox.network, saved in your settings, for every project'));
+    setup.mockInput.pressEnter();
+    const back = await frameWith(setup, (frame) => /> sandbox\.network = true\s+your settings/.test(frame));
+    expect(back).toContain('This session was reopened');
     expect(readJson(userConfig()).sandbox.network).toBe(true);
     // A key's own text is never offered for editing here.
-    await send(setup, '/config');
     await setup.mockInput.typeText('api_key');
     await frameWith(setup, (frame) => frame.includes('Nothing matches the filter.'));
   } finally {

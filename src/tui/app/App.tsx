@@ -321,6 +321,8 @@ export function App(props: AppProps) {
     [controller, open, runtime]
   );
 
+  /** What Escape does while the composer holds text a command put there to finish, as /config's list does. */
+  const prefillBack = useRef<(() => void) | undefined>(undefined);
   /**
    * The overlay open over the composer: the request, its choices once they arrive, the
    * filter typed so far, and the chosen row. Keys read the ref, which changes at once.
@@ -336,16 +338,16 @@ export function App(props: AppProps) {
     overlay.current = next;
     setOverlayView((count) => count + 1);
   };
-  /** The row of the choice in use, so the list opens on it. */
-  const startAt = (items: PickItem[]) => Math.max(0, items.findIndex((item) => item.current));
+  /** The row the request names, or else the choice in use, so the list opens on it. */
+  const startAt = (request: PickRequest, items: PickItem[]) => Math.max(0, items.findIndex((item) => (request.at === undefined ? item.current : item.key === request.at)));
   const pick = (request: PickRequest) => {
     const items = Array.isArray(request.items) ? request.items : undefined;
-    setOverlay({ request, filter: '', index: items ? startAt(items) : 0, ...(items ? { items } : {}) });
+    setOverlay({ request, filter: '', index: items ? startAt(request, items) : 0, ...(items ? { items } : {}) });
     if (items) return;
     const pending = request.items as Promise<{ items: PickItem[]; note?: string }>;
     const still = () => overlay.current?.request === request;
     pending.then(
-      (arrived) => still() && setOverlay({ ...overlay.current!, items: arrived.items, index: startAt(arrived.items), ...(arrived.note ? { note: arrived.note } : {}) }),
+      (arrived) => still() && setOverlay({ ...overlay.current!, items: arrived.items, index: startAt(request, arrived.items), ...(arrived.note ? { note: arrived.note } : {}) }),
       (error) => still() && setOverlay({ ...overlay.current!, items: [], note: error?.message ?? String(error) })
     );
   };
@@ -379,9 +381,10 @@ export function App(props: AppProps) {
     setTheme,
     statusStyle,
     setStatusStyle,
-    prefill: (text) => {
+    prefill: (text, back) => {
       composer.current?.setText(text);
       composer.current?.gotoBufferEnd();
+      prefillBack.current = back;
     },
     send: (prompt, options) => void controller.submit(prompt, options),
     keys: keys.bindings,
@@ -495,6 +498,7 @@ export function App(props: AppProps) {
     const typed = composer.current?.plainText ?? '';
     const text = typed.trim();
     if (!text) return;
+    prefillBack.current = undefined;
     // Enter on an `@` word still being typed completes it rather than sending.
     const referenced = referencesFor(typed)?.[palette.current.index];
     if (referenced) return completeWith(referenced);
@@ -570,6 +574,14 @@ export function App(props: AppProps) {
       return;
     }
     const draft = composer.current?.plainText ?? '';
+    // Text a list put in the composer to finish: Escape takes it back out, unsent, and returns.
+    if (key.name === 'escape' && prefillBack.current && !controller.running) {
+      key.preventDefault();
+      const back = prefillBack.current;
+      prefillBack.current = undefined;
+      composer.current?.setText('');
+      return back();
+    }
     // Help, on an empty composer, lists the commands and keys.
     if (bound('help', key) && draft === '') {
       key.preventDefault();

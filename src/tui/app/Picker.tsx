@@ -35,6 +35,8 @@ export interface PickRequest {
   freeText?: string;
   /** Called when Escape closes the list without a choice. */
   dismissed?(): void;
+  /** The key of the row the list opens on, when not the one in use. */
+  at?: string;
 }
 
 /** The rows the list shows for a filter: the matching choices, or the typed text first. */

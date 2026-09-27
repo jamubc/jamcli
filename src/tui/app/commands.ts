@@ -76,8 +76,11 @@ export interface CommandContext {
   /** The working indicator's style. */
   readonly statusStyle: StatusStyleDefinition;
   setStatusStyle(style: StatusStyleDefinition): void;
-  /** Put text in the composer for the person to finish. */
-  prefill(text: string): void;
+  /**
+   * Put text in the composer for the person to finish. With `back`, Escape takes it out
+   * again, unsent, and runs `back`, such as reopening the list it came from.
+   */
+  prefill(text: string, back?: () => void): void;
   /** Send a prompt as a turn, showing `display` as what was typed, as a custom command does. */
   send(prompt: string, options?: RunOptions & { display?: string }): void;
   /** The keys in effect, for help. */
@@ -430,12 +433,16 @@ const mcp: SlashCommand = {
 /** A value as a person would type it after /config set: text bare, anything else as JSON. */
 const typed = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value));
 
+/** The setting the list put in the composer to edit: once it is set, the list opens again on it. */
+let editing: string | undefined;
+
 /**
  * Every setting the schema describes, with what it does, its value, and where that comes
  * from. A yes/no or fixed choice opens its choices, which apply at once; anything else is
- * put in the composer as a /config set with its current value, to edit.
+ * put in the composer as a /config set with its current value, to edit. Either way the
+ * list opens again after the change, on the setting changed, so several can be made in turn.
  */
-async function pickSetting(ctx: CommandContext): Promise<void> {
+async function pickSetting(ctx: CommandContext, at?: string): Promise<void> {
   const lines: string[] = [];
   const problems: string[] = [];
   await runConfigCommand({ action: 'list', args: ['--json'] }, ctx.projectRoot, { out: (line) => lines.push(line), err: (line) => problems.push(line) });
@@ -465,11 +472,17 @@ async function pickSetting(ctx: CommandContext): Promise<void> {
     empty: 'No settings.',
     ...(problems.length ? { note: problems.join('; ') } : {}),
     hint: 'Enter changes it · type to find one, such as sandbox · /config provider shows the providers',
+    ...(at ? { at } : {}),
     choose: (item) => {
       const setting = byKey.get(item.key);
       const entry = set.get(item.key);
       if (setting?.choices) return chooseValue(ctx, setting, entry);
-      ctx.prefill(`/config set ${item.key} ${entry && setting?.kind !== 'map' ? typed(entry.value) : ''}`);
+      editing = item.key;
+      ctx.prefill(`/config set ${item.key} ${entry && setting?.kind !== 'map' ? typed(entry.value) : ''}`, () => {
+        editing = undefined;
+        void pickSetting(ctx, item.key);
+      });
+      ctx.notice('info', `Edit the value of ${item.key} and press Enter to set it, or Escape to go back to the settings.`);
     },
   });
 }
@@ -482,12 +495,15 @@ function chooseValue(ctx: CommandContext, setting: Setting, entry: { origin: str
     items: setting.choices!.map((choice) => ({ key: choice, label: choice, ...(entry && String(entry.value) === choice ? { current: true } : {}) })),
     empty: 'No choices.',
     ...(setting.description ? { note: setting.description } : {}),
-    hint: 'Enter sets it, and this session reopens with it',
+    hint: 'Enter sets it now · Escape goes back to the settings',
+    dismissed: () => void pickSetting(ctx, setting.key),
     choose: async (item) => {
-      if (waitForTurn(ctx, 'change settings')) return;
-      const request = { action: 'set' as ConfigAction, args: [setting.key, item.key, '--scope', scope] };
-      const code = await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
-      if (code === 0) await reopen(ctx);
+      if (!item.current && !waitForTurn(ctx, 'change settings')) {
+        const request = { action: 'set' as ConfigAction, args: [setting.key, item.key, '--scope', scope] };
+        const code = await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
+        if (code === 0) await reopen(ctx);
+      }
+      await pickSetting(ctx, setting.key);
     },
   });
 }
@@ -499,6 +515,8 @@ const config: SlashCommand = {
   source: 'built-in',
   async run(ctx, args) {
     const [first, ...rest] = splitWords(args);
+    const edited = editing;
+    editing = undefined;
     if (!first) return pickSetting(ctx);
     const action = first.toLowerCase();
     if (action === 'provider' || action === 'providers') {
@@ -511,6 +529,8 @@ const config: SlashCommand = {
     const request = { action: action as ConfigAction, args: action === 'list' && !rest.length ? ['--show-origin'] : rest };
     const code = await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
     if (changes && code === 0) await reopen(ctx);
+    // A setting edited from the list goes back to the list, whether or not the value took.
+    if (edited && action === 'set' && rest[0] === edited) await pickSetting(ctx, edited);
   },
 };
 
