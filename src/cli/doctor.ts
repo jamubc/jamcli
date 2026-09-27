@@ -7,6 +7,8 @@ import { createChatProvider } from '../core/providers/factory.js';
 import { ProviderError } from '../core/providers/http.js';
 import { resolveModel, trustModelRef } from '../core/runtime/model.js';
 import { loadAgents, type Agent } from '../core/ext/agents.js';
+import { DEFAULT_LSP_SERVERS } from '../core/lsp/manager.js';
+import { LspClient } from '../core/lsp/client.js';
 import { detectSandbox } from '../core/sandbox/index.js';
 import { exportTarget } from '../core/observe/otlp.js';
 import { McpTestService } from '../services/McpTestService.js';
@@ -56,8 +58,6 @@ const versionOf = (file: string, env: Record<string, string | undefined>): strin
   if (result.status !== 0) return undefined;
   return (result.stdout || result.stderr).trim().split('\n')[0];
 };
-
-const LANGUAGE_SERVERS = ['typescript-language-server', 'pyright-langserver', 'gopls', 'rust-analyzer', 'clangd'];
 
 function configurationChecks(settings: LoadedConfig, projectRoot: string, agentProblems: string[]): Check[] {
   const checks: Check[] = [];
@@ -195,9 +195,27 @@ function toolChecks(projectRoot: string, settings: LoadedConfig, env: Record<str
       ? { name: 'gh', status: 'ok', detail: versionOf(gh, env) ?? gh }
       : { name: 'gh', status: 'info', detail: 'not found; needed only to open pull requests.', fix: 'Install the GitHub CLI (gh) to open pull requests from JamCLI.' }
   );
-  const servers = LANGUAGE_SERVERS.filter((name) => findExecutable(name, env));
-  checks.push({ name: 'language servers', status: 'info', detail: `JamCLI does not use language servers yet${servers.length ? `; found ${servers.join(', ')}` : ''}` });
   return checks;
+}
+
+/** Every configured, installed language server, and whether it starts, like mcpChecks does for MCP servers. */
+async function lspChecks(projectRoot: string, settings: LoadedConfig, env: Record<string, string | undefined>, timeoutMs: number): Promise<Check[]> {
+  const lsp = settings.config.lsp;
+  if (lsp?.enabled === false) return [{ name: 'language servers', status: 'info', detail: 'off (lsp.enabled is false)' }];
+  const merged = { ...DEFAULT_LSP_SERVERS, ...(lsp?.servers ?? {}) };
+  const configured = Object.entries(merged).filter(([, server]) => server.enabled !== false && findExecutable(server.command, env));
+  if (configured.length === 0) return [{ name: 'language servers', status: 'info', detail: 'none installed' }];
+  return Promise.all(
+    configured.map(async ([name, server]): Promise<Check> => {
+      try {
+        const client = await LspClient.start({ command: server.command, args: server.args, env }, projectRoot, timeoutMs);
+        await client.stop().catch(() => undefined);
+        return { name: `language server ${name}`, status: 'ok', detail: `${server.command} starts` };
+      } catch (error: any) {
+        return { name: `language server ${name}`, status: 'fail', detail: error?.message ?? String(error), fix: `Check that ${server.command} runs on its own.` };
+      }
+    })
+  );
 }
 
 async function mcpChecks(projectRoot: string, settings: LoadedConfig): Promise<Check[]> {
@@ -237,9 +255,10 @@ export async function runChecks(options: DoctorOptions): Promise<Check[]> {
   const timeoutMs = options.timeoutMs ?? 5_000;
   const settings = loadConfig({ projectRoot: options.projectRoot, env });
   const agents = loadAgents(options.projectRoot, settings.config);
-  const [models, mcp, telemetry] = await Promise.all([
+  const [models, mcp, lsp, telemetry] = await Promise.all([
     Promise.all(modelsInUse(settings, agents.agents).map((entry) => modelCheck(entry.ref, entry.role, settings, timeoutMs))),
     options.skipMcp ? Promise.resolve([]) : mcpChecks(options.projectRoot, settings),
+    lspChecks(options.projectRoot, settings, env, timeoutMs),
     telemetryCheck(settings, env, timeoutMs),
   ]);
   return [
@@ -248,6 +267,7 @@ export async function runChecks(options: DoctorOptions): Promise<Check[]> {
     ...models,
     ...toolChecks(options.projectRoot, settings, env),
     ...mcp,
+    ...lsp,
     telemetry,
   ];
 }

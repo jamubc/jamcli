@@ -43,11 +43,11 @@ const find = (checks: Check[], name: string) => checks.filter((check) => check.n
 
 test('a working local setup passes, naming what it found', async () => {
   configure({ api_registry: { ollama: { endpoint: server.ollamaBaseUrl } }, model: 'ollama:fake-model', sandbox: { enabled: false } });
-  const checks = await runChecks({ projectRoot: root, env: tools('rg', 'git', 'gh', 'gopls') });
+  const checks = await runChecks({ projectRoot: root, env: tools('rg', 'git', 'gh') });
   expect(find(checks, 'model (session model)')).toEqual([{ name: 'model (session model)', status: 'ok', detail: 'ollama:fake-model answers, a 32,768-token window' }]);
   expect(find(checks, 'ripgrep')[0]).toMatchObject({ status: 'ok', detail: 'rg 9.9.9' });
   expect(find(checks, 'gh')[0]).toMatchObject({ status: 'ok' });
-  expect(find(checks, 'language servers')[0].detail).toBe('JamCLI does not use language servers yet; found gopls');
+  expect(find(checks, 'language servers')[0]).toMatchObject({ status: 'info', detail: 'none installed' });
   expect(find(checks, 'telemetry')[0]).toMatchObject({ status: 'ok', detail: 'off; nothing is sent anywhere' });
   expect(checks.filter((check) => check.status === 'fail')).toEqual([]);
 });
@@ -66,7 +66,7 @@ test('each problem is named with a fix', async () => {
   // Rendered first: the matchers below leave their marks on what they match.
   const text = renderChecks(checks, root);
   expect(find(checks, 'model (session model)')[0]).toEqual({ name: 'model (session model)', status: 'fail', detail: 'Ollama does not have missing-model.', fix: 'ollama pull missing-model' });
-  expect(find(checks, 'model (category quick)')[0]).toMatchObject({ status: 'fail', detail: expect.stringContaining('Provider "openrouter" is not configured.') });
+  expect(find(checks, 'model (agent quick)')[0]).toMatchObject({ status: 'fail', detail: expect.stringContaining('Provider "openrouter" is not configured.') });
   expect(find(checks, 'configuration')[1]).toMatchObject({ status: 'warn', detail: '.jamcli/config.json agent_loop.max_steps should be a whole number above zero, so it is ignored.' });
   expect(find(checks, 'keys')[0]).toMatchObject({
     status: 'warn',
