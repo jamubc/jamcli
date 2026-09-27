@@ -12,5 +12,8 @@ export const getChain = (
 
 export const describeChain = (chain: CategoryChain) =>
   chain
-    .map((entry: CategoryEntry) => (entry.reasoning ? `${entry.model} (reasoning ${entry.reasoning})` : entry.model))
+    .map((entry: CategoryEntry) => {
+      const how = [entry.reasoning ? `reasoning ${entry.reasoning}` : '', entry.effort ? `effort ${entry.effort}` : ''].filter(Boolean).join(', ');
+      return how ? `${entry.model} (${how})` : entry.model;
+    })
     .join(' -> ');

@@ -5,7 +5,7 @@ import { userConfigDir } from '../../utils/paths.js';
 import { parseFrontMatter } from './frontmatter.js';
 import { skillNameProblem } from './skills.js';
 import { pluginAgentDirs } from '../plugins/load.js';
-import { providerConfigured, providerOf } from '../routing/capabilities.js';
+import { EFFORT_LEVELS, isEffortLevel, providerConfigured, providerOf, type EffortLevel } from '../routing/capabilities.js';
 import { describeChain } from '../routing/categories.js';
 
 /**
@@ -29,6 +29,8 @@ export interface Agent {
   chain: CategoryChain;
   /** No chain of its own: the child runs on whatever model the session is using. */
   inherits?: boolean;
+  /** The effort a child on the session's model runs at. A chain entry carries its own. */
+  effort?: EffortLevel;
   /** The body of the agent's file: rules its child reads before the project's. */
   rules?: string;
   source: AgentSource;
@@ -74,7 +76,7 @@ export const BUILTIN_AGENTS: readonly Agent[] = [
 /** The agent a call without one runs on when only the built-ins are in effect. */
 export const BUILTIN_DEFAULT_AGENT = 'quick';
 
-const KNOWN_KEYS = new Set(['description', 'models']);
+const KNOWN_KEYS = new Set(['description', 'model', 'models', 'effort']);
 const REASONING = new Set(['off', 'on', 'auto']);
 
 /** Where agent files are found, the first shadowing the later: the project's, the user's, then plugins'. */
@@ -89,10 +91,15 @@ export function agentDirs(projectRoot: string): { scope: AgentScope; dir: string
 const entryOf = (value: unknown): CategoryEntry | string => {
   if (typeof value === 'string') return value.trim() ? { model: value.trim() } : 'an entry in models is empty';
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'an entry in models is neither a model nor { model, reasoning }';
-  const { model, reasoning } = value as Record<string, unknown>;
+  const { model, reasoning, effort } = value as Record<string, unknown>;
   if (typeof model !== 'string' || !model.trim()) return 'an entry in models has no model';
   if (reasoning !== undefined && !REASONING.has(String(reasoning))) return `the reasoning of ${model} is not off, on, or auto`;
-  return { model: model.trim(), ...(reasoning !== undefined ? { reasoning: String(reasoning) as CategoryEntry['reasoning'] } : {}) };
+  if (effort !== undefined && !isEffortLevel(effort)) return `the effort of ${model} is not one of ${EFFORT_LEVELS.join(', ')}`;
+  return {
+    model: model.trim(),
+    ...(reasoning !== undefined ? { reasoning: String(reasoning) as CategoryEntry['reasoning'] } : {}),
+    ...(effort !== undefined ? { effort: effort as EffortLevel } : {}),
+  };
 };
 
 /** Read one agent file. Problems that do not stop it from loading come back as `notes`. */
@@ -107,23 +114,32 @@ export function readAgent(file: string, scope: AgentScope): { agent: Agent; note
   if (error) return { problem: `${file}: ${error}.` };
   const name = path.basename(file, '.md');
   const description = typeof data.description === 'string' ? data.description.trim() : '';
-  const entries = Array.isArray(data.models) ? data.models.map(entryOf) : typeof data.models === 'string' ? [entryOf(data.models)] : [];
+  // `model` names one; `models` a chain tried in order. Neither: the session's model.
+  const listed = data.models ?? data.model;
+  const entries = Array.isArray(listed) ? listed.map(entryOf) : listed !== undefined ? [entryOf(listed)] : [];
   const bad = entries.find((entry): entry is string => typeof entry === 'string');
+  const effort = data.effort;
   const problem =
     skillNameProblem(name) ??
     (!description ? 'it has no description' : undefined) ??
-    (!entries.length ? 'it names no models' : undefined) ??
-    bad;
+    (data.model !== undefined && data.models !== undefined ? 'it names both model and models; use one' : undefined) ??
+    (listed !== undefined && !entries.length ? 'it names no models' : undefined) ??
+    bad ??
+    (effort !== undefined && !isEffortLevel(effort) ? `its effort is not one of ${EFFORT_LEVELS.join(', ')}` : undefined);
   if (problem) return { problem: `${file}: ${problem}.` };
   const rules = body.trim();
   const notes = Object.keys(data)
     .filter((key) => !KNOWN_KEYS.has(key))
     .map((key) => `${file}: ${key} is not a key this version knows, so it is ignored.`);
+  // The agent's effort applies to every entry that does not set its own.
+  const chain = (entries as CategoryEntry[]).map((entry) => (isEffortLevel(effort) && !entry.effort ? { ...entry, effort } : entry));
   return {
     agent: {
       name,
       description,
-      chain: entries as CategoryEntry[],
+      chain,
+      ...(chain.length ? {} : { inherits: true }),
+      ...(!chain.length && isEffortLevel(effort) ? { effort } : {}),
       ...(rules ? { rules } : {}),
       source: { kind: 'file', path: file, scope },
     },
@@ -186,7 +202,8 @@ export const routableAgents = (agents: Record<string, Agent>, registry: Config['
     .sort((a, b) => a.name.localeCompare(b.name));
 
 /** What an agent runs on, in words. */
-export const describeRun = (agent: Pick<Agent, 'chain' | 'inherits'>): string => (agent.inherits ? 'the session model' : describeChain(agent.chain));
+export const describeRun = (agent: Pick<Agent, 'chain' | 'inherits' | 'effort'>): string =>
+  agent.inherits ? `the session model${agent.effort ? ` (effort ${agent.effort})` : ''}` : describeChain(agent.chain);
 
 /** Where an agent came from, in words. */
 export const describeSource = (source: AgentSource, label: (file: string) => string = (file) => file): string =>

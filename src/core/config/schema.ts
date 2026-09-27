@@ -111,6 +111,7 @@ export const AgentLoopSchema = z
 const CategoryEntrySchema = z.strictObject({
   model: z.string().min(1),
   reasoning: z.enum(['off', 'on', 'auto']).optional(),
+  effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional().describe('How hard the model thinks, where it takes a level.'),
 });
 
 /** `.jamcli/config.json`, `.jamcli/config.local.json`, and the user's `config.json`. */

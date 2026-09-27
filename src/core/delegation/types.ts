@@ -1,5 +1,5 @@
 import type { ApprovalDecision, ApprovalRequest, ToolCall } from '../types.js';
-import type { ReasoningLevel } from '../routing/capabilities.js';
+import type { EffortLevel, ReasoningLevel } from '../routing/capabilities.js';
 
 /** Ask whoever answers a call's approvals about a call nested inside it, such as a child run's. */
 export type NestedApproval = (nested: { call: ToolCall; request?: ApprovalRequest }) => Promise<ApprovalDecision | 'cancelled'>;
@@ -10,6 +10,8 @@ export interface DelegationRequest {
   prompt: string;
   /** Replaces the chain entry's reasoning level for this child only. */
   reasoning?: ReasoningLevel;
+  /** Replaces the agent's effort for this child only. */
+  effort?: EffortLevel;
   maxTurns: number;
   /** A background child outlives the call that started it, so it cannot ask anyone. */
   background: boolean;

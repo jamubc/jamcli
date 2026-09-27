@@ -19,7 +19,7 @@ import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type Too
 import { childLauncher, type ParentSession } from './children.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
-import type { ReasoningLevel } from '../routing/capabilities.js';
+import type { EffortLevel, ReasoningLevel } from '../routing/capabilities.js';
 import { sessionPermissions } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
@@ -82,6 +82,8 @@ export interface RuntimeOptions {
   model?: string;
   /** The reasoning level every request asks for. The agent loop's default when absent. */
   reasoning?: ReasoningLevel;
+  /** How hard the model thinks on every request, where it takes a level. */
+  effort?: EffortLevel;
   /** A delegated run's agent rules, read before the project's, which win a conflict. */
   agentRules?: { agent: string; source: string; text: string };
   /** `--allow-tool` names for this run. */
@@ -696,6 +698,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       model: choice.model,
       temperature: profile.temperature,
       ...(options.reasoning ? { reasoning: options.reasoning } : {}),
+      ...(options.effort ? { effort: options.effort, acceptsEffort: modelInfo.effort } : {}),
       modelUsageKey: `${choice.provider}:${choice.model}`,
       maxOutputTokens: requestedOutputTokens(modelInfo, loop?.max_output_tokens),
       context: { budget: budgetFor(), counter, auto: autoCompact, proactive: windowKnown() },

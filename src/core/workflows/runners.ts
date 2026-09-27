@@ -78,6 +78,7 @@ export function runtimeRunners(options: RuntimeRunnerOptions): StepRunners {
         if (route?.model) model = route.model;
         agentOptions = {
           ...(route?.reasoning ? { reasoning: route.reasoning } : {}),
+          ...(route?.effort ? { effort: route.effort } : !route && agent.effort ? { effort: agent.effort } : {}),
           ...(agent.rules ? { agentRules: { agent: agent.name, source: describeSource(agent.source, (file) => displayPath(file, options.projectRoot)), text: agent.rules } } : {}),
         };
       }

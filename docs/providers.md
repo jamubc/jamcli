@@ -78,16 +78,22 @@ winning:
 ```markdown
 ---
 description: Prose: documentation, a commit message, a summary for the person.
-models:
-  - openrouter:anthropic/claude-haiku-4.5
-  - model: ollama:llama3
-    reasoning: off
+model: openrouter:anthropic/claude-haiku-4.5
+effort: low
 ---
 Write plainly. Short sentences. No em dashes, no emojis.
 ```
 
-- `description` and `models` are required. An entry is a model ref, or `{ model,
-  reasoning }` with `reasoning` of `off`, `on`, or `auto`.
+- `description` is required. `model` names one model, `models` a chain tried in order;
+  with neither, the agent runs on the session's model, so an agent can be just rules and
+  an effort. An entry is a model ref, or `{ model, reasoning, effort }` with `reasoning`
+  of `off`, `on`, or `auto`.
+- `effort` is how hard the model thinks: `low`, `medium`, `high`, `xhigh`, or `max`. Set
+  at the top it applies to every entry without its own. Anthropic receives it as
+  `output_config.effort` on models that take it, OpenAI and custom endpoints as
+  `reasoning_effort`, OpenRouter as `reasoning.effort` (above `high` sent as `high`), and
+  Ollama's gpt-oss models as the `think` level. A `task` call may set `effort` for one
+  child.
 - The body is the agent's rules. Only a child running on the agent reads them, before the
   project's rules, so a project's `AGENTS.md` wins a conflict.
 - The built-ins are `quick`, `intelligent`, `explore`, and `writing`. They have no chain

@@ -471,6 +471,17 @@
                 "on",
                 "auto"
               ]
+            },
+            "effort": {
+              "description": "How hard the model thinks, where it takes a level.",
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
             }
           },
           "required": [

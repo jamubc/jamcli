@@ -94,7 +94,7 @@ test('delegation.default_agent names the default, and one that names no agent is
 
 test('an unusable file is reported by path and reason and skipped, and the others load', () => {
   projectAgent('nodesc', '---\nmodels: ollama:a\n---\n');
-  projectAgent('nomodels', '---\ndescription: x\n---\n');
+  projectAgent('nomodels', '---\ndescription: x\nmodels: []\n---\n');
   projectAgent('badreason', '---\ndescription: x\nmodels:\n  - model: ollama:a\n    reasoning: max\n---\n');
   projectAgent('Bad_Name', '---\ndescription: x\nmodels: ollama:a\n---\n');
   projectAgent('broken', '---\ndescription: [unclosed\n---\n');
@@ -143,4 +143,31 @@ test('a source is described as a path, the categories configuration, or built-in
   expect(describeSource({ kind: 'file', path: '/p/.jamcli/agents/a.md', scope: 'project' }, (file) => file.replace('/p/', ''))).toBe('.jamcli/agents/a.md');
   expect(describeSource({ kind: 'categories' })).toBe('the categories configuration');
   expect(describeSource({ kind: 'builtin' })).toBe('built-in');
+});
+
+test('an agent file can name one model and an effort, which each entry without its own takes', () => {
+  projectAgent('deep', '---\ndescription: hard problems\nmodel: openai:big\neffort: xhigh\n---\n');
+  projectAgent('mixed', '---\ndescription: two models\neffort: low\nmodels:\n  - openai:a\n  - model: openai:b\n    effort: max\n---\n');
+  const { agents, problems } = loadAgents(root, {});
+  expect(problems).toEqual([]);
+  expect(agents.deep.chain).toEqual([{ model: 'openai:big', effort: 'xhigh' }]);
+  expect(agents.mixed.chain).toEqual([{ model: 'openai:a', effort: 'low' }, { model: 'openai:b', effort: 'max' }]);
+});
+
+test('an agent file with no model runs on the session model at its own effort', () => {
+  projectAgent('careful', '---\ndescription: think hard on my model\neffort: high\n---\nCheck twice.\n');
+  const { agents } = loadAgents(root, {});
+  expect(agents.careful).toMatchObject({ chain: [], inherits: true, effort: 'high', rules: 'Check twice.' });
+  expect(routableAgents(agents, {}).map((agent) => agent.name)).toContain('careful');
+});
+
+test('an effort that is not a level, or both model and models, is reported and the file skipped', () => {
+  projectAgent('badeffort', '---\ndescription: x\nmodel: openai:a\neffort: extreme\n---\n');
+  projectAgent('both', '---\ndescription: x\nmodel: openai:a\nmodels: [openai:b]\n---\n');
+  const { agents, problems } = loadAgents(root, {});
+  const dir = path.join(root, '.jamcli', 'agents');
+  expect(agents.badeffort).toBeUndefined();
+  expect(agents.both).toBeUndefined();
+  expect(problems).toContain(`${path.join(dir, 'badeffort.md')}: its effort is not one of low, medium, high, xhigh, max.`);
+  expect(problems).toContain(`${path.join(dir, 'both.md')}: it names both model and models; use one.`);
 });

@@ -1,12 +1,13 @@
 import type { ApiRegistry, CategoryChain } from '../../types/config.js';
 import { getChain } from './categories.js';
 import { downgradeReasoning, providerConfigured, providerOf } from './capabilities.js';
-import type { ReasoningLevel } from './capabilities.js';
+import type { EffortLevel, ReasoningLevel } from './capabilities.js';
 
 export interface RouteResolution {
   category: string;
   model: string | null;
   reasoning?: ReasoningLevel;
+  effort?: EffortLevel;
   skipped: { model: string; reason: string }[];
   notes: string[];
 }
@@ -53,7 +54,7 @@ export const resolveRoute = async ({
     const reasoning = downgradeReasoning(entry.reasoning, entry.model);
     if (reasoning.note) notes.push(reasoning.note);
 
-    return { category, model: entry.model, reasoning: reasoning.level, skipped, notes };
+    return { category, model: entry.model, reasoning: reasoning.level, ...(entry.effort ? { effort: entry.effort } : {}), skipped, notes };
   }
 
   return {

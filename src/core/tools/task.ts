@@ -3,6 +3,7 @@ import { canDelegate, childTurns, delegationTranscriptLine } from '../delegation
 import type { DelegationOutcome, DelegationRequest } from '../delegation/types.js';
 import type { CategoryChain } from '../../types/config.js';
 import { describeChain } from '../routing/categories.js';
+import { EFFORT_LEVELS, isEffortLevel, type EffortLevel } from '../routing/capabilities.js';
 import { DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
 
 interface BackgroundTask {
@@ -36,6 +37,11 @@ const taskSchema: JsonSchema = {
       type: 'string',
       enum: ['off', 'on', 'auto'],
       description: "on for work that needs careful multi-step thought, off for lookups. Omit it to use the agent's own setting.",
+    },
+    effort: {
+      type: 'string',
+      enum: [...EFFORT_LEVELS],
+      description: "How hard the child thinks: low for lookups, high or above for hard problems. Omit for the agent's own.",
     },
     background: { type: 'boolean', description: 'Start the child and return immediately with its id.' },
     max_turns: { type: 'integer', minimum: 1, description: 'Optional bound on child turns.' },
@@ -79,12 +85,13 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
 
   const agent = typeof args.agent === 'string' && args.agent.trim() ? args.agent.trim() : undefined;
   const reasoning = args.reasoning === 'off' || args.reasoning === 'on' || args.reasoning === 'auto' ? args.reasoning : undefined;
+  const effort = isEffortLevel(args.effort) ? args.effort : undefined;
   const prompt = String(args.prompt ?? '');
   const maxTurns = childTurns(config, typeof args.max_turns === 'number' ? args.max_turns : undefined);
   const isolation = args.isolation === 'worktree' ? ({ isolation: 'worktree' } as const) : {};
 
   if (args.background) {
-    const task = startBackground(ctx, { ...(agent ? { agent } : {}), ...(reasoning ? { reasoning } : {}), prompt, maxTurns, ...isolation });
+    const task = startBackground(ctx, { ...(agent ? { agent } : {}), ...(reasoning ? { reasoning } : {}), ...(effort ? { effort } : {}), prompt, maxTurns, ...isolation });
     return {
       output: [
         `Started background task ${task.id} on ${agent ? `agent "${agent}"` : 'the default agent'} (max ${maxTurns} turns).`,
@@ -97,6 +104,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
   const outcome = await ctx.delegate({
     ...(agent ? { agent } : {}),
     ...(reasoning ? { reasoning } : {}),
+    ...(effort ? { effort } : {}),
     prompt,
     maxTurns,
     ...isolation,
@@ -208,6 +216,8 @@ export interface OfferedAgent {
   chain: CategoryChain;
   /** Runs on the session's model rather than a chain. */
   inherits?: boolean;
+  /** The effort an agent on the session's model runs at. */
+  effort?: EffortLevel;
 }
 
 const GUIDANCE = `Delegate when:
@@ -231,7 +241,7 @@ export function taskDescription(agents: OfferedAgent[], defaultAgent?: string): 
   const intro =
     'Delegate a self-contained piece of work to a child agent. It runs on its own model and session with the same tools as you, under your permissions, and returns one final message. The person does not see that message, so tell them what matters in it.';
   if (!agents.length) return `${intro}\n\nNo agent can run: none has a model on a configured provider.`;
-  const runsOn = (agent: OfferedAgent) => (agent.inherits ? 'the same model as you' : describeChain(agent.chain));
+  const runsOn = (agent: OfferedAgent) => (agent.inherits ? `the same model as you${agent.effort ? `, effort ${agent.effort}` : ''}` : describeChain(agent.chain));
   const lines = agents.map((agent) => `- ${agent.name}: ${agent.description ? `${agent.description} ` : ''}(runs on ${runsOn(agent)})`);
   const offered = defaultAgent && agents.some((agent) => agent.name === defaultAgent);
   const rule = offered ? `If you omit agent, ${defaultAgent} is used.` : 'Always name an agent.';

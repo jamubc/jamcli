@@ -70,6 +70,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
     const parent = options.parent();
     let model = parent.model;
     let chainReasoning: DelegationRequest['reasoning'];
+    let chainEffort: DelegationRequest['effort'] = agent.effort;
     if (!agent.inherits) {
       const route = await resolveRoute({
         registry: options.config.api_registry,
@@ -80,9 +81,11 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
       if (!route?.model) return refuse(route?.notes.join(' ') || `No model in "${name}" can serve it.`);
       model = route.model;
       chainReasoning = route.reasoning;
+      chainEffort = route.effort;
     }
     // The call's level replaces the chain entry's, and is held to what the model accepts.
     const reasoning = request.reasoning ? downgradeReasoning(request.reasoning, model).level : chainReasoning;
+    const effort = request.effort ?? chainEffort;
 
     let tree: Worktree | undefined;
     if (request.isolation === 'worktree') {
@@ -101,6 +104,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         surface: 'child',
         model,
         ...(reasoning ? { reasoning } : {}),
+        ...(effort ? { effort } : {}),
         ...(agent.rules ? { agentRules: { agent: name, source: describeSource(agent.source, (file) => displayPath(file, options.projectRoot)), text: agent.rules } } : {}),
         maxSteps: request.maxTurns,
         signal: request.signal,

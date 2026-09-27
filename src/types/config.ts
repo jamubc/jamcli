@@ -46,6 +46,8 @@ export interface SearchSettings {
 export interface CategoryEntry {
   model: string;
   reasoning?: 'off' | 'on' | 'auto';
+  /** How hard the model thinks, where it takes a level. */
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 }
 
 export type CategoryChain = CategoryEntry[];

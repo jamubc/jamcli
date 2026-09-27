@@ -175,6 +175,29 @@ test("a chain entry's reasoning reaches the child, and the call's level replaces
   expect(server.completions().at(-2)!.body.think).toBe(true);
 });
 
+test("an agent's effort reaches its child, and the call's effort replaces it", async () => {
+  fs.writeFileSync(
+    path.join(root, '.jamcli', 'config.json'),
+    JSON.stringify({ api_registry: { openai: { base_url: server.openaiBaseUrl } }, active_profile: 'default', trust: { enabled: false } })
+  );
+  fs.writeFileSync(path.join(root, '.jamcli', 'profiles', 'default.json'), JSON.stringify({ name: 'Default', preferred_provider: 'openai', preferred_model: 'session-model' }));
+  fs.mkdirSync(path.join(root, '.jamcli', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.jamcli', 'agents', 'deep.md'), '---\ndescription: Hard problems.\nmodel: openai:deep-model\neffort: xhigh\n---\n');
+  const parent = await start({ allowTools: ['task'] });
+  server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'deep', prompt: 'think' } }] }, { text: 'child done' }, { text: 'ok' });
+  await parent.run('go');
+  const [first, child] = server.completions().slice(-3);
+  expect(child.body.model).toBe('deep-model');
+  expect(child.body.reasoning_effort).toBe('xhigh');
+  expect(first.body.reasoning_effort).toBeUndefined();
+  const description = first.body.tools.find((tool: any) => tool.function.name === 'task').function.description;
+  expect(description).toContain('- deep: Hard problems. (runs on openai:deep-model (effort xhigh))');
+
+  server.enqueue({ toolCalls: [{ id: 't2', name: 'task', arguments: { agent: 'deep', prompt: 'look up', effort: 'low' } }] }, { text: 'child done' }, { text: 'ok' });
+  await parent.run('again');
+  expect(server.completions().at(-2)!.body.reasoning_effort).toBe('low');
+});
+
 test("an agent's rules reach its child before the project's rules, and never the parent", async () => {
   fs.writeFileSync(path.join(root, 'AGENTS.md'), 'PROJECT-RULE-MARKER\n');
   fs.mkdirSync(path.join(root, '.jamcli', 'agents'), { recursive: true });
