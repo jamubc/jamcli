@@ -2,6 +2,10 @@
  * The HTTP layer every provider shares: retries for transient failures, and errors that
  * carry the provider's own message and a suggested fix instead of a bare status code.
  */
+import { JAMCLI_VERSION } from '../version.js';
+
+/** How JamCLI names itself to a provider. */
+export const USER_AGENT = `jamcli/${JAMCLI_VERSION}`;
 
 export interface RetryInfo {
   attempt: number;
@@ -147,10 +151,13 @@ export interface FetchRetryOptions {
  */
 export async function fetchWithRetry(url: string, init: RequestInit, options: FetchRetryOptions): Promise<Response> {
   const policy = options.policy ?? DEFAULT_RETRY_POLICY;
+  // Providers that serve coding agents ask each client to name itself, not its HTTP library.
+  const given: Record<string, string> = init.headers instanceof Headers ? Object.fromEntries(init.headers) : { ...(init.headers as Record<string, string> | undefined) };
+  const headers = Object.keys(given).some((name) => name.toLowerCase() === 'user-agent') ? given : { ...given, 'user-agent': USER_AGENT };
   for (let attempt = 1; ; attempt += 1) {
     let response: Response;
     try {
-      response = await globalThis.fetch(url, { ...init, signal: options.signal });
+      response = await globalThis.fetch(url, { ...init, headers, signal: options.signal });
     } catch (error: any) {
       if (error?.name === 'AbortError' || options.signal?.aborted) throw error;
       const reason = scrubSecrets(String(error?.message ?? error), options.secrets);

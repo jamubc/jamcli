@@ -3,7 +3,8 @@ import { startFakeProvider, type FakeProviderServer } from '../../../testing/fak
 import { OpenAICompatProvider } from '../openai-compat.js';
 import { AnthropicProvider } from '../anthropic.js';
 import { OllamaProvider, DEFAULT_OLLAMA_CONTEXT_CAP } from '../ollama.js';
-import { ProviderError, extractErrorText, parseRetryAfter, type RetryInfo } from '../http.js';
+import { ProviderError, USER_AGENT, extractErrorText, parseRetryAfter, type RetryInfo } from '../http.js';
+import { JAMCLI_VERSION } from '../../version.js';
 import type { ChatMessage } from '../../types.js';
 
 let server: FakeProviderServer | undefined;
@@ -171,4 +172,14 @@ test('error text is pulled from the shapes providers use', () => {
   expect(extractErrorText('{"error":"model not found"}')).toBe('model not found');
   expect(extractErrorText('{"message":"quota"}')).toBe('quota');
   expect(extractErrorText('upstream   timed out')).toBe('upstream timed out');
+});
+
+test('every provider names itself as jamcli, not as its HTTP library', async () => {
+  server = startFakeProvider();
+  server.enqueue({ text: 'a' }, { text: 'b' }, { text: 'c' });
+  await new OpenAICompatProvider({ baseUrl: server.openaiBaseUrl, retryPolicy: fast }).complete([user('hi')], { model: 'm' });
+  await new AnthropicProvider({ baseUrl: server.anthropicBaseUrl, apiKey: 'k', retryPolicy: fast }).complete([user('hi')], { model: 'm' });
+  await new OllamaProvider({ endpoint: server.ollamaBaseUrl, retryPolicy: fast }).complete([user('hi')], { model: 'm' });
+  expect(server.completions().map((request) => request.headers['user-agent'])).toEqual([USER_AGENT, USER_AGENT, USER_AGENT]);
+  expect(USER_AGENT).toBe(`jamcli/${JAMCLI_VERSION}`);
 });
