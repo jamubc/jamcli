@@ -205,7 +205,7 @@ export class PermissionEngine {
     }
     if (this.options.alwaysAsks?.(names[0])) {
       if (this.currentMode === 'bypass' && this.options.bypassAllowsAlwaysAsked) return { decision: 'allow', by: 'mode', reason: 'bypass mode allows it, as git.allow_commit_in_bypass says' };
-      return { decision: 'ask', by: 'policy', reason: 'a commit is always asked for; no rule or mode allows one ahead' };
+      return { decision: 'ask', by: 'policy', reason: `${names[0]} is always asked for; no rule or mode allows it ahead` };
     }
     if (this.currentMode === 'bypass') return { decision: 'allow', by: 'mode', reason: 'bypass mode allows everything no rule denies' };
 

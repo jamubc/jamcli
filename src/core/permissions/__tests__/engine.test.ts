@@ -186,3 +186,8 @@ test('rules load from every scope with their sources, and legacy entries map onl
 test('a flag list splits on commas outside parentheses and braces', () => {
   expect(splitRuleList('edit({a,b}/**), run_command(git log*),grep')).toEqual(['edit({a,b}/**)', 'run_command(git log*)', 'grep']);
 });
+
+test('a tool that always asks is named as the one asked for, whatever the rules and mode say', () => {
+  const always = new PermissionEngine({ projectRoot: root, rules: [...builtin, rule('propose_lesson', 'allow', 'flag')], mode: 'accept-edits', sandboxed: false, classOf, namesOf, alwaysAsks: (name) => name === 'propose_lesson' });
+  expect(always.decide(call('propose_lesson'))).toMatchObject({ decision: 'ask', by: 'policy', reason: 'propose_lesson is always asked for; no rule or mode allows it ahead' });
+});

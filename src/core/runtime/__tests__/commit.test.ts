@@ -56,7 +56,7 @@ test('a commit asks every time, with the message, the files, and the diffstat, e
   configure({ permissions: { mode: 'accept-edits', allow: ['git_commit'] } });
   const runtime = await start();
   const [first] = await run(runtime, false);
-  expect(first.request!.reason).toBe('a commit is always asked for; no rule or mode allows one ahead');
+  expect(first.request!.reason).toBe('git_commit is always asked for; no rule or mode allows it ahead');
   expect(first.request!.suggestions).toEqual([]);
   expect(first.request!.preview?.text).toContain('fix(a): say new');
   expect(first.request!.preview?.text).toContain('M a.txt');
