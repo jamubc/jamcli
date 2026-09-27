@@ -102,13 +102,20 @@ function backupName(file: string): string {
   return candidate;
 }
 
+/** Whether a value set at this key is, or holds, a provider's key. */
+function holdsKey(at: KeyPath, value: unknown): boolean {
+  if (at.at(-1) === 'api_key') return true;
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([name, inner]) => holdsKey([name], inner));
+}
+
 export async function runConfigCommand(request: ConfigCommandRequest, projectRoot: string, io: ConfigCommandIo = defaultIo): Promise<number> {
   const flags = parseFlags(request.args);
   if (flags.unknown.length) {
     io.err(`Unknown option: ${flags.unknown.join(', ')}\n\n${CONFIG_USAGE}`);
     return 2;
   }
-  const scope = (flags.scope ?? 'project') as Scope;
+  let scope = (flags.scope ?? 'project') as Scope;
   if (!['user', 'project', 'local'].includes(scope)) {
     io.err(`--scope is user, project, or local, not ${flags.scope}.`);
     return 2;
@@ -160,6 +167,16 @@ export async function runConfigCommand(request: ConfigCommandRequest, projectRoo
     if (request.action === 'set' && raw === undefined) {
       io.err(`Give a value: jamcli config set ${formatPath(parsed)} <value>`);
       return 2;
+    }
+    // A key is never written into the project, where a commit or a copy of the folder
+    // would carry it: without a scope it goes to the user's file, and a project scope is refused.
+    if (request.action === 'set' && holdsKey(parsed, parseValue(raw))) {
+      if (flags.scope && scope !== 'user') {
+        const provider = parsed[0] === 'api_registry' && typeof parsed[1] === 'string' ? parsed[1] : '<provider>';
+        io.err(`A key is never written into the project, where a commit could carry it. Store it with jamcli auth set ${provider}, or leave out --scope to keep it in ${label(userConfigFile())}.`);
+        return 1;
+      }
+      scope = 'user';
     }
     const file = scopeFile(scope, projectRoot);
     const current = readJsonFile(file, label(file));

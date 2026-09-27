@@ -76,10 +76,25 @@ test('set reads JSON where it parses, refuses a value that does not fit, and war
 test('keys are never printed, by list or by get', async () => {
   const set = await config('set', 'api_registry.openrouter.api_key', 'sk-or-v1-secret-value');
   expect(set.err).toEqual(['A key in a file can be read by anything that reads the file; key_env_var keeps it in the environment instead.']);
+  fs.mkdirSync(path.join(root, '.jamcli'), { recursive: true });
   fs.writeFileSync(path.join(root, '.jamcli', 'mcp.json'), JSON.stringify({ servers: [{ id: 'gh', command: 'x', env: { GITHUB_TOKEN: 'ghp-secret-value' } }] }));
   const everything = [...(await config('list')).out, ...(await config('get', 'api_registry')).out, ...(await config('get', 'mcp.servers')).out, ...(await config('list', '--json')).out];
   expect(everything.join('\n')).not.toContain('secret-value');
   expect((await config('get', 'api_registry.openrouter.api_key')).out).toEqual(['(hidden)']);
+});
+
+test('a key is never written into the project: without a scope it goes to the user file, and a project scope is refused', async () => {
+  const userFile = path.join(userDir, 'config.json');
+  expect(await config('set', 'api_registry.openrouter.api_key', 'sk-or-v1-secret-value')).toMatchObject({ code: 0, out: [`Set api_registry.openrouter.api_key in ${userFile}.`] });
+  expect(JSON.parse(fs.readFileSync(userFile, 'utf8')).api_registry.openrouter.api_key).toBe('sk-or-v1-secret-value');
+  for (const scope of ['project', 'local']) {
+    const refused = await config('set', 'api_registry.openrouter.api_key', 'sk-or-v1-other', '--scope', scope);
+    expect(refused.code).toBe(1);
+    expect(refused.err[0]).toContain('jamcli auth set openrouter');
+  }
+  // A key inside a whole section is caught too.
+  expect((await config('set', 'api_registry.anthropic', '{"api_key":"sk-ant-x"}', '--scope', 'project')).code).toBe(1);
+  expect(fs.existsSync(path.join(root, '.jamcli', 'config.json'))).toBe(false);
 });
 
 test('unset removes a value and the sections it empties; a missing key is an error', async () => {

@@ -298,6 +298,17 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   const settings = loadConfig({ projectRoot, env });
   notices.push(...settings.errors);
+  // A key in the project goes wherever the folder does, so every session says how to move it.
+  for (const layer of settings.layers) {
+    if (layer.scope !== 'project' && layer.scope !== 'local') continue;
+    for (const [provider, entry] of Object.entries(layer.values.api_registry ?? {})) {
+      if (!(entry as { api_key?: unknown })?.api_key) continue;
+      notices.push(
+        `${layer.label} holds the ${provider} key, where a commit or a copy of the folder would carry it. ` +
+          `Move it with jamcli auth set ${provider}, then jamcli config unset api_registry.${provider}.api_key --scope ${layer.scope}.`
+      );
+    }
+  }
   const { config, profile, mcp: mcpConfig } = settings;
   const redact = createRedactor(env, configuredSecrets(config.api_registry, env, config.search), revealedKeys);
   let observer: Observer;

@@ -9,6 +9,10 @@ import type { ChatProvider } from '../../providers/types.js';
 import type { ModelFacts } from '../../catalog/index.js';
 import type { AgentEvent } from '../../types.js';
 
+// Keys come from the environment, as they should: a key in the project's files draws a notice.
+process.env.JAMCLI_TEST_ANTHROPIC_KEY = 'sk-ant-test-0123456789';
+process.env.JAMCLI_TEST_OPENAI_KEY = 'sk-test-0123456789abcdef';
+
 let server: FakeProviderServer;
 let root: string;
 const sharedCache = process.env.JAMCLI_CACHE_DIR;
@@ -40,7 +44,7 @@ function configure(config: Record<string, unknown> = {}, profile: Record<string,
   fs.writeFileSync(
     path.join(dir, 'config.json'),
     JSON.stringify({
-      api_registry: { ollama: { endpoint: server.ollamaBaseUrl }, anthropic: { base_url: server.anthropicBaseUrl, api_key: 'sk-ant-test-0123456789' }, ...api_registry },
+      api_registry: { ollama: { endpoint: server.ollamaBaseUrl }, anthropic: { base_url: server.anthropicBaseUrl, key_env_var: 'JAMCLI_TEST_ANTHROPIC_KEY' }, ...api_registry },
       ...rest,
     })
   );
@@ -92,7 +96,7 @@ test('Ollama is asked for the window the catalog settles on', async () => {
 });
 
 test('a model whose window no source knows is named, with the setting that fixes it', async () => {
-  configure({ api_registry: { openai: { base_url: server.openaiBaseUrl, api_key: 'sk-test-0123456789abcdef' } } }, { preferred_provider: 'openai', preferred_model: 'mystery' });
+  configure({ api_registry: { openai: { base_url: server.openaiBaseUrl, key_env_var: 'JAMCLI_TEST_OPENAI_KEY' } } }, { preferred_provider: 'openai', preferred_model: 'mystery' });
   const runtime = await start();
   server.enqueue({ text: 'ok' }, { text: 'ok' });
   const notices: string[] = [];
@@ -189,7 +193,7 @@ test('a reply cut off at the output limit says so, in every wire format', async 
   expect(await noticesOf(ollama)).toEqual([]);
 
   configure(
-    { api_registry: { openai: { base_url: server.openaiBaseUrl, api_key: 'sk-test-0123456789abcdef' } }, models: { 'openai:known': { context_window: 100_000, max_output: 4_000 } } },
+    { api_registry: { openai: { base_url: server.openaiBaseUrl, key_env_var: 'JAMCLI_TEST_OPENAI_KEY' } }, models: { 'openai:known': { context_window: 100_000, max_output: 4_000 } } },
     { preferred_provider: 'openai', preferred_model: 'known' }
   );
   const openai = await start();
@@ -232,4 +236,13 @@ test('the configured effort goes out on each request, as the nearest level model
     process.env.JAMCLI_MODELS_DIRECTORY = before;
     feed.stop(true);
   }
+});
+
+test("a key in the project's files draws a notice that says how to move it", async () => {
+  configure({ api_registry: { openrouter: { api_key: 'sk-or-v1-in-the-project' } } });
+  const runtime = await start();
+  expect(runtime.notices).toContain(
+    '.jamcli/config.json holds the openrouter key, where a commit or a copy of the folder would carry it. Move it with jamcli auth set openrouter, then jamcli config unset api_registry.openrouter.api_key --scope project.'
+  );
+  expect(runtime.notices.join('\n')).not.toContain('sk-or-v1-in-the-project');
 });

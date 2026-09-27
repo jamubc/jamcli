@@ -35,7 +35,6 @@ import {
   TOOL_DEFAULTS,
   UI_CONFIG_FILE,
 } from './config/defaults.js';
-import type { ProviderName } from './config/defaults.js';
 import { normalizePermission, toolPermissionsOf, upsertServer } from './config/mcpConfig.js';
 import { ensureProjectStateDir } from '../core/transcript/log.js';
 import { loadConfig } from '../core/config/load.js';
@@ -195,31 +194,6 @@ export class ConfigService {
 
   async updateSystemPrompt(systemPrompt: string): Promise<Profile> {
     return this.updateActiveProfile({ system_prompt_override: systemPrompt });
-  }
-
-  async updateProvider(provider: ProviderName, value?: string): Promise<Config> {
-    if (provider !== 'ollama' && provider !== 'openrouter') throw new Error(`Provider ${provider} is not supported.`);
-    if (provider === 'openrouter' && !value?.trim()) {
-      throw new Error('Provide an API key: /config provider set openrouter <api_key>');
-    }
-    return this.updateProjectConfig((config) => {
-      const registry = (config.api_registry ??= {});
-      if (provider === 'ollama') registry.ollama = { endpoint: value?.trim() || 'http://localhost:11434' };
-      else registry.openrouter = { api_key: value!.trim() };
-    });
-  }
-
-  async removeProvider(provider: string): Promise<Config> {
-    return this.updateProjectConfig((config) => {
-      if (config.api_registry) delete config.api_registry[provider];
-    });
-  }
-
-  /** Store a key in the project's configuration, as the legacy interface's provider menu does. */
-  async setProviderKey(provider: 'openrouter' | 'openai' | 'anthropic', apiKey: string): Promise<Config> {
-    return this.updateProjectConfig((config) => {
-      (config.api_registry ??= {})[provider] = { api_key: apiKey };
-    });
   }
 
   async updateContextManagement(updates: Partial<ContextManagementConfig>): Promise<Config> {

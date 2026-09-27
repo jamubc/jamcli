@@ -8,6 +8,10 @@ import { SessionLog } from '../../transcript/index.js';
 import { estimateMessage } from '../../context/index.js';
 import type { AgentEvent, ChatMessage } from '../../types.js';
 
+// Keys come from the environment, as they should: a key in the project's files draws a notice.
+process.env.JAMCLI_TEST_ANTHROPIC_KEY = 'sk-ant-test-0123456789';
+process.env.JAMCLI_TEST_OPENAI_KEY = 'sk-test-0123456789abcdef';
+
 let server: FakeProviderServer;
 let root: string;
 const sharedCache = process.env.JAMCLI_CACHE_DIR;
@@ -33,7 +37,7 @@ function configure(config: Record<string, unknown> = {}, profile: Record<string,
     JSON.stringify({
       api_registry: {
         ollama: { endpoint: server.ollamaBaseUrl },
-        openai: { base_url: server.openaiBaseUrl, api_key: 'sk-test-0123456789abcdef' },
+        openai: { base_url: server.openaiBaseUrl, key_env_var: 'JAMCLI_TEST_OPENAI_KEY' },
       },
       models: { 'ollama:fake-model': { context_window: 20_000 } },
       trust: { enabled: false },

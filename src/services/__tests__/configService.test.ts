@@ -27,9 +27,8 @@ test('a change writes only what changed into the project file, which ignores its
   expect(read('config.json')).toEqual({ telemetry: true });
   expect(fs.readFileSync(path.join(root, '.jamcli', '.gitignore'), 'utf8')).toContain('\n*\n');
 
-  await service.setProviderKey('anthropic', 'sk-ant-test');
   await service.upsertMcpServer({ id: 'files', command: 'npx' });
-  expect(read('config.json')).toEqual({ telemetry: true, api_registry: { anthropic: { api_key: 'sk-ant-test' } } });
+  expect(read('config.json')).toEqual({ telemetry: true });
   expect(read('mcp.json')).toEqual({ servers: [{ id: 'files', command: 'npx' }] });
 });
 
