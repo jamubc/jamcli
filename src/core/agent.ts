@@ -14,6 +14,11 @@ import { createRedactor, type Redactor } from './redact.js';
 
 export interface AgentOptions {
   maxSteps?: number;
+  /**
+   * At the step limit, ask once more with no tool allowed for what was found, so a delegated
+   * run that ran out of steps still hands back its findings instead of nothing.
+   */
+  wrapUpOnLimit?: boolean;
   provider?: ChatProvider;
   model?: string;
   temperature?: number;
@@ -90,6 +95,10 @@ const OUTPUT_LIMIT_REASONS = new Set(['max_tokens', 'length']);
  * and record exactly one result for each. The loop ends when the model stops calling
  * tools, the user takes back control, a limit is reached, or the run is cancelled.
  */
+/** What a delegated run is asked when it runs out of steps, with no tool allowed. */
+const WRAP_UP =
+  'You have reached the step limit and cannot call any more tools. Report what you found so far, with the files and lines it rests on, and say plainly what you did not finish.';
+
 export class CoreAgent implements Agent {
   private readonly running = new Map<string, AbortController>();
   private readonly maxSteps: number;
@@ -252,7 +261,19 @@ export class CoreAgent implements Agent {
     for (;;) {
       if (signal.aborted) return finish('cancelled', '', steps);
       if (steps >= this.maxSteps) {
-        return finish('limit', `Stopped after ${this.maxSteps} steps without a final answer.`, steps);
+        const stopped = `Stopped after ${this.maxSteps} steps without a final answer.`;
+        if (!this.options.wrapUpOnLimit) return finish('limit', stopped, steps);
+        let report = '';
+        try {
+          record(userMessage(WRAP_UP));
+          const step = await this.streamStep(provider, this.project(working.messages), tools, signal, emit, 'none');
+          if (step.done?.usage) working = this.account(working, step.done.usage, this.options.modelUsageKey, this.options.price, emit);
+          record(this.assistantMessage(step.text, step.reasoning, [], step.done));
+          report = step.text.trim();
+        } catch {
+          // Out of steps either way: the limit is reported without the findings.
+        }
+        return finish('limit', report ? `${stopped} What it had found:\n\n${report}` : stopped, steps);
       }
       steps += 1;
       emit({ type: 'step_start', step: steps });
@@ -513,7 +534,8 @@ export class CoreAgent implements Agent {
     messages: ChatMessage[],
     tools: ToolDefinition[] | undefined,
     signal: AbortSignal,
-    emit: (e: AgentEvent) => void
+    emit: (e: AgentEvent) => void,
+    toolChoice?: 'none'
   ): Promise<StepOutput> {
     let text = '';
     let reasoning = '';
@@ -524,6 +546,7 @@ export class CoreAgent implements Agent {
         temperature: this.options.temperature,
         signal,
         tools,
+        ...(toolChoice ? { toolChoice } : {}),
         reasoning: this.options.reasoning ?? 'auto',
         ...(this.options.effort ? { effort: this.options.effort, acceptsEffort: this.options.acceptsEffort } : {}),
         maxOutputTokens: this.options.maxOutputTokens,

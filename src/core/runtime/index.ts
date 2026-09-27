@@ -710,6 +710,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       dispatcher: toolSet.dispatcher,
       toolDefinitions: toolSet.definitions,
       maxSteps: options.maxSteps ?? loop?.max_steps ?? DEFAULT_AGENT_LOOP_CONFIG.max_steps,
+      // A child out of steps still reports what it found; the parent would otherwise redo it.
+      ...(options.surface === 'child' ? { wrapUpOnLimit: true } : {}),
       maxToolCallsPerTurn: loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn,
       truncationLimit: loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars,
       systemPrompt,

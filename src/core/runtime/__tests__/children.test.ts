@@ -216,6 +216,26 @@ test("an agent's rules reach its child before the project's rules, and never the
   expect(description).toContain('- quick: Small jobs. (runs on ollama:child-model)');
 });
 
+test('a child that runs out of steps still reports what it found', async () => {
+  configure({ delegation: { max_depth: 2, max_concurrent: 3, max_turns_per_child: 2 } });
+  const parent = await start({ allowTools: ['task', 'read_file'] });
+  const read = (id: string) => ({ id, name: 'read_file', arguments: { path: 'a.txt' } });
+  server.enqueue(
+    { toolCalls: [delegateCall('look')] },
+    { toolCalls: [read('r1')] },
+    { toolCalls: [read('r2')] },
+    { text: 'a.txt holds one line, old, at line 1. I did not check anything else.' },
+    { text: 'parent done' }
+  );
+  await parent.run('go');
+  const requests = server.completions().slice(-5);
+  const wrapUp = requests[3].body.messages.at(-1).content;
+  expect(wrapUp).toContain('reached the step limit and cannot call any more tools');
+  const parentSaw = requests[4].body.messages.filter((message: any) => message.role === 'tool').at(-1).content;
+  expect(parentSaw).toContain('status limit');
+  expect(parentSaw).toContain('What it had found:\n\na.txt holds one line, old, at line 1.');
+});
+
 test('delegation depth is bounded, and an unknown agent is refused with the real ones named', async () => {
   configure({ delegation: { max_depth: 1, max_concurrent: 3, max_turns_per_child: 4 } });
   const parent = await start({ allowTools: ['task'] });
