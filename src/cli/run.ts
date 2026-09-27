@@ -1,5 +1,6 @@
 import { createRuntime, type DryRunEntry, type RunOptions, type Runtime, type RuntimeOptions } from '../core/runtime/index.js';
-import { customCommandTurn } from '../core/ext/commandTurn.js';
+import { CommandHost, entryText } from '../commands/host.js';
+import { hostClipboard } from '../utils/clipboard.js';
 import type { AgentEvent, RunResult } from '../core/types.js';
 import type { SpendSummary } from '../core/catalog/cost.js';
 
@@ -14,6 +15,8 @@ export interface HeadlessOptions {
   sessionId?: string;
   allowTools?: string[];
   denyTools?: string[];
+  /** `--choose`: answers to the lists a command offers, in order. */
+  choose?: string[];
   /** `--allowed-tools`, `--disallowed-tools`, and `--permission-mode`. */
   permissions?: RuntimeOptions['permissions'];
   bypassPermissions?: boolean;
@@ -74,22 +77,61 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   });
   const permissionDenials: PermissionDenial[] = [];
   const notices: HeadlessResult['notices'] = [];
+  const onEvent = (event: AgentEvent) => {
+    if (event.type === 'approval_request') {
+      const reason = event.request?.reason ?? 'this tool asks before it runs';
+      permissionDenials.push({ tool: event.call.name, callId: event.call.id, arguments: event.call.arguments ?? {}, reason });
+      event.decide({
+        allow: false,
+        by: 'mode',
+        feedback: `a headless run cannot ask for approval, and ${reason}. The user can pass --allow-tool ${event.call.name} to allow it.`,
+      });
+    } else if (event.type === 'notice') {
+      notices.push({ level: event.level ?? 'info', message: event.message });
+    }
+    options.onEvent?.(event);
+  };
+  const clipboard = hostClipboard();
   try {
-    const { prompt, turn } = await customCommandTurn(options.prompt, options.projectRoot, runtime);
-    const result = await runtime.run(prompt, (event) => {
-      if (event.type === 'approval_request') {
-        const reason = event.request?.reason ?? 'this tool asks before it runs';
-        permissionDenials.push({ tool: event.call.name, callId: event.call.id, arguments: event.call.arguments ?? {}, reason });
-        event.decide({
-          allow: false,
-          by: 'mode',
-          feedback: `a headless run cannot ask for approval, and ${reason}. The user can pass --allow-tool ${event.call.name} to allow it.`,
-        });
-      } else if (event.type === 'notice') {
-        notices.push({ level: event.level ?? 'info', message: event.message });
-      }
-      options.onEvent?.(event);
-    }, turn);
+    // A prompt naming a command runs it, as the interface would; any other text, a path such as /tmp included, is sent as written.
+    const output: string[] = [];
+    const turns: RunResult[] = [];
+    const host = new CommandHost({
+      runtime,
+      projectRoot: options.projectRoot,
+      onEntry: (entry) => {
+        if (entry.kind === 'event') return onEvent(entry.event);
+        if (entry.kind === 'notice') return void notices.push({ level: entry.level, message: entry.text });
+        output.push(entryText(entry));
+      },
+      runTurn: async (prompt, { display: _display, ...turn }) => turns.push(await runtime.run(prompt, onEvent, turn)),
+      openRefusal: 'A headless run keeps one session. Continue another with --resume <id>, or the latest with --continue.',
+      answerHint: 'Answer it in advance with --choose <number or key>.',
+      laterInput: false,
+      answers: options.choose ?? [],
+      copy: async (text) => ((await clipboard.write(text)) ? 'system' : false),
+    });
+    await host.load();
+    let result: RunResult;
+    if (host.commandFor(options.prompt)) {
+      await host.run(options.prompt);
+      const turn = turns.at(-1);
+      // A command that ends refused, in error, or wanting an argument fails the run, as the interface would say so.
+      const failed = [...notices].reverse().find((notice) => notice.level !== 'info');
+      const response = [...output, turn?.response ?? ''].filter(Boolean).join('\n\n');
+      result = turn
+        ? { ...turn, response }
+        : {
+            status: failed ? 'error' : 'ok',
+            sessionId: runtime.sessionId,
+            response,
+            turns: 0,
+            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+            ...(failed ? { error: failed.message } : {}),
+          };
+    } else {
+      result = await runtime.run(options.prompt, onEvent);
+    }
     return {
       result,
       sessionId: runtime.sessionId,
@@ -102,6 +144,7 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
       spend: runtime.spend(),
     };
   } finally {
+    clipboard.dispose();
     await runtime.close();
   }
 };

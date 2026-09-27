@@ -34,6 +34,8 @@ export interface ParsedArgs {
   continueLast: boolean;
   allowTools: string[];
   denyTools: string[];
+  /** `--choose`: answers to the lists a command offers, in order. */
+  choose: string[];
   allowedTools: string[];
   disallowedTools: string[];
   permissionMode?: string;
@@ -69,6 +71,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     continueLast: false,
     allowTools: [],
     denyTools: [],
+    choose: [],
     allowedTools: [],
     disallowedTools: [],
     bypassPermissions: false,
@@ -150,6 +153,11 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (token === '--dry-run') {
       parsed.dryRun = true;
+      continue;
+    }
+    if (token === '--choose') {
+      parsed.choose.push(argv[i + 1] ?? '');
+      i += 1;
       continue;
     }
     if (token === '--deny-tool') {
@@ -266,6 +274,7 @@ export const USAGE = `Usage: jamcli [options]
       --permission-mode <mode> plan, default, accept-edits, auto, or bypass
       --dangerously-bypass-permissions  Run in bypass mode: nothing asks, only denies stop
       --dry-run                Make no change; report each call that would have made one
+      --choose <key>           Answer the next list a /command offers, by key or number (repeatable)
   -v, -vv, --verbose           Log more: -v adds each request and tool call, -vv prompts and outputs too
       --log-file <path>        Write the log here instead of the state directory's logs/
       --trace-file <path>      Write each span (session, turn, model request, tool call) as JSON lines
@@ -452,6 +461,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
       sessionId,
       allowTools: parsed.allowTools,
       denyTools: parsed.denyTools,
+      choose: parsed.choose,
       permissions: {
         allowedTools: parsed.allowedTools,
         disallowedTools: parsed.disallowedTools,

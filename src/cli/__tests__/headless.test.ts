@@ -278,9 +278,9 @@ test('jamcli -p runs a /server:prompt, matched without case, and sends the rende
 test('a /server:prompt missing a required argument fails the run before the model is called', async () => {
   withMcp();
   const before = server.completions().length;
-  const { err, code } = await jam(['-p', '/modern:review', '--output-format', 'json']);
+  const { out, code } = await jam(['-p', '/modern:review', '--output-format', 'json']);
   expect(code).toBe(1);
-  expect(err).toContain('/modern:review needs file.');
+  expect(lastLine(out)).toMatchObject({ status: 'error', error: expect.stringContaining('/modern:review needs file') });
   expect(server.completions().length).toBe(before);
 }, 30_000);
 
@@ -292,4 +292,38 @@ test('a path such as /tmp/x is sent as written even with MCP servers configured'
   expect(lastLine(out).response).toBe('Noted.');
   const user = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'user');
   expect(user.content).toBe('/tmp/x');
+}, 30_000);
+
+test('jamcli -p runs a built-in command: its output is the response, and no model is asked', async () => {
+  const before = server.completions().length;
+  const { out, code } = await jam(['-p', '/context', '--output-format', 'json']);
+  expect(code).toBe(0);
+  expect(lastLine(out)).toMatchObject({ type: 'result', status: 'ok', turns: 0, response: expect.stringContaining('Context:') });
+  expect(server.completions().length).toBe(before);
+}, 30_000);
+
+test('a list a command offers is answered in advance with --choose, as /commit does', async () => {
+  const git = (...args: string[]) => Bun.spawnSync(['git', ...args], { cwd: root });
+  git('init', '-q');
+  // Its own identity: a fresh CI runner has none, and the commit is made by the child.
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
+  git('add', 'a.txt');
+  const { out, code } = await jam(['-p', '/commit add a', '--choose', 'commit', '--output-format', 'json']);
+  expect(code).toBe(0);
+  expect(lastLine(out).response).toContain('Commit this?');
+  expect(new TextDecoder().decode(git('log', '--format=%s').stdout).trim()).toBe('add a');
+}, 30_000);
+
+test('a list with no answer given is shown with how to answer it, and nothing is chosen', async () => {
+  const { out, code } = await jam(['-p', '/effort']);
+  expect(code).toBe(0);
+  expect(out).toContain('Answer it in advance with --choose <number or key>.');
+  expect(out).toContain('[high]');
+}, 30_000);
+
+test('a command that is refused fails the run and says why', async () => {
+  const { out, code } = await jam(['-p', '/mode bypass', '--output-format', 'json']);
+  expect(code).toBe(1);
+  expect(lastLine(out)).toMatchObject({ status: 'error', error: expect.stringContaining('only where you can confirm it') });
 }, 30_000);
