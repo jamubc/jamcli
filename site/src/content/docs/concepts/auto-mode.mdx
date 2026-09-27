@@ -108,16 +108,18 @@ and says which ones are prompt injection.
 
 What happens on each turn:
 
-1. Results with the same tool and the same normalised text are deduplicated locally, before any
-   request is made.
-2. The rest go to the classifier in one request. Each result is cut to 4,000 characters, keeping
+1. The session's own state, such as the todo list the model wrote, is left out: it is not from
+   outside, and nothing in it needs screening.
+2. Results with the same tool and the same normalised text are sent once. Each duplicate takes the
+   verdict of the first, so it is kept or withheld with it, never withheld for being a duplicate.
+3. The rest go to the classifier in one request. Each result is cut to 4,000 characters, keeping
    the beginning and the end, and the task description the classifier sees is cut to 2,000.
-3. The classifier answers, per result, a relevance score from 0 to 1, an injection flag, and a
+4. The classifier answers, per result, a relevance score from 0 to 1, an injection flag, and a
    short reason. How it is asked depends on what kind of model it is; see below.
-4. A result flagged as an injection is withheld. A result scoring under the threshold is withheld
+5. A result flagged as an injection is withheld. A result scoring under the threshold is withheld
    as not relevant. The model sees a one-line note in place of each, and the transcript records
    which tool and why.
-5. A result the classifier did not mention is kept. If the request fails, times out, or returns
+6. A result the classifier did not mention is kept. If the request fails, times out, or returns
    nothing usable, every result is kept and the failure is reported. The gate fails open.
 
 Source: <Receipt path="src/core/trust/index.ts" symbol="screenToolResults" />,
@@ -178,7 +180,7 @@ Source: <Receipt path="src/cli/doctor.ts" symbol="modelsInUse" />,
 | `trust.model` | none: auto mode says the gate is off | The classifier, as `provider:model` on any configured provider, or `typesafe:jev-latest`. |
 | `trust.threshold` | 0.3 | Relevance below which a result is withheld. `0` keeps every result that is not an injection. |
 | `trust.enabled` | on | `false` turns the gate off in every mode, and the off state shows in configuration. |
-| `trust.dedupe` | on | Local deduplication before the request. |
+| `trust.dedupe` | on | Identical results are sent once, each duplicate taking its twin's verdict. `false` sends every one. |
 
 Source: <Receipt path="src/core/config/schema.ts" symbol="trust" />,
 <Receipt path="src/core/trust/index.ts" symbol="DEFAULT_THRESHOLD" />.
