@@ -7,6 +7,21 @@ export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 export const isEffortLevel = (value: unknown): value is EffortLevel => (EFFORT_LEVELS as readonly unknown[]).includes(value);
 
+/** What a person picks for how a session thinks: thinking off, the model's default, on, or a level. */
+export const THINKING_CHOICES = ['off', 'auto', 'on', ...EFFORT_LEVELS] as const;
+export type ThinkingChoice = (typeof THINKING_CHOICES)[number];
+export const isThinkingChoice = (value: unknown): value is ThinkingChoice => (THINKING_CHOICES as readonly unknown[]).includes(value);
+
+/** A choice as the request settings it stands for. `auto` leaves both to the model's default. */
+export function thinkingFor(choice: ThinkingChoice): { reasoning?: ReasoningLevel; effort?: EffortLevel } {
+  if (choice === 'auto') return {};
+  if (choice === 'off' || choice === 'on') return { reasoning: choice };
+  return { effort: choice };
+}
+
+/** The choice request settings stand for: the level when there is one, else the reasoning switch. */
+export const choiceOf = (thinking: { reasoning?: ReasoningLevel; effort?: EffortLevel }): ThinkingChoice => thinking.effort ?? thinking.reasoning ?? 'auto';
+
 /**
  * The level to send for the one asked: itself when the model takes it or lists nothing,
  * else the nearest it takes, the higher on a tie. DeepSeek v4.1 Flash, for one, takes low,

@@ -73,6 +73,10 @@ Keys never enter project files, and a subprocess gets none unless a setting name
 
   `/model info` names the source of each fact. `JAMCLI_MODELS_DIRECTORY=off` never
   fetches the directory; Ollama sessions never ask it.
+- `/effort` chooses how hard the model thinks: `off`, `auto` (the model's default), `on`,
+  or a level from `low` to `max`. It applies at once and is kept as `effort` in the user
+  configuration. A level the model does not take goes as the nearest one it does, from
+  models.dev, and the picker says so; the status line shows the level beside the model.
 - A model whose price is unknown reports a cost as a lower bound; `/cost` says what is
   unpriced.
 

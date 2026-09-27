@@ -19,7 +19,7 @@ import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type Too
 import { childLauncher, type ParentSession } from './children.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
-import { effortFor, type EffortLevel, type ReasoningLevel } from '../routing/capabilities.js';
+import { effortFor, thinkingFor, type EffortLevel, type ReasoningLevel } from '../routing/capabilities.js';
 import { sessionPermissions } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
@@ -165,6 +165,12 @@ export interface DryRunEntry {
   preview?: ApprovalPreview;
 }
 
+/** How a session's turns think. Absent parts are left to the model's default. */
+export interface Thinking {
+  reasoning?: ReasoningLevel;
+  effort?: EffortLevel;
+}
+
 export interface Runtime {
   readonly sessionId: string;
   /** Where the tools work: the project root, or the worktree the session runs in. */
@@ -227,6 +233,10 @@ export interface Runtime {
   cancel(): void;
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
   setModel(ref: string): void;
+  /** How later turns think: the reasoning switch and, where the model takes one, the effort level. */
+  readonly thinking: Thinking;
+  /** Change how later turns think. An empty value returns to the model's default. */
+  setThinking(next: Thinking): void;
   /**
    * Every model the configured providers list, each with what the catalog knows of it
    * without asking further, and why any provider could not be asked. Each provider has
@@ -695,13 +705,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let reasoningSince = prefixSetNow();
   /** A guessed window is not compacted ahead of; Ollama's window is the one JamCLI asks for, so it is always known. */
   const windowKnown = () => modelInfo.sources.contextWindow !== 'default' || modelInfo.provider === 'ollama';
+  // A run's own settings, as a delegated agent's, win over the configured default.
+  let thinking: Thinking =
+    options.reasoning || options.effort
+      ? { ...(options.reasoning ? { reasoning: options.reasoning } : {}), ...(options.effort ? { effort: options.effort } : {}) }
+      : thinkingFor(config.effort ?? 'auto');
   const buildAgent = () =>
     new CoreAgent({
       provider,
       model: choice.model,
       temperature: profile.temperature,
-      ...(options.reasoning ? { reasoning: options.reasoning } : {}),
-      ...(options.effort ? { effort: effortFor(options.effort, modelInfo.efforts), acceptsEffort: modelInfo.effort } : {}),
+      ...(thinking.reasoning ? { reasoning: thinking.reasoning } : {}),
+      ...(thinking.effort ? { effort: effortFor(thinking.effort, modelInfo.efforts), acceptsEffort: modelInfo.effort } : {}),
       modelUsageKey: `${choice.provider}:${choice.model}`,
       maxOutputTokens: requestedOutputTokens(modelInfo, loop?.max_output_tokens),
       context: { budget: budgetFor(), counter, auto: autoCompact, proactive: windowKnown() },
@@ -1148,6 +1163,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     setModel(ref) {
       switchModel(ref);
+    },
+
+    get thinking() {
+      return thinking;
+    },
+
+    setThinking(next) {
+      thinking = { ...(next.reasoning ? { reasoning: next.reasoning } : {}), ...(next.effort ? { effort: next.effort } : {}) };
+      agent = buildAgent();
     },
 
     async listModels(timeoutMs = LIST_TIMEOUT_MS) {

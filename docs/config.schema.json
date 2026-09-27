@@ -16,6 +16,20 @@
       "minLength": 1,
       "description": "The profile in profiles/<name>.json to use."
     },
+    "effort": {
+      "type": "string",
+      "enum": [
+        "off",
+        "auto",
+        "on",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "description": "How sessions think: off, auto (the model's default), on, or an effort level from low to max. /effort sets it."
+    },
     "api_registry": {
       "type": "object",
       "properties": {

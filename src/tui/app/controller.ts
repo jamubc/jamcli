@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { RunOptions, Runtime } from '../../core/runtime/index.js';
+import { choiceOf } from '../../core/routing/capabilities.js';
 import type { PermissionMode } from '../../core/permissions/modes.js';
 import type { AgentEvent, ApprovalDecision, ApprovalScope } from '../../core/types.js';
 import type { StatusData, ViewAction } from '../state/view.js';
@@ -48,7 +49,8 @@ export function statusOf(runtime: Runtime): Partial<StatusData> {
   const chosen = Boolean(runtime.model.model);
   return {
     mode: runtime.permissionMode,
-    model: chosen ? `${runtime.model.provider}:${runtime.model.model}` : '',
+    // The effort shows beside the model once it is anything but the model's own default.
+    model: chosen ? `${runtime.model.provider}:${runtime.model.model}${choiceOf(runtime.thinking) === 'auto' ? '' : ` (${choiceOf(runtime.thinking)})`}` : '',
     sandbox: runtime.sandbox.kind,
     contextPercent: chosen && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined,
     costUsd: spend.requests > 0 && spend.unpriced === spend.requests ? null : spend.requests ? spend.cost : null,

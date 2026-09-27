@@ -9,6 +9,7 @@ import { displayPath, loadConfig, userConfigFile } from '../../core/config/load.
 import { storedKey } from '../../core/config/credentials.js';
 import { userConfigDir } from '../../utils/paths.js';
 import { describeChain } from '../../core/routing/categories.js';
+import { choiceOf, effortFor, EFFORT_LEVELS, isEffortLevel, isThinkingChoice, THINKING_CHOICES, thinkingFor, type ThinkingChoice } from '../../core/routing/capabilities.js';
 import { describeRun, describeSource, loadAgents, type LoadedAgents } from '../../core/ext/agents.js';
 import { readSessionIndex, readTranscript, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from '../../cli/config.js';
@@ -607,6 +608,66 @@ const doctor: SlashCommand = {
   },
 };
 
+const THINKING_WORDS: Record<ThinkingChoice, string> = {
+  off: 'no thinking',
+  auto: "the model's own default",
+  on: 'thinking on, at the default level',
+  low: 'thinks briefly',
+  medium: 'thinks moderately',
+  high: 'thinks hard',
+  xhigh: 'thinks harder',
+  max: 'thinks as hard as the model can',
+};
+
+/** What a choice does on the model in use: a level it does not take goes as the nearest it does. */
+const thinkingDetail = (choice: ThinkingChoice, runtime: Runtime): string => {
+  const info = runtime.modelInfo;
+  const words = [THINKING_WORDS[choice]];
+  if (isEffortLevel(choice)) {
+    if (info.effort === false || (info.effort === undefined && !info.efforts)) words.push('this model takes no level, so it only turns thinking on');
+    else if (effortFor(choice, info.efforts) !== choice) words.push(`this model takes ${info.efforts!.join(', ')}, so it goes as ${effortFor(choice, info.efforts)}`);
+  }
+  if (choice !== 'off' && choice !== 'auto' && info.reasoning === false) words.push('this model does not think');
+  if (choice === 'off' && info.alwaysThinks) words.push('this model always thinks, so it cannot be turned off');
+  return words.join(' · ');
+};
+
+const effort: SlashCommand = {
+  name: 'effort',
+  aliases: ['thinking'],
+  args: `[${THINKING_CHOICES.join('|')}]`,
+  summary: 'Choose how hard the model thinks, now and for new sessions',
+  source: 'built-in',
+  run(ctx, args) {
+    const choose = async (choice: ThinkingChoice) => {
+      if (waitForTurn(ctx, 'change the effort')) return;
+      ctx.runtime.setThinking(thinkingFor(choice));
+      ctx.refresh();
+      ctx.notice('info', `Later turns: ${thinkingDetail(choice, ctx.runtime)}.`);
+      const request = { action: 'set' as ConfigAction, args: ['effort', choice, '--scope', 'user'] };
+      await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
+    };
+    const word = args.trim().toLowerCase();
+    if (word) {
+      if (!isThinkingChoice(word)) return ctx.notice('warn', `The effort is one of ${THINKING_CHOICES.join(', ')}, not ${word}.`);
+      return void choose(word);
+    }
+    const current = choiceOf(ctx.runtime.thinking);
+    ctx.pick({
+      title: `How ${ctx.runtime.model.provider}:${ctx.runtime.model.model} thinks`,
+      items: THINKING_CHOICES.map((choice) => ({
+        key: choice,
+        label: choice,
+        detail: thinkingDetail(choice, ctx.runtime),
+        ...(choice === current ? { current: true } : {}),
+      })),
+      empty: 'No choices.',
+      hint: `Enter applies it now and keeps it for new sessions · levels run ${EFFORT_LEVELS[0]} to ${EFFORT_LEVELS[EFFORT_LEVELS.length - 1]}`,
+      choose: (item) => void choose(item.key as ThinkingChoice),
+    });
+  },
+};
+
 const exportCommand: SlashCommand = {
   name: 'export',
   args: '[file]',
@@ -665,6 +726,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   profile,
   theme,
   agentsCommand,
+  effort,
   reflect,
   doctor,
   exportCommand,

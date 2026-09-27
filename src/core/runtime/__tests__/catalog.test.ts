@@ -199,3 +199,37 @@ test('a reply cut off at the output limit says so, in every wire format', async 
   ]);
   expect(lastRequest().max_tokens).toBe(4_000);
 });
+
+test('the configured effort goes out on each request, as the nearest level models.dev says the model takes, and /effort changes it', async () => {
+  // A models.dev feed that lists the fake endpoint by its URL, so the custom id matches it.
+  const feed = Bun.serve({
+    port: 0,
+    fetch: () =>
+      Response.json({ lab: { api: server.openaiBaseUrl, models: { 'fake-model': { reasoning: true, reasoning_options: [{ type: 'effort', values: ['low', 'high', 'max'] }], limit: { context: 64_000, output: 8_000 } } } } }),
+  });
+  const before = process.env.JAMCLI_MODELS_DIRECTORY;
+  process.env.JAMCLI_MODELS_DIRECTORY = `http://127.0.0.1:${feed.port}/api.json`;
+  try {
+    // The custom id differs from the feed's, so only the endpoint URL can match it.
+    configure({ model: 'other:fake-model', effort: 'medium', api_registry: { endpoints: [{ id: 'other', base_url: server.openaiBaseUrl, key_env_var: 'LAB_KEY' }] } });
+    const runtime = await start({ env: { LAB_KEY: 'k' } });
+    expect(runtime.thinking).toEqual({ effort: 'medium' });
+    server.enqueue({ text: 'ok' });
+    await runtime.run('hi');
+    expect(runtime.modelInfo.sources.efforts).toBe('directory');
+    expect(lastRequest().reasoning_effort).toBe('high');
+
+    runtime.setThinking({ effort: 'low' });
+    server.enqueue({ text: 'ok' });
+    await runtime.run('again');
+    expect(lastRequest().reasoning_effort).toBe('low');
+
+    runtime.setThinking({});
+    server.enqueue({ text: 'ok' });
+    await runtime.run('once more');
+    expect(lastRequest().reasoning_effort).toBeUndefined();
+  } finally {
+    process.env.JAMCLI_MODELS_DIRECTORY = before;
+    feed.stop(true);
+  }
+});

@@ -5,7 +5,7 @@
 Type `/` in the composer; the palette lists these and what they take.
 
 - Session: `/help`, `/clear`, `/resume`, `/fork`, `/export`, `/exit`, `/copy`.
-- Model and context: `/model`, `/profile`, `/context`, `/compact`, `/cost`,
+- Model and context: `/model`, `/effort`, `/profile`, `/context`, `/compact`, `/cost`,
   `/agents`.
 - Permissions and modes: `/mode`, `/permissions`.
 - Extensions: `/tools`, `/mcp`, `/hooks`, `/plugins`, `/skills`, `/commands`,

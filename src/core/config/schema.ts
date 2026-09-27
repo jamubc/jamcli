@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PERMISSION_MODES, type PermissionMode } from '../permissions/modes.js';
+import { THINKING_CHOICES } from '../routing/capabilities.js';
 
 /**
  * The shape of every file JamCLI reads its configuration from. These schemas are the
@@ -120,6 +121,9 @@ export const ConfigFileSchema = z
     $schema: z.string().describe('The JSON schema this file follows, for editors.'),
     model: z.string().min(1).describe('The model sessions start on, as "provider:model" or a model on the profile\'s provider.'),
     active_profile: z.string().min(1).describe('The profile in profiles/<name>.json to use.'),
+    effort: z
+      .enum(THINKING_CHOICES)
+      .describe("How sessions think: off, auto (the model's default), on, or an effort level from low to max. /effort sets it."),
     api_registry: ApiRegistrySchema,
     models: z.record(z.string(), ModelSettingsSchema).describe('Facts about models, keyed "provider:model", overriding what providers report.'),
     permissions: PermissionSettingsSchema,

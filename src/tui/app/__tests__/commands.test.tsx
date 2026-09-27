@@ -238,6 +238,19 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
     await send(setup, '/agents nobody');
     await frameWith(setup, (frame) => frame.includes('No agent named nobody. The agents are explore, intelligent, quick, writing.'));
 
+    // /effort applies now, shows beside the model, and keeps the choice in the user's config.
+    await send(setup, '/effort high');
+    await frameWith(setup, (frame) => frame.includes('Later turns: thinks hard') && frame.includes('ollama:fake-model (high)'));
+    expect(current().thinking).toEqual({ effort: 'high' });
+    const userConfig = path.join(process.env.JAMCLI_CONFIG_DIR!, 'config.json');
+    expect(readJson(userConfig).effort).toBe('high');
+    await send(setup, '/effort extreme');
+    await frameWith(setup, (frame) => frame.includes('The effort is one of off, auto, on, low, medium, high, xhigh, max, not extreme.'));
+    await send(setup, '/effort auto');
+    await frameWith(setup, (frame) => frame.includes("Later turns: the model's own default"));
+    expect(current().thinking).toEqual({});
+    expect(readJson(userConfig).effort).toBe('auto');
+
     await send(setup, '/config get model --show-origin');
     await frameWith(setup, (frame) => frame.includes('ollama:fake-model') && frame.includes('config.json'));
     const before = current();

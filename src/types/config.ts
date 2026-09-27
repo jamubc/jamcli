@@ -4,6 +4,7 @@ import type { McpServerConfig } from './mcp.js';
 import type { PermissionSettings } from '../core/permissions/config.js';
 import type { SandboxSettings } from '../core/sandbox/types.js';
 import type { OtelSettings } from '../core/observe/otlp.js';
+import type { ThinkingChoice } from '../core/routing/capabilities.js';
 
 export interface ApiRegistry {
   /** `num_ctx` sets the context window Ollama allocates for every request. */
@@ -135,6 +136,8 @@ export interface Config {
   model?: string;
   api_registry: ApiRegistry;
   active_profile: string;
+  /** How sessions think: off, auto, on, or an effort level. */
+  effort?: ThinkingChoice;
   telemetry: boolean;
   available_models?: ModelInfo[];
   context_management?: ContextManagementConfig;
