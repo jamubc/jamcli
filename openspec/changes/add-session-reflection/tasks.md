@@ -47,8 +47,13 @@
 
 ## 6. Close
 
-- [ ] 6.1 Run `/reflect` end to end against a real provider. The owner directed that
-  tests use OpenCode Go (`opencode-go:deepseek-v4.1-flash`), not Ollama.
+- [x] 6.1 Run `/reflect` end to end against a real provider. The owner directed that
+  tests use OpenCode Go (`opencode-go:deepseek-v4.1-flash`), not Ollama. Done 2026-09-27, twice: a
+  session whose only failure was already covered by a rule proposed nothing and wrote
+  nothing; a session where the person corrected an unstated convention proposed two
+  lessons that passed the gates, showed their diffs, and on approval were appended under
+  one heading each. The first run found the /reflect prompt itself listed as a correction,
+  fixed in `5aff758`.
 - [ ] 6.2 Run `/reflect` on at least 10 real sessions; record approved novel edits in
   `SEQUENCE.md` against the 0 of 26 baseline.
 - [ ] 6.3 Four gates, then archive.
