@@ -10,17 +10,21 @@ const GIT_HOOKS = ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-commi
 
 const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
-/** The script a git hook runs: the workflow, headless, failing the git command when the run fails. */
-export const gitHookScript = (workflow: string, jamcli: string) =>
-  `#!/bin/sh\n# ${MARK}: written by jamcli workflow hook install. Remove it with jamcli workflow hook remove.\nexec ${quote(jamcli)} workflow run ${quote(workflow)} --headless\n`;
+/**
+ * The script a git hook runs: the workflow, headless, failing the git command when the run
+ * fails. It names the digest of the workflow file it was installed for, so an edit to the
+ * file after that is refused at run time instead of running unreviewed.
+ */
+export const gitHookScript = (workflow: string, jamcli: string, digest: string) =>
+  `#!/bin/sh\n# ${MARK}: written by jamcli workflow hook install. Remove it with jamcli workflow hook remove.\nexec ${quote(jamcli)} workflow run ${quote(workflow)} --headless --expect-digest ${quote(digest)}\n`;
 
 /** Install a git hook that runs a workflow. An existing hook that JamCLI did not write is left alone. */
-export function installGitHook(projectRoot: string, hook: string, workflow: string, jamcli: string): string {
+export function installGitHook(projectRoot: string, hook: string, workflow: string, jamcli: string, digest: string): string {
   if (!GIT_HOOKS.includes(hook)) throw new Error(`${hook} is not a git hook JamCLI installs. Use one of ${GIT_HOOKS.join(', ')}.`);
   const file = path.resolve(projectRoot, execFileSync('git', ['rev-parse', '--git-path', `hooks/${hook}`], { cwd: projectRoot, encoding: 'utf8' }).trim());
   if (fs.existsSync(file) && !fs.readFileSync(file, 'utf8').includes(MARK)) throw new Error(`${file} exists and was not written by JamCLI, so it is left as it is.`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, gitHookScript(workflow, jamcli), { mode: 0o755 });
+  fs.writeFileSync(file, gitHookScript(workflow, jamcli, digest), { mode: 0o755 });
   fs.chmodSync(file, 0o755);
   return file;
 }

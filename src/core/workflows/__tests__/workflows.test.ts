@@ -3,8 +3,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
+import YAML from 'yaml';
 import { holds, parseExpr, render } from '../expr.js';
-import { resolveInputs, validateWorkflow, type Workflow } from '../schema.js';
+import { resolveInputs, validateWorkflow, workflowDigest, type Workflow } from '../schema.js';
 import { executeWorkflow, readRunLog, recordApproval, type StepRunners } from '../engine.js';
 import { runtimeRunners } from '../runners.js';
 import { cronLine, editCrontab, installGitHook, launchdPlist, listSchedules, scheduleWorkflow, unscheduleWorkflow, windowsTaskXml, type ScheduleSystem } from '../triggers.js';
@@ -201,13 +202,36 @@ test('a real run: an agent step in plan mode, a command, a tool, a headless appr
   expect(git('log', '-1', '--format=%s')).toBe('fix: typo');
 }, 60_000);
 
+test('a git hook refuses to run a workflow whose file changed since the hook was installed', async () => {
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  const file = path.join(root, '.jamcli', 'workflows', 'echo.yaml');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, ['name: echo', 'steps:', '  - id: read', '    tool: { name: read_file, arguments: { path: notes.txt } }'].join('\n'));
+  fs.writeFileSync(path.join(root, 'notes.txt'), 'kept\n');
+  const out: string[] = [];
+  const io = { out: (line: string) => out.push(line), err: (line: string) => out.push(line) };
+  const runtime = { env: { PATH: process.env.PATH, HOME: process.env.HOME } };
+  expect(await runWorkflowCommand(['hook', 'install', 'pre-commit', 'echo'], root, { io, runtime })).toBe(0);
+  const hook = fs.readFileSync(path.join(root, '.git', 'hooks', 'pre-commit'), 'utf8');
+  const [, digest] = hook.match(/--expect-digest '([0-9a-f]{64})'/)!;
+  expect(digest).toBe(workflowDigest(validateWorkflow(YAML.parse(fs.readFileSync(file, 'utf8')), file)));
+  // The hook's own arguments, with the file as it was: the run goes ahead.
+  expect(await runWorkflowCommand(['run', 'echo', '--headless', '--expect-digest', digest], root, { io, runtime })).toBe(0);
+  // The file edited after install: refused, with the way back named.
+  fs.appendFileSync(file, '\n# edited after the hook was installed\n');
+  expect(await runWorkflowCommand(['run', 'echo', '--headless', '--expect-digest', digest], root, { io, runtime })).toBe(1);
+  expect(out.at(-1)).toContain('changed since the hook that runs echo was installed');
+  // With no digest asked for, a person's own run is unaffected.
+  expect(await runWorkflowCommand(['run', 'echo', '--headless'], root, { io, runtime })).toBe(0);
+});
+
 test('triggers are written as files: a git hook, a crontab line, a launchd agent, and a Windows task', () => {
   execFileSync('git', ['init', '-q'], { cwd: root });
-  const hook = installGitHook(root, 'pre-push', 'fix', '/usr/local/bin/jamcli');
-  expect(fs.readFileSync(hook, 'utf8')).toBe("#!/bin/sh\n# jamcli-workflow: written by jamcli workflow hook install. Remove it with jamcli workflow hook remove.\nexec '/usr/local/bin/jamcli' workflow run 'fix' --headless\n");
+  const hook = installGitHook(root, 'pre-push', 'fix', '/usr/local/bin/jamcli', 'abc123');
+  expect(fs.readFileSync(hook, 'utf8')).toBe("#!/bin/sh\n# jamcli-workflow: written by jamcli workflow hook install. Remove it with jamcli workflow hook remove.\nexec '/usr/local/bin/jamcli' workflow run 'fix' --headless --expect-digest 'abc123'\n");
   expect(fs.statSync(hook).mode & 0o111).toBeTruthy();
   fs.writeFileSync(path.join(root, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nmy own hook\n');
-  expect(() => installGitHook(root, 'pre-commit', 'fix', 'jamcli')).toThrow('was not written by JamCLI');
+  expect(() => installGitHook(root, 'pre-commit', 'fix', 'jamcli', 'abc123')).toThrow('was not written by JamCLI');
 
   const line = cronLine('0 9 * * 1-5', root, 'fix', '/usr/local/bin/jamcli');
   expect(line).toBe(`0 9 * * 1-5 cd '${root}' && '/usr/local/bin/jamcli' workflow run 'fix' --headless # jamcli-workflow ${root} fix`);

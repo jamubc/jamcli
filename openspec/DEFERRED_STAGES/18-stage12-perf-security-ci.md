@@ -27,7 +27,7 @@
 **Acceptance criteria:**
 - [ ] 1. Project MCP trust gate: gate `.jamcli/mcp.json` on digest like project hooks, ask on first start
 - [ ] 2. Workflow agent `mode: auto` cap: cap step mode at session mode or require trusted workflow file
-- [ ] 3. Git hook digest: record workflow digest at `hook install`, refuse on change
+- [x] 3. Git hook digest: record workflow digest at `hook install`, refuse on change
 - [ ] 4. Observer socket dir: refuse world-writable dir or bind inside 0700 state dir
 - [ ] 5. Per-host net: see `17-unfinished-stages.md` Task 3
 - [ ] Note: review was diff-only, not line-by-line; Part 1 probes guard paths until they run

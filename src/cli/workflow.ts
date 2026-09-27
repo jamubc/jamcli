@@ -1,7 +1,7 @@
 import readline from 'readline';
 import path from 'path';
 import { executeWorkflow, listRuns, readRunLog, recordApproval, type RunSummary } from '../core/workflows/engine.js';
-import { findWorkflow, loadWorkflows, resolveInputs, stepKind } from '../core/workflows/schema.js';
+import { findWorkflow, loadWorkflows, resolveInputs, stepKind, workflowDigest } from '../core/workflows/schema.js';
 import { runtimeRunners } from '../core/workflows/runners.js';
 import { installGitHook, listSchedules, removeGitHook, scheduleWorkflow, unscheduleWorkflow, type ScheduleSystem } from '../core/workflows/triggers.js';
 import type { RuntimeOptions } from '../core/runtime/index.js';
@@ -63,7 +63,7 @@ export async function runWorkflowCommand(args: string[], projectRoot: string, op
   const io = options.io ?? stdio;
   const headless = args.includes('--headless');
   const flag = (name: string) => args.flatMap((word, index) => (word === name && args[index + 1] !== undefined ? [args[index + 1]] : []));
-  const valued = new Set(['--input', '--allow-tool', '--cron']);
+  const valued = new Set(['--input', '--allow-tool', '--cron', '--expect-digest']);
   const words = args.filter((word, index) => !word.startsWith('--') && !valued.has(args[index - 1]));
   const [action = 'list', first, second] = words;
   const ask = headless ? undefined : io.ask;
@@ -91,6 +91,10 @@ export async function runWorkflowCommand(args: string[], projectRoot: string, op
       case 'run': {
         if (!first) break;
         const workflow = findWorkflow(projectRoot, first);
+        const [expected] = flag('--expect-digest');
+        if (expected && expected !== workflowDigest(workflow)) {
+          throw new Error(`${workflow.file} changed since the hook that runs ${first} was installed, so it did not run. Review the file, then run jamcli workflow hook install <git-hook> ${first} again.`);
+        }
         const given = Object.fromEntries(
           flag('--input').map((pair) => {
             const at = pair.indexOf('=');
@@ -123,8 +127,8 @@ export async function runWorkflowCommand(args: string[], projectRoot: string, op
       }
       case 'hook': {
         if (first === 'install' && second && words[3]) {
-          findWorkflow(projectRoot, words[3]);
-          io.out(`Wrote ${installGitHook(projectRoot, second, words[3], jamcliCommand())}. It runs ${words[3]} headless.`);
+          const workflow = findWorkflow(projectRoot, words[3]);
+          io.out(`Wrote ${installGitHook(projectRoot, second, words[3], jamcliCommand(), workflowDigest(workflow))}. It runs ${words[3]} headless, and refuses if the workflow file changes before the hook is reinstalled.`);
           return 0;
         }
         if (first === 'remove' && second) {

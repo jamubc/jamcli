@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { userConfigDir } from '../../utils/paths.js';
@@ -156,6 +157,9 @@ export function findWorkflow(projectRoot: string, name: string): Workflow {
   if (found) return found;
   throw new Error(`There is no workflow ${name}.${problems.length ? ` Some files did not load: ${problems.join(' ')}` : ''}`);
 }
+
+/** The sha256 of a workflow's file as it is now, so a trigger can tell whether the file it was written for has changed. */
+export const workflowDigest = (workflow: Workflow): string => createHash('sha256').update(fs.readFileSync(workflow.file)).digest('hex');
 
 /** The inputs a run gets: given values, typed, then defaults; a missing required one is an error. */
 export function resolveInputs(workflow: Workflow, given: Record<string, string | number | boolean>): Record<string, string | number | boolean> {
