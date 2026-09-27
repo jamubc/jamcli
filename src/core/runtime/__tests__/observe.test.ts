@@ -111,3 +111,26 @@ test('a compaction and a delegated run are traced, the child under the turn that
   // At warn level nothing went wrong, so nothing was logged.
   expect(fs.existsSync(logFile)).toBe(false);
 });
+
+test('at the default level a failed call says why, and a turn stopped behind an unanswered prompt is a warning', async () => {
+  const runtime = await start({ observe: { level: 'warn', logFile } });
+  server.enqueue(
+    { toolCalls: [{ id: 'm1', name: 'read_file', arguments: { path: 'missing.txt' } }] },
+    { toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] }
+  );
+  // Nobody answers the prompt; the person stops the turn, as one who cannot reach it does.
+  const result = await runtime.run('go', (event) => {
+    if (event.type === 'approval_request') setTimeout(() => runtime.cancel(), 20);
+  });
+  expect(result.status).toBe('cancelled');
+  await runtime.close();
+
+  const lines = read(logFile);
+  expect(lines.every((line) => line.level === 'warn' || line.level === 'error')).toBe(true);
+  const failed = lines.find((line) => line.msg === 'tool call' && line.tool === 'read_file');
+  expect(failed.error).toContain('missing.txt');
+  const unanswered = lines.find((line) => line.msg === 'prompt unanswered');
+  expect(unanswered).toMatchObject({ tool: 'run_command', call: 'c1', status: 'cancelled' });
+  expect(unanswered.waited_ms).toBeGreaterThanOrEqual(0);
+  expect(lines.find((line) => line.msg === 'turn ended')).toMatchObject({ level: 'warn', status: 'cancelled' });
+});

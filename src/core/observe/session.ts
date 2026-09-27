@@ -8,6 +8,15 @@ export const DEBUG_TEXT_LIMIT = 4_000;
 
 const bounded = (text: string) => (text.length > DEBUG_TEXT_LIMIT ? `${text.slice(0, DEBUG_TEXT_LIMIT)}... (${text.length - DEBUG_TEXT_LIMIT} more characters)` : text);
 
+/** Characters of a failed call's first line of output that its warning keeps. */
+const REASON_LIMIT = 200;
+
+/** Why a call failed, in the first line of its output, for the warning that reports it at any level. */
+const reasonOf = (output: string) => (output.split('\n').find((line) => line.trim()) ?? '').trim().slice(0, REASON_LIMIT);
+
+/** How long a prompt may wait before a turn cancelled behind it is worth a warning. */
+export const LONG_PROMPT_MS = 60_000;
+
 export interface SessionObservation {
   /** The span model requests, hooks, and children are made under right now. */
   current(): Span;
@@ -51,6 +60,9 @@ export function observeSession(
   let turn: Span | undefined;
   const tools = new Map<string, Span>();
   const current = () => turn ?? session;
+  // The prompts shown this turn: when each was asked, and how long each answered one waited.
+  const asked = new Map<string, { tool: string; since: number }>();
+  let longestPrompt = 0;
 
   return {
     session,
@@ -77,12 +89,23 @@ export function observeSession(
       turn = undefined;
       for (const span of tools.values()) span.end({ error: 'the turn ended first' });
       tools.clear();
-      observer.log(message ? 'error' : 'info', 'turn ended', {
+      // A prompt nobody answered, or a turn stopped after a long wait on one, is how a person
+      // who could not reach a prompt shows up in the log.
+      const now = Date.now();
+      for (const [call, prompt] of asked) {
+        observer.log('warn', 'prompt unanswered', { session: facts.sessionId, tool: prompt.tool, call, waited_ms: now - prompt.since, status: result?.status ?? 'error' });
+        longestPrompt = Math.max(longestPrompt, now - prompt.since);
+      }
+      const stuck = result?.status === 'cancelled' && (asked.size > 0 || longestPrompt >= LONG_PROMPT_MS);
+      observer.log(message ? 'error' : stuck ? 'warn' : 'info', 'turn ended', {
         session: facts.sessionId,
         status: result?.status ?? 'error',
         steps: result?.turns,
+        ...(longestPrompt ? { longest_prompt_ms: longestPrompt } : {}),
         ...(message ? { error: message } : {}),
       });
+      asked.clear();
+      longestPrompt = 0;
       if (result?.response && observer.enabled('debug')) observer.log('debug', 'response', { session: facts.sessionId, text: bounded(result.response) });
     },
     event(event) {
@@ -118,13 +141,35 @@ export function observeSession(
             },
           });
           tools.delete(id);
-          observer.log(failed ? 'warn' : 'info', 'tool call', { tool: result.tool, call: result.callId, status: result.status, duration_ms: result.durationMs });
+          observer.log(failed ? 'warn' : 'info', 'tool call', {
+            tool: result.tool,
+            call: result.callId,
+            status: result.status,
+            duration_ms: result.durationMs,
+            ...(failed && reasonOf(result.output ?? '') ? { error: reasonOf(result.output ?? '') } : {}),
+          });
           if (observer.enabled('debug')) observer.log('debug', 'tool output', { tool: result.tool, call: result.callId, output: bounded(result.output ?? '') });
           return;
         }
-        case 'approval_decision':
-          observer.log('info', 'approval', { tool: event.tool, call: event.callId, allow: event.allow, by: event.by, ...(event.rule ? { rule: event.rule } : {}) });
+        case 'approval_request':
+          asked.set(event.call.id, { tool: event.call.name, since: Date.now() });
+          observer.log('info', 'approval requested', { tool: event.call.name, call: event.call.id, ...(event.request?.reason ? { reason: event.request.reason } : {}) });
           return;
+        case 'approval_decision': {
+          const prompt = asked.get(event.callId);
+          asked.delete(event.callId);
+          const waited = prompt ? Date.now() - prompt.since : undefined;
+          if (waited !== undefined) longestPrompt = Math.max(longestPrompt, waited);
+          observer.log('info', 'approval', {
+            tool: event.tool,
+            call: event.callId,
+            allow: event.allow,
+            by: event.by,
+            ...(event.rule ? { rule: event.rule } : {}),
+            ...(waited !== undefined ? { waited_ms: waited } : {}),
+          });
+          return;
+        }
         case 'usage':
           observer.log('info', 'model usage', {
             model: event.model,

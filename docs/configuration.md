@@ -98,3 +98,19 @@ A profile is a named file in `profiles/` with `name`, `preferred_model`,
 | `JAMCLI_MICRO` | `auto`, `always`, or `never`: the micro status view. See [interface.md](interface.md). |
 | `NO_COLOR` | Forces the monochrome theme. |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY` | Provider keys, when not in the keychain. |
+
+## Logs
+
+JamCLI writes a JSON line log, a file a day, to `logs/` in its state directory
+(`~/Library/Application Support/jamcli` on macOS, `~/.local/state/jamcli` on Linux) and
+keeps 14 days of it; `--log-file` names another file. Credentials are redacted from every
+line. By default it records warnings and errors, which is where something went wrong shows:
+
+- a tool call that failed or timed out, with the first line of why;
+- a prompt that was never answered, with how long it waited, when its turn ends;
+- a turn stopped while a prompt waited, or after one waited a minute or more, as a
+  warning with `longest_prompt_ms`, since that is how a prompt nobody could reach looks.
+
+`-v` adds each session, turn, tool call, and model request, and each prompt as it is asked
+and answered with `waited_ms`; `-vv` adds prompts, arguments, and outputs. A session's own
+record, every message and decision, is in `.jamcli/history/` in the project.
