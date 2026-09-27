@@ -8,20 +8,20 @@
 
 ## 2. The host for surfaces without a terminal
 
-- [ ] 2.1 `CommandHost`: the context without a terminal, output as entries, one pending choice, `/choose`, answers given in advance, session opening through an optional opener, bypass refused, notes kept, the system clipboard, exit ending the session.
-- [ ] 2.2 Host tests.
+- [x] 2.1 `CommandHost`: the context without a terminal, output as entries, one pending choice, `/choose`, answers given in advance, session opening through an optional opener, bypass refused, notes kept, the system clipboard, exit ending the session.
+- [x] 2.2 Host tests.
 
 ## 3. Headless and ACP
 
 - [ ] 3.1 Headless: a prompt naming a built-in command runs it through the host; `--choose` answers its choices in order; text, json, and stream-json carry its output.
 - [ ] 3.2 ACP: offer every built-in command; a prompt naming one runs it through the host, with output as message chunks, compaction events mapped, and `/choose` for choices.
 - [ ] 3.3 Tests on the assembled surfaces with the fake provider.
-- [ ] 3.4 `src/commands/__tests__/parity.test.ts`.
+- [x] 3.4 `src/commands/__tests__/parity.test.ts`.
 
 ## 4. Whose answer it is
 
 - [ ] 4.1 An approval request says when its tool always asks; the observer's `requires_action` update names the tool and says so.
-- [ ] 4.2 A choice request can be marked as the person's; the hooks trust question is; the host never answers it from answers given in advance.
+- [x] 4.2 A choice request can be marked as the person's; the hooks trust question is; the host never answers it from answers given in advance.
 - [ ] 4.3 Tests for both.
 
 ## 5. Docs

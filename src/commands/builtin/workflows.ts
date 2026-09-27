@@ -41,7 +41,7 @@ export const workflowsCommand: SlashCommand = {
           ? ['approve', rest[0] ?? '', rest[1] ?? '', ...(action === 'reject' ? ['--reject'] : [])]
           : ['list'];
     // Loaded when used, so the interface starts without the workflow engine.
-    void import('../../cli/workflow.js')
+    return import('../../cli/workflow.js')
       .then(({ runWorkflowCommand }) => runWorkflowCommand(command, ctx.projectRoot, { io }))
       .then(() => ctx.show(lines.join('\n')));
   },

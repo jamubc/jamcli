@@ -399,6 +399,7 @@ export function App(props: AppProps) {
     exit: onExit,
     commands: () => commands,
     choose: pick,
+    answerChoice: () => say('info', 'Lists open on the screen here: choose with the arrow keys and Enter, or Escape to close one.'),
     themeName: theme.name,
     setTheme: (name) => setTheme(resolveTheme(name, process.env)),
     statusStyle,

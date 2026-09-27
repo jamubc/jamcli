@@ -90,6 +90,16 @@ const help: SlashCommand = {
 };
 
 
+const choose: SlashCommand = {
+  name: 'choose',
+  args: '<key|number|none>',
+  summary: 'Answer the list a command offered, where there is no screen to choose on',
+  source: 'built-in',
+  run(ctx, args) {
+    ctx.answerChoice(args);
+  },
+};
+
 const model: SlashCommand = {
   name: 'model',
   args: '[provider:model|info]',
@@ -110,7 +120,7 @@ const model: SlashCommand = {
       const request = { action: 'set' as ConfigAction, args: ['model', chosen, '--scope', 'user'] };
       await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
     };
-    if (args) return void switchTo(args);
+    if (args) return switchTo(args);
     const inUse = `${ctx.runtime.model.provider}:${ctx.runtime.model.model}`;
     ctx.choose({
       title: 'Models the configured providers offer',
@@ -553,7 +563,7 @@ const agentsCommand: SlashCommand = {
         })),
       empty: 'No agents.',
       hint: 'Enter makes it the default for tasks that name none · /agents list prints this',
-      choose: (item) => void choose(item.key),
+      choose: (item) => choose(item.key),
     });
   },
 };
@@ -612,7 +622,7 @@ const effort: SlashCommand = {
     const word = args.trim().toLowerCase();
     if (word) {
       if (!isThinkingChoice(word)) return ctx.notice('warn', `The effort is one of ${THINKING_CHOICES.join(', ')}, not ${word}.`);
-      return void choose(word);
+      return choose(word);
     }
     const current = choiceOf(ctx.runtime.thinking);
     ctx.choose({
@@ -625,7 +635,7 @@ const effort: SlashCommand = {
       })),
       empty: 'No choices.',
       hint: `Enter applies it now and keeps it for new sessions · levels run ${EFFORT_LEVELS[0]} to ${EFFORT_LEVELS[EFFORT_LEVELS.length - 1]}`,
-      choose: (item) => void choose(item.key as ThinkingChoice),
+      choose: (item) => choose(item.key as ThinkingChoice),
     });
   },
 };
@@ -676,6 +686,7 @@ const exit: SlashCommand = {
 /** The built-in commands, in the order help lists them. */
 export const BUILTIN_COMMANDS: SlashCommand[] = [
   help,
+  choose,
   setup,
   model,
   style,

@@ -1,7 +1,5 @@
-import { createHostClipboard, type CliRenderer } from '@opentui/core';
-
-/** Put text on the clipboard. Resolves to how it got there, or false when nothing could take it. */
-import type { Copier } from '../../commands/types.js';
+import type { CliRenderer } from '@opentui/core';
+import { hostClipboard, type Copier } from '../../utils/clipboard.js';
 
 export type { Copier };
 
@@ -11,26 +9,14 @@ export type { Copier };
  * the terminal's own OSC 52, which reaches the machine the person sits at.
  */
 export function systemCopier(renderer: Pick<CliRenderer, 'copyToClipboardOSC52'>): { copy: Copier; dispose(): void } {
-  let host: ReturnType<typeof createHostClipboard> | undefined;
-  let hostFailed = false;
+  const host = hostClipboard();
   return {
     async copy(text) {
-      if (!hostFailed && !process.env.SSH_CONNECTION) {
-        try {
-          host ??= createHostClipboard();
-          const result = await host.writeText(text);
-          if (result.status === 'written') return 'system';
-        } catch {
-          // No system clipboard here: the terminal is asked instead, from now on.
-        }
-        hostFailed = true;
-      }
+      if (await host.write(text)) return 'system';
       return renderer.copyToClipboardOSC52(text) ? 'terminal' : false;
     },
     dispose() {
-      host?.dispose();
+      host.dispose();
     },
   };
 }
-
-/** How much was copied and where, for a notice: a terminal copy may be ignored by the terminal. */

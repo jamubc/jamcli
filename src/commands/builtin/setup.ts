@@ -133,7 +133,7 @@ export const setup: SlashCommand = {
         if (item.key.startsWith('use:')) return adopt(ctx, item.key.slice('use:'.length));
         if (item.key.startsWith('provider:')) return chooseHosted(ctx, item.key.slice('provider:'.length));
         const suggestion = surveyed?.suggestion;
-        if (suggestion) void pull(ctx, suggestion.name, suggestion.downloadGb);
+        if (suggestion) return pull(ctx, suggestion.name, suggestion.downloadGb);
       },
     });
   },

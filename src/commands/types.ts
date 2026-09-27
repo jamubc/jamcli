@@ -3,6 +3,7 @@ import type { PermissionMode } from '../core/permissions/modes.js';
 import type { AgentEvent } from '../core/types.js';
 import type { StatusStyleDefinition } from '../styles/statusStyles.js';
 import type { ThemeName } from '../types/config.js';
+import type { Copier } from '../utils/clipboard.js';
 
 /** Where a command comes from. The palette shows a custom command's source. */
 export type CommandSource = 'built-in' | 'user' | 'project' | 'plugin' | 'mcp';
@@ -52,8 +53,7 @@ export interface ChoiceRequest {
   personOnly?: boolean;
 }
 
-/** Put text on the clipboard: the system's, else the terminal's. Resolves false when neither takes it. */
-export type Copier = (text: string) => Promise<'system' | 'terminal' | false>;
+export type { Copier } from '../utils/clipboard.js';
 
 export type NoticeLevel = 'info' | 'warn' | 'error';
 
@@ -90,6 +90,8 @@ export interface CommandContext {
   commands(): SlashCommand[];
   /** Offer a list to choose from. */
   choose(request: ChoiceRequest): void;
+  /** Answer the list a command offered, as /choose does where there is no screen to choose on. */
+  answerChoice(answer: string): void;
   /** The theme in use. */
   readonly themeName: ThemeName;
   /** Repaint in a theme, where there is a screen. */

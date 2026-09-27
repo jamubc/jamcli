@@ -19,7 +19,7 @@ export const plugins: SlashCommand = {
   source: 'built-in',
   run(ctx) {
     const lines: string[] = [];
-    void import('../../cli/plugin.js')
+    return import('../../cli/plugin.js')
       .then(({ runPluginCommand }) => runPluginCommand(['list'], ctx.projectRoot, { out: (line) => lines.push(line), err: (line) => lines.push(line) }))
       .then(() =>
       ctx.show([...lines, '', 'Install, update, or remove plugins with jamcli plugin; changes load with the next session.'].join('\n'))
@@ -46,6 +46,7 @@ export function askToTrustHooks(ctx: CommandContext): void {
   const project = hooks.filter(needsTrust);
   ctx.choose({
     title: 'This project configures hooks. Run them?',
+    personOnly: true,
     items: [
       { key: 'trust', label: 'Trust them and run them', detail: 'for this project, until they change' },
       { key: 'not-now', label: 'Not now', detail: 'they stay off; /hooks trust turns them on' },
