@@ -209,21 +209,24 @@ const help: SlashCommand = {
 const model: SlashCommand = {
   name: 'model',
   args: '[provider:model|info]',
-  summary: 'Choose the model from what the providers offer, or name one',
+  summary: 'Choose the model, now and for new sessions, from what the providers offer, or name one',
   source: 'built-in',
   run(ctx, args) {
     if (args === 'info') return ctx.show(modelReport(ctx.runtime.modelInfo));
-    const switchTo = (ref: string) => {
+    const switchTo = async (ref: string) => {
       if (waitForTurn(ctx, 'switch models')) return;
       try {
         ctx.runtime.setModel(ref);
-        ctx.refresh();
-        ctx.notice('info', `Later turns use ${ctx.runtime.model.provider}:${ctx.runtime.model.model}.`);
       } catch (error: any) {
-        ctx.notice('warn', `Not switched: ${error?.message ?? error}`);
+        return ctx.notice('warn', `Not switched: ${error?.message ?? error}`);
       }
+      ctx.refresh();
+      const chosen = `${ctx.runtime.model.provider}:${ctx.runtime.model.model}`;
+      ctx.notice('info', `Later turns use ${chosen}.`);
+      const request = { action: 'set' as ConfigAction, args: ['model', chosen, '--scope', 'user'] };
+      await throughCli(ctx, (io) => runConfigCommand(request, ctx.projectRoot, io), 'config', 'config');
     };
-    if (args) return switchTo(args);
+    if (args) return void switchTo(args);
     const inUse = `${ctx.runtime.model.provider}:${ctx.runtime.model.model}`;
     ctx.pick({
       title: 'Models the configured providers offer',
@@ -236,7 +239,7 @@ const model: SlashCommand = {
         return { items, ...(problems.length ? { note: `Not listed: ${problems.join('; ')}` } : {}) };
       }),
       empty: 'No provider listed a model. /config provider shows how each is set up.',
-      hint: 'Enter switches later turns to it · /model info tells what is known about the one in use',
+      hint: 'Enter switches to it and saves it for new sessions · /model info tells what is known about the one in use',
       choose: (item) => switchTo(item.key),
     });
   },

@@ -38,8 +38,10 @@ export OPENAI_API_KEY=...       # or read from the environment
 jamcli auth login openrouter    # browser sign-in for OpenRouter
 ```
 
-Then choose a model with `/model` in the interface, or `--model anthropic:<model>` on
-the command line. Models are addressed as `provider:model`. See
+Then choose a model with `/model` in the interface: it switches now and becomes the
+default for new sessions. Outside the interface, `jamcli config set model <provider:model>
+--scope user` sets the same default, and `--model anthropic:<model>` runs once on another
+model. Models are addressed as `provider:model`. See
 [providers.md](providers.md).
 
 ## A first task

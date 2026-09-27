@@ -58,8 +58,10 @@ Keys never enter project files, and a subprocess gets none unless a setting name
 
 ## Models
 
-- `/model` lists what the configured providers offer, with what is known of each, and
-  switches the session's model. `/model info` describes the one in use.
+- `/model` lists what the configured providers offer, with what is known of each,
+  switches the session's model, and saves it as `model` in your user settings, so new
+  sessions start on it. A project that sets `model` still wins in that project, and
+  `/model` says so. `/model info` describes the one in use.
 - `--model provider:model` runs one turn on another model; `/profile` and profiles set
   the session's model.
 - The catalog carries context windows, output limits, prices (input, output, cache read

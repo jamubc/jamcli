@@ -91,8 +91,13 @@ test('/cost, /context, and /model report on the session, and /model switches lat
     await send(setup, '/model ollama:other-model');
     const switched = await frameWith(setup, (frame) => frame.includes('Later turns use ollama:other-model.'));
     expect(switched).toContain('default mode · ollama:other-model');
+    // It is saved for new sessions, in the person's own settings.
+    const saved = () => JSON.parse(fs.readFileSync(path.join(process.env.JAMCLI_CONFIG_DIR!, 'config.json'), 'utf8')).model;
+    await frameWith(setup, (frame) => frame.includes('Set model in'));
+    expect(saved()).toBe('ollama:other-model');
     await send(setup, '/model anthropic:claude-x');
     await frameWith(setup, (frame) => frame.includes('Not switched:'));
+    expect(saved()).toBe('ollama:other-model');
   } finally {
     await close();
   }
