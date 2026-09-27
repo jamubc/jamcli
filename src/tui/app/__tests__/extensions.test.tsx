@@ -45,7 +45,9 @@ test('/skills, /commands, and /hooks show what each extension point holds', asyn
 test('a project\'s hooks are asked about once at the start, and run only when trusted', async () => {
   const ran = path.join(context.root, 'hook-ran');
   projectHooks(`touch ${ran}`);
-  const first = await open({}, { size: tall });
+  // Wide enough that the note's full command, including the harness's temp-dir path, never wraps.
+  const wide = { width: 220, height: 44 };
+  const first = await open({}, { size: wide });
   try {
     const asked = await frameWith(first.setup, (frame) => frame.includes('This project configures hooks. Run them?'));
     expect(asked).toContain(`pre_tool: touch ${ran}`);
@@ -57,7 +59,7 @@ test('a project\'s hooks are asked about once at the start, and run only when tr
     await first.close();
   }
 
-  const second = await open({}, { size: tall });
+  const second = await open({}, { size: wide });
   try {
     await frameWith(second.setup, (frame) => frame.includes('This project configures hooks. Run them?'));
     second.setup.mockInput.pressEnter();
@@ -71,7 +73,7 @@ test('a project\'s hooks are asked about once at the start, and run only when tr
   }
 
   // Trusted as they are, they are not asked about again.
-  const third = await open({}, { size: tall });
+  const third = await open({}, { size: wide });
   try {
     await frameWith(third.setup, (frame) => frame.includes('Message JamCLI.'));
     await Bun.sleep(50);

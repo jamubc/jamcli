@@ -100,7 +100,7 @@ test('a session through every command, as a person meets it', async () => {
   await command('/model', 'Models the configured providers offer', true);
   await command('/style', 'Working indicator styles', true);
   await command('/theme', 'light text on a dark background', true);
-  await command('/config', 'Settings, each with the file it comes from', true);
+  await command('/config', 'Settings: what each does, its value, and where it comes from', true);
   await command('/permissions', 'Mode: default.');
   await command('/context', 'Compaction starts at');
   await command('/cost', 'This session:');
@@ -108,8 +108,10 @@ test('a session through every command, as a person meets it', async () => {
   await command('/mcp', 'No MCP servers configured.');
   await command('/agents list', 'Agents that delegated work runs on:');
   // With no profile files, it says where they would go: here, the user directory in use.
-  expect(await command('/profile', 'The profile is default')).toContain(`${path.join(base, 'user', 'profiles')}${path.sep}`);
-  await command('/doctor', /JamCLI \S+ on linux/);
+  // A long temporary path wraps at the screen's edge, so the rows are joined before the check.
+  const unwrapped = (screen: string) => screen.split('\n').map((row) => row.replace(/[\s\u2580-\u259f]+$/, '')).join('');
+  expect(unwrapped(await command('/profile', 'The profile is default'))).toContain(`${path.join(base, 'user', 'profiles')}${path.sep}`);
+  await command('/doctor', /JamCLI \S+ on (linux|darwin)/);
   await command('/export notes.md', 'Wrote notes.md.');
   expect(fs.readFileSync(path.join(base, 'project', 'notes.md'), 'utf8')).toContain('approved-output');
   await command('/copy', /Copied \d+ messages|cannot take text for the clipboard/);
