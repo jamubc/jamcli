@@ -58,7 +58,7 @@ test("only a person's denial takes back the rest of the step", async () => {
     if (event.type === 'approval_request') event.decide(false);
   });
   expect(byUser.outcome.results.map((result) => result.status)).toEqual(['denied', 'cancelled']);
-  expect(byUser.outcome.denial).toEqual({ feedback: undefined });
+  expect(byUser.outcome.denial).toEqual({ feedback: undefined, proceed: false });
 });
 
 test('allowed changes are recorded with who allowed them; reads and the plan are not', async () => {

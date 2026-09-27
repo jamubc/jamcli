@@ -107,7 +107,7 @@ export type ApprovalBy = 'user' | 'policy' | 'hook' | 'flag' | 'mode';
  */
 export type ApprovalDecision =
   | boolean
-  | { allow: boolean; scope?: ApprovalScope; pattern?: string; feedback?: string; by?: ApprovalBy };
+  | { allow: boolean; scope?: ApprovalScope; pattern?: string; feedback?: string; by?: ApprovalBy; /** A deny that lets the turn go on, the model told the call did not run. */ proceed?: boolean };
 
 export interface JamSession {
   id: string;
@@ -205,13 +205,14 @@ export interface Agent {
 /** Normalize an approval decision to its parts. */
 export const readDecision = (
   decision: ApprovalDecision
-): { allow: boolean; scope: ApprovalScope; pattern?: string; feedback?: string; by: ApprovalBy } =>
+): { allow: boolean; scope: ApprovalScope; pattern?: string; feedback?: string; by: ApprovalBy; proceed: boolean } =>
   typeof decision === 'boolean'
-    ? { allow: decision, scope: 'once', by: 'user' }
+    ? { allow: decision, scope: 'once', by: 'user', proceed: false }
     : {
         allow: decision.allow,
         scope: decision.scope ?? 'once',
         pattern: decision.pattern,
         feedback: decision.feedback,
         by: decision.by ?? 'user',
+        proceed: decision.proceed ?? false,
       };

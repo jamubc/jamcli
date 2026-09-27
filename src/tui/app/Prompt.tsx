@@ -15,15 +15,16 @@ const fitTo = (line: string, room: number): string => (line.length > room ? `${l
 /** The most lines of a command the prompt shows. */
 const PREVIEW_LINES = 12;
 
-/** The keyed choices. Escape is the fifth: deny and stop the turn. */
-type Choice = '1' | '2' | '3' | '4';
+/** The keyed choices. Escape is the sixth: deny and stop the turn. */
+type Choice = '1' | '2' | '3' | '4' | '5';
 
 /**
  * The permission prompt, which replaces the composer while a call waits. It reads top
  * to bottom as a decision: what wants to run; why the harness stopped; then the keyed
  * choices, the pattern a grant would remember beside the two that use it. Escape, shown
  * as a badge in the corner, denies and stops the turn; the badge turns red when pressed.
- * A deny can instead carry feedback for the model, typed on a line of its own.
+ * A deny can instead let the turn go on, or carry feedback for the model, typed on a
+ * line of its own.
  */
 export function PermissionPrompt(props: {
   approval: PendingApproval;
@@ -35,7 +36,7 @@ export function PermissionPrompt(props: {
   /** Escape was pressed: the badge shows red while the answer lands. */
   escaping?: boolean;
   onFeedback: (text: string) => void;
-  /** A choice was clicked: 1 to 4, as its key would. */
+  /** A choice was clicked: 1 to 5, as its key would. */
   onChoose?: (key: Choice) => void;
 }) {
   const { approval, queued, syntax, file, selected, feedback, escaping } = props;
@@ -108,7 +109,8 @@ export function PermissionPrompt(props: {
           {label('1', 'Allow once')}
           {pattern ? label('2', 'Allow this session', pattern) : null}
           {pattern ? label('3', 'Allow this project', `${pattern} · .jamcli/config.local.json`) : null}
-          {label('4', 'Deny with feedback')}
+          {label('4', 'Deny, continue')}
+          {label('5', 'Deny with feedback')}
           {notes ? <text fg={theme.dim}>{fitTo(notes, room)}</text> : null}
         </box>
       )}

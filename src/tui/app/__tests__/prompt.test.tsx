@@ -15,7 +15,7 @@ test('2 allows the chosen pattern for the session, so the same call no longer as
     const prompt = await frameWith(setup, (value) => value.includes('Allow run_command echo first?'));
     expect(prompt).toContain('1  Allow once');
     expect(prompt).toContain('2  Allow this session   run_command(echo first)');
-    expect(prompt).toContain('4  Deny with feedback');
+    expect(prompt).toContain('5  Deny with feedback');
     // Down walks to broader patterns and stops at the last; Up walks back. Keys that
     // arrive together each count.
     setup.mockInput.pressArrow('down');
@@ -57,14 +57,14 @@ test('3 allows the pattern for the project, in .jamcli/config.local.json', async
   }
 }, 20_000);
 
-test('4 takes feedback, which the model reads, and the turn goes on', async () => {
+test('5 takes feedback, which the model reads, and the turn goes on', async () => {
   const { setup, close } = await open();
   try {
     context.server.enqueue(command('c1', 'rm -rf build'), { text: 'I will use the clean script instead.' });
     await setup.mockInput.typeText('clean up');
     setup.mockInput.pressEnter();
     await frameWith(setup, (value) => value.includes('Allow run_command rm -rf build?'));
-    setup.mockInput.pressKey('4');
+    setup.mockInput.pressKey('5');
     await frameWith(setup, (value) => value.includes('Feedback for the model'));
     await setup.mockInput.typeText('use npm run clean');
     setup.mockInput.pressEnter();
@@ -105,6 +105,25 @@ test('bypass turns on only when the person types yes, and the status line says s
     // No sandbox here, so auto mode is refused with the reason.
     await frameWith(setup, (value) => value.includes('Not switched to auto mode: auto mode runs commands without asking only inside a sandbox'));
     expect(runtime.permissionMode).toBe('plan');
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('4 denies and the turn goes on: the model reads that the call did not run', async () => {
+  const { setup, close } = await open();
+  try {
+    context.server.enqueue(command('c1', 'rm -rf build'), { text: 'Skipped the delete.' });
+    await setup.mockInput.typeText('clean up');
+    setup.mockInput.pressEnter();
+    const prompt = await frameWith(setup, (value) => value.includes('4  Deny, continue'));
+    expect(prompt).toContain('[Esc]');
+    setup.mockInput.pressKey('4');
+    const after = await frameWith(setup, (value) => value.includes('Skipped the delete.'));
+    expect(after).toContain('denied: run_command rm -rf build');
+    expect(after).not.toContain('Stopped because a tool call was denied.');
+    const toolMessage = context.server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
+    expect(toolMessage.content).toBe('Tool call was denied.');
   } finally {
     await close();
   }

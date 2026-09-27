@@ -10,7 +10,7 @@ import type { StatusData, ViewAction } from '../state/view.js';
 export const MODE_CYCLE: PermissionMode[] = ['default', 'accept-edits', 'plan', 'auto'];
 
 /** The answer to a permission prompt: once, for the session or the project with a pattern, or no. */
-export type PromptChoice = { allow: true; scope: ApprovalScope; pattern?: string } | { allow: false; feedback?: string };
+export type PromptChoice = { allow: true; scope: ApprovalScope; pattern?: string } | { allow: false; feedback?: string; proceed?: boolean };
 
 /**
  * The branch checked out in `root`, read from `.git/HEAD` without starting git. In a
@@ -140,7 +140,7 @@ export class SessionController {
     decide(
       choice.allow
         ? { allow: true, scope: choice.scope, ...(choice.pattern ? { pattern: choice.pattern } : {}) }
-        : { allow: false, ...(choice.feedback ? { feedback: choice.feedback } : {}) }
+        : { allow: false, ...(choice.feedback ? { feedback: choice.feedback } : {}), ...(choice.proceed ? { proceed: true } : {}) }
     );
   }
 

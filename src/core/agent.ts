@@ -421,7 +421,7 @@ export class CoreAgent implements Agent {
       }
 
       if (signal.aborted) return finish('cancelled', step.text, steps);
-      if (batch.denial && !batch.denial.feedback) {
+      if (batch.denial && !batch.denial.feedback && !batch.denial.proceed) {
         return finish('refused', step.text || 'Stopped because a tool call was denied.', steps);
       }
       if (cap !== undefined && batch.capped > 0 && batch.ran === 0) {

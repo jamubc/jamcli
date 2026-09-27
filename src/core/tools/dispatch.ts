@@ -88,8 +88,8 @@ export interface BatchOutcome {
   ran: number;
   /** Calls not run because the per-turn cap was reached. */
   capped: number;
-  /** Present when the user denied a call; carries any feedback they wrote. */
-  denial?: { feedback?: string };
+  /** Present when the user denied a call. With their feedback, or `proceed`, the turn goes on; bare, it stops. */
+  denial?: { feedback?: string; proceed: boolean };
 }
 
 export const resultFor = (call: ToolCall, status: ToolStatus, output: string, durationMs = 0): ToolResult => ({
@@ -327,7 +327,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         settle(i, result);
         // Only a person saying no takes the rest of the step back.
         if (read.by === 'user') {
-          denial = { feedback: read.feedback };
+          denial = { feedback: read.feedback, proceed: read.proceed };
           stopped = 'denied';
         }
         i += 1;

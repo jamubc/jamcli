@@ -290,14 +290,15 @@ export function App(props: AppProps) {
     [approval, controller]
   );
 
-  /** One of the prompt's four choices, by its key or a click on it. */
-  const answerWith = (key: '1' | '2' | '3' | '4') => {
+  /** One of the prompt's five choices, by its key or a click on it. */
+  const answerWith = (key: '1' | '2' | '3' | '4' | '5') => {
     if (!approval || selection().feedback) return;
     const pattern = approval.suggestions[selection().selected];
     if (key === '1') answer({ allow: true, scope: 'once' });
     else if (key === '2' && pattern) answer({ allow: true, scope: 'session', pattern });
     else if (key === '3' && pattern) answer({ allow: true, scope: 'project', pattern });
-    else if (key === '4') choose(() => ({ feedback: true }));
+    else if (key === '4') answer({ allow: false, proceed: true });
+    else if (key === '5') choose(() => ({ feedback: true }));
   };
 
   /** The profile chosen with /profile, kept for every session opened after it. */
@@ -543,8 +544,8 @@ export function App(props: AppProps) {
         setTimeout(() => answer({ allow: false }), ESC_FLASH_MS);
       } else if (now.feedback) return;
       else if (key.name === '1' || key.name === 'y') answerWith('1');
-      else if (key.name === '2' || key.name === '3') answerWith(key.name);
-      else if (key.name === '4' || key.name === 'n') answerWith('4');
+      else if (key.name === '2' || key.name === '3' || key.name === '4') answerWith(key.name);
+      else if (key.name === '5' || key.name === 'n') answerWith('5');
       else if (key.name === 'down') choose((from) => ({ selected: Math.min(from.selected + 1, Math.max(0, approval.suggestions.length - 1)) }));
       else if (key.name === 'up') choose((from) => ({ selected: Math.max(0, from.selected - 1) }));
       return;
