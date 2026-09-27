@@ -1,7 +1,7 @@
 ## 1. The terminal moves into the product (refactor, then behavior)
 
 - [x] 1.1 `src/testing/terminal.ts` moves to `src/terminal/`, and the end-to-end tests import it from there.
-- [ ] 1.2 It launches JamCLI as the shipped build does, from the running executable and entry, or a compiled binary as itself; records asciinema v2; resizes; names keys.
+- [x] 1.2 It launches JamCLI as the shipped build does, from the running executable and entry, or a compiled binary as itself; records asciinema v2; resizes; names keys.
 
 ## 2. The server and its sessions
 

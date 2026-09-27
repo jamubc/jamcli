@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { startFakeProvider, type FakeProviderServer } from '../testing/fakeProvider.js';
-import { KEYS, openTerminal, type TerminalSession } from '../terminal/terminal.js';
+import { KEYS, jamcliCommand, openTerminal, type TerminalSession } from '../terminal/terminal.js';
 
 /**
  * The interface as a person meets it: the real entry point in a pseudo-terminal, read
@@ -30,7 +30,8 @@ beforeAll(() => {
   for (const args of [['init', '-q', '-b', 'main'], ['add', 'a.txt'], ['commit', '-q', '-m', 'first']]) execFileSync('git', args, { cwd: project, env: identity });
   const env: Record<string, string | undefined> = { ...process.env, JAMCLI_CONFIG_DIR: path.join(base, 'user'), JAMCLI_STATE_DIR: path.join(base, 'state'), JAMCLI_CACHE_DIR: path.join(base, 'cache') };
   for (const name of ['JAMCLI_MODEL', 'JAMCLI_PROFILE', 'JAMCLI_PERMISSION_MODE', 'NO_COLOR']) delete env[name];
-  jam = openTerminal([], { cwd: path.join(base, 'project'), env });
+  // The source entry, launched as the shipped build launches it.
+  jam = openTerminal([], { cwd: path.join(base, 'project'), env, command: jamcliCommand(path.join(import.meta.dir, '..', 'index.tsx')) });
 });
 
 afterAll(() => {
