@@ -55,12 +55,8 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-plan-tools`, on branch `add-plan-tools`, opened 2026-09-27: a plan file, an approved exit
-from plan mode, an `ask_user` tool, todo acceptance checks, and a summary that keeps the todo
-list and plan. Done when `openspec/changes/add-plan-tools/tasks.md` is all checked and the
-change is archived.
-
-Before it: every unit up to `add-session-reflection` is archived, and the owner merged the whole
+None. `add-plan-tools` is archived on its branch, `add-plan-tools`, awaiting the owner's
+merge. Every unit up to `add-session-reflection` is archived, and the owner merged the whole
 stack to `master` on 2026-09-27, so work starts again from one branch. The next unit is the
 first open one in `ROADMAP.md`. `add-windows-support` is shelved, not in the active changes
 tree: it waits for the owner to approve it before any task begins, and `git checkout 9d9f5c6
@@ -68,6 +64,20 @@ tree: it waits for the owner to approve it before any task begins, and `git chec
 it.
 
 ## Closed units
+
+### 11. `add-plan-tools`
+
+Archived as `2026-09-27-add-plan-tools`: 3 requirements added (Plan Artifacts, Ask the
+Person, Todo Acceptance Checks), 2 modified (Permission Modes, Context Management).
+`plan_write` and `exit_plan_mode` are offered in plan mode only; `ask_user` answers through
+the interface and says so elsewhere; a todo item carries its check and the interface shows
+the list as a checklist above the composer; a summary ends with the list and the plan's
+path. Found and left open: the fixed cost of a request is 4,516 tokens against the 4,526
+compaction trigger of the default 8,192 window, and three tests (`catalog`, runtime
+`context`, `observe`) pin it there, so the next tool added to every mode breaks them; the
+`task` tool alone is 776 tokens. A unit that trims the base request, or sizes those tests
+from the base rather than a constant, is worth opening before the next tool. Tested with
+the fake provider on every surface; not yet run on a real model through `jamcli mcp serve`.
 
 ### 10. `add-session-reflection`
 

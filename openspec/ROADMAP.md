@@ -246,10 +246,11 @@ CLI does today (`src/cli/auth.ts:7-8`).
 
 Why last: it has nothing to write until the shapes above exist.
 
-## Inserted unit: `add-plan-tools` (open, 2026-09-27)
+## Inserted unit: `add-plan-tools` (archived 2026-09-27)
 
-Raised by the owner on 2026-09-27 and opened the same day as `openspec/changes/add-plan-tools`,
-ahead of unit 4. Its proposal carries the sources. Each names what already exists so a
+Raised by the owner on 2026-09-27, opened and archived the same day as
+`openspec/changes/archive/2026-09-27-add-plan-tools`, ahead of unit 4. Its proposal carries
+the sources; `SEQUENCE.md` carries what it found and left open. Each names what already exists so a
 proposal starts from the seam, not from scratch. Sources: Ronacher, "What is plan mode"
 (2025-12-17); Columbia DAPLab, "9 critical failure patterns of coding agents"
 (2026-01-08); claude-world.com tutorials S03, S06, S07, S22.
