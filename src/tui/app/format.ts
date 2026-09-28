@@ -202,3 +202,83 @@ export function thinkingLine(reasoning: string, shown: boolean, marks = true, wi
   const lines = thinkingLines(reasoning, width);
   return `${marks ? `${shown ? '▾' : '▸'} ` : ''}thinking, ${lines} line${lines === 1 ? '' : 's'}`;
 }
+
+/** The inline markers a reply may leave open mid-stream, longest first so `**` is seen before `*`. */
+const INLINE_MARKERS = ['**', '__', '~~', '*', '_'] as const;
+
+/** Whether the text ends inside a fenced code block: an odd number of fence lines so far. */
+function inFence(text: string): boolean {
+  let fences = 0;
+  for (const line of text.split('\n')) if (/^ {0,3}(```|~~~)/.test(line)) fences += 1;
+  return fences % 2 === 1;
+}
+
+/**
+ * A reply still arriving, with the inline markers it has opened and not yet closed
+ * closed for it. The markdown view conceals a marker only once its pair has arrived, so
+ * without this `**bo` shows its asterisks and then loses them when `ld**` lands, and every
+ * word after it jumps left. Closed early, the words are styled from their first character
+ * and stay put; when the real closer arrives the text is the same. A marker with nothing
+ * after it yet is left out rather than closed, since `****` is not bold. Only the last
+ * block can be unfinished, so only it is read, and text inside a fenced code block is left
+ * as it is.
+ */
+export function closeMarkers(text: string): string {
+  if (inFence(text)) return text;
+  const start = Math.max(0, text.lastIndexOf('\n\n'));
+  const tail = text.slice(start);
+  const open: { marker: string; at: number }[] = [];
+  let code: { run: string; at: number } | undefined;
+  let i = 0;
+  while (i < tail.length) {
+    if (code) {
+      const closes = tail.startsWith(code.run, i) && tail[i + code.run.length] !== '`';
+      i += closes ? code.run.length : 1;
+      if (closes) code = undefined;
+      continue;
+    }
+    const char = tail[i];
+    if (char === '\\') {
+      i += 2;
+      continue;
+    }
+    if (char === '`') {
+      let run = 0;
+      while (tail[i + run] === '`') run += 1;
+      code = { run: '`'.repeat(run), at: i };
+      i += run;
+      continue;
+    }
+    const marker = INLINE_MARKERS.find((candidate) => tail.startsWith(candidate, i));
+    if (!marker) {
+      i += 1;
+      continue;
+    }
+    if (open.at(-1)?.marker === marker) open.pop();
+    else {
+      const next = tail[i + marker.length];
+      const prev = tail[i - 1];
+      // An opener has a word right after it; `_` also has none right before, so snake_case stays words.
+      const flanking = next !== undefined && !/\s/.test(next) && (marker[0] !== '_' || prev === undefined || !/\w/.test(prev));
+      // A lone `*` at the very end is more often arithmetic than emphasis, so it stays as written.
+      const bare = next === undefined && marker.length > 1;
+      if (flanking || bare) open.push({ marker, at: i });
+    }
+    i += marker.length;
+  }
+  // The last opener, with nothing after it yet, is dropped; everything else open is closed.
+  let cut = tail.length;
+  const closers: string[] = [];
+  if (code) {
+    if (code.at + code.run.length === tail.length) cut = code.at;
+    else closers.push(code.run);
+  } else if (open.length && open.at(-1)!.at + open.at(-1)!.marker.length === tail.length) {
+    cut = open.pop()!.at;
+  }
+  while (open.length) closers.push(open.pop()!.marker);
+  let out = text.slice(0, start + cut);
+  if (!closers.length) return out;
+  // An emphasis closer has to follow a word, so the tail's trailing whitespace goes first.
+  if (closers[0] !== code?.run) out = out.trimEnd();
+  return out + closers.join('');
+}

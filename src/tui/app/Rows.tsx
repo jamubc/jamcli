@@ -2,7 +2,7 @@
 import type { MarkdownRenderable, SyntaxStyle } from '@opentui/core';
 import { useEffect, useRef } from 'react';
 import type { Row } from '../state/view.js';
-import { compactionLine, noticeLine, thinkingLine, thinkingSize, thinkingText, thinkingWindow, toolLine } from './format.js';
+import { closeMarkers, compactionLine, noticeLine, thinkingLine, thinkingSize, thinkingText, thinkingWindow, toolLine } from './format.js';
 import type { ThinkingSize } from './format.js';
 import { useClick } from './mouse.js';
 import { filetypeOf } from './syntax.js';
@@ -50,16 +50,19 @@ function colorSelection(renderable: Selects, colors: Selectable): void {
 }
 
 /**
- * A reply as Markdown. The markdown element builds its own text blocks and gives them
- * no selection colors, so after each change of content they are given the theme's.
+ * A reply as Markdown. While it streams, the markers it has opened are closed for it, so
+ * a word is bold or code from its first character rather than jumping once its closer
+ * arrives. The markdown element builds its own text blocks and gives them no selection
+ * colors, so after each change of content they are given the theme's.
  */
 function MarkdownView({ content, syntax, streaming }: { content: string; syntax: SyntaxStyle; streaming: boolean }) {
   const sel = useSelectable();
   const ref = useRef<MarkdownRenderable>(null);
+  const shown = streaming ? closeMarkers(content) : content;
   useEffect(() => {
     if (ref.current) colorSelection(ref.current as unknown as Selects, sel);
-  }, [content, sel.selectionBg, sel.selectionFg]);
-  return <markdown ref={ref} content={content} syntaxStyle={syntax} streaming={streaming} conceal />;
+  }, [shown, sel.selectionBg, sel.selectionFg]);
+  return <markdown ref={ref} content={shown} syntaxStyle={syntax} streaming={streaming} conceal />;
 }
 
 const NOTICE_LABELS = { info: 'Note', warn: 'Warning', error: 'Error' } as const;

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { diffRows, diffStat, fitStatus, statusParts, thinkingLine, thinkingSize, thinkingText, thinkingWindow, toolLine } from '../format.js';
+import { closeMarkers, diffRows, diffStat, fitStatus, statusParts, thinkingLine, thinkingSize, thinkingText, thinkingWindow, toolLine } from '../format.js';
 import { initialView } from '../../state/view.js';
 
 const diff = 'Index: a.txt\n===\n--- a.txt\n+++ a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n';
@@ -57,6 +57,29 @@ test('the thinking window keeps its height and its width, however much has arriv
 
 test('opened thinking is every line behind the rail, wrapped to the window it is read in', () => {
   expect(thinkingText('first\n\nsecond and third', 14)).toBe('│ first\n│ \n│ second and\n│ third');
+});
+
+test('a reply mid-stream has its open markers closed, so words are styled from their first character', () => {
+  expect(closeMarkers('Here is **bo')).toBe('Here is **bo**');
+  expect(closeMarkers('x **bold** and *it')).toBe('x **bold** and *it*');
+  expect(closeMarkers('a `co')).toBe('a `co`');
+  expect(closeMarkers('a **b `c')).toBe('a **b `c`**');
+  expect(closeMarkers('Here is ~~str')).toBe('Here is ~~str~~');
+  expect(closeMarkers('__ini')).toBe('__ini__');
+  // A closer has to follow a word, so a trailing space waits for the next chunk.
+  expect(closeMarkers('**bold ')).toBe('**bold**');
+  // A marker with nothing after it yet is left out: `****` would not be bold.
+  expect(closeMarkers('Here is **')).toBe('Here is ');
+  expect(closeMarkers('a `')).toBe('a ');
+  // What is already balanced, or was never a marker, is left as written.
+  expect(closeMarkers('done **bold** here')).toBe('done **bold** here');
+  expect(closeMarkers('2 * 3 and 4 *')).toBe('2 * 3 and 4 *');
+  expect(closeMarkers('snake_case and more_')).toBe('snake_case and more_');
+  expect(closeMarkers('a \\*b')).toBe('a \\*b');
+  // Only the last block can be unfinished, and code is never markup.
+  expect(closeMarkers('para one\n\n**bo')).toBe('para one\n\n**bo**');
+  expect(closeMarkers('```\nconst x = **not')).toBe('```\nconst x = **not');
+  expect(closeMarkers('```\ncode\n```\n**bo')).toBe('```\ncode\n```\n**bo**');
 });
 
 test('the thinking window is never wider than the terminal, and never shorter than a line', () => {

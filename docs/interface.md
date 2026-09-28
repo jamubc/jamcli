@@ -93,6 +93,10 @@ the window folds to its line, which says how many lines of thinking there were a
 window draws them. Click that line to read them, and click it again to put it away. In
 screen reader mode the window does not run: the line says only that thinking is under way.
 
+A reply is drawn as Markdown while it streams. A word that will be bold or code is drawn
+so from its first character, rather than showing its markers until the closing ones
+arrive; nothing on the line moves as the rest of it lands.
+
 ## The detailed transcript
 
 The transcript is compact: a tool call is its one line, and thinking is the line it left
