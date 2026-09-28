@@ -67,6 +67,10 @@ test('the gate screens with Jev: the key is sent, the injection is withheld, and
   expect(outcome.kept.map((candidate) => candidate.tool)).toEqual(['read_file']);
   expect(outcome.dropped[0].reason).toContain('flagged as an injection: Jev puts the chance of injection at 99%');
   expect(outcome.usage).toEqual({ prompt_tokens: 120, completion_tokens: 8, total_tokens: 128 });
+  // The exchange as it went over the wire: the body posted, which never holds the key, and the body returned.
+  expect(JSON.parse(outcome.exchange!.sent!)).toEqual(requests[0].body);
+  expect(outcome.exchange!.sent).not.toContain('ts-test-key');
+  expect(JSON.parse(outcome.exchange!.answered!).answers.injection_1).toEqual({ type: 'noul', noul: 0.99 });
 });
 
 test('a refused key fails open with the status', async () => {
@@ -79,4 +83,6 @@ test('a refused key fails open with the status', async () => {
   expect(outcome.kept).toHaveLength(1);
   expect(outcome.notes[0]).toContain('failed open');
   expect(outcome.notes[0]).toContain('401');
+  expect(JSON.parse(outcome.exchange!.sent!).state.task).toBe('fix the build');
+  expect(outcome.exchange!.error).toContain('401');
 });

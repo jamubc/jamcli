@@ -1,7 +1,7 @@
 import type { TokenUsage } from '../types.js';
 import { HeadTailBuffer } from '../tools/command.js';
 import { fetchWithRetry } from '../providers/http.js';
-import type { Classifier, ScreeningCandidate } from './index.js';
+import { withSent, type Classifier, type ScreeningCandidate } from './index.js';
 
 export const JEV_BASE_URL = 'https://api.typesafe.ai';
 export const JEV_DEFAULT_MODEL = 'jev-latest';
@@ -86,20 +86,25 @@ export const jevClassifier = (options: JevOptions): Classifier => {
   const model = options.model || JEV_DEFAULT_MODEL;
   return {
     async classify(task, candidates, signal) {
-      const response = await fetchWithRetry(
-        `${base}/v1/systemone`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${options.apiKey}` },
-          body: JSON.stringify(buildJevRequest(task, candidates, model)),
-        },
-        { provider: 'typesafe', secrets: [options.apiKey], ...(signal ? { signal } : {}) }
-      );
-      const body: any = await response.json();
+      // The body as posted; the key travels in a header, so it is never part of what is kept.
+      const sent = JSON.stringify(buildJevRequest(task, candidates, model));
+      let answered: string;
+      let body: any;
+      try {
+        const response = await fetchWithRetry(
+          `${base}/v1/systemone`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${options.apiKey}` }, body: sent },
+          { provider: 'typesafe', secrets: [options.apiKey], ...(signal ? { signal } : {}) }
+        );
+        answered = await response.text();
+        body = JSON.parse(answered);
+      } catch (error) {
+        throw withSent(error, sent);
+      }
       const usage: TokenUsage | undefined = body?.usage
         ? { prompt_tokens: body.usage.input_tokens ?? 0, completion_tokens: body.usage.output_tokens ?? 0, total_tokens: (body.usage.input_tokens ?? 0) + (body.usage.output_tokens ?? 0) }
         : undefined;
-      return { verdicts: parseJevAnswers(body?.answers, candidates.length), ...(usage ? { usage } : {}) };
+      return { verdicts: parseJevAnswers(body?.answers, candidates.length), ...(usage ? { usage } : {}), exchange: { sent, answered } };
     },
   };
 };

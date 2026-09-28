@@ -28,13 +28,41 @@ export interface ScreeningOutcome {
   screened: boolean;
   /** What the classifier request used, when the provider reported it. */
   usage?: TokenUsage;
+  /** The classifier request, when one was made. */
+  exchange?: ClassifierExchange;
+  /** Each candidate, in the order passed in, with its verdict and fate, when a request was made. */
+  results?: ScreenedResult[];
+}
+
+/**
+ * One classifier request as it went: what was sent, as sent, and what came back, raw, or
+ * the error that stopped it. It is kept for the record so a person can see why the gate
+ * decided as it did; nothing in it reaches the agent's model.
+ */
+export interface ClassifierExchange {
+  sent?: string;
+  answered?: string;
+  error?: string;
+}
+
+/** What the gate made of one candidate: its verdict when the classifier gave one, and whether it was withheld. */
+export interface ScreenedResult {
+  tool: string;
+  verdict?: { relevance: number; injection: boolean; reason?: string };
+  withheld: boolean;
+  /** For a duplicate that was not sent: the index of the candidate whose verdict it took. */
+  duplicateOf?: number;
 }
 
 /** What the classifier said about one request's candidates, and what it cost when known. */
 export interface Classification {
   verdicts: ScreeningVerdict[];
   usage?: TokenUsage;
+  exchange?: ClassifierExchange;
 }
+
+/** Keep what a classifier sent on the error that stopped the request, for the record. */
+export const withSent = (error: unknown, sent: string): unknown => (error && typeof error === 'object' ? Object.assign(error, { sent }) : error);
 
 /**
  * Something that judges tool results. A chat model does it by reading a prompt and answering
@@ -138,11 +166,15 @@ export const buildClassifierPrompt = (prompt: string, candidates: ScreeningCandi
 /** A chat model as the classifier: one prompt holding every result, one JSON object back per result. */
 export const chatClassifier = (provider: ChatProvider, model?: string): Classifier => ({
   async classify(task, candidates, signal) {
-    const completion = await provider.complete(
-      [{ role: 'user', content: buildClassifierPrompt(task, candidates), timestamp: Date.now() }],
-      { model, signal, reasoning: 'off' }
-    );
-    return { verdicts: parseVerdicts(completion.content ?? '', candidates.length), ...(completion.usage ? { usage: completion.usage } : {}) };
+    const sent = buildClassifierPrompt(task, candidates);
+    let completion;
+    try {
+      completion = await provider.complete([{ role: 'user', content: sent, timestamp: Date.now() }], { model, signal, reasoning: 'off' });
+    } catch (error) {
+      throw withSent(error, sent);
+    }
+    const answered = completion.content ?? '';
+    return { verdicts: parseVerdicts(answered, candidates.length), ...(completion.usage ? { usage: completion.usage } : {}), exchange: { sent, answered } };
   },
 });
 
@@ -161,13 +193,23 @@ export const screenToolResults = async ({ prompt, candidates, classifier, thresh
 
   let verdicts: ScreeningVerdict[] = [];
   let usage: TokenUsage | undefined;
+  let exchange: ClassifierExchange | undefined;
   try {
     const classified = await classifier.classify(prompt, unique, signal);
     verdicts = classified.verdicts.filter((verdict) => verdict.index >= 0 && verdict.index < unique.length);
     usage = classified.usage;
+    exchange = classified.exchange;
   } catch (error: any) {
-    notes.push(`The trust gate failed open: ${error?.message ?? String(error)}`);
-    return { kept: candidates, dropped: [], notes, screened: false };
+    const message = error?.message ?? String(error);
+    notes.push(`The trust gate failed open: ${message}`);
+    return {
+      kept: candidates,
+      dropped: [],
+      notes,
+      screened: false,
+      exchange: { ...(typeof error?.sent === 'string' ? { sent: error.sent } : {}), error: message },
+      results: candidates.map((candidate) => ({ tool: candidate.tool, withheld: false })),
+    };
   }
 
   const byIndex = new Map(verdicts.map((verdict) => [verdict.index, verdict]));
@@ -214,5 +256,18 @@ export const screenToolResults = async ({ prompt, candidates, classifier, thresh
     notes.push('Every tool result this turn was removed by the trust gate.');
   }
 
-  return { kept, dropped, notes, screened: true, ...(usage ? { usage } : {}) };
+  const withheld = new Set(dropped.map((removal) => removal.index));
+  const uniqueAt = new Map(unique.map((candidate, index) => [candidate, index]));
+  const results: ScreenedResult[] = candidates.map((candidate, index) => {
+    const twin = twins.get(index);
+    const verdict = byIndex.get(uniqueAt.get(twin === undefined ? candidate : candidates[twin])!);
+    return {
+      tool: candidate.tool,
+      ...(verdict ? { verdict: { relevance: verdict.relevance, injection: verdict.injection, ...(verdict.reason ? { reason: verdict.reason } : {}) } } : {}),
+      withheld: withheld.has(index),
+      ...(twin !== undefined ? { duplicateOf: twin } : {}),
+    };
+  });
+
+  return { kept, dropped, notes, screened: true, ...(usage ? { usage } : {}), ...(exchange ? { exchange } : {}), results };
 };

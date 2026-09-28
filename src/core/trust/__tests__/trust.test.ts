@@ -131,3 +131,51 @@ test('no classifier configured keeps results and reports the gate as off', async
 test('verdicts outside the candidate range are ignored', () => {
   expect(parseVerdicts('{"index":5,"relevance":1,"injection":false}', 2)).toEqual([]);
 });
+
+test('the exchange is kept: what the classifier received, what it answered, and every result\'s verdict', async () => {
+  const received: string[] = [];
+  const answer = '{"index":0,"relevance":0.9,"injection":false,"reason":"on task"}\n{"index":1,"relevance":0.1,"injection":false,"reason":"off topic"}';
+  const outcome = await screenToolResults({
+    prompt: 'fix the build',
+    classifier: chatClassifier({
+      async *streamChat() {
+        yield { content: '', done: true };
+      },
+      async complete(messages) {
+        received.push(messages[0].content);
+        return { content: answer };
+      },
+    }),
+    candidates: [
+      { tool: 'read_file', output: 'tsconfig' },
+      { tool: 'grep', output: 'a recipe' },
+      { tool: 'read_file', output: 'tsconfig' },
+    ],
+  });
+  expect(outcome.exchange).toEqual({ sent: received[0], answered: answer });
+  expect(received[0]).toContain('a recipe');
+  expect(outcome.results).toEqual([
+    { tool: 'read_file', verdict: { relevance: 0.9, injection: false, reason: 'on task' }, withheld: false },
+    { tool: 'grep', verdict: { relevance: 0.1, injection: false, reason: 'off topic' }, withheld: true },
+    { tool: 'read_file', verdict: { relevance: 0.9, injection: false, reason: 'on task' }, withheld: false, duplicateOf: 0 },
+  ]);
+});
+
+test('a failed classifier request keeps what was sent and the error', async () => {
+  const received: string[] = [];
+  const outcome = await screenToolResults({
+    prompt: 'fix the build',
+    classifier: chatClassifier({
+      async *streamChat() {
+        yield { content: '', done: true };
+      },
+      async complete(messages) {
+        received.push(messages[0].content);
+        throw new Error('classifier down');
+      },
+    }),
+    candidates: [{ tool: 'read_file', output: 'contents' }],
+  });
+  expect(outcome.exchange).toEqual({ sent: received[0], error: 'classifier down' });
+  expect(outcome.results).toEqual([{ tool: 'read_file', withheld: false }]);
+});
