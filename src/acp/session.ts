@@ -2,6 +2,7 @@ import type { AvailableCommand, SessionConfigOption, SessionModeState } from '@a
 import { createRuntime, type RunOptions, type RuntimeOptions } from '../core/runtime/index.js';
 import { ConfigService } from '../services/ConfigService.js';
 import { CommandHost, type HostEntry } from '../commands/host.js';
+import type { ChoiceItem } from '../commands/types.js';
 import { hostClipboard } from '../utils/clipboard.js';
 import { PERMISSION_MODES, type PermissionMode } from '../core/permissions/modes.js';
 import type { AgentEvent, ChatMessage, RunResult } from '../core/types.js';
@@ -28,6 +29,8 @@ export interface AcpSessionController {
   runCommand?(text: string, handlers: CommandHandlers): Promise<void>;
   /** A command asked to leave; the server closes the session. */
   readonly exited?: boolean;
+  /** The list a command offered that waits for /choose, when one does. */
+  waitingChoice?(): { title: string; items: ChoiceItem[]; personOnly: boolean } | undefined;
   /** The recorded conversation, for `session/load`. */
   history?(): ChatMessage[];
   /** Switch the permission mode; returns why not when it cannot. */
@@ -156,6 +159,10 @@ export const createAcpSession = async (options: CreateAcpSessionOptions): Promis
     },
     get exited() {
       return exited;
+    },
+    waitingChoice() {
+      const open = host.waiting;
+      return open ? { title: open.request.title, items: open.items, personOnly: Boolean(open.request.personOnly) } : undefined;
     },
     history: () => runtime.session.messages,
     setMode: (mode) => (PERMISSION_MODES.includes(mode as PermissionMode) && mode !== 'bypass' ? runtime.setPermissionMode(mode as PermissionMode) : `There is no mode ${mode} here.`),

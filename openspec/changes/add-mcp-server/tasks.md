@@ -5,10 +5,10 @@
 
 ## 2. The server and its sessions
 
-- [ ] 2.1 `jamcli mcp serve` starts an MCP server on stdio; usage and the dispatcher name it.
-- [ ] 2.2 `session_start`, `session_send`, `session_answer`, `session_state`, `session_stop` over the ACP session controller and its command host: output since last read, what the session waits on, waits bounded by `wait_ms`, progress notifications.
-- [ ] 2.3 The person's answer: always-ask approvals and person-only lists refused to the caller, elicited from the person, denied where the host cannot ask or the person does not accept.
-- [ ] 2.4 Tests through an SDK client on the fake provider.
+- [x] 2.1 `jamcli mcp serve` starts an MCP server on stdio; usage and the dispatcher name it.
+- [x] 2.2 `session_start`, `session_send`, `session_answer`, `session_state`, `session_stop` over the ACP session controller and its command host: output since last read, what the session waits on, waits bounded by `wait_ms`, progress notifications.
+- [x] 2.3 The person's answer: always-ask approvals and person-only lists refused to the caller, elicited from the person, denied where the host cannot ask or the person does not accept.
+- [x] 2.4 Tests through an SDK client on the fake provider.
 
 ## 3. The interface through a terminal
 

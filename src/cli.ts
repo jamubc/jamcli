@@ -285,6 +285,7 @@ export const USAGE = `Usage: jamcli [options]
   jamcli config list|get|set|unset|migrate   Read and change configuration, layer by layer
   jamcli auth set|get|remove|list|login   Store provider keys in the keychain, or sign in to OpenRouter
   jamcli mcp add|list|test|remove|login|logout   Manage MCP servers in .jamcli/mcp.json, and sign in to HTTP ones
+  jamcli mcp serve             Serve MCP on stdio: other agents open JamCLI sessions and use its interface
   jamcli acp                   Serve the Agent Client Protocol over stdio
   jamcli skill list            List the skills the model can load, and any that could not be read
   jamcli hooks [list|trust]    List the configured hooks, or trust this project's as they are
@@ -382,6 +383,11 @@ export const runCli = async (argv: string[]): Promise<number> => {
   }
 
   if (parsed.mcpCommand) {
+    // `jamcli mcp serve` is JamCLI serving MCP, not managing the servers it uses.
+    if ((parsed.mcpCommand.action as string) === 'serve') {
+      const { runMcpServer } = await import('./mcp/server.js');
+      return runMcpServer();
+    }
     const { runMcpCommand } = await import('./cli/mcp.js');
     return runMcpCommand(parsed.mcpCommand, projectRoot);
   }

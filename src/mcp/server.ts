@@ -1,0 +1,248 @@
+import fs from 'fs';
+import path from 'path';
+import { McpServer, MissingRequiredClientCapabilityError, inputRequired, inputResponse } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import * as z from 'zod/v4';
+import { JAMCLI_VERSION } from '../core/version.js';
+import { resolveJamcliProjectRoot } from '../utils/projectRoot.js';
+import { DelegatedSession, type SessionReport, type Waiting } from './session.js';
+
+/** How long a call waits for a turn when the caller does not say. */
+const DEFAULT_WAIT_MS = 120_000;
+
+type ToolContext = { mcpReq: { _meta?: { progressToken?: string | number }; signal: AbortSignal; notify(notification: unknown): Promise<void>; elicitInput(request: unknown): Promise<{ action: string; content?: Record<string, unknown> }>; inputResponses?: unknown } };
+
+/** A tool's result: the report as text a model reads, and as structured content a program reads. */
+const reply = (report: SessionReport) => ({
+  content: [{ type: 'text' as const, text: reportText(report) }],
+  structuredContent: report as unknown as Record<string, unknown>,
+});
+
+const failure = (message: string) => ({ content: [{ type: 'text' as const, text: message }], isError: true });
+
+/** The report in words: the status, what happened, and what it waits on with how to answer it. */
+export function reportText(report: SessionReport): string {
+  const lines = [`Session ${report.session} is ${report.status}${report.ended && report.status === 'idle' ? ` (the last turn ended ${report.ended})` : ''}. Model ${report.model}${report.mode ? `, ${report.mode} mode` : ''}.`];
+  if (report.output.trim()) lines.push('', report.output.trim());
+  const waiting = report.waiting;
+  if (waiting?.kind === 'approval') {
+    lines.push('', `Waiting for approval: ${waiting.summary}. ${waiting.reason}.`);
+    if (waiting.preview?.text) lines.push(waiting.preview.text);
+    lines.push(waiting.personOnly ? 'Only the person answers this; they are being asked.' : 'Answer with session_answer: approval allow_once, allow_session, or deny.');
+  } else if (waiting?.kind === 'choice') {
+    lines.push('', waiting.title, ...waiting.items.map((item, index) => `  ${index + 1}. ${item.label}${item.detail ? ` · ${item.detail}` : ''}  [${item.key}]`));
+    lines.push(waiting.personOnly ? 'Only the person answers this; they are being asked.' : 'Answer with session_answer: choice <key or number>, or none.');
+  }
+  return lines.join('\n');
+}
+
+/** The question put to the person, as one enumerated answer. */
+function personQuestion(session: DelegatedSession, waiting: Waiting) {
+  if (waiting.kind === 'approval') {
+    return {
+      message: `JamCLI session ${session.id} asks you, not the agent driving it: allow ${waiting.summary}? ${waiting.reason}.${waiting.preview?.text ? `\n\n${waiting.preview.text}` : ''}`,
+      requestedSchema: { type: 'object' as const, properties: { answer: { type: 'string' as const, enum: ['allow', 'deny'], description: 'Allow this call once, or deny it.' } }, required: ['answer'] },
+    };
+  }
+  return {
+    message: `JamCLI session ${session.id} asks you, not the agent driving it: ${waiting.title}`,
+    requestedSchema: { type: 'object' as const, properties: { answer: { type: 'string' as const, enum: waiting.items.map((item) => item.key), description: waiting.items.map((item) => `${item.key}: ${item.label}`).join('; ') } }, required: ['answer'] },
+  };
+}
+
+/** A name for the question that survives the retry a 2026-07-28 client makes after answering it. */
+const questionKey = (waiting: Waiting) => `person-${waiting.kind}-${waiting.id}`.replace(/[^A-Za-z0-9_-]/g, '_');
+
+/** Put the person's answer, or its absence, to the session. */
+function applyPersonAnswer(session: DelegatedSession, waiting: Waiting, answer: { action: string; content?: Record<string, unknown> }): void {
+  const chosen = answer.action === 'accept' ? String(answer.content?.answer ?? '') : '';
+  if (waiting.kind === 'approval') {
+    // A decision with no `by` is the person's.
+    session.decide(chosen === 'allow' ? { allow: true } : { allow: false, feedback: chosen === 'deny' ? 'the person denied it' : `the person was asked and did not answer (${answer.action})` });
+  } else {
+    session.send(chosen && waiting.items.some((item) => item.key === chosen) ? `/choose ${chosen}` : '/choose none');
+  }
+}
+
+/**
+ * Wait for the session as the call asked, and put what is the person's to the person.
+ * Resolves to the result to return: the report, or, for a client on the 2026-07-28
+ * revision, the question the client puts to the person before retrying this call.
+ */
+async function attend(session: DelegatedSession, ctx: ToolContext, waitMs: number) {
+  const deadline = Date.now() + waitMs;
+  const token = ctx.mcpReq._meta?.progressToken;
+  let told = 0;
+  const progress = token === undefined ? undefined : (output: string) => {
+    told += 1;
+    void ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: told, message: output.slice(-400) } }).catch(() => undefined);
+  };
+  for (;;) {
+    await session.settle(Math.max(0, deadline - Date.now()), ctx.mcpReq.signal, progress);
+    const waiting = session.waiting();
+    if (!waiting?.personOnly) return reply(session.report());
+    const question = personQuestion(session, waiting);
+    const key = questionKey(waiting);
+    const retried = inputResponse(ctx.mcpReq.inputResponses as never, key) as { kind: string; action?: string; content?: Record<string, unknown> };
+    let answer: { action: string; content?: Record<string, unknown> };
+    if (retried.kind === 'elicit') answer = retried as { action: string; content?: Record<string, unknown> };
+    else {
+      try {
+        answer = await ctx.mcpReq.elicitInput(question);
+      } catch (error) {
+        // A host that cannot ask the person gets no answer from the agent instead: the call is denied.
+        if (error instanceof MissingRequiredClientCapabilityError) answer = { action: 'unsupported' };
+        else return inputRequired({ inputRequests: { [key]: inputRequired.elicit(question) } });
+      }
+    }
+    applyPersonAnswer(session, waiting, answer);
+    if (Date.now() >= deadline) return reply(session.report());
+  }
+}
+
+/** Whether this call is a retry carrying the person's answers, which must not repeat what the first call did. */
+const isRetry = (ctx: ToolContext) => Boolean(ctx.mcpReq.inputResponses && Object.keys(ctx.mcpReq.inputResponses as object).length);
+
+/**
+ * JamCLI as an MCP server: sessions another agent delegates work to, each the same kind of
+ * session an editor opens over ACP, with what is the person's put to the person.
+ */
+export function createMcpServer(sessions = new Map<string, DelegatedSession>()): McpServer {
+  const server = new McpServer({ name: 'jamcli', version: JAMCLI_VERSION });
+  const find = (id: string) => sessions.get(id);
+  const unknown = (id: string) => failure(`No session ${id}. session_start opens one.`);
+  const wait = z.number().int().min(0).max(3_600_000).optional().describe(`How long to wait for the turn, in milliseconds, before returning what there is. ${DEFAULT_WAIT_MS} when absent.`);
+
+  server.registerTool(
+    'session_start',
+    {
+      description:
+        'Open a JamCLI session in a directory: the same agent, tools, commands, and permissions a person gets in the jamcli interface. Returns the session id for the other session_ tools.',
+      inputSchema: z.object({
+        cwd: z.string().describe('Absolute path of the directory to work in. Its JamCLI project root is found from it, as jamcli does when started there.'),
+        model: z.string().optional().describe('provider:model to use instead of the configured one.'),
+        resume: z.string().optional().describe('A session id to continue instead of starting a new session.'),
+      }),
+    },
+    async ({ cwd, model, resume }) => {
+      if (!path.isAbsolute(cwd) || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) return failure(`${cwd} is not an absolute path to a directory.`);
+      let session: DelegatedSession;
+      try {
+        session = await DelegatedSession.open({ projectRoot: resolveJamcliProjectRoot(cwd), cwd, ...(resume ? { sessionId: resume } : {}) });
+      } catch (error: any) {
+        return failure(`The session did not open: ${error?.message ?? error}`);
+      }
+      if (model) {
+        try {
+          session.controller.setModel?.(model);
+        } catch (error: any) {
+          await session.close();
+          return failure(`The session did not open: ${error?.message ?? error}`);
+        }
+      }
+      sessions.set(session.id, session);
+      return reply(session.report());
+    }
+  );
+
+  server.registerTool(
+    'session_send',
+    {
+      description:
+        'Send a prompt, or any /command a person could type such as /compact or /diff, to a session. Returns when the turn ends, when the session needs an answer, or when wait_ms passes, with everything that happened since you last read the session.',
+      inputSchema: z.object({ session: z.string(), text: z.string().describe('The prompt, or a command line starting with /.'), wait_ms: wait }),
+    },
+    async ({ session: id, text, wait_ms }, ctx) => {
+      const session = find(id);
+      if (!session) return unknown(id);
+      if (!isRetry(ctx as ToolContext)) {
+        try {
+          session.send(text);
+        } catch (error: any) {
+          return failure(error?.message ?? String(error));
+        }
+      }
+      return attend(session, ctx as ToolContext, wait_ms ?? DEFAULT_WAIT_MS);
+    }
+  );
+
+  server.registerTool(
+    'session_answer',
+    {
+      description:
+        "Answer what a session waits on: a call waiting for approval, or a list a command offered. A call to a tool that always asks, and a choice that is the person's, are put to the person instead and cannot be answered here.",
+      inputSchema: z.object({
+        session: z.string(),
+        approval: z.enum(['allow_once', 'allow_session', 'deny']).optional().describe('The answer to a call waiting for approval.'),
+        feedback: z.string().optional().describe('With deny: why, which the model reads.'),
+        choice: z.string().optional().describe('The key or number of the choice, or none to close the list.'),
+        wait_ms: wait,
+      }),
+    },
+    async ({ session: id, approval, feedback, choice, wait_ms }, ctx) => {
+      const session = find(id);
+      if (!session) return unknown(id);
+      if (!isRetry(ctx as ToolContext)) {
+        const waiting = session.waiting();
+        if (!waiting) return failure('The session is not waiting on anything.');
+        if (waiting.personOnly) return failure(`Only the person answers this (${waiting.kind === 'approval' ? waiting.summary : waiting.title}); they are asked in their own host.`);
+        try {
+          if (waiting.kind === 'approval') {
+            if (!approval) return failure('A call waits for approval: answer with approval allow_once, allow_session, or deny.');
+            session.answerApproval(approval, feedback);
+          } else {
+            if (!choice) return failure('A list waits: answer with choice <key or number>, or none.');
+            session.send(`/choose ${choice}`);
+          }
+        } catch (error: any) {
+          return failure(error?.message ?? String(error));
+        }
+      }
+      return attend(session, ctx as ToolContext, wait_ms ?? DEFAULT_WAIT_MS);
+    }
+  );
+
+  server.registerTool(
+    'session_state',
+    {
+      description: 'Report a session: whether a turn runs, what happened since you last read it, and what it waits on. With wait_ms, wait that long for the turn first.',
+      inputSchema: z.object({ session: z.string(), wait_ms: z.number().int().min(0).max(3_600_000).optional() }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ session: id, wait_ms }, ctx) => {
+      const session = find(id);
+      if (!session) return unknown(id);
+      return attend(session, ctx as ToolContext, wait_ms ?? 0);
+    }
+  );
+
+  server.registerTool(
+    'session_stop',
+    { description: 'Stop a session: a running turn is cancelled, and the session stays in history, to resume with session_start.', inputSchema: z.object({ session: z.string() }) },
+    async ({ session: id }) => {
+      const session = find(id);
+      if (!session) return unknown(id);
+      sessions.delete(id);
+      await session.close();
+      return { content: [{ type: 'text' as const, text: `Stopped session ${id}; it stays in history.` }] };
+    }
+  );
+
+  return server;
+}
+
+/** `jamcli mcp serve`: MCP on stdio until the host goes away, then every session stops. */
+export async function runMcpServer(): Promise<number> {
+  const sessions = new Map<string, DelegatedSession>();
+  const server = createMcpServer(sessions);
+  // The host leaves by closing standard input; until then the server and its sessions stay.
+  const left = new Promise<void>((resolve) => {
+    process.stdin.once('end', resolve);
+    process.stdin.once('close', resolve);
+  });
+  const served = serveStdio(() => server);
+  await left;
+  await Promise.allSettled([...sessions.values()].map((session) => session.close()));
+  served.close();
+  return 0;
+}
