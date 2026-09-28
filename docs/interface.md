@@ -98,8 +98,10 @@ with what each request carried and what the model was not shown. It is read when
 opens, so reopen it to see what came after. Up and Down scroll a line, Page Up and Page
 Down a page, Home and End go to the top and the bottom, `v` writes it beside the log as
 `<session>.debug.md` and opens it in VS Code with `code`, and `?` lists these keys.
-Ctrl+O again, or Escape, returns to the conversation, with any draft where it was. A
-permission prompt that arrives meanwhile still shows, and is answered as usual.
+Ctrl+O again, Escape, or Ctrl+C returns to the conversation, with any draft where it
+was; those keys close the viewer before they stop a turn, answer a prompt, or leave. It
+opens behind a permission prompt too, so the log can be read before the call is
+answered, and the prompt takes its keys again once the viewer closes.
 
 ## The status line
 
