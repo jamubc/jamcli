@@ -71,6 +71,12 @@ export const BUILTIN_AGENTS: readonly Agent[] = [
     description: 'Prose: documentation, a commit message, a summary for the person.',
     ...inherited,
   },
+  {
+    name: 'research',
+    description:
+      'Web research on one line of inquiry: search, read the best sources in full with web_fetch, and report each finding with its URL, its date, and a quote where wording matters, then what sources disagree on. It reports; it never edits files.',
+    ...inherited,
+  },
 ];
 
 /** The agent a call without one runs on when only the built-ins are in effect. */

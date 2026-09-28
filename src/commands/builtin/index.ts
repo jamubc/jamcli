@@ -28,6 +28,7 @@ import { pr } from './pr.js';
 import { commandsList, hooksCommand, plugins, skills } from './extensions.js';
 import { workflowsCommand } from './workflows.js';
 import { reflect } from './reflect.js';
+import { research } from './research.js';
 
 /** Refuse, and say so, while a turn runs. */
 const waitForTurn = (ctx: CommandContext, what: string): boolean => {
@@ -759,6 +760,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   agentsCommand,
   effort,
   reflect,
+  research,
   note,
   doctor,
   exportCommand,
