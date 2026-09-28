@@ -10,7 +10,7 @@ import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { anchorsToTop, initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, statusOf, gitBranch } from './controller.js';
-import { fitStatus, statusParts, thinkingSize } from './format.js';
+import { PHASE_WORDS, fitStatus, statusParts, thinkingSize } from './format.js';
 import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
@@ -24,11 +24,11 @@ import { Palette, ReferencePalette } from './Palette.js';
 import { completeReference, matchReferences, referenceCandidates, referenceToken, type ReferenceItem } from './references.js';
 import { noteCall, noteText } from './note.js';
 import { Picker, shownItems, PICKER_ROWS } from './Picker.js';
-import { MotionContext, PlainContext, THEMES, ThemeContext, framed, resolveTheme, selectable, type Theme } from './theme.js';
+import { MotionContext, PlainContext, THEMES, ThemeContext, framed, resolveTheme, selectable, useReducedMotion, type Theme } from './theme.js';
 import { KEY_ACTIONS, keysFor, keysHelp, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
-import type { TodoView } from '../state/view.js';
-import { RowView } from './Rows.js';
+import type { Phase, TodoView } from '../state/view.js';
+import { Rail, RowView } from './Rows.js';
 import { BypassConfirm, PermissionPrompt } from './Prompt.js';
 import { systemCopier, type Copier } from './clipboard.js';
 import type { ObserverHub } from '../observer.js';
@@ -80,29 +80,86 @@ const ANCHOR_MS = 600;
 
 const WORKING = new Set(['thinking', 'streaming', 'tool', 'retrying', 'compacting']);
 
+/** A step's state as screen reader mode reads it, and as the styled board draws it. */
 const TODO_BOXES: Record<TodoView['status'], string> = { pending: '[ ]', in_progress: '[~]', completed: '[x]' };
+const TODO_MARKS: Record<TodoView['status'], string> = { pending: '○', in_progress: '◐', completed: '●' };
 
-/** One line of the checklist, as the panel and its test see it. */
+/** One line of the checklist, in words, as screen reader mode reads it. */
 export const todoLine = (todo: TodoView): string =>
   `${TODO_BOXES[todo.status]} ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}${todo.check ? `\n    check: ${todo.check}` : ''}`;
 
+/** How long something has run, in the words a glance takes. */
+const elapsed = (ms: number): string => {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+};
+
 /**
- * The model's plan as a checklist, above the composer: shown on its own when a list
- * first arrives, hidden and shown with the todos key. The plan file is named so the
- * person can edit it to steer the model.
+ * The model's plan as a board, above the composer: shown on its own when a list first
+ * arrives, hidden and shown with the todos key, and kept in place while a prompt is up.
+ * The header is the whole plan in glyphs, then what runs beside the turn, then each step
+ * with its state as a mark and a color, the running one with how long it has run and its
+ * check behind a rail. The plan file is named so the person can edit it to steer the model.
+ * Screen reader mode reads the same facts as lines of words.
  */
-function TodoPanel({ todos, plan, plain, colors }: { todos: TodoView[] | undefined; plan: ViewState['plan']; plain: boolean; colors: Theme }) {
+function TodoPanel({ todos, plan, work, phase, plain, colors }: { todos: TodoView[] | undefined; plan: ViewState['plan']; work: ViewState['work']; phase: Phase; plain: boolean; colors: Theme }) {
   const sel = selectable(colors);
+  const reduced = useReducedMotion();
   const done = todos?.filter((todo) => todo.status === 'completed').length ?? 0;
+  const live = work.filter((item) => item.endedAt === undefined);
+  const running = todos?.find((todo) => todo.status === 'in_progress');
+  // The clock ticks only while something has a duration to show, and never in screen reader mode or with reduced motion.
+  const ticking = !plain && !reduced && (running?.since !== undefined || live.length > 0);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!ticking) return;
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [ticking]);
+  const words = phase === 'idle' ? '' : PHASE_WORDS[phase];
+  if (plain) {
+    return (
+      <box flexDirection="column" flexShrink={0}>
+        <text {...sel}>{`${todos?.length ? `Plan: ${done} of ${todos.length} done` : 'Plan'}${words ? `, ${words}` : ''}${plan ? `, saved at ${plan.path}, edit it there to steer the model` : ''}`}</text>
+        {live.map((item) => (
+          <text {...sel} key={item.id}>{`Running: ${item.kind === 'job' ? 'command' : 'agent'} ${item.label}, ${elapsed(now - item.startedAt)}, stop it with /jobs stop ${item.id}`}</text>
+        ))}
+        {todos?.length ? todos.map((todo, index) => <text {...sel} key={index}>{todoLine(todo)}</text>) : <text {...sel}>No checklist yet. The model writes one with todo_write as it works.</text>}
+      </box>
+    );
+  }
+  const strip = todos?.map((todo) => TODO_MARKS[todo.status]).join('') ?? '';
   return (
-    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
-      <text {...sel} fg={colors.accent}>{todos?.length ? `Plan: ${done} of ${todos.length} done` : 'Plan'}{plan ? ` · ${plan.path} (${plan.lines} lines), edit it there to steer the model` : ''}</text>
+    <box flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
+      <text {...sel} fg={colors.accent} wrapMode="none" truncate>
+        {todos?.length ? `Plan ${strip} ${done} of ${todos.length}` : 'Plan'}
+        <span fg={colors.dim}>{`${words ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}`}</span>
+      </text>
+      {live.map((item) => (
+        <text {...sel} key={item.id} fg={colors.accent} wrapMode="none" truncate>
+          {`◐ ${item.kind === 'job' ? 'command' : 'agent'} ${item.label}`}
+          <span fg={colors.dim}>{` · ${elapsed(now - item.startedAt)} · /jobs stop ${item.id}`}</span>
+        </text>
+      ))}
       {todos?.length ? (
-        todos.map((todo, index) => (
-          <text {...sel} key={index} fg={todo.status === 'completed' ? colors.dim : todo.status === 'in_progress' ? colors.accent : colors.text}>
-            {todoLine(todo)}
-          </text>
-        ))
+        todos.map((todo, index) => {
+          const active = todo.status === 'in_progress';
+          const color = todo.status === 'completed' ? colors.settled : active ? colors.accent : colors.text;
+          return (
+            <box key={index} flexDirection="column" flexShrink={0}>
+              <text {...sel} fg={color} wrapMode="none" truncate>
+                {`${TODO_MARKS[todo.status]} ${active && todo.active_form ? todo.active_form : todo.content}`}
+                {active && todo.since !== undefined ? <span fg={colors.dim}>{` · ${elapsed(now - todo.since)}`}</span> : null}
+              </text>
+              {active && todo.check ? (
+                <Rail>
+                  <text {...sel} fg={colors.dim} wrapMode="none" truncate>{`check: ${todo.check}`}</text>
+                </Rail>
+              ) : null}
+            </box>
+          );
+        })
       ) : (
         <text {...sel} fg={colors.dim}>No checklist yet. The model writes one with todo_write as it works.</text>
       )}
@@ -814,6 +871,7 @@ export function App(props: AppProps) {
                 <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} {...(viewer ? { open: !viewer.has(row.id), onToggle: toggleInViewer } : { onToggle: (id: number) => dispatch({ type: 'toggle', id }) })} />
               ))}
             </scrollbox>
+            {showTodos && !viewer ? <TodoPanel todos={state.todos} plan={state.plan} work={state.work} phase={state.status.phase} plain={plain} colors={theme} /> : null}
             {approval ? (
               <PermissionPrompt
                 approval={approval}
@@ -879,7 +937,6 @@ export function App(props: AppProps) {
                     onPick={(index) => referenceMatches[index] && completeWith(referenceMatches[index])}
                   />
                 ) : null}
-                {showTodos ? <TodoPanel todos={state.todos} plan={state.plan} plain={plain} colors={theme} /> : null}
                 <box {...framed(plain, theme.border)} flexShrink={0} height={plain ? 3 : 5}>
                   <textarea
                     ref={composer}

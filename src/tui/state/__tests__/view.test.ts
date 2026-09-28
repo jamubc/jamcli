@@ -52,6 +52,7 @@ test('an approval request queues the prompt, and the decision settles it', () =>
   expect(state.approvals[0]).toEqual({
     callId: 'c2',
     tool: 'run_command',
+    policyClass: 'execute',
     summary: 'run_command npm test',
     reason: 'default mode asks before commands',
     preview: { kind: 'command', text: 'npm test' },
@@ -97,6 +98,7 @@ test('what runs beside the turn is counted on the status line, and what ended is
     { id: 'job_0', kind: 'job' as const, label: 'old', startedAt: 0, endedAt: 2, outcome: 'exited with code 0' },
   ];
   expect(run([{ type: 'work', items }]).status.work).toEqual({ jobs: 1, agents: 1 });
+  expect(run([{ type: 'work', items }]).work).toEqual(items);
   expect(run([{ type: 'work', items: [] }]).status.work).toEqual({ jobs: 0, agents: 0 });
 });
 
@@ -203,14 +205,20 @@ test('the todo list is the one the model last wrote, and another session has non
     event({ type: 'tool_call', call: call('t1', 'todo_write', { todos }) }),
     event({ type: 'tool_result', result: { tool: 'todo_write', success: true, output: 'ok', durationMs: 1, callId: 't1', metadata: { todos } } }),
   ]);
-  expect(state.todos).toEqual(todos);
+  // The running step keeps the time it was first seen running, so the board can say how long.
+  expect(state.todos).toMatchObject(todos);
+  const since = state.todos![1].since;
+  expect(typeof since).toBe('number');
+  expect(state.todos![0].since).toBeUndefined();
+  const again = reduceView(state, event({ type: 'tool_result', result: { tool: 'todo_write', success: true, output: 'ok', durationMs: 1, callId: 't3', metadata: { todos } } }));
+  expect(again.todos![1].since).toBe(since);
   // A saved plan is kept by path, so the panel can say where to edit it.
   state = reduceView(state, event({ type: 'tool_result', result: { tool: 'plan_write', success: true, output: 'saved', durationMs: 1, callId: 'p1', metadata: { path: '.jamcli/plan.md', lines: 12 } } }));
   expect(state.plan).toEqual({ path: '.jamcli/plan.md', lines: 12 });
   // A failed write, or another tool's metadata, changes nothing.
   state = reduceView(state, event({ type: 'tool_result', result: { tool: 'todo_write', success: false, output: 'bad', durationMs: 1, callId: 't2', metadata: { todos: [] } } }));
   state = reduceView(state, event({ type: 'tool_result', result: { tool: 'read_file', success: true, output: 'x', durationMs: 1, callId: 'r1', metadata: { todos: [] } } }));
-  expect(state.todos).toEqual(todos);
+  expect(state.todos).toMatchObject(todos);
   expect(reduceView(state, { type: 'load', messages: [] }).todos).toBeUndefined();
 });
 

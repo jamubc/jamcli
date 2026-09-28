@@ -96,17 +96,17 @@ exports[`the permission prompt for a command 1`] = `
 
 
 
+
+
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Allow run_command npm test?                                            [Esc] │
-│   npm test                                                                   │
 │ Default mode asks before tools that run commands.                            │
 │                                                                              │
 │  1  Allow once                                                               │
-│  2  Allow this session   run_command(npm test)                               │
-│  3  Allow this project   run_command(npm test) · .jamcli/config.local.json   │
+│  2  Allow this session   run_command(npm test)   ▲▼ 1/3                      │
+│  3  Allow this project   the same rule · .jamcli/config.local.json           │
 │  4  Deny, continue                                                           │
 │  5  Deny with feedback                                                       │
-│ Up/Down pattern 1/3                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
 default mode · ollama:fake-model · context N% · no sandbox · waiting
 "
@@ -127,6 +127,7 @@ exports[`a diff, in the prompt for an edit 1`] = `
 
 
 
+
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Allow edit a.txt?                                                      [Esc] │
 │  1   one                                                                     │
@@ -136,11 +137,10 @@ exports[`a diff, in the prompt for an edit 1`] = `
 │ Default mode asks before tools that change files.                            │
 │                                                                              │
 │  1  Allow once                                                               │
-│  2  Allow this session   edit(a.txt)                                         │
-│  3  Allow this project   edit(a.txt) · .jamcli/config.local.json             │
+│  2  Allow this session   edit(a.txt)   ▲▼ 1/2                                │
+│  3  Allow this project   the same rule · .jamcli/config.local.json           │
 │  4  Deny, continue                                                           │
 │  5  Deny with feedback                                                       │
-│ Up/Down pattern 1/2                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
 default mode · ollama:fake-model · context N% · no sandbox · waiting
 "
@@ -166,16 +166,16 @@ Tool run_command ls, asking
 
 
 
+
 Permission needed: Allow run_command ls?                 Escape denies and stops
 ls
 Default mode asks before tools that run commands.
 
 1: Allow once
-2: Allow this session   run_command(ls)
-3: Allow this project   run_command(ls) · .jamcli/config.local.json
+2: Allow this session   run_command(ls)   pattern 1 of 2, Up and Down change it
+3: Allow this project   the same rule · .jamcli/config.local.json
 4: Deny, continue
 5: Deny with feedback
-Up/Down pattern 1/2
 Status: default mode, ollama:fake-model, context N%, no sandbox, waiting
 "
 `;
@@ -200,6 +200,7 @@ exports[`NO_COLOR: the same frame, every character in the terminal's own colors 
 
 
 
+
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Allow edit a.txt?                                                      [Esc] │
 │  1   one                                                                     │
@@ -209,11 +210,10 @@ exports[`NO_COLOR: the same frame, every character in the terminal's own colors 
 │ Default mode asks before tools that change files.                            │
 │                                                                              │
 │  1  Allow once                                                               │
-│  2  Allow this session   edit(a.txt)                                         │
-│  3  Allow this project   edit(a.txt) · .jamcli/config.local.json             │
+│  2  Allow this session   edit(a.txt)   ▲▼ 1/2                                │
+│  3  Allow this project   the same rule · .jamcli/config.local.json           │
 │  4  Deny, continue                                                           │
 │  5  Deny with feedback                                                       │
-│ Up/Down pattern 1/2                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
 default mode · ollama:fake-model · context N% · no sandbox · waiting
 "

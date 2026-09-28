@@ -13,6 +13,16 @@ import { framed, usePlain, useSelectable, useTheme } from './theme.js';
 const submitted = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 /**
+ * A command preview without the command the heading already shows whole: what is left
+ * are its facts, such as where it runs. A command the heading has to cut is kept.
+ */
+export const omitRepeated = (preview: string, heading: string, room: number): string => {
+  const [command, ...facts] = preview.split('\n');
+  const repeated = !command.includes('\n') && heading.includes(command) && heading.length <= room;
+  return repeated ? facts.join('\n') : preview;
+};
+
+/**
  * Rows the transcript keeps while a prompt is up, so the model's words before the call
  * stay in view beside the choice. The prompt's preview takes what is left.
  */
@@ -21,8 +31,8 @@ const TRANSCRIPT_ROWS_KEPT = 8;
 /** The header and the status line. */
 const CHROME_ROWS = 2;
 
-/** The prompt's rows besides the preview: borders, heading, reason, spacer, five choices, and a hint. */
-const FIXED_ROWS = 11;
+/** The prompt's rows besides the preview: borders, heading, reason, spacer, and five choices. */
+const FIXED_ROWS = 10;
 
 /** The fewest preview rows worth showing. */
 const MIN_PREVIEW_ROWS = 3;
@@ -67,15 +77,17 @@ export function PermissionPrompt(props: {
   // The rows the diff is drawn in: its hunks, or in screen reader mode every line after a label.
   const diffHeight = diff ? (plain ? diff.split('\n').length + 1 : diffRows(diff)) : 0;
   const diffOverflow = diffHeight > previewRows;
-  const text = approval.preview && approval.preview.kind !== 'diff' ? approval.preview.text : undefined;
-  // A command is read whole before it is allowed: long lines wrap, and rows past the ones
-  // the transcript leaves scroll with the wheel, as a diff does.
-  const indent = plain ? 0 : 2;
-  const textRows = text ? text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / Math.max(1, room - indent))), 0) : 0;
-  const textOverflow = textRows > previewRows;
   // The heading names the call. When the preview carries the whole command, the heading
   // does not repeat it past one line.
   const heading = `${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?`;
+  // A command is read whole before it is allowed: long lines wrap, and rows past the ones
+  // the transcript leaves scroll with the wheel, as a diff does. A command short enough to
+  // read whole in the heading is not printed twice; its facts, such as where it runs, are.
+  const indent = plain ? 0 : 2;
+  const commandOnce = !plain && approval.preview?.kind === 'command' ? omitRepeated(approval.preview.text, heading, room) : undefined;
+  const text = commandOnce !== undefined ? commandOnce || undefined : approval.preview && approval.preview.kind !== 'diff' ? approval.preview.text : undefined;
+  const textRows = text ? text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / Math.max(1, room - indent))), 0) : 0;
+  const textOverflow = textRows > previewRows;
   const waiting = queued > 1 ? `1 of ${queued} waiting · ` : '';
   const badge = plain ? 'Escape denies and stops' : '[Esc]';
   const reason = approval.reason.charAt(0).toUpperCase() + approval.reason.slice(1);
@@ -85,10 +97,13 @@ export function PermissionPrompt(props: {
   const label = (key: Choice, what: string, detail?: string) => (
     <ListRow chosen={hovered === key} mark={plain ? `${key}: ` : ` ${key}  `} markFg={theme.accent} label={what} {...(detail ? { detail } : {})} fg={theme.text} detailFg={theme.dim} {...choice(key)} />
   );
-  const notes = patterns > 1 ? `Up/Down pattern ${selected + 1}/${patterns}` : '';
+  // Which of the patterns is offered, on the row that grants it, since Up and Down change it there.
+  const counted = patterns > 1 ? `${pattern}   ${plain ? `pattern ${selected + 1} of ${patterns}, Up and Down change it` : `▲▼ ${selected + 1}/${patterns}`}` : pattern;
+  // A change to files is framed in the accent; anything that runs, reaches out, or delegates in the warning color.
+  const frame = approval.policyClass === 'write' ? theme.accent : theme.warn;
 
   return (
-    <box {...framed(plain, theme.warn)} flexDirection="column" flexShrink={0}>
+    <box {...framed(plain, frame)} flexDirection="column" flexShrink={0}>
       <box flexDirection="row" justifyContent="space-between">
         <text {...sel} fg={theme.warn} {...(text ? { wrapMode: 'none' as const, truncate: true } : {})}>{heading}</text>
         <text {...sel} flexShrink={0} marginLeft={1}>
@@ -106,7 +121,13 @@ export function PermissionPrompt(props: {
       ) : null}
       {diffOverflow ? <text {...sel} fg={theme.dim}>{plain ? 'The diff continues.' : '… the diff continues, [↕ scroll]'}</text> : null}
       {text ? (
-        <scrollbox height={Math.min(textRows, previewRows)} flexShrink={0} paddingLeft={indent} verticalScrollbarOptions={{ visible: false }}>
+        <scrollbox
+          height={Math.min(textRows, previewRows)}
+          flexShrink={0}
+          paddingLeft={plain ? 0 : 1}
+          verticalScrollbarOptions={{ visible: false }}
+          {...(plain ? {} : { border: ['left'] as const, borderColor: theme.dim })}
+        >
           <text {...sel} fg={theme.tokens.raw ?? theme.text} wrapMode="char">
             {text}
           </text>
@@ -125,11 +146,10 @@ export function PermissionPrompt(props: {
       ) : (
         <box flexDirection="column">
           {label('1', 'Allow once')}
-          {pattern ? label('2', 'Allow this session', pattern) : null}
-          {pattern ? label('3', 'Allow this project', `${pattern} · .jamcli/config.local.json`) : null}
+          {pattern ? label('2', 'Allow this session', counted) : null}
+          {pattern ? label('3', 'Allow this project', `${patterns > 1 ? 'the same rule' : pattern} · .jamcli/config.local.json`) : null}
           {label('4', 'Deny, continue')}
           {label('5', 'Deny with feedback')}
-          {notes ? <text {...sel} fg={theme.dim} wrapMode="none" truncate>{notes}</text> : null}
         </box>
       )}
     </box>

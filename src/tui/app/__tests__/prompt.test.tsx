@@ -61,7 +61,8 @@ test('3 allows the pattern for the project, in .jamcli/config.local.json', async
     context.server.enqueue(command('c1', 'echo saved'), { text: 'Saved.' });
     await setup.mockInput.typeText('save it');
     setup.mockInput.pressEnter();
-    await frameWith(setup, (value) => value.includes('3  Allow this project   run_command(echo saved)'));
+    // The project row grants the rule the session row shows, so it names it once.
+    await frameWith(setup, (value) => value.includes('2  Allow this session   run_command(echo saved)   ▲▼ 1/3') && value.includes('3  Allow this project   the same rule · .jamcli/config.local.json'));
     setup.mockInput.pressKey('3');
     await frameWith(setup, (value) => value.includes('Saved.'));
     const local = JSON.parse(fs.readFileSync(path.join(context.root, '.jamcli', 'config.local.json'), 'utf8'));
@@ -143,6 +144,40 @@ test('4 denies and the turn goes on: the model reads that the call did not run',
   }
 }, 20_000);
 
+test('the board stays up beside a prompt, and lists what runs beside the turn with how to stop it', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 40 } });
+  try {
+    const todos = [
+      { content: 'Start the server', status: 'in_progress', active_form: 'Starting the server', check: 'curl returns 200' },
+      { content: 'Take the screenshot', status: 'pending' },
+    ];
+    context.server.enqueue(
+      { toolCalls: [{ id: 't1', name: 'todo_write', arguments: { todos } }] },
+      { toolCalls: [{ id: 'b1', name: 'run_command', arguments: { command: 'sleep 20', background: true } }] },
+      { text: 'Started.' }
+    );
+    await setup.mockInput.typeText('serve it');
+    setup.mockInput.pressEnter();
+    // The prompt says the command stays running; the board is still there above it, with its running step.
+    const prompt = await frameWith(setup, (value) => value.includes('Allow run_command sleep 20 · background?'));
+    expect(prompt).toContain('in the background');
+    expect(prompt).toContain('◐ Starting the server');
+    expect(prompt).toContain('│ check: curl returns 200');
+    setup.mockInput.pressKey('1');
+    // Once it runs, the board lists it, with how long and how to stop it, and the status line counts it.
+    const running = await frameWith(setup, (value) => value.includes('/jobs stop job_') && value.includes('Started.'));
+    expect(running).toMatch(/◐ command sleep 20 · \d+s · \/jobs stop job_/);
+    expect(running).toContain('1 job');
+    const id = /\/jobs stop (job_\w+)/.exec(running)![1];
+    await setup.mockInput.typeText(`/jobs stop ${id}`);
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (value) => value.includes(`Stopping ${id}.`));
+    await frameWith(setup, (value) => !value.includes('◐ command sleep 20') && !value.includes('1 job'));
+  } finally {
+    await close();
+  }
+}, 20_000);
+
 test('the prompt leaves the transcript its rows, and Page Up scrolls it behind the prompt', async () => {
   const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
   try {
@@ -151,11 +186,11 @@ test('the prompt leaves the transcript its rows, and Page Up scrolls it behind t
     context.server.enqueue({ text: preamble, toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: long } }] }, { text: 'Listed.' });
     await setup.mockInput.typeText('list them');
     setup.mockInput.pressEnter();
-    // 30 rows: 2 of chrome, 8 kept for the transcript, 11 fixed in the prompt, so 9 lines of the command show.
+    // 30 rows: 2 of chrome, 8 kept for the transcript, 10 fixed in the prompt, so 10 lines of the command show, behind the rail.
     const prompt = await frameWith(setup, (value) => value.includes('1  Allow once') && value.includes('Step 10 of the plan.'));
-    expect(prompt).toMatch(/^│ {3}echo line-9/m);
-    expect(prompt).not.toMatch(/^│ {3}echo line-10/m);
-    expect(prompt).toContain('31 more rows, [↕ scroll]');
+    expect(prompt).toMatch(/^│ │ echo line-10/m);
+    expect(prompt).not.toMatch(/^│ │ echo line-11/m);
+    expect(prompt).toContain('30 more rows, [↕ scroll]');
     expect(prompt).not.toContain('> list them');
     const paged = await pageUntil(setup, 'pageup', (value) => value.includes('> list them'));
     expect(paged).toContain('1  Allow once');

@@ -48,6 +48,8 @@ export type Row =
 export interface PendingApproval {
   callId: string;
   tool: string;
+  /** What the tool does, so the prompt's frame can say how much care the answer needs. */
+  policyClass?: string;
   summary: string;
   /** The rule or mode that asked. */
   reason: string;
@@ -88,6 +90,8 @@ export interface TodoView {
   active_form?: string;
   /** What proves the item done, when the model gave one. */
   check?: string;
+  /** When the item was last seen to start, so the board can say how long it has run. */
+  since?: number;
 }
 
 export interface ViewState {
@@ -102,6 +106,8 @@ export interface ViewState {
   plan?: { path: string; lines: number };
   /** The person's sticky notes for this interface, newest first. They never reach the model. */
   notes: string[];
+  /** What runs beside the turn, and what ended lately, as the runtime lists it. */
+  work: WorkItem[];
 }
 
 export type ViewAction =
@@ -150,6 +156,7 @@ export function initialView(status: Partial<StatusData> = {}): ViewState {
     running: false,
     nextId: 1,
     notes: [],
+    work: [],
     status: { mode: 'default', model: '', sandbox: 'none', costUsd: null, unpriced: 0, inputTokens: 0, outputTokens: 0, mcpServers: 0, lspServers: 0, phase: 'idle', ...status },
   };
 }
@@ -182,6 +189,12 @@ const updateRow = (rows: Row[], match: (row: Row) => boolean, change: (row: any)
 };
 
 const isTool = (callId: string) => (row: Row) => row.kind === 'tool' && row.callId === callId;
+
+/** The list as written, each running item keeping the time it was first seen running. */
+const withSince = (before: TodoView[] | undefined, next: TodoView[], now: number): TodoView[] =>
+  next.map((todo) =>
+    todo.status === 'in_progress' ? { ...todo, since: before?.find((prev) => prev.content === todo.content && prev.status === 'in_progress')?.since ?? now } : todo
+  );
 
 /** The assistant row being streamed into, closed when anything else is shown. */
 const closeStreaming = (rows: Row[]): Row[] => {
@@ -246,7 +259,7 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         // The change made replaces the one proposed, and a change is shown open.
         ...(madeDiff ? { diff: madeDiff, collapsed: false } : {}),
       }));
-      const todos = result.tool === 'todo_write' && result.success && Array.isArray(result.metadata?.todos) ? (result.metadata.todos as TodoView[]) : undefined;
+      const todos = result.tool === 'todo_write' && result.success && Array.isArray(result.metadata?.todos) ? withSince(state.todos, result.metadata.todos as TodoView[], Date.now()) : undefined;
       const plan =
         result.tool === 'plan_write' && result.success && typeof result.metadata?.path === 'string' ? { path: result.metadata.path, lines: Number(result.metadata.lines ?? 0) } : undefined;
       return { ...state, rows, approvals: state.approvals.filter((approval) => approval.callId !== result.callId), ...(todos ? { todos } : {}), ...(plan ? { plan } : {}) };
@@ -257,6 +270,7 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
       const approval: PendingApproval = {
         callId: event.call.id,
         tool: event.call.name,
+        ...(request?.policyClass ? { policyClass: request.policyClass } : {}),
         summary: request?.summary ?? describeCall(event.call),
         reason: request?.reason ?? 'this tool asks before it runs',
         ...(request?.preview ? { preview: request.preview } : {}),
@@ -413,7 +427,7 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     case 'work': {
       const running = action.items.filter((item) => item.endedAt === undefined);
       const work = { jobs: running.filter((item) => item.kind === 'job').length, agents: running.filter((item) => item.kind === 'task').length };
-      return { ...state, status: { ...state.status, work } };
+      return { ...state, work: action.items, status: { ...state.status, work } };
     }
     default:
       return state;

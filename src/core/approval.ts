@@ -118,7 +118,9 @@ export function previewCall(call: ToolCall, projectRoot: string): ApprovalPrevie
     if (call.name === 'run_command') {
       const command = argString(call, 'command') ?? '';
       const cwd = argString(call, 'cwd');
-      return { kind: 'command', text: cwd ? `${command}\n(in ${cwd})` : command };
+      // Where it runs, relative to the project, and whether it stays running.
+      const facts = [cwd ? `in ${path.relative(projectRoot, path.resolve(projectRoot, cwd)) || '.'}` : '', call.arguments?.background === true ? 'in the background' : ''].filter(Boolean);
+      return { kind: 'command', text: facts.length ? `${command}\n${facts.join(' · ')}` : command };
     }
     if (call.name === 'apply_patch') {
       return { kind: 'diff', text: clip(argString(call, 'patch') ?? '', MAX_PREVIEW_CHARS) };

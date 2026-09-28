@@ -66,7 +66,7 @@ function MarkdownView({ content, syntax, streaming }: { content: string; syntax:
 }
 
 /** The rail a block's detail sits behind, so it reads as an aside to the line above it. */
-function Rail({ children, width }: { children: ReactNode; width?: number }) {
+export function Rail({ children, width }: { children: ReactNode; width?: number }) {
   const theme = useTheme();
   return (
     <box border={['left']} borderColor={theme.dim} paddingLeft={1} flexShrink={0} {...(width !== undefined ? { width } : {})}>

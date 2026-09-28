@@ -126,16 +126,18 @@ test('the checklist appears on its own when the model writes one, with its check
     await send(setup, '/mode plan');
     await frameWith(setup, (frame) => frame.includes('plan'));
     await send(setup, 'plan it');
-    // Nobody pressed the key: the list showed itself.
-    const shown = await frameWith(setup, (frame) => frame.includes('[~] Fixing the bug'));
-    expect(shown).toContain('Plan: 1 of 3 done');
-    expect(shown).toContain('[x] Read the parser');
-    expect(shown).toContain('[ ] Add a test');
-    expect(shown).toContain('check: bun test test/parse passes');
+    // Nobody pressed the key: the board showed itself, the whole plan in its header and each step as a mark.
+    const shown = await frameWith(setup, (frame) => frame.includes('◐ Fixing the bug'));
+    expect(shown).toContain('Plan ●◐○ 1 of 3');
+    expect(shown).toContain('● Read the parser');
+    expect(shown).toContain('○ Add a test');
+    // The running step's check sits behind the rail, under it.
+    expect(shown).toContain('│ check: bun test test/parse passes');
+    expect(shown).toContain('.jamcli/plan.md');
     setup.mockInput.pressKey('t', { ctrl: true });
-    await frameWith(setup, (frame) => !frame.includes('[~] Fixing the bug'));
+    await frameWith(setup, (frame) => !frame.includes('◐ Fixing the bug'));
     setup.mockInput.pressKey('t', { ctrl: true });
-    await frameWith(setup, (frame) => frame.includes('[~] Fixing the bug'));
+    await frameWith(setup, (frame) => frame.includes('◐ Fixing the bug'));
   } finally {
     await close();
   }
