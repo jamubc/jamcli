@@ -75,7 +75,9 @@ session's log as Markdown: each message, tool call and result, approval, notice,
 mode change, and request with its cost, in order. It also shows what the requests carried
 besides the conversation, the system prompt and every tool definition as they were sent,
 recorded whenever they changed, and the text of any result the trust gate withheld from
-the model.
+the model. In auto mode it shows each trust-gate request too: the classifier, what it was
+sent and what it answered, or why the request failed, and every result's verdict and
+whether it was kept.
 
 ## Thinking
 
