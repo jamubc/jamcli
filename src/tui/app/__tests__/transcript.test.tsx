@@ -140,13 +140,35 @@ test('Ctrl+O shows the detailed transcript in place of the conversation, as /cop
     const moved = await frameWith(setup, (frame) => frame !== detailed && frame.includes('Showing detailed transcript'));
     expect(moved).toContain('Showing detailed transcript');
     setup.mockInput.pressKey('?');
-    await frameWith(setup, (frame) => frame.includes('Escape returns to the conversation'));
+    await frameWith(setup, (frame) => frame.includes('returns to the conversation'));
     // And the same key puts the conversation back, with the draft where it was.
     setup.mockInput.pressKey('o', { ctrl: true });
     const back = await frameWith(setup, (frame) => !frame.includes('Showing detailed transcript'));
     expect(back).toContain('It has one line.');
     expect(back).not.toContain('the only line');
     expect(back).toContain('a draft');
+  } finally {
+    await close();
+  }
+}, 20_000);
+
+test('Escape and Ctrl+C close the detailed transcript first, before they answer a prompt, stop a turn, or leave', async () => {
+  const { setup, close } = await open();
+  try {
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] }, { text: 'Ran it.' });
+    await setup.mockInput.typeText('echo hi');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Allow run_command echo hi?'));
+    for (const press of [() => setup.mockInput.pressEscape(), () => setup.mockInput.pressKey('c', { ctrl: true })]) {
+      setup.mockInput.pressKey('o', { ctrl: true });
+      await frameWith(setup, (frame) => frame.includes('Showing detailed transcript'));
+      press();
+      const back = await frameWith(setup, (frame) => !frame.includes('Showing detailed transcript'));
+      // The prompt still waits, unanswered, and nothing was stopped or armed to exit.
+      expect(back).toContain('Allow run_command echo hi?');
+      expect(back).not.toContain('again to exit');
+      expect(back).not.toContain('Ran it.');
+    }
   } finally {
     await close();
   }

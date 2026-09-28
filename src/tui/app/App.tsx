@@ -582,6 +582,12 @@ export function App(props: AppProps) {
   };
 
   useKeyboard((key) => {
+    // The detailed transcript is closed first: Escape or the exit key returns to the
+    // conversation before it stops a turn, answers a prompt, or leaves.
+    if (viewer && (key.name === 'escape' || bound('exit', key))) {
+      key.preventDefault();
+      return closeViewer();
+    }
     if (bound('exit', key)) {
       if (controller.running) {
         controller.cancel();
@@ -600,9 +606,10 @@ export function App(props: AppProps) {
       }
       return;
     }
-    // Page keys still scroll the transcript behind a prompt, so what the model said
-    // before the call can be read before it is answered.
-    if (approval && !bound('page_up', key) && !bound('page_down', key)) {
+    // Page keys still scroll the transcript behind a prompt, and the detailed transcript
+    // still opens and moves, so what the model said before the call can be read before it
+    // is answered.
+    if (approval && !viewer && !bound('page_up', key) && !bound('page_down', key) && !bound('tool_detail', key)) {
       const now = selection();
       if (key.name === 'escape') {
         // The Esc badge turns red first, so the no is seen before the prompt goes.
@@ -637,7 +644,7 @@ export function App(props: AppProps) {
       // The detailed transcript takes the keys that move through it, and gives the rest back.
       key.preventDefault();
       const box = viewerBox.current;
-      if (bound('tool_detail', key) || key.name === 'escape') return closeViewer();
+      if (bound('tool_detail', key)) return closeViewer();
       if (key.name === 'up' || key.name === 'down') return box?.scrollBy(key.name === 'up' ? -1 : 1);
       if (bound('page_up', key) || bound('page_down', key)) return box?.scrollBy(bound('page_up', key) ? -1 : 1, 'viewport');
       if (key.name === 'home') return box?.scrollTo(0);
@@ -762,9 +769,9 @@ export function App(props: AppProps) {
             {state.notes.length ? <NotesPanel notes={state.notes} plain={plain} colors={theme} /> : null}
             {viewer ? (
               <box flexDirection="column" flexGrow={1}>
-                <text {...sel} fg={theme.accent} flexShrink={0}>{`${plain ? 'Note: ' : ''}Showing detailed transcript · ${keysFor(keys.bindings, 'tool_detail')} to toggle · ↑↓ scroll · v to open in code · ? for shortcuts`}</text>
+                <text {...sel} fg={theme.warn} flexShrink={0}>{`${plain ? 'Note: ' : ''}Showing detailed transcript · ${keysFor(keys.bindings, 'tool_detail')} to toggle · ↑↓ scroll · v to open in code · ? for shortcuts`}</text>
                 {viewerHelp ? (
-                  <text {...sel} fg={theme.dim} flexShrink={0}>{`↑↓ a line · ${keysFor(keys.bindings, 'page_up')} and ${keysFor(keys.bindings, 'page_down')} a page · Home and End the top and bottom · v writes it beside the log and opens it in code · ${keysFor(keys.bindings, 'tool_detail')} or Escape returns to the conversation`}</text>
+                  <text {...sel} fg={theme.dim} flexShrink={0}>{`↑↓ a line · ${keysFor(keys.bindings, 'page_up')} and ${keysFor(keys.bindings, 'page_down')} a page · Home and End the top and bottom · v writes it beside the log and opens it in code · ${keysFor(keys.bindings, 'tool_detail')}, Escape, or ${keysFor(keys.bindings, 'exit')} returns to the conversation`}</text>
                 ) : null}
                 <scrollbox ref={viewerBox} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
                   {viewer.lines.map((line, index) => (
