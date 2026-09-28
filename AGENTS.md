@@ -86,6 +86,8 @@ description. `bun test` must pass, and the tests must be capable of failing.
 - `src/tui/` is the OpenTUI interface, and it only renders and forwards input.
 - `src/cli/` is the dispatcher and the non-interactive surfaces.
 - `src/services/` holds the pre-core services that have not moved yet.
+- `site/` is the published docs site, its own project with its own build and its own
+  `AGENTS.md`. Read that before writing a page.
 - `openspec/specs/jamcli/spec.md` is current truth. `openspec/changes/` is what should
   change. Do not edit the spec while a change is open; the spec updates at archive time.
 
