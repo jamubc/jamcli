@@ -158,3 +158,68 @@ test('the compatible client never sets Anthropic-only headers', async () => {
   expect(headers['x-api-key']).toBeUndefined();
   expect(headers['anthropic-version']).toBeUndefined();
 });
+
+const refusal = (message: string) => new Response(JSON.stringify({ error: { message } }), { status: 400 });
+
+test('a model the endpoint serves only through the Responses API is asked that way, and remembered', async () => {
+  const requests: { path: string; body: any }[] = [];
+  globalThis.fetch = (async (url: any, init: any) => {
+    const path = new URL(String(url)).pathname;
+    const body = JSON.parse(init.body);
+    requests.push({ path, body });
+    if (path.endsWith('/chat/completions')) return refusal('Model does not support this protocol.');
+    return streamResponse([
+      'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"Hel"}\n\n',
+      'event: response.reasoning_summary_text.delta\ndata: {"type":"response.reasoning_summary_text.delta","delta":"why"}\n\n',
+      'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"lo"}\n\n',
+      'event: response.completed\ndata: {"type":"response.completed","response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Hello"}]},{"type":"function_call","call_id":"call_1","name":"read_file","arguments":"{\\"path\\":\\"a\\"}"}],"usage":{"input_tokens":4,"output_tokens":6,"total_tokens":10,"input_tokens_details":{"cached_tokens":2}}}}\n\n',
+    ]);
+  }) as unknown as typeof fetch;
+  const provider = new OpenAICompatProvider({ baseUrl: 'https://example.test/v1' });
+  const messages = [
+    { role: 'system', content: 'Be brief.', timestamp: 0 },
+    { role: 'user', content: 'read it', timestamp: 0 },
+    { role: 'assistant', content: '', timestamp: 0, tool_calls: [{ id: 'call_0', type: 'function', function: { name: 'read_file', arguments: { path: 'z' } } }] },
+    { role: 'tool', content: 'zzz', timestamp: 0, tool_call_id: 'call_0' },
+  ];
+  const tools = [{ type: 'function' as const, function: { name: 'read_file', parameters: { type: 'object' } } }];
+  const events = await collect(provider, messages, { model: 'luna', tools, effort: 'max', reasoning: 'on' });
+  expect(requests.map((request) => request.path)).toEqual(['/v1/chat/completions', '/v1/responses']);
+  const sent = requests[1].body;
+  expect(sent.input).toEqual([
+    { role: 'system', content: 'Be brief.' },
+    { role: 'user', content: 'read it' },
+    { type: 'function_call', call_id: 'call_0', name: 'read_file', arguments: '{"path":"z"}' },
+    { type: 'function_call_output', call_id: 'call_0', output: 'zzz' },
+  ]);
+  expect(sent.tools).toEqual([{ type: 'function', name: 'read_file', description: undefined, parameters: { type: 'object' } }]);
+  expect(sent.reasoning).toEqual({ effort: 'xhigh', summary: 'auto' });
+  expect(events.map((event) => [event.content, event.reasoning ?? null, event.done])).toEqual([
+    ['Hel', null, false],
+    ['', 'why', false],
+    ['lo', null, false],
+    ['', null, true],
+  ]);
+  const last = events.at(-1)!;
+  expect(last.toolCalls).toEqual([{ id: 'call_1', type: 'function', function: { name: 'read_file', arguments: { path: 'a' } } }]);
+  expect(last.usage).toEqual({ prompt_tokens: 4, completion_tokens: 6, total_tokens: 10, cached_tokens: 2 });
+  expect(last.stopReason).toBe('tool_calls');
+  // The next request for that model goes straight to the Responses API.
+  await collect(provider, messages, { model: 'luna' });
+  expect(requests.map((request) => request.path)).toEqual(['/v1/chat/completions', '/v1/responses', '/v1/responses']);
+});
+
+test('an effort the endpoint rejects falls back to high, and stays there', async () => {
+  const efforts: unknown[] = [];
+  globalThis.fetch = (async (_url: any, init: any) => {
+    const body = JSON.parse(init.body);
+    efforts.push(body.reasoning_effort);
+    if (body.reasoning_effort === 'max') return refusal('Upstream request failed: [400] Invalid request parameters');
+    return jsonResponse({ choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] });
+  }) as unknown as typeof fetch;
+  const provider = new OpenAICompatProvider({ baseUrl: 'https://example.test/v1' });
+  const options = { model: 'mimo', effort: 'max' as const, reasoning: 'on' as const };
+  expect((await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], options)).content).toBe('ok');
+  await provider.complete([{ role: 'user', content: 'hi', timestamp: 0 }], options);
+  expect(efforts).toEqual(['max', 'high', 'high']);
+});

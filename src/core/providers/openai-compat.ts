@@ -58,6 +58,10 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
   private readonly retryPolicy?: RetryPolicy;
   /** Cleared when an endpoint rejects `stream_options`, so usage is not requested again. */
   private streamUsage = true;
+  /** Models the endpoint serves only through the Responses API, learned from its refusal. */
+  private readonly responsesOnly = new Set<string>();
+  /** Set when the endpoint rejects an effort above high, so later requests send high. */
+  private effortCapped = false;
 
   constructor(options: OpenAICompatOptions = {}) {
     if (options.dialect === 'anthropic') {
@@ -121,10 +125,11 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       body[this.reasoningParam] = true;
     }
     if (options.effort && options.reasoning !== 'off') {
+      const capped = this.effortCapped && (options.effort === 'xhigh' || options.effort === 'max') ? 'high' : options.effort;
       if (this.effortStyle === 'openrouter') {
         if (body.reasoning === undefined) body.reasoning = { effort: options.effort === 'xhigh' || options.effort === 'max' ? 'high' : options.effort };
       } else if (body.reasoning_effort === undefined) {
-        body.reasoning_effort = options.effort;
+        body.reasoning_effort = capped;
       }
     }
 
@@ -183,10 +188,11 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): AsyncGenerator<StreamChunk> {
-    const response = await this.startStream(messages, options);
+    const response = await this.request(messages, options, true);
     if (!response.body) {
       throw new ProviderError({ provider: this.name, detail: 'the response had no body' });
     }
+    if (this.responsesOnly.has(requireModel(this.name, options.model))) return yield* this.streamResponses(response.body);
 
     let usage: TokenUsage | undefined;
     let stopReason: string | undefined;
@@ -232,44 +238,63 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     }
   }
 
-  /** Open the stream, dropping `stream_options` once if the endpoint rejects it. */
-  private async startStream(messages: ChatMessage[], options: ProviderRequestOptions): Promise<Response> {
-    const request = () =>
-      this.send(
-        '/chat/completions',
-        {
-          method: 'POST',
-          headers: this.buildHeaders({ Accept: 'text/event-stream' }),
-          body: JSON.stringify(this.buildBody(messages, options, true)),
-        },
-        options
-      );
+  /**
+   * Send a request, learning from a refusal: `stream_options` is dropped once an endpoint
+   * rejects it, an effort above high falls back to high, and a model the endpoint serves
+   * only through the Responses API is remembered and asked that way from then on.
+   */
+  private async request(messages: ChatMessage[], options: ProviderRequestOptions, stream: boolean): Promise<Response> {
+    const model = requireModel(this.name, options.model);
+    const post = (path: string, body: Record<string, unknown>) =>
+      this.send(path, { method: 'POST', headers: this.buildHeaders(stream ? { Accept: 'text/event-stream' } : undefined), body: JSON.stringify(body) }, options);
+    const attempt = () => (this.responsesOnly.has(model) ? post('/responses', this.buildResponsesBody(messages, options, stream)) : post('/chat/completions', this.buildBody(messages, options, stream)));
     try {
-      return await request();
+      return await attempt();
     } catch (error) {
-      if (this.streamUsage && error instanceof ProviderError && error.status === 400 && /stream_options|include_usage/i.test(error.detail ?? '')) {
+      if (!(error instanceof ProviderError) || error.status !== 400) throw error;
+      const detail = error.detail ?? '';
+      if (this.streamUsage && stream && /stream_options|include_usage/i.test(detail)) {
         this.streamUsage = false;
-        return request();
+        return attempt();
+      }
+      if (!this.responsesOnly.has(model) && /does not support this protocol/i.test(detail)) {
+        this.responsesOnly.add(model);
+        return attempt();
+      }
+      if (!this.effortCapped && (options.effort === 'xhigh' || options.effort === 'max') && options.reasoning !== 'off' && /invalid request parameters/i.test(detail)) {
+        this.effortCapped = true;
+        return attempt();
       }
       throw error;
     }
+  }
+
+  private buildResponsesBody(messages: ChatMessage[], options: ProviderRequestOptions, stream: boolean): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      model: requireModel(this.name, options.model),
+      input: messages.flatMap(toResponsesItems),
+      stream,
+      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.maxOutputTokens ? { max_output_tokens: Math.max(16, options.maxOutputTokens) } : {}),
+      ...(options.extraParams || {}),
+    };
+    if (options.effort && options.reasoning !== 'off') {
+      body.reasoning = { effort: options.effort === 'max' ? 'xhigh' : options.effort, summary: 'auto' };
+    }
+    if (options.tools?.length) {
+      body.tools = options.tools.map((tool) => ({ type: 'function', name: tool.function.name, description: tool.function.description, parameters: tool.function.parameters }));
+      body.tool_choice = typeof options.toolChoice === 'object' ? { type: 'function', name: options.toolChoice.function.name } : (options.toolChoice ?? 'auto');
+    }
+    return body;
   }
 
   async complete(
     messages: ChatMessage[],
     options: ProviderRequestOptions
   ): Promise<CompletionResult> {
-    const response = await this.send(
-      '/chat/completions',
-      {
-        method: 'POST',
-        headers: this.buildHeaders(),
-        body: JSON.stringify(this.buildBody(messages, options, false)),
-      },
-      options
-    );
-
+    const response = await this.request(messages, options, false);
     const json: any = await response.json();
+    if (json?.object === 'response' || Array.isArray(json?.output)) return parseResponsesResult(json);
     const choice = json?.choices?.[0];
     const message = choice?.message || {};
     const reasoning = extractReasoningDelta(message);
@@ -281,8 +306,61 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       ...(choice?.finish_reason ? { stopReason: choice.finish_reason } : {}),
     };
   }
+
+  /** The Responses API's stream: text and reasoning deltas, then the calls and usage on the final event. */
+  private async *streamResponses(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamChunk> {
+    for await (const line of readLines(body)) {
+      if (!line.startsWith('data:')) continue;
+      let event: any;
+      try {
+        event = JSON.parse(line.slice(5).trim());
+      } catch {
+        continue;
+      }
+      if (event?.type === 'error' || event?.type === 'response.failed') {
+        const detail = String(event?.error?.message ?? event?.response?.error?.message ?? event?.message ?? 'the response failed');
+        throw new ProviderError({ provider: this.name, detail, message: `${this.name} reported an error mid-stream: ${detail}` });
+      }
+      if (event?.type === 'response.output_text.delta' && typeof event.delta === 'string') yield { content: event.delta, done: false };
+      else if (event?.type === 'response.reasoning_summary_text.delta' && typeof event.delta === 'string') yield { content: '', reasoning: event.delta, done: false };
+      else if (event?.type === 'response.completed' || event?.type === 'response.incomplete') {
+        const result = parseResponsesResult(event.response);
+        yield { content: '', done: true, usage: result.usage, toolCalls: result.toolCalls, stopReason: result.stopReason };
+        return;
+      }
+    }
+    yield { content: '', done: true };
+  }
 }
 
+/** A chat message as the Responses API's input items: a tool result, a call the model made, or a turn of text. */
+function toResponsesItems(message: ChatMessage): Record<string, unknown>[] {
+  if (message.role === 'tool') return [{ type: 'function_call_output', call_id: message.tool_call_id, output: message.content ?? '' }];
+  const items: Record<string, unknown>[] = [];
+  if (message.content) items.push({ role: message.role, content: message.content });
+  for (const call of message.tool_calls ?? []) {
+    const args = call.function.arguments;
+    items.push({ type: 'function_call', call_id: call.id, name: call.function.name, arguments: typeof args === 'string' ? args : JSON.stringify(args ?? {}) });
+  }
+  return items;
+}
+
+/** What a finished Responses API response says: its text, its reasoning summary, its calls, and its usage. */
+function parseResponsesResult(response: any): CompletionResult {
+  const output: any[] = Array.isArray(response?.output) ? response.output : [];
+  const content = output.filter((item) => item?.type === 'message').flatMap((item) => (Array.isArray(item.content) ? item.content : [])).filter((part) => part?.type === 'output_text').map((part) => part.text ?? '').join('');
+  const reasoning = output.filter((item) => item?.type === 'reasoning').flatMap((item) => (Array.isArray(item.summary) ? item.summary : [])).map((part) => part?.text ?? '').join('\n');
+  const calls: ProviderToolCall[] = output.filter((item) => item?.type === 'function_call' && item.name).map((item) => ({ id: item.call_id ?? item.id, type: 'function', function: { name: item.name, arguments: normalizeArgs(item.arguments) } }));
+  const usage = response?.usage;
+  const cached = usage?.input_tokens_details?.cached_tokens;
+  return {
+    content,
+    ...(reasoning ? { reasoning } : {}),
+    ...(calls.length ? { toolCalls: calls } : {}),
+    ...(usage ? { usage: { prompt_tokens: usage.input_tokens || 0, completion_tokens: usage.output_tokens || 0, total_tokens: usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0), ...(typeof cached === 'number' && cached > 0 ? { cached_tokens: cached } : {}) } } : {}),
+    stopReason: calls.length ? 'tool_calls' : response?.status === 'incomplete' ? 'length' : 'stop',
+  };
+}
 
 const positiveCount = (...values: unknown[]): number | undefined =>
   values.find((value): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0);
