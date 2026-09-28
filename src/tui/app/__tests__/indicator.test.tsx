@@ -45,6 +45,27 @@ test('while a turn works, the status line leads with the spinner and the phase i
   }
 }, 20_000);
 
+test('the spinner stops while the terminal window is unfocused and runs again when it is back', async () => {
+  const { setup, close } = await open({}, { statusStyle: arrows });
+  try {
+    context.server.enqueue({ text: 'Done.', delayMs: 1_500 });
+    await send(setup, 'go');
+    await frameWith(setup, (value) => /[<>] thinking/.test(value));
+    setup.renderer.emit('blur');
+    await Bun.sleep(60);
+    const held = (await frameWith(setup, (value) => /[<>] thinking/.test(value))).match(/([<>]) thinking/)![1];
+    for (let look = 0; look < 6; look += 1) {
+      await Bun.sleep(45);
+      await setup.renderOnce();
+      expect(setup.captureCharFrame().match(/([<>]) thinking/)![1]).toBe(held);
+    }
+    setup.renderer.emit('focus');
+    await frameWith(setup, (value) => value.match(/([<>]) thinking/)?.[1] !== held && /[<>] thinking/.test(value));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('reduced motion, screen reader mode, and monochrome each keep the words and drop what they should', async () => {
   for (const view of [{ reducedMotion: true }, { screenReader: true }, { theme: THEMES.monochrome }]) {
     const { setup, close } = await open({}, { statusStyle: arrows, ...view });

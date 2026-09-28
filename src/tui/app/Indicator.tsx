@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useBlur, useFocus } from '@opentui/react';
 import type { StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { breath, resolveColor, sample, sweep, sweepMs, TICK_MS } from './motion.js';
 import { frameRow } from '../../styles/fromConfig.js';
@@ -17,10 +18,15 @@ export function Indicator({ style, words }: { style: StatusStyleDefinition; word
   const sel = useSelectable();
   const started = useRef(Date.now());
   const [now, setNow] = useState(started.current);
+  // Nothing moves while the terminal window is unfocused; the clock carries on where it was.
+  const [awake, setAwake] = useState(true);
+  useBlur(() => setAwake(false));
+  useFocus(() => setAwake(true));
   useEffect(() => {
+    if (!awake) return;
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(timer);
-  }, []);
+  }, [awake]);
   const elapsed = now - started.current;
 
   // Monochrome, or NO_COLOR, keeps the motion and drops the colors.
