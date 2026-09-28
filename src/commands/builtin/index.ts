@@ -446,9 +446,10 @@ const copy: SlashCommand = {
       if (words.length > 1) return ctx.notice('warn', usage);
       const file = sessionFileFor(ctx.projectRoot, ctx.runtime.session.id);
       if (!fs.existsSync(file)) return ctx.notice('info', 'Nothing is recorded yet: the log starts with the first message.');
-      // Every event in the log, rendered as /export renders it, so nothing is left out and every message keeps its lines.
+      // Every event in the log, rendered as /export renders it, so every message keeps its lines, and with what each request
+      // carried and what the record kept that the model was not shown.
       const events = readTranscript(file);
-      const text = transcriptToMarkdown(events, { id: ctx.runtime.session.id });
+      const text = transcriptToMarkdown(events, { id: ctx.runtime.session.id, debug: true });
       const how = await ctx.copy(text);
       if (how) ctx.notice('info', `Copied the session log, ${events.length} event${events.length === 1 ? '' : 's'} from ${displayPath(file, ctx.projectRoot)}, ${copiedLine(text, how)}`);
       else ctx.notice('warn', `This terminal cannot take text for the clipboard, so nothing was copied. The log is ${displayPath(file, ctx.projectRoot)}.`);

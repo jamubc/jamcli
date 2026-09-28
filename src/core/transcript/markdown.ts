@@ -46,8 +46,11 @@ const renderMessage = (message: ChatMessage, toolNames: Map<string, string>): st
 /**
  * The session as Markdown: every message, tool call, result with its status, approval
  * decision, notice, compaction, model switch, and turn end, in the order they happened.
+ * With `debug`, also what each request carried besides the conversation, the system prompt
+ * and the tool definitions as sent, and what a notice kept for the record, such as a
+ * result the trust gate withheld.
  */
-export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: string; title?: string } = {}): string {
+export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: string; title?: string; debug?: boolean } = {}): string {
   const header = events.find((event) => event.type === 'session');
   const id = options.id ?? header?.id ?? 'session';
   const messages = events.filter((event) => event.type === 'message').length;
@@ -81,6 +84,18 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
       }
       case 'notice':
         out.push(`> **Notice** (${event.level}${event.code ? `, ${event.code}` : ''}): ${event.message}`);
+        if (options.debug && event.detail !== undefined) out.push('What it concerns, kept for the record and not sent to the model:', fenced(event.detail, 'text'));
+        break;
+      case 'context':
+        if (!options.debug) break;
+        if (event.system !== undefined) out.push('### Sent to the model: system prompt', fenced(event.system, 'text'));
+        if (event.tools?.length) {
+          out.push(`### Sent to the model: tools (${event.tools.length})`);
+          for (const tool of event.tools) {
+            out.push(`\`${tool.function.name}\`${tool.function.description ? `: ${tool.function.description}` : ''}`, fenced(JSON.stringify(tool.function.parameters ?? {}, null, 2), 'json'));
+          }
+        }
+        if (event.system === undefined && !event.tools?.length) out.push('*Sent to the model: no system prompt and no tools*');
         break;
       case 'usage': {
         const { prompt_tokens: prompt, completion_tokens: completion } = event.usage;

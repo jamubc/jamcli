@@ -146,6 +146,11 @@ test('/copy debug copies every event of the session log, readably, in the order 
   expect(copied).toContain('Hello back.');
   expect(copied).toMatch(/\*Usage \(ollama:fake-model\): \d+ prompt/);
   expect(copied).toContain('*Turn ended: ok*');
+  // What the model was sent, from the request: the system prompt and every tool definition.
+  expect(copied).toContain('### Sent to the model: system prompt');
+  expect(copied).toContain('Environment:');
+  expect(copied).toContain('### Sent to the model: tools');
+  expect(copied).toContain('`read_file`');
   await host.run('/copy debug 3');
   expect(said(entries)).toContain('Usage: /copy');
 });
