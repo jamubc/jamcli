@@ -1,8 +1,9 @@
 {
-  "verified": "2026-09-24",
+  "verified": "2026-09-27",
   "sources": [
     "https://platform.claude.com/docs/en/about-claude/models/overview",
-    "https://platform.claude.com/docs/en/about-claude/pricing"
+    "https://platform.claude.com/docs/en/about-claude/pricing",
+    "https://typesafe.ai"
   ],
   "note": "Prices are US dollars per million tokens. cache_write is the five-minute cache. Add a row only from a published source, and update verified when you do.",
   "aliases": {
@@ -192,6 +193,12 @@
         "output": 15,
         "cache_read": 0.3,
         "cache_write": 3.75
+      }
+    },
+    "typesafe:jev-latest": {
+      "price": {
+        "input": 0.042,
+        "output": 0
       }
     }
   }

@@ -103,6 +103,11 @@ test('a model no source knows gets a conservative window and stays unpriced', as
   expect(info.price).toBeUndefined();
 });
 
+test('the trust classifier Jev is priced, so its requests count toward what a session cost', () => {
+  // TypeSafe publishes an input price only; output is not charged.
+  expect(catalog().lookup('typesafe', 'jev-latest').price).toEqual({ input: 0.042, output: 0 });
+});
+
 test('Ollama models cost nothing, and their window is the one JamCLI asks for', async () => {
   const reported = { contextWindow: 131_072, tools: true };
   const capped = await catalog().resolve('ollama', 'coder', reporting(reported, 'ollama'));
@@ -207,7 +212,8 @@ test('the bundled table is well formed and follows the published price multiplie
   }
   // Cache reads cost a tenth of input, except where the pricing page names another multiplier.
   const readMultiplier: Record<string, number> = { 'anthropic:claude-fable-5-1': 0.025, 'anthropic:claude-opus-5-5': 0.05 };
-  for (const key of bundledModels()) {
+  // Those multipliers are Anthropic's; a judgment model such as Jev has no cache or window row.
+  for (const key of bundledModels().filter((model) => model.startsWith('anthropic:'))) {
     const [provider, ...rest] = key.split(':');
     const facts = bundledFacts(provider, rest.join(':'))!;
     expect(facts.contextWindow! > facts.maxOutput!).toBe(true);
