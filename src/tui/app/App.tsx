@@ -721,7 +721,8 @@ export function App(props: AppProps) {
       }
       if (key.name === 'escape') {
         key.preventDefault();
-        return setPalette({ draft, index: 0, closed: draft });
+        composer.current?.setText('');
+        return setPalette({ draft: '', index: 0 });
       }
     }
     const referenced = listed ? undefined : referencesFor(draft);

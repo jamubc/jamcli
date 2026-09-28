@@ -55,14 +55,12 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
     setup.mockInput.pressArrow('up');
     await setup.mockInput.typeText('y');
     await frameWith(setup, (frame) => /│ \/copy +│/.test(frame));
+    // Escape closes the list and takes the half-typed name with it.
     setup.mockInput.pressEscape();
-    for (let index = 0; index < 5; index += 1) setup.mockInput.pressBackspace();
-    await frameWith(setup, (frame) => frame.includes('Message JamCLI'));
+    await frameWith(setup, (frame) => frame.includes('Message JamCLI') && !frame.includes('> /copy'));
 
     await setup.mockInput.typeText('/zz');
     await frameWith(setup, (frame) => frame.includes('No command starts with that.'));
-    setup.mockInput.pressEscape();
-    await frameWith(setup, (frame) => !frame.includes('No command starts with that.'));
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('/zz is not a command. /help lists them.'));
     await send(setup, '/workflows');
