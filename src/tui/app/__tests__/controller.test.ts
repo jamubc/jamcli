@@ -65,3 +65,31 @@ describe('SessionController work watching', () => {
     stop();
   });
 });
+
+describe('SessionController context share', () => {
+  test('the context share is read again with each request of the session, not at the end of a long turn, and not for a child', async () => {
+    let used = 100;
+    const usage = { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 };
+    const runtime = {
+      ...fakeRuntime([], { status: 'ok' } as RunResult),
+      run: async (_text: string, onEvent: (event: AgentEvent) => void) => {
+        used = 400;
+        onEvent({ type: 'usage', usage });
+        used = 900;
+        onEvent({ type: 'usage', usage });
+        used = 5_000;
+        onEvent({ type: 'usage', usage, delegatedSession: 'child-1' });
+        return { status: 'ok' } as RunResult;
+      },
+      contextUsage: () => ({ used, budget: 1_000 }),
+      model: { provider: 'p', model: 'm' },
+      thinking: {},
+    } as any;
+    const actions: ViewAction[] = [];
+    await new SessionController(runtime, (action) => actions.push(action)).submit('go');
+    const shares = actions.filter((action: any) => action.type === 'status' && action.patch.contextPercent !== undefined).map((action: any) => action.patch.contextPercent);
+    // Two of the session's own requests, then the end of the turn reads it once more; the child's request adds none.
+    expect(shares.slice(0, 2)).toEqual([40, 90]);
+    expect(shares).toHaveLength(3);
+  });
+});

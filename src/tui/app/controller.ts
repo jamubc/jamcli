@@ -51,6 +51,12 @@ export function spendOf(runtime: Runtime): Pick<StatusData, 'costUsd' | 'unprice
   };
 }
 
+/** How full the next request is, 0 to 100, when a model is chosen and its window is known. */
+export function contextPercentOf(runtime: Runtime): number | undefined {
+  const usage = runtime.contextUsage();
+  return runtime.model.model && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined;
+}
+
 export function statusOf(runtime: Runtime): Partial<StatusData> {
   const usage = runtime.contextUsage();
   // With no model chosen there is no window to measure against, so neither is shown.
@@ -133,6 +139,8 @@ export class SessionController {
           }
           if (event.type === 'notice' && event.level === 'error') shownErrors.add(event.message);
           this.dispatch({ type: 'event', event });
+          // A long turn grows the context with every request, so the share is read again with each one of this session's own.
+          if (event.type === 'usage' && !event.delegatedSession) this.dispatch({ type: 'status', patch: { contextPercent: contextPercentOf(this.runtime) } });
         },
         turn
       );
