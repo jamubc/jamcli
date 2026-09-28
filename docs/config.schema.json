@@ -41,7 +41,8 @@
               "description": "Where Ollama listens. Defaults to http://localhost:11434."
             },
             "base_url": {
-              "type": "string"
+              "type": "string",
+              "description": "Where Ollama listens, used in place of endpoint when both are set."
             },
             "num_ctx": {
               "type": "integer",
@@ -531,17 +532,20 @@
         "max_depth": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "How deep tasks may nest: a task started by a task counts one deeper. Defaults to 2."
         },
         "max_concurrent": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Tasks one session may run at once. Defaults to 3."
         },
         "max_turns_per_child": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Turns a task may take; a task call may ask for fewer, never more. Defaults to 8."
         },
         "default_agent": {
           "type": "string",
@@ -640,7 +644,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run when a session opens, new or resumed."
         },
         "user_prompt_submit": {
           "type": "array",
@@ -671,7 +676,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run before a prompt is recorded or sent; one may stop it or add context to it."
         },
         "pre_tool": {
           "type": "array",
@@ -702,7 +708,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run before a tool call is decided; one may deny, ask, allow, or change its arguments."
         },
         "post_tool": {
           "type": "array",
@@ -733,7 +740,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run after a tool call has run, with its result."
         },
         "stop": {
           "type": "array",
@@ -764,7 +772,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run when the model answers with no calls; one may ask it to carry on."
         },
         "pre_compact": {
           "type": "array",
@@ -795,7 +804,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run before older messages are summarized; one may add to what the summary keeps."
         },
         "notification": {
           "type": "array",
@@ -826,7 +836,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run when the person's attention is wanted, such as for an approval."
         },
         "session_end": {
           "type": "array",
@@ -857,7 +868,8 @@
               "command"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Commands run when a session ends."
         }
       },
       "additionalProperties": false,
@@ -952,24 +964,28 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Kept so older configuration files still load. Sessions do not read it."
         },
         "max_tokens": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Kept so older configuration files still load. Sessions do not read it."
         },
         "compression_threshold": {
           "type": "number",
           "minimum": 0,
-          "maximum": 1
+          "maximum": 1,
+          "description": "Kept so older configuration files still load. Sessions do not read it."
         },
         "strategy": {
           "type": "string",
           "enum": [
             "summarize",
             "truncate"
-          ]
+          ],
+          "description": "Kept so older configuration files still load. Sessions do not read it."
         }
       },
       "additionalProperties": false,
@@ -979,7 +995,8 @@
       "type": "object",
       "properties": {
         "show_tool_calling_models_only": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Kept so older configuration files still load. Sessions do not read it."
         }
       },
       "additionalProperties": false
@@ -1017,7 +1034,8 @@
           "name"
         ],
         "additionalProperties": false
-      }
+      },
+      "description": "Kept so older configuration files still load. Sessions do not read it."
     }
   },
   "additionalProperties": false,

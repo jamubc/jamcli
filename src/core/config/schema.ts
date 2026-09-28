@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PERMISSION_MODES, type PermissionMode } from '../permissions/modes.js';
 import { THINKING_CHOICES } from '../routing/capabilities.js';
+import type { USER_HOOK_EVENTS } from '../hooks/commands.js';
 
 /**
  * The shape of every file JamCLI reads its configuration from. These schemas are the
@@ -19,6 +20,21 @@ const nonNegativeInt = () => {
   return z.number(shape).int(shape).nonnegative(shape);
 };
 const ruleList = (decision: string) => z.array(z.string()).describe(`Rules that ${decision}, such as "run_command(npm test *)". Lists from every layer apply.`);
+
+/** When each hook event's commands run, for every event a person can hook. */
+const HOOK_EVENT_WORDS: Record<(typeof USER_HOOK_EVENTS)[number], string> = {
+  session_start: 'when a session opens, new or resumed',
+  user_prompt_submit: 'before a prompt is recorded or sent; one may stop it or add context to it',
+  pre_tool: 'before a tool call is decided; one may deny, ask, allow, or change its arguments',
+  post_tool: 'after a tool call has run, with its result',
+  stop: 'when the model answers with no calls; one may ask it to carry on',
+  pre_compact: 'before older messages are summarized; one may add to what the summary keeps',
+  notification: "when the person's attention is wanted, such as for an approval",
+  session_end: 'when a session ends',
+};
+
+/** Said of a key only the legacy configuration service normalizes. */
+const LEGACY = 'Kept so older configuration files still load. Sessions do not read it.';
 
 const keyed = {
   api_key: z.string().describe('A key stored in the file. Prefer key_env_var, so the key stays out of files.'),
@@ -40,7 +56,7 @@ export const ApiRegistrySchema = z
     ollama: z
       .strictObject({
         endpoint: z.string().describe('Where Ollama listens. Defaults to http://localhost:11434.'),
-        base_url: z.string(),
+        base_url: z.string().describe('Where Ollama listens, used in place of endpoint when both are set.'),
         num_ctx: positiveInt().describe('The context window Ollama allocates for every request.'),
       })
       .partial(),
@@ -179,9 +195,9 @@ export const ConfigFileSchema = z
       .describe('Model chains by name, loaded as agents with no description or rules. Agent files in .jamcli/agents/ describe them.'),
     delegation: z
       .strictObject({
-        max_depth: positiveInt(),
-        max_concurrent: positiveInt(),
-        max_turns_per_child: positiveInt(),
+        max_depth: positiveInt().describe('How deep tasks may nest: a task started by a task counts one deeper. Defaults to 2.'),
+        max_concurrent: positiveInt().describe('Tasks one session may run at once. Defaults to 3.'),
+        max_turns_per_child: positiveInt().describe('Turns a task may take; a task call may ask for fewer, never more. Defaults to 8.'),
         default_agent: z.string().min(1).describe('The agent a task call that names none runs on.'),
       })
       .partial(),
@@ -206,7 +222,7 @@ export const ConfigFileSchema = z
     hooks: z
       .strictObject(
         Object.fromEntries(
-          ['session_start', 'user_prompt_submit', 'pre_tool', 'post_tool', 'stop', 'pre_compact', 'notification', 'session_end'].map((event) => [
+          Object.entries(HOOK_EVENT_WORDS).map(([event, when]) => [
             event,
             z.array(
               z.strictObject({
@@ -215,7 +231,7 @@ export const ConfigFileSchema = z
                 timeout_ms: positiveInt().optional().describe('Stop it and report a failure after this long. Defaults to 30000.'),
                 enabled: z.boolean().optional().describe('false keeps it here without running it.'),
               })
-            ),
+            ).describe(`Commands run ${when}.`),
           ])
         ) as Record<string, z.ZodArray<z.ZodObject<any>>>
       )
@@ -252,14 +268,14 @@ export const ConfigFileSchema = z
     // Read by the legacy interface only.
     context_management: z
       .strictObject({
-        enabled: z.boolean(),
-        max_tokens: positiveInt(),
-        compression_threshold: z.number().min(0).max(1),
-        strategy: z.enum(['summarize', 'truncate']),
+        enabled: z.boolean().describe(LEGACY),
+        max_tokens: positiveInt().describe(LEGACY),
+        compression_threshold: z.number().min(0).max(1).describe(LEGACY),
+        strategy: z.enum(['summarize', 'truncate']).describe(LEGACY),
       })
       .partial()
       .describe('Context settings for the legacy interface. Sessions use context instead.'),
-    general: z.strictObject({ show_tool_calling_models_only: z.boolean() }).partial(),
+    general: z.strictObject({ show_tool_calling_models_only: z.boolean().describe(LEGACY) }).partial(),
     available_models: z.array(
       z.strictObject({
         id: z.string(),
@@ -268,7 +284,7 @@ export const ConfigFileSchema = z
         description: z.string().optional(),
         supports_tool_calling: z.boolean().optional(),
       })
-    ),
+    ).describe(LEGACY),
   })
   .partial();
 
