@@ -274,6 +274,67 @@ proposal starts from the seam, not from scratch. Sources: Ronacher, "What is pla
   check, no `blockedBy` dependencies, and compaction (`src/core/context/compact.ts`) does
   not pin the list in the summary; the model must call `todo_read` to recover it.
 
+## Inserted units: the interface
+
+Raised by the owner on 2026-09-27. The interface reads as one long growing list: every
+transcript row is drawn flush at column 0, and `marginTop={1}` on a user message is the
+only vertical spacing in `src/tui/app/Rows.tsx`. Nothing groups a turn, and no tone
+separates a settled row from the live one.
+
+The cause is that the interface never landed its own brief. `docs/ux.md` is the stage-6
+brief for it, and its mock already carries the `you` gutter, the blank line between groups,
+tool calls indented under a `●` assistant bullet, a `│` rail for detail, status
+right-aligned at the margin, and noun-led labels. The owner decided: two units, copy
+first, and the brief is the floor rather than the ceiling.
+
+### A. `tighten-interface-copy` (open)
+
+The words only, so its snapshot diff is purely wording. Tool lines lead with the call and
+carry state as the leading mark; phase words are one word each; the compaction line is a
+fact; the composer invites instead of listing keys; a saved setting says it applied rather
+than how. `describeCall` (`src/core/approval.ts`) is left alone, being already noun-led
+and shared by every surface, and core diagnostics keep the what, why, fix shape
+`docs/ux.md` prescribes for errors.
+
+### B. `land-interface-rhythm`
+
+Opens when A archives. Lands the brief's shape: grouping and spacing through OpenTUI's
+flex props rather than the `padEnd` string padding the lists use today
+(`Picker.tsx:95-98`, `Palette.tsx:37-41`, `Prompt.tsx:90-93`); `justifyContent`
+`space-between` for right-aligned state, the pattern `Prompt.tsx:115` already uses for the
+`[Esc]` badge; the `│` detail rail; and the composer gutter, which `App.tsx:877` sets to
+zero against `framed()`'s default of one, so the placeholder sits flush on the border
+while every overlay has a space.
+
+Past the brief, tone and depth: new roles on `Theme` rather than new themes, built from
+`mix()` and `sample()` in `src/tui/app/motion.ts`, which already blend hex and step at the
+halfway point for the terminal's own foreground, and which only the spinner uses today. A
+settled row and the live turn should read differently. Every role needs a value in all four
+themes, and `monochrome` collapses them to `TERMINAL`, so the grouping has to carry itself
+structurally and take tone as reinforcement only. The `NO_COLOR` frame is what catches that
+being backwards.
+
+It also folds in the interface defects in seed finding 5 above, being the same surface:
+long lines cut with no mark at 60 columns, a finished tool line hiding its arguments,
+Escape on the `/` list leaving its filter text in the composer, and the garbled frame for
+about three seconds after a large resize.
+
+### C. `add-btw`
+
+Raised by the owner on 2026-09-27, after A and B. `/btw` is a side exchange that does not
+accumulate into the main thread: the conversation stays as it was, and the aside is scoped
+to itself. JamCLI's own turn on it is that the recipient is chosen, interactively or typed,
+so a named model answers at that point in the conversation's context and a person can ask
+a second opinion of a different model without leaving the session.
+
+It needs a system prompt that tells the recipient what it is: asked one thing, as a
+bystander, not a worker with a task and not the session's agent. The seam is the delegation
+path, `src/core/runtime/children.ts` and the agent files from `add-agents`, so a recipient
+is an agent name before it is a ref. Source:
+`mindstudio.ai/blog/claude-code-btw-command-save-tokens`, which describes the branch rather
+than extension behavior and the token claim, and does not describe the responder's prompt,
+so that part is ours to design and to justify.
+
 ## Deliberately not planned
 
 - Graded effort beyond `off | on | auto`. Only Anthropic exposes it; a provider unit if

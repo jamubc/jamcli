@@ -33,6 +33,8 @@ A unit is done when all of these are true:
 - [ ] `npx tsc --noEmit` does not exceed the recorded baseline for the unit.
 - [ ] `bun test` passes, and the tests can fail. A test that cannot fail is not evidence.
       At least one test per surface drives the assembled product, not only its modules.
+      The full suite stays under its time budget, and each new test reaches behavior no
+      existing test does, per the Testing Strategy in `project.md`.
 - [ ] `bun run build` succeeds.
 - [ ] The interface boots and its slash commands work, if the unit touched the core,
       exercised through the interface itself and not only through the headless path.
@@ -55,10 +57,16 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. `add-plan-tools` is archived on its branch, `add-plan-tools`, awaiting the owner's
-merge. Every unit up to `add-session-reflection` is archived, and the owner merged the whole
-stack to `master` on 2026-09-27, so work starts again from one branch. The next unit is the
-first open one in `ROADMAP.md`. `add-windows-support` is shelved, not in the active changes
+`tighten-interface-copy`, opened 2026-09-27 on the `add-plan-tools` branch, which also
+carries the archived `add-plan-tools` awaiting the owner's merge. The interface's words are
+written as explanations rather than as labels; this unit fixes the words only, moving no
+layout, so the frame snapshots diff as wording. `land-interface-rhythm` follows it and
+carries the spacing, the rail, the indentation and the tone layers. Both are recorded in
+`ROADMAP.md` under the inserted interface units, with `/btw` after them.
+
+Every unit up to `add-session-reflection` is archived, and the owner merged the whole
+stack to `master` on 2026-09-27, so work starts again from one branch.
+`add-windows-support` is shelved, not in the active changes
 tree: it waits for the owner to approve it before any task begins, and `git checkout 9d9f5c6
 -- openspec/changes/add-windows-support` restores its proposal from the commit that recorded
 it.
