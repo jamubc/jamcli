@@ -54,3 +54,20 @@ test('a reply the model declined says so, rather than reading as a finished answ
   expect(notices).toEqual(['The model declined this request, so the reply may be empty or partial. Rephrase it, or switch models with /model.']);
   expect(result.status).toBe('ok');
 });
+
+test('a completion the harness caps runs with thinking off, and an empty reply that spent the cap is asked for once more with twice the room', async () => {
+  const { completeWithinCap } = await import('../providers/complete.js');
+  const provider = new OpenAICompatProvider({ baseUrl: server.openaiBaseUrl });
+  const messages = [{ role: 'user' as const, content: 'draft it', timestamp: 0 }];
+  server.enqueue({ text: '', stopReason: 'length', usage: { prompt: 10, completion: 400 } }, { text: 'feat: the draft', usage: { prompt: 10, completion: 5 } });
+  const result = await completeWithinCap(provider, messages, { model: 'fake-model', maxOutputTokens: 400 });
+  expect(result.content).toBe('feat: the draft');
+  expect(result.usage).toMatchObject({ prompt_tokens: 20, completion_tokens: 405 });
+  const requests = server.completions().slice(-2).map((request) => request.body);
+  expect(requests.map((body) => body.max_tokens ?? body.max_completion_tokens)).toEqual([400, 800]);
+  // A reply that came back whole is not asked for again, and a cut-off reply with text is kept as it is.
+  server.enqueue({ text: 'done', usage: { prompt: 1, completion: 1 } });
+  expect((await completeWithinCap(provider, messages, { model: 'fake-model', maxOutputTokens: 400 })).content).toBe('done');
+  server.enqueue({ text: 'half', stopReason: 'length', usage: { prompt: 1, completion: 400 } });
+  expect((await completeWithinCap(provider, messages, { model: 'fake-model', maxOutputTokens: 400 })).content).toBe('half');
+});

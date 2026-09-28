@@ -3,6 +3,7 @@ import type { ChatProvider } from '../providers/types.js';
 import { HeadTailBuffer } from '../tools/command.js';
 import { ProviderError } from '../providers/http.js';
 import { estimateMessage } from './estimate.js';
+import { completeWithinCap } from '../providers/complete.js';
 
 /** A provider refusing a request as longer than the model's window, in the words providers use. */
 export function isContextOverflow(error: unknown): boolean {
@@ -180,7 +181,7 @@ export async function compact(input: CompactInput): Promise<CompactResult | unde
   let usage: TokenUsage | undefined;
   let error: string | undefined;
   try {
-    const result = await input.provider.complete([{ role: 'user', content: summaryPrompt(earlier, input.focus), timestamp: Date.now() }], {
+    const result = await completeWithinCap(input.provider, [{ role: 'user', content: summaryPrompt(earlier, input.focus), timestamp: Date.now() }], {
       model: input.model,
       signal: input.signal,
       maxOutputTokens: Math.min(SUMMARY_OUTPUT_TOKENS, input.maxOutputTokens ?? SUMMARY_OUTPUT_TOKENS),
