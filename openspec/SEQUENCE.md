@@ -55,16 +55,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-session-reflection`, waiting at its task 6.2. `add-surface-parity`, which the owner
-opened on 2026-09-27 as an exception to the working rule while 6.2 waited, is archived; see
-Closed units below. The next unit in `ROADMAP.md` is `add-mcp-server`: other agents
-delegating to JamCLI and using its interface through the same program a person runs. Its
-acceptance is 6.2 run that way, the owner approving each lesson, which is why it comes
-before 6.2 closes. `add-surface-parity` and `add-mcp-server` are stacked on
-`feat/agentic-harness-core`, which is not yet merged to `master`.
-
-`generate-reference-docs`, a second exception the owner opened on 2026-09-27 while 6.2
-waited, is archived on the same branch; see Closed units below.
+`add-session-reflection`, waiting at its task 6.2. `add-surface-parity`, `add-mcp-server`,
+and `generate-reference-docs`, which the owner opened on 2026-09-27 as exceptions to the
+working rule while 6.2 waited, are archived; see Closed units below. `add-mcp-server` is how
+6.2 now runs: an agent drives `/reflect` through `jamcli mcp serve`, and the owner approves
+each lesson in their own host. On 2026-09-27 the owner merged the whole stack to `master`,
+`add-session-reflection` still open, so work starts again from one branch.
 
 `add-session-reflection` stays open. Its code is committed and its task 6.1 ran end to end
 on OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real
@@ -77,6 +73,16 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it.
 
 ## Closed units
+
+### 9. `add-mcp-server`
+
+Archived as `2026-09-27-add-mcp-server`: 1 requirement added (MCP Server Surface).
+`jamcli mcp serve` offers `session_*` tools over the ACP session controller and the command
+host, and `terminal_*` tools over the ordinary `jamcli` program in a pseudo-terminal, with a
+recording of each. A call only the person may answer is elicited from them in their own host,
+or denied where the host cannot ask. Three trials through it on OpenCode Go found and fixed
+eleven defects, recorded in the change's task 5.1; the rest of what they found is under
+`add-findings-loop` in `ROADMAP.md`.
 
 ### 8. `generate-reference-docs`
 

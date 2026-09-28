@@ -82,7 +82,7 @@ the interface into `src/commands/`, one set every surface runs: the interface, h
 `-p`, and ACP. Where no screen offers a list, `/choose` answers it. The ACP observer says
 when a waiting call's tool always asks. See the change for the whole of it.
 
-### 3. `add-mcp-server`
+### 3. `add-mcp-server` (archived 2026-09-27)
 
 `jamcli mcp serve`: JamCLI as a tool for other agents, the way `claude mcp serve` is, so an
 agent host (OpenCode, Claude Code, or JamCLI itself) can delegate work to JamCLI, and an
