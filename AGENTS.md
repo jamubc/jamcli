@@ -42,6 +42,8 @@ the bugs it hides go unfound.
   started with.
 - What only the person answers stays theirs: a commit, a lesson from `/reflect`, bypass,
   trusting a project's hooks. The server asks them; never answer for them.
+- Undo a trial's edits with `/rewind`, never `git checkout`: the fixture's working tree may
+  hold uncommitted work that only the checkpoint taken before the edit still has.
 - A defect found this way is fixed with a test that fails without the fix, and the
   terminal's recording is the evidence.
 
