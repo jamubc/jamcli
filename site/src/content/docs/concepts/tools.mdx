@@ -32,9 +32,11 @@ A tool is a `RegisteredTool`: plain data plus a function.
 | `runner` | `(args, ctx) => { output }`. `ctx.signal` carries cancellation. |
 | `hidden` | Registered and callable, but not shown to the model. Old tool names use this. |
 | `aliasOf` | The tool this one stands in for, so rules and grants for either apply to both. |
-| `alwaysAsks` | Asks every time. No rule, grant or mode allows it ahead. |
+| `alwaysAsks` | Asks every time. No rule, grant or mode allows it ahead, and the answer is the person's: the interface's observer marks the waiting call as one, and an agent using JamCLI over MCP cannot answer it. |
 
-Source: <Receipt path="src/types/tools.ts" symbol="RegisteredTool" />.
+Source: <Receipt path="src/types/tools.ts" symbol="RegisteredTool" />,
+<Receipt path="src/core/approval.ts" symbol="buildApprovalRequest" />,
+<Receipt path="src/tui/observer.ts" symbol="startObserver" />.
 
 The class matters before any rule is written. With no rule, each mode has a default for each
 class. For example, a `network` tool asks in every mode except bypass. See
