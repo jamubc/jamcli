@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/react */
 import type { MarkdownRenderable, SyntaxStyle } from '@opentui/core';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Row } from '../state/view.js';
-import { closeMarkers, compactionLine, noticeLine, thinkingLine, thinkingSize, thinkingText, thinkingWindow, toolLine } from './format.js';
+import { closeMarkers, compactionLine, noticeLine, thinkingLine, thinkingSize, toolLine } from './format.js';
 import type { ThinkingSize } from './format.js';
 import { useClickable } from './mouse.js';
 import { filetypeOf } from './syntax.js';
@@ -63,6 +63,16 @@ function MarkdownView({ content, syntax, streaming }: { content: string; syntax:
     if (ref.current) colorSelection(ref.current as unknown as Selects, sel);
   }, [shown, sel.selectionBg, sel.selectionFg]);
   return <markdown ref={ref} content={shown} syntaxStyle={syntax} streaming={streaming} conceal />;
+}
+
+/** The rail a block's detail sits behind, so it reads as an aside to the line above it. */
+function Rail({ children, width }: { children: ReactNode; width?: number }) {
+  const theme = useTheme();
+  return (
+    <box border={['left']} borderColor={theme.dim} paddingLeft={1} flexShrink={0} {...(width !== undefined ? { width } : {})}>
+      {children}
+    </box>
+  );
 }
 
 const NOTICE_LABELS = { info: 'Note', warn: 'Warning', error: 'Error' } as const;
@@ -154,16 +164,24 @@ export function RowView({
       return (
         <box flexDirection="column">
           {live ? (
-            <box key="live" flexDirection="column" width={thinking.width} height={thinking.lines + 1} flexShrink={0}>
+            <box key="live" flexDirection="column" width={thinking.width} flexShrink={0}>
               <text {...sel} fg={theme.dim}>{thinkingLine(row.reasoning, true, true, thinking.width)}</text>
-              <text {...sel} fg={theme.dim}>{thinkingWindow(row.reasoning, thinking)}</text>
+              <Rail>
+                <scrollbox height={thinking.lines} stickyScroll stickyStart="bottom" verticalScrollbarOptions={{ visible: false }}>
+                  <text {...sel} fg={theme.dim} wrapMode="word">{row.reasoning}</text>
+                </scrollbox>
+              </Rail>
             </box>
           ) : row.reasoning ? (
             <box key="settled" flexDirection="column">
               <text {...sel} fg={theme.dim} {...toggles}>
                 {thinkingLine(row.reasoning, thinkingShown, true, thinking.width)}
               </text>
-              {thinkingShown ? <text {...sel} fg={theme.dim}>{thinkingText(row.reasoning, thinking.width)}</text> : null}
+              {thinkingShown ? (
+                <Rail width={thinking.width}>
+                  <text {...sel} fg={theme.dim} wrapMode="word">{row.reasoning}</text>
+                </Rail>
+              ) : null}
             </box>
           ) : null}
           {row.text ? <MarkdownView content={row.text} syntax={syntax} streaming={Boolean(row.streaming)} /> : null}
@@ -176,8 +194,16 @@ export function RowView({
           <text {...sel} fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent} {...toggles}>
             {toolLine(row)}
           </text>
-          {open && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}
-          {open && !row.diff && row.output ? <text {...sel} fg={theme.dim}>{row.output}</text> : null}
+          {open && row.diff ? (
+            <Rail>
+              <DiffView diff={row.diff} file={row.path} syntax={syntax} />
+            </Rail>
+          ) : null}
+          {open && !row.diff && row.output ? (
+            <Rail>
+              <text {...sel} fg={theme.dim}>{row.output}</text>
+            </Rail>
+          ) : null}
         </box>
       );
     case 'notice':

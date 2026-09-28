@@ -173,26 +173,12 @@ function wrapLine(line: string, width: number): string[] {
   return out;
 }
 
-/** The rail every line of thinking is drawn behind, so it reads as an aside and not as the reply. */
-const RAIL = '│ ';
+/** The rail and its gutter, which the thinking is drawn behind. */
+const RAIL_WIDTH = 2;
 
-/** The thinking as the lines it is drawn in: wrapped to fit behind the rail at `width`. */
+/** The thinking as the lines it is drawn in behind the rail at `width`. */
 export const wrapThinking = (reasoning: string, width: number): string[] =>
-  reasoning.split('\n').flatMap((line) => wrapLine(line, Math.max(1, width - RAIL.length)));
-
-/**
- * The live thinking window: the last lines of the thinking so far, each behind the rail,
- * padded to exactly the window's height. The window keeps its height and its width, so
- * the transcript above it does not jump as the model thinks.
- */
-export function thinkingWindow(reasoning: string, size: ThinkingSize): string {
-  const shown = wrapThinking(reasoning, size.width).slice(-size.lines).map((line) => RAIL + line);
-  while (shown.length < size.lines) shown.push('');
-  return shown.join('\n');
-}
-
-/** All of the thinking, behind the rail, for when its line is opened. */
-export const thinkingText = (reasoning: string, width: number): string => wrapThinking(reasoning, width).map((line) => RAIL + line).join('\n');
+  reasoning.split('\n').flatMap((line) => wrapLine(line, Math.max(1, width - RAIL_WIDTH)));
 
 /** Lines of thinking there are as drawn at `width`, not counting the blank ones. */
 export const thinkingLines = (reasoning: string, width = THINKING_WIDTH): number => wrapThinking(reasoning, width).filter((line) => line.trim()).length;

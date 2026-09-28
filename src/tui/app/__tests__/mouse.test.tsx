@@ -77,12 +77,12 @@ test('clicking a permission choice answers it, and clicking a tool line opens an
     await setup.mockMouse.click(allow.x + 2, allow.y);
     await frameWith(setup, (frame) => frame.includes('Done.'));
     const line = where(setup, 'run_command echo clicked-output');
-    const shownBefore = setup.captureCharFrame().split('\n').filter((row) => row.trim() === 'clicked-output').length;
+    const shownBefore = setup.captureCharFrame().split('\n').filter((row) => row.trim() === '│ clicked-output').length;
     await setup.mockMouse.click(line.x + 2, line.y);
-    const toggled = await frameWith(setup, (frame) => frame.split('\n').filter((row) => row.trim() === 'clicked-output').length !== shownBefore);
+    const toggled = await frameWith(setup, (frame) => frame.split('\n').filter((row) => row.trim() === '│ clicked-output').length !== shownBefore);
     await Bun.sleep(600);
     await setup.mockMouse.click(where(setup, 'run_command echo clicked-output').x + 2, where(setup, 'run_command echo clicked-output').y);
-    await frameWith(setup, (frame) => frame.split('\n').filter((row) => row.trim() === 'clicked-output').length === shownBefore);
+    await frameWith(setup, (frame) => frame.split('\n').filter((row) => row.trim() === '│ clicked-output').length === shownBefore);
     expect(toggled).toBeTruthy();
   } finally {
     await close();
