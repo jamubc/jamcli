@@ -24,10 +24,17 @@ import { Palette, ReferencePalette } from './Palette.js';
 import { completeReference, matchReferences, referenceCandidates, referenceToken, type ReferenceItem } from './references.js';
 import { noteCall, noteText } from './note.js';
 import { Picker, shownItems, PICKER_ROWS } from './Picker.js';
-import { MotionContext, PlainContext, THEMES, ThemeContext, framed, resolveTheme, selectable, useReducedMotion, type Theme } from './theme.js';
+import { MotionContext, PlainContext, THEMES, ThemeContext, chosenRow, framed, resolveTheme, selectable, useReducedMotion, useTheme, type Theme } from './theme.js';
 import { KEY_ACTIONS, keysFor, keysHelp, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
 import type { Phase, TodoView } from '../state/view.js';
+import type { WorkItem } from '../../core/work.js';
+import type { SessionNote } from '../../core/runtime/index.js';
+import type { AgentEvent } from '../../core/types.js';
+import { formatTokens, formatUsd } from '../../core/catalog/cost.js';
+import { useClickable } from './mouse.js';
+import type { SyntaxStyle } from '@opentui/core';
+import type { ThinkingSize } from './format.js';
 import { Rail, RowView } from './Rows.js';
 import { BypassConfirm, PermissionPrompt } from './Prompt.js';
 import { systemCopier, type Copier } from './clipboard.js';
@@ -95,87 +102,233 @@ const elapsed = (ms: number): string => {
   return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 };
 
+/** How long an ended child stays on the board, so its end is seen and it can still be opened. */
+const RECENT_WORK_MS = 90_000;
+
+/** The work the board lists: what runs, and what ended a moment ago. */
+export const shownWork = (work: WorkItem[], now: number): WorkItem[] => work.filter((item) => item.endedAt === undefined || now - item.endedAt < RECENT_WORK_MS);
+
+/** A child's facts in one dim run: how long, how many tokens, what it cost. */
+const workFacts = (item: WorkItem, now: number): string[] => [
+  elapsed((item.endedAt ?? now) - item.startedAt),
+  ...(item.tokens ? [`${formatTokens(item.tokens)} tokens`] : []),
+  ...(item.cost ? [formatUsd(item.cost)] : []),
+];
+
+/** The mark and color of a work item's state. */
+const workState = (item: WorkItem, colors: Theme): { mark: string; color: Theme['accent'] } => {
+  if (item.endedAt === undefined) return { mark: '◐', color: colors.warn };
+  return item.outcome === 'ok' ? { mark: '●', color: colors.user } : { mark: '●', color: colors.error };
+};
+
+/** A step's mark in its own color: done is green, running is yellow, waiting is dim. */
+const todoColor = (status: TodoView['status'], colors: Theme) => (status === 'completed' ? colors.user : status === 'in_progress' ? colors.warn : colors.dim);
+
 /**
  * The model's plan as a board, above the composer: shown on its own when a list first
- * arrives, hidden and shown with the todos key, and kept in place while a prompt is up.
- * The header is the whole plan in glyphs, then what runs beside the turn, then each step
- * with its state as a mark and a color, the running one with how long it has run and its
- * check behind a rail. The plan file is named so the person can edit it to steer the model.
- * Screen reader mode reads the same facts as lines of words.
+ * arrives or a child starts, hidden and shown with the todos key, and kept in place while a
+ * prompt is up. The header is the whole plan in marks, each in the color of its state, and
+ * the count. Under it, each child agent that runs beside the turn: its state, its agent
+ * and task, how long it has run and what it has cost, and below that, behind a rail, what
+ * it is doing right now. Then each step, indented, with its state as a mark and a color.
+ * Up and Down on an empty composer choose a child, Enter looks in on it, and a click does
+ * both. Screen reader mode reads the same facts as lines of words.
  */
-function TodoPanel({ todos, plan, work, phase, plain, colors }: { todos: TodoView[] | undefined; plan: ViewState['plan']; work: ViewState['work']; phase: Phase; plain: boolean; colors: Theme }) {
+function TodoPanel({
+  todos,
+  plan,
+  work,
+  phase,
+  plain,
+  colors,
+  focus,
+  onOpen,
+}: {
+  todos: TodoView[] | undefined;
+  plan: ViewState['plan'];
+  work: ViewState['work'];
+  phase: Phase;
+  plain: boolean;
+  colors: Theme;
+  /** The child the keys chose, by its id. */
+  focus?: string;
+  onOpen: (id: string) => void;
+}) {
   const sel = selectable(colors);
   const reduced = useReducedMotion();
+  const clickable = useClickable();
   const done = todos?.filter((todo) => todo.status === 'completed').length ?? 0;
-  const live = work.filter((item) => item.endedAt === undefined);
   const running = todos?.find((todo) => todo.status === 'in_progress');
-  // The clock ticks only while something has a duration to show, and never in screen reader mode or with reduced motion.
-  const ticking = !plain && !reduced && (running?.since !== undefined || live.length > 0);
   const [now, setNow] = useState(Date.now());
+  const listed = shownWork(work, now);
+  const live = listed.filter((item) => item.endedAt === undefined);
+  // The clock ticks only while something has a duration to show, and never in screen reader mode or with reduced motion.
+  const ticking = !plain && !reduced && (running?.since !== undefined || listed.length > 0);
   useEffect(() => {
     if (!ticking) return;
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
   }, [ticking]);
   const words = phase === 'idle' ? '' : PHASE_WORDS[phase];
+  const kindOf = (item: WorkItem) => (item.kind === 'job' ? 'command' : (item.agent ?? 'agent'));
   if (plain) {
     return (
       <box flexDirection="column" flexShrink={0}>
         <text {...sel}>{`${todos?.length ? `Plan: ${done} of ${todos.length} done` : 'Plan'}${words ? `, ${words}` : ''}${plan ? `, saved at ${plan.path}, edit it there to steer the model` : ''}`}</text>
-        {live.map((item) => (
-          <text {...sel} key={item.id}>{`Running: ${item.kind === 'job' ? 'command' : 'agent'} ${item.label}, ${elapsed(now - item.startedAt)}, stop it with /jobs stop ${item.id}`}</text>
+        {listed.map((item) => (
+          <text {...sel} key={item.id}>
+            {`${item.endedAt === undefined ? 'Running' : `Ended ${item.outcome ?? ''}`}: ${item.kind === 'job' ? 'command' : `agent ${item.agent ?? ''}`} ${item.label}, ${workFacts(item, now).join(', ')}${item.detail ? `, now: ${item.detail}` : ''}${item.endedAt === undefined ? `, stop it with /jobs stop ${item.id}` : ''}${item.id === focus ? ', chosen, Enter looks in on it' : ''}`}
+          </text>
         ))}
-        {todos?.length ? todos.map((todo, index) => <text {...sel} key={index}>{todoLine(todo)}</text>) : <text {...sel}>No checklist yet. The model writes one with todo_write as it works.</text>}
+        {todos?.length ? todos.map((todo, index) => <text {...sel} key={index}>{todoLine(todo)}</text>) : live.length ? null : <text {...sel}>No checklist yet. The model writes one with todo_write as it works.</text>}
       </box>
     );
   }
-  const strip = todos?.map((todo) => TODO_MARKS[todo.status]).join('') ?? '';
   return (
-    <box flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
+    <box flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1} paddingTop={1}>
       <text {...sel} fg={colors.accent} wrapMode="none" truncate>
-        {todos?.length ? `Plan ${strip} ${done} of ${todos.length}` : 'Plan'}
-        <span fg={colors.dim}>{`${words ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}`}</span>
+        {todos?.length ? 'Plan ' : live.length ? 'Agents ' : 'Plan'}
+        {todos?.map((todo, index) => (
+          <span key={index} fg={todoColor(todo.status, colors)}>{`${TODO_MARKS[todo.status]} `}</span>
+        ))}
+        {todos?.length ? <span fg={colors.text}>{`${done} of ${todos.length}`}</span> : live.length ? <span fg={colors.text}>{`${live.length} running`}</span> : null}
+        <span fg={colors.dim}>{`${words && todos?.length ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}${live.some((item) => item.kind === 'task') && !focus ? ' · ↑↓ choose an agent, Enter looks in' : ''}`}</span>
       </text>
-      {live.map((item) => (
-        <text {...sel} key={item.id} fg={colors.accent} wrapMode="none" truncate>
-          {`◐ ${item.kind === 'job' ? 'command' : 'agent'} ${item.label}`}
-          <span fg={colors.dim}>{` · ${elapsed(now - item.startedAt)} · /jobs stop ${item.id}`}</span>
-        </text>
-      ))}
+      {listed.map((item) => {
+        const state = workState(item, colors);
+        const chosen = item.id === focus;
+        const facts = workFacts(item, now);
+        return (
+          <box key={item.id} flexDirection="column" flexShrink={0} marginTop={1} paddingLeft={2} {...clickable(() => onOpen(item.id))}>
+            <text {...sel} wrapMode="none" truncate {...chosenRow(colors, chosen)}>
+              <span fg={state.color}>{`${state.mark} `}</span>
+              <span fg={colors.accent}>{kindOf(item)}</span>
+              <span fg={colors.text}>{` ${item.kind === 'job' ? item.label : item.label.replace(/^[^:]*:\s*/, '')}`}</span>
+              <span fg={colors.dim}>{` · ${facts.join(' · ')}${item.endedAt !== undefined ? ` · ${item.outcome ?? 'ended'}` : item.kind === 'job' ? ` · /jobs stop ${item.id}` : ''}${chosen ? ' · Enter looks in' : ''}`}</span>
+            </text>
+            {item.kind === 'task' ? (
+              <Rail>
+                <text {...sel} fg={item.detail?.startsWith('asking') ? colors.warn : colors.dim} wrapMode="none" truncate>
+                  {item.endedAt !== undefined ? (item.detail ?? 'done') : (item.detail ?? 'starting')}
+                </text>
+              </Rail>
+            ) : null}
+          </box>
+        );
+      })}
       {todos?.length ? (
-        todos.map((todo, index) => {
-          const active = todo.status === 'in_progress';
-          const color = todo.status === 'completed' ? colors.settled : active ? colors.accent : colors.text;
-          return (
-            <box key={index} flexDirection="column" flexShrink={0}>
-              <text {...sel} fg={color} wrapMode="none" truncate>
-                {`${TODO_MARKS[todo.status]} ${active && todo.active_form ? todo.active_form : todo.content}`}
-                {active && todo.since !== undefined ? <span fg={colors.dim}>{` · ${elapsed(now - todo.since)}`}</span> : null}
-              </text>
-              {active && todo.check ? (
-                <Rail>
-                  <text {...sel} fg={colors.dim} wrapMode="none" truncate>{`check: ${todo.check}`}</text>
-                </Rail>
-              ) : null}
-            </box>
-          );
-        })
-      ) : (
+        <box flexDirection="column" flexShrink={0} marginTop={listed.length ? 1 : 0} paddingLeft={2}>
+          {todos.map((todo, index) => {
+            const active = todo.status === 'in_progress';
+            const color = todo.status === 'completed' ? colors.settled : active ? colors.text : colors.dim;
+            return (
+              <box key={index} flexDirection="column" flexShrink={0}>
+                <text {...sel} wrapMode="none" truncate>
+                  <span fg={todoColor(todo.status, colors)}>{`${TODO_MARKS[todo.status]} `}</span>
+                  <span fg={color}>{active && todo.active_form ? todo.active_form : todo.content}</span>
+                  {active && todo.since !== undefined ? <span fg={colors.dim}>{` · ${elapsed(now - todo.since)}`}</span> : null}
+                </text>
+                {active && todo.check ? (
+                  <Rail>
+                    <text {...sel} fg={colors.dim} wrapMode="none" truncate>{`check: ${todo.check}`}</text>
+                  </Rail>
+                ) : null}
+              </box>
+            );
+          })}
+        </box>
+      ) : live.length ? null : (
         <text {...sel} fg={colors.dim}>No checklist yet. The model writes one with todo_write as it works.</text>
       )}
     </box>
   );
 }
 
-/** The person's sticky notes, newest on top, shown while there are any. */
-function NotesPanel({ notes, plain, colors }: { notes: string[]; plain: boolean; colors: Theme }) {
+/** A note's time, as the clock on the wall read it. */
+const noteClock = (ts: number): string => {
+  const at = new Date(ts);
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+};
+
+/**
+ * The tester's flags, newest on top, shown while there are any. A flag is a person's
+ * remark on this point of the session, for whoever reads it back; the model never sees
+ * it, and the session log keeps it.
+ */
+function NotesPanel({ notes, plain, colors }: { notes: SessionNote[]; plain: boolean; colors: Theme }) {
   const sel = selectable(colors);
+  if (plain) {
+    return (
+      <box flexDirection="column" flexShrink={0}>
+        {notes.map((note, index) => (
+          <text {...sel} key={notes.length - index}>{`Tester note at ${noteClock(note.ts)}: ${note.text}`}</text>
+        ))}
+      </box>
+    );
+  }
   return (
-    <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
-      <text {...sel} fg={colors.accent}>{`Notes${plain ? ', newest first' : ''}`}</text>
-      {notes.map((text, index) => (
-        <text {...sel} key={notes.length - index} fg={index === 0 ? colors.text : colors.dim}>{`- ${text}`}</text>
+    <box flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
+      {notes.map((note, index) => (
+        <text {...sel} key={notes.length - index} wrapMode="word">
+          <span fg={colors.warn}>{'⚑ '}</span>
+          <span fg={colors.dim}>{`${noteClock(note.ts)} `}</span>
+          <span fg={index === 0 ? colors.text : colors.dim}>{note.text}</span>
+        </text>
       ))}
+    </box>
+  );
+}
+
+/**
+ * A child agent's run as a transcript of its own, in place of the conversation: what it
+ * has done so far, folded from its events, and each further event as it happens. Escape
+ * returns to the conversation; s stops the child; once it has ended, o opens its session.
+ */
+function AgentViewer({ runtime, item, syntax, thinking, focus }: { runtime: Runtime; item: WorkItem; syntax: SyntaxStyle; thinking: ThinkingSize; focus?: (box: ScrollBoxRenderable | null) => void }) {
+  const theme = useTheme();
+  const sel = selectable(theme);
+  const seen = useRef(0);
+  const [child, fold] = useReducer(reduceView, undefined, (): ViewState => {
+    const events = runtime.workEvents(item.id);
+    seen.current = events.length;
+    return events.reduce((state, event) => reduceView(state, { type: 'event', event }), initialView());
+  });
+  useEffect(() => {
+    // Events between the first fold and now are taken before the watch starts, so none is missed.
+    for (const event of runtime.workEvents(item.id).slice(seen.current)) fold({ type: 'event', event });
+    return runtime.watchWorkEvents(item.id, (event: AgentEvent) => fold({ type: 'event', event }));
+  }, [runtime, item.id]);
+  const state = workState(item, theme);
+  const facts = workFacts(item, Date.now());
+  const running = item.endedAt === undefined;
+  const keys = running ? 'Esc back · ↑↓ scroll · type below to talk to it, /stop stops it' : `Esc back${item.sessionId ? ' · o opens its session to go on with it' : ''} · ↑↓ scroll`;
+  /** A line typed to the child: `/stop` stops it; anything else it reads with its next step. */
+  const sayTo = (value: unknown) => {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return;
+    if (text === '/stop') return void runtime.stopWork(item.id);
+    if (!runtime.sayToWork(item.id, text)) fold({ type: 'notice', level: 'warn', text: 'It has ended, so it cannot hear you. o opens its session to go on with it.' });
+  };
+  return (
+    <box flexDirection="column" flexGrow={1}>
+      <text {...sel} wrapMode="none" truncate flexShrink={0}>
+        <span fg={state.color}>{`${state.mark} `}</span>
+        <span fg={theme.accent}>{item.agent ?? 'agent'}</span>
+        <span fg={theme.text}>{` ${item.label.replace(/^[^:]*:\s*/, '')}`}</span>
+        <span fg={theme.dim}>{` · ${[...facts, item.model, item.endedAt !== undefined ? (item.outcome ?? 'ended') : undefined].filter(Boolean).join(' · ')}`}</span>
+      </text>
+      <text {...sel} fg={theme.dim} flexShrink={0}>{keys}</text>
+      {child.rows.length ? null : <text {...sel} fg={theme.dim} flexShrink={0}>{item.endedAt === undefined ? 'Nothing yet: the child is waiting for its model.' : 'It said nothing before it ended.'}</text>}
+      <scrollbox ref={focus} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling contentOptions={{ paddingRight: 1 }}>
+        {child.rows.map((row) => (
+          <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} open />
+        ))}
+      </scrollbox>
+      {running ? (
+        <box {...framed(false, theme.border)} flexShrink={0} height={3}>
+          <input key={item.id} focused placeholder={`Message ${item.agent ?? 'the agent'} · it reads it after its current step · /stop stops it`} onSubmit={sayTo} />
+        </box>
+      ) : null}
     </box>
   );
 }
@@ -209,13 +362,14 @@ export function App(props: AppProps) {
   // A session opened with messages already in it shows them from the first frame.
   const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState =>
     // The status line has the session's facts from the first frame, not after an effect.
-    first.session.messages.length ? reduceView(initialView(statusOf(first)), { type: 'load', messages: first.session.messages }) : initialView(statusOf(first))
+    reduceView(initialView(statusOf(first)), { type: 'load', messages: first.session.messages, notes: first.notes() })
   );
-  // A checklist that has just appeared is shown without asking; the todos key hides it again.
+  // A checklist that has just appeared, or a child agent that has just started, is shown without asking; the todos key hides the board again.
   const hasTodos = Boolean(state.todos?.length);
+  const liveAgents = state.work.filter((item) => item.endedAt === undefined && item.kind === 'task').length;
   useEffect(() => {
-    if (hasTodos) setShowTodos(true);
-  }, [hasTodos]);
+    if (hasTodos || liveAgents) setShowTodos(true);
+  }, [hasTodos, liveAgents > 0]);
   const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch, props.observer?.event), [runtime]);
   useEffect(() => props.observer?.attach(runtime), [runtime]);
@@ -381,6 +535,37 @@ export function App(props: AppProps) {
     setViewer(undefined);
     if (!overlay.current) composer.current?.focus();
   };
+  /**
+   * Looking in on a child agent: the one the keys chose on the board, by id, and the one
+   * whose run is shown in place of the conversation. Up and Down on an empty composer
+   * choose, Enter or a click opens, Escape returns.
+   */
+  const [agentFocus, setAgentFocusState] = useState<string | undefined>(undefined);
+  // Keys read the ref, which changes at once: two Downs arriving together move two rows, not one.
+  const agentFocusRef = useRef<string | undefined>(undefined);
+  const setAgentFocus = (id: string | undefined) => {
+    agentFocusRef.current = id;
+    setAgentFocusState(id);
+  };
+  const [agentView, setAgentView] = useState<string | undefined>(undefined);
+  const agentBox = useRef<ScrollBoxRenderable | null>(null);
+  const viewedAgent = agentView ? state.work.find((item) => item.id === agentView) : undefined;
+  // A child that left the board is no longer chosen, and one that was forgotten closes its view.
+  useEffect(() => {
+    if (agentFocus && !state.work.some((item) => item.id === agentFocus)) setAgentFocus(undefined);
+    if (agentView && !viewedAgent) setAgentView(undefined);
+  }, [state.work]);
+  const openAgent = (id: string) => {
+    if (!state.work.some((item) => item.id === id)) return;
+    composer.current?.blur();
+    setAgentFocus(id);
+    setAgentView(id);
+  };
+  const closeAgent = () => {
+    setAgentView(undefined);
+    if (!overlay.current && !viewer) composer.current?.focus();
+  };
+
   /** The whole session log, as `/copy debug` renders it, written beside the log and opened in VS Code. */
   const openLogInCode = () => {
     const log = debugTranscript(projectRoot, runtime.sessionId);
@@ -450,7 +635,7 @@ export function App(props: AppProps) {
       }
       if (choice.profile) profile.current = choice.profile;
       setRuntime(next);
-      dispatch({ type: 'load', messages: next.session.messages });
+      dispatch({ type: 'load', messages: next.session.messages, notes: next.notes() });
       await runtime.close().catch(() => undefined);
       return undefined;
     },
@@ -521,7 +706,11 @@ export function App(props: AppProps) {
     setTheme: (name) => setTheme(resolveTheme(name, process.env)),
     statusStyle,
     setStatusStyle,
-    note: (text) => dispatch({ type: 'note', text }),
+    note: (text) => {
+      // Planted in the log first, so the flag on screen is one that is kept.
+      runtime.note(text);
+      dispatch({ type: 'note', note: { text, ts: Date.now() } });
+    },
     clearNotes: () => dispatch({ type: 'clear_notes' }),
     prefill: (text, back) => {
       composer.current?.setText(text);
@@ -694,6 +883,11 @@ export function App(props: AppProps) {
       setTimeout(() => setExitArmed(false), 2_000);
       return;
     }
+    // Escape while looking in on a child closes that view before it can answer a prompt that came up meanwhile.
+    if (agentView && viewedAgent && key.name === 'escape') {
+      key.preventDefault();
+      return closeAgent();
+    }
     if (confirmBypass) {
       if (key.name === 'escape') {
         setConfirmBypass(false);
@@ -747,7 +941,45 @@ export function App(props: AppProps) {
       if (key.sequence === '?') return setViewerHelp((shown) => !shown);
       return;
     }
+    if (agentView && viewedAgent) {
+      // A child's run takes the keys that move through it; while it runs, the rest type a message to it.
+      const box = agentBox.current;
+      const scrolls = key.name === 'up' || key.name === 'down' || key.name === 'home' || key.name === 'end' || bound('page_up', key) || bound('page_down', key);
+      if (scrolls) {
+        key.preventDefault();
+        if (key.name === 'up' || key.name === 'down') return box?.scrollBy(key.name === 'up' ? -1 : 1);
+        if (key.name === 'home') return box?.scrollTo(0);
+        if (key.name === 'end') return box?.scrollTo(box.scrollHeight);
+        return box?.scrollBy(bound('page_up', key) ? -1 : 1, 'viewport');
+      }
+      if (viewedAgent.endedAt !== undefined) {
+        key.preventDefault();
+        if (key.sequence === 'o' && !key.ctrl && !key.meta && viewedAgent.sessionId) {
+          const id = viewedAgent.sessionId;
+          closeAgent();
+          return void switchSession({ sessionId: id }).then((refusal) => refusal && say('warn', `Its session was not opened: ${refusal}`));
+        }
+      }
+      return;
+    }
     const draft = composer.current?.plainText ?? '';
+    // On an empty composer, Up and Down walk the children on the board and Enter looks in on the chosen one.
+    // Escape lets go of the choice between turns; while a turn runs it still stops the turn.
+    const walkable = shownWork(state.work, Date.now()).filter((item) => item.kind === 'task');
+    const focused = agentFocusRef.current;
+    const walking = key.name === 'up' || key.name === 'down' || (focused && (key.name === 'return' || (key.name === 'escape' && !controller.running)));
+    if (draft === '' && walkable.length && !approval && walking) {
+      key.preventDefault();
+      if (key.name === 'escape') return setAgentFocus(undefined);
+      if (key.name === 'return') return openAgent(focused!);
+      const at = walkable.findIndex((item) => item.id === focused);
+      // The first move lands on a running child, since that is the one worth looking in on.
+      const running = walkable.findIndex((item) => item.endedAt === undefined);
+      const first = running >= 0 ? running : key.name === 'up' ? walkable.length - 1 : 0;
+      const next = at < 0 ? first : Math.min(Math.max(0, at + (key.name === 'up' ? -1 : 1)), walkable.length - 1);
+      setShowTodos(true);
+      return setAgentFocus(walkable[next].id);
+    }
     // Text a list put in the composer to finish: Escape takes it back out, unsent, and returns.
     if (key.name === 'escape' && prefillBack.current && !controller.running) {
       key.preventDefault();
@@ -863,7 +1095,8 @@ export function App(props: AppProps) {
                 ) : null}
               </box>
             ) : null}
-            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
+            {agentView && viewedAgent ? <AgentViewer runtime={runtime} item={viewedAgent} syntax={syntax} thinking={thinking} focus={(box) => (agentBox.current = box)} /> : null}
+            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling visible={!(agentView && viewedAgent)} onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
               {hidden ? (
                 <text {...sel} fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
               ) : null}
@@ -871,7 +1104,7 @@ export function App(props: AppProps) {
                 <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} {...(viewer ? { open: !viewer.has(row.id), onToggle: toggleInViewer } : { onToggle: (id: number) => dispatch({ type: 'toggle', id }) })} />
               ))}
             </scrollbox>
-            {showTodos && !viewer ? <TodoPanel todos={state.todos} plan={state.plan} work={state.work} phase={state.status.phase} plain={plain} colors={theme} /> : null}
+            {showTodos && !viewer ? <TodoPanel todos={state.todos} plan={state.plan} work={state.work} phase={state.status.phase} plain={plain} colors={theme} focus={agentFocus} onOpen={openAgent} /> : null}
             {approval ? (
               <PermissionPrompt
                 approval={approval}
@@ -893,7 +1126,7 @@ export function App(props: AppProps) {
                 }}
               />
             ) : (
-              <box flexDirection="column" flexShrink={0} visible={!viewer}>
+              <box flexDirection="column" flexShrink={0} visible={!viewer && !(agentView && viewedAgent)}>
                 {overlay.current ? (
                   <Picker
                     key={overlay.current.serial}
@@ -940,7 +1173,7 @@ export function App(props: AppProps) {
                 <box {...framed(plain, theme.border)} flexShrink={0} height={plain ? 3 : 5}>
                   <textarea
                     ref={composer}
-                    focused={!overlay.current && !viewer}
+                    focused={!overlay.current && !viewer && !agentView}
                     textColor={theme.text}
                     focusedTextColor={theme.text}
                     placeholderColor={theme.dim}

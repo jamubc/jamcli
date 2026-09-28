@@ -128,7 +128,9 @@ test('the checklist appears on its own when the model writes one, with its check
     await send(setup, 'plan it');
     // Nobody pressed the key: the board showed itself, the whole plan in its header and each step as a mark.
     const shown = await frameWith(setup, (frame) => frame.includes('◐ Fixing the bug'));
-    expect(shown).toContain('Plan ●◐○ 1 of 3');
+    // Each mark stands apart in its own color, and the steps sit indented under the header.
+    expect(shown).toContain('Plan ● ◐ ○ 1 of 3');
+    expect(shown).toContain('   ● Read the parser');
     expect(shown).toContain('● Read the parser');
     expect(shown).toContain('○ Add a test');
     // The running step's check sits behind the rail, under it.

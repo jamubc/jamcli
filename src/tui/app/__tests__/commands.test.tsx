@@ -194,15 +194,21 @@ test('/compact says when there is nothing to compact yet', async () => {
   }
 }, 30_000);
 
-test('/note pins notes above the conversation, newest on top, and /notes clear removes them', async () => {
-  const { setup, close } = await open({}, { size: tall });
+test('/note flags notes above the conversation, newest on top, keeps them in the log, and /notes clear hides them', async () => {
+  const { setup, runtime, close } = await open({}, { size: tall });
   try {
     await send(setup, '/note check the migration');
     await send(setup, '/note ask about retries');
-    const frame = await frameWith(setup, (frame) => frame.includes('- ask about retries') && frame.includes('- check the migration'));
-    expect(frame.indexOf('- ask about retries')).toBeLessThan(frame.indexOf('- check the migration'));
+    const frame = await frameWith(setup, (frame) => frame.includes('⚑') && frame.includes('ask about retries') && frame.includes('check the migration'));
+    // A flag, not a label: the panel never says "Notes".
+    expect(frame).not.toContain('Notes');
+    expect(frame.indexOf('ask about retries')).toBeLessThan(frame.indexOf('check the migration'));
+    // The log keeps them, in order, so a person reading the session back finds them where they were planted.
+    expect(runtime.notes().map((note) => note.text)).toEqual(['check the migration', 'ask about retries']);
     await send(setup, '/notes clear');
-    await frameWith(setup, (frame) => frame.includes('Notes cleared.') && !frame.includes('- check the migration'));
+    // The flags go; the commands that planted them stay in the transcript, as typed.
+    await frameWith(setup, (frame) => frame.includes('Notes hidden here.') && !frame.includes('⚑'));
+    expect(runtime.notes()).toHaveLength(2);
   } finally {
     await close();
   }
@@ -265,7 +271,7 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
     await frameWith(setup, (frame) => frame.includes('Applied to this session.'));
     expect(readJson(path.join(context.root, '.jamcli', 'config.json')).delegation.default_agent).toBe('writing');
     await send(setup, '/agents nobody');
-    await frameWith(setup, (frame) => frame.includes('No agent named nobody. The agents are explore, intelligent, quick, writing.'));
+    await frameWith(setup, (frame) => frame.includes('No agent named nobody. The agents are explore, intelligent, quick, research, writing.'));
 
     // /effort applies now, shows beside the model, and keeps the choice in the user's config.
     await send(setup, '/effort high');

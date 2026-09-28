@@ -2,6 +2,7 @@ import type { AgentEvent, ApprovalPreview, ApprovalScope, ChatMessage, ToolCall,
 import { describeCall } from '../../core/approval.js';
 import { isSummary } from '../../core/context/compact.js';
 import type { WorkItem } from '../../core/work.js';
+import type { SessionNote } from '../../core/runtime/index.js';
 
 /**
  * The interface's view state, and the pure function that folds runtime events into it.
@@ -104,8 +105,8 @@ export interface ViewState {
   todos?: TodoView[];
   /** The plan the model last saved this session: where it is, so the person can edit it. */
   plan?: { path: string; lines: number };
-  /** The person's sticky notes for this interface, newest first. They never reach the model. */
-  notes: string[];
+  /** The tester's notes on this session, newest first. They never reach the model. */
+  notes: SessionNote[];
   /** What runs beside the turn, and what ended lately, as the runtime lists it. */
   work: WorkItem[];
 }
@@ -114,8 +115,8 @@ export type ViewAction =
   | { type: 'event'; event: AgentEvent }
   /** The person sent a message; it is shown as typed, before any `@` reference is expanded. */
   | { type: 'submit'; text: string }
-  /** Show a conversation from its messages, as a resumed session. */
-  | { type: 'load'; messages: ChatMessage[] }
+  /** Show a conversation from its messages, as a resumed session, with the notes planted in it. */
+  | { type: 'load'; messages: ChatMessage[]; notes?: SessionNote[] }
   | { type: 'status'; patch: Partial<StatusData> }
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; text: string }
   /** The person ran a slash command, which never reaches the model. */
@@ -123,8 +124,9 @@ export type ViewAction =
   | { type: 'output'; text: string; diff?: string }
   | { type: 'toggle'; id: number }
   | { type: 'clear' }
-  /** Put a sticky note on top of the others. */
-  | { type: 'note'; text: string }
+  /** Put a note on top of the others. */
+  | { type: 'note'; note: SessionNote }
+  /** Hide the notes here; the session log keeps them. */
   | { type: 'clear_notes' }
   /** The runtime's work changed: what runs beside the turn, whether or not one runs. */
   | { type: 'work'; items: WorkItem[] };
@@ -315,7 +317,8 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
           decision: { allow: event.allow, by: event.by, scope: event.scope, ...(event.rule ? { rule: event.rule } : {}) },
         })),
         approvals: state.approvals.filter((approval) => approval.callId !== event.callId),
-        status: { ...status, phase: state.approvals.length > 1 ? 'waiting' : 'tool' },
+        // Between turns, a background child's answered prompt leaves the session ready, not running.
+        status: { ...status, phase: state.approvals.length > 1 ? 'waiting' : state.running ? 'tool' : 'idle' },
       };
 
     case 'usage': {
@@ -348,11 +351,14 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
     }
 
     case 'turn_end': {
-      // A call still open when the turn ends did not finish.
+      // A call still open when the turn ends did not finish, except a background child's,
+      // which outlives the turn and may still be asking.
+      const nested = (callId: string) => callId.includes('/');
       const rows = closeStreaming(state.rows).map((row) =>
-        row.kind === 'tool' && (row.phase === 'pending' || row.phase === 'running' || row.phase === 'waiting') ? { ...row, phase: 'cancelled' as const } : row
+        row.kind === 'tool' && !nested(row.callId) && (row.phase === 'pending' || row.phase === 'running' || row.phase === 'waiting') ? { ...row, phase: 'cancelled' as const } : row
       );
-      return { ...state, rows, approvals: [], running: false, status: { ...status, phase: 'idle', retry: undefined } };
+      const approvals = state.approvals.filter((approval) => nested(approval.callId));
+      return { ...state, rows, approvals, running: false, status: { ...status, phase: approvals.length ? 'waiting' : 'idle', retry: undefined } };
     }
 
     default:
@@ -403,7 +409,8 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     case 'load': {
       const { rows, nextId } = rowsFrom(action.messages, state.nextId);
       // Tokens are counted from events, so another session's count starts over.
-      return { ...state, rows, nextId, approvals: [], running: false, todos: undefined, plan: undefined, status: { ...state.status, phase: 'idle', retry: undefined, inputTokens: 0, outputTokens: 0 } };
+      const notes = [...(action.notes ?? [])].sort((a, b) => b.ts - a.ts);
+      return { ...state, rows, nextId, approvals: [], running: false, todos: undefined, plan: undefined, notes, status: { ...state.status, phase: 'idle', retry: undefined, inputTokens: 0, outputTokens: 0 } };
     }
     case 'status':
       return { ...state, status: { ...state.status, ...action.patch } };
@@ -421,7 +428,7 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     case 'clear':
       return { ...state, rows: [], approvals: [] };
     case 'note':
-      return { ...state, notes: [action.text, ...state.notes] };
+      return { ...state, notes: [action.note, ...state.notes] };
     case 'clear_notes':
       return { ...state, notes: [] };
     case 'work': {

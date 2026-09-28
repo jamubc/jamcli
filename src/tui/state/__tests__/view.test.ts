@@ -222,12 +222,25 @@ test('the todo list is the one the model last wrote, and another session has non
   expect(reduceView(state, { type: 'load', messages: [] }).todos).toBeUndefined();
 });
 
-test('notes stack newest first, survive a session load, and clear together', () => {
-  let state = run([{ type: 'note', text: 'first' }, { type: 'note', text: 'second' }]);
-  expect(state.notes).toEqual(['second', 'first']);
-  state = run([{ type: 'load', messages: [] }, { type: 'clear' }], state);
-  expect(state.notes).toEqual(['second', 'first']);
+test('notes stack newest first, a loaded session brings its own, and clear hides them', () => {
+  let state = run([{ type: 'note', note: { text: 'first', ts: 10 } }, { type: 'note', note: { text: 'second', ts: 20 } }]);
+  expect(state.notes.map((note) => note.text)).toEqual(['second', 'first']);
+  // Clearing the transcript leaves the flags; loading another session shows that session's, newest first.
+  expect(run([{ type: 'clear' }], state).notes.map((note) => note.text)).toEqual(['second', 'first']);
+  state = run([{ type: 'load', messages: [], notes: [{ text: 'older', ts: 1 }, { text: 'newer', ts: 2 }] }], state);
+  expect(state.notes.map((note) => note.text)).toEqual(['newer', 'older']);
+  expect(run([{ type: 'load', messages: [] }], state).notes).toEqual([]);
   expect(run([{ type: 'clear_notes' }], state).notes).toEqual([]);
+});
+
+test('work items carry what a child is doing, and the status counts what runs', () => {
+  const items = [
+    { id: 'task-1', kind: 'task' as const, label: 'quick: look', startedAt: 1, agent: 'quick', model: 'ollama:qwen', detail: 'read_file a.txt', tokens: 1200, cost: 0.01 },
+    { id: 'job-1', kind: 'job' as const, label: 'npm test', startedAt: 1, endedAt: 2, outcome: 'exited with code 0' },
+  ];
+  const state = run([{ type: 'work', items }]);
+  expect(state.work[0]).toMatchObject({ agent: 'quick', detail: 'read_file a.txt', tokens: 1200 });
+  expect(state.status.work).toEqual({ jobs: 0, agents: 1 });
 });
 
 test('a report taller than the viewport anchors to its own top, not the viewport bottom', () => {
@@ -252,4 +265,26 @@ test('a row opens and closes on its own', () => {
   expect(reduceView(state, { type: 'toggle', id: tool(state, 'c7').id }).rows[1]).toMatchObject({ kind: 'tool', collapsed: false });
   const loaded = run([{ type: 'load', messages: [{ role: 'assistant', content: 'Read it.', reasoning: 'I should read it.' } as ChatMessage] }]);
   expect(loaded.rows[0]).toMatchObject({ kind: 'assistant', reasoning: 'I should read it.', collapsed: true });
+});
+
+test("a background child's prompt outlives the turn that started it, and the status says the person is wanted", () => {
+  const nested = call('t1/c1', 'run_command', { command: 'wc -l a.txt' });
+  let state = run([
+    { type: 'submit', text: 'count it' },
+    event({ type: 'tool_call', call: call('t1', 'task', { prompt: 'count' }) }),
+    event({ type: 'tool_result', result: { tool: 'task', success: true, output: 'Started background task', callId: 't1', status: 'ok', durationMs: 1 } }),
+    event({ type: 'approval_request', call: nested, decide: () => undefined }),
+    event({ type: 'turn_end', status: 'ok' }),
+  ]);
+  expect(state.approvals.map((approval) => approval.callId)).toEqual(['t1/c1']);
+  expect(tool(state, 't1/c1').phase).toBe('waiting');
+  expect(state.status.phase).toBe('waiting');
+  state = reduceView(state, event({ type: 'approval_decision', callId: 't1/c1', tool: 'run_command', allow: true, scope: 'once', by: 'user' }));
+  expect(state.approvals).toEqual([]);
+  // Answered between turns, the session is ready again, not running.
+  expect(state.status.phase).toBe('idle');
+  // A prompt of the turn's own does not outlive it.
+  const own = run([event({ type: 'approval_request', call: call('c2', 'run_command', { command: 'ls' }), decide: () => undefined }), event({ type: 'turn_end', status: 'cancelled' })]);
+  expect(own.approvals).toEqual([]);
+  expect(tool(own, 'c2').phase).toBe('cancelled');
 });
