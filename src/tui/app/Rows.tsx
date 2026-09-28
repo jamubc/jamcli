@@ -2,7 +2,7 @@
 import type { MarkdownRenderable, SyntaxStyle } from '@opentui/core';
 import { useEffect, useRef } from 'react';
 import type { Row } from '../state/view.js';
-import { compactionLine, noticeLine, thinkingLine, thinkingSize, thinkingWindow, toolLine } from './format.js';
+import { compactionLine, noticeLine, thinkingLine, thinkingSize, thinkingText, thinkingWindow, toolLine } from './format.js';
 import type { ThinkingSize } from './format.js';
 import { useClick } from './mouse.js';
 import { filetypeOf } from './syntax.js';
@@ -138,23 +138,26 @@ export function RowView({
         </box>
       );
     case 'assistant': {
-      // Thinking arrives fast and in bursts. It runs in a window of a fixed height and a
-      // fixed width so the transcript above it stays still, and leaves one line behind
-      // once the answer starts or the turn ends. A click on that line shows all of it.
+      // Thinking arrives fast and in bursts. It runs under its own line, in a window of a
+      // fixed height and a fixed width so the transcript above it stays still, and folds
+      // to that line once the answer starts or the turn ends. A click on the line shows
+      // all of it. The two states are keyed apart: reused, the one box would keep the
+      // window's fixed height after the window had gone.
       const live = Boolean(row.reasoning) && row.streaming && !row.text;
       const thinkingShown = open;
       return (
         <box flexDirection="column">
           {live ? (
-            <box width={thinking.width} height={thinking.lines} flexShrink={0}>
+            <box key="live" flexDirection="column" width={thinking.width} height={thinking.lines + 1} flexShrink={0}>
+              <text {...sel} fg={theme.dim}>{thinkingLine(row.reasoning, true, true, thinking.width)}</text>
               <text {...sel} fg={theme.dim}>{thinkingWindow(row.reasoning, thinking)}</text>
             </box>
           ) : row.reasoning ? (
-            <box flexDirection="column">
+            <box key="settled" flexDirection="column">
               <text {...sel} fg={theme.dim} onMouseUp={click(() => onToggle?.(row.id))}>
-                {thinkingLine(row.reasoning, thinkingShown)}
+                {thinkingLine(row.reasoning, thinkingShown, true, thinking.width)}
               </text>
-              {thinkingShown ? <text {...sel} fg={theme.dim}>{row.reasoning}</text> : null}
+              {thinkingShown ? <text {...sel} fg={theme.dim}>{thinkingText(row.reasoning, thinking.width)}</text> : null}
             </box>
           ) : null}
           {row.text ? <MarkdownView content={row.text} syntax={syntax} streaming={Boolean(row.streaming)} /> : null}

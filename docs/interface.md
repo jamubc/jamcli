@@ -84,13 +84,14 @@ trust gate's requests. The header counts the reasoning left out.
 
 ## Thinking
 
-A model that thinks before it answers shows that thinking as it arrives, in a window of a
-fixed size: `ui.thinking_lines` tall, 3 by default, and `ui.thinking_width` wide, 72 by
-default and never wider than the terminal. The window keeps that size however fast the
-words arrive, so the transcript above it stays where it is. Once the reply starts, or the
-turn ends, the window leaves one line behind saying how many lines of thinking there
-were. Click that line to read them, and click it again to put it away. In screen reader
-mode the window does not run: the line says only that thinking is under way.
+A model that thinks before it answers shows that thinking as it arrives, behind a rail
+under a line that says `thinking` and counts its lines, in a window of a fixed size:
+`ui.thinking_lines` tall, 3 by default, and `ui.thinking_width` wide, 72 by default and
+never wider than the terminal. The window keeps that size however fast the words arrive,
+so the transcript above it stays where it is. Once the reply starts, or the turn ends,
+the window folds to its line, which says how many lines of thinking there were as the
+window draws them. Click that line to read them, and click it again to put it away. In
+screen reader mode the window does not run: the line says only that thinking is under way.
 
 ## The detailed transcript
 
