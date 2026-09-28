@@ -454,7 +454,8 @@ export const COMMAND_KILL_TOOL: RegisteredTool = {
     required: ['job_id'],
     additionalProperties: false,
   },
-  policy: 'execute',
+  // Stopping a job the model started changes nothing outside the session, as cancelling a task does.
+  policy: 'state',
   runner: commandKillRunner,
 };
 
