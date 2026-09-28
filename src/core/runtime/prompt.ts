@@ -26,7 +26,10 @@ const toolGuidance = (tools: ToolSummary[]): string => {
   const finders = ['glob', 'grep'].filter(has);
   if (finders.length) lines.push(`- Find files with ${finders.join(' and ')}, then read what matters with read_file.`);
   if (has('edit')) lines.push('- Read a file before changing it, and prefer edit for changes to existing files.');
-  if (has('run_command')) lines.push('- Check your work with the project\'s own tests or build through run_command when you can.');
+  if (has('run_command')) {
+    lines.push('- Check your work with the project\'s own tests or build through run_command when you can.');
+    lines.push('- A server, a watcher, or anything that does not exit on its own runs with background: true. Read it with command_output and stop it with command_kill; you are told when it ends. Never wait on it in the foreground.');
+  }
   lines.push('- When a tool can do something, call it rather than describing the call.');
   lines.push('- If no tool is needed, answer directly.');
   return lines.join('\n');

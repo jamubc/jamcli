@@ -27,7 +27,7 @@ const argString = (call: ToolCall, key: string): string | undefined => {
 export function describeCall(call: ToolCall): string {
   const command = argString(call, 'command');
   const target = argString(call, 'path');
-  if (call.name === 'run_command' && command) return `run_command ${clip(command.replace(/\s+/g, ' '), 160)}`;
+  if (call.name === 'run_command' && command) return `run_command ${clip(command.replace(/\s+/g, ' '), 160)}${call.arguments?.background === true ? ' · background' : ''}`;
   if (call.name === 'apply_patch') {
     const files = [...(argString(call, 'patch') ?? '').matchAll(/^\+\+\+ (?:b\/)?(.+)$/gm)].map((m) => m[1].trim());
     const named = files.filter((file) => file !== '/dev/null');
