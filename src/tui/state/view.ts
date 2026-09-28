@@ -403,9 +403,12 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     case 'event':
       return applyEvent(state, action.event);
     case 'submit': {
-      const last = state.rows[state.rows.length - 1];
       // A command that sends a turn shows the line it was typed as, so the turn's echo of it is not a second row.
-      const echoed = last?.kind === 'command' && last.text === action.text;
+      // Notices the command posted before sending, such as what /research is about to do, sit between the two.
+      let at = state.rows.length - 1;
+      while (at >= 0 && state.rows[at].kind === 'notice') at -= 1;
+      const typed = state.rows[at];
+      const echoed = typed?.kind === 'command' && typed.text === action.text;
       const row: Row = { kind: 'user', id: state.nextId, text: action.text };
       return { ...state, rows: echoed ? state.rows : [...closeStreaming(state.rows), row], nextId: echoed ? state.nextId : state.nextId + 1, running: true, status: { ...state.status, phase: 'thinking' } };
     }
