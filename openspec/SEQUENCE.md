@@ -63,6 +63,10 @@ acceptance is 6.2 run that way, the owner approving each lesson, which is why it
 before 6.2 closes. `add-surface-parity` and `add-mcp-server` are stacked on
 `feat/agentic-harness-core`, which is not yet merged to `master`.
 
+`generate-reference-docs` is open, stacked on the same branch: the owner opened it on
+2026-09-27, as a second exception to the working rule while 6.2 waits. It writes the docs site's
+reference pages from the product's definitions and runs every proof in the site build.
+
 `add-session-reflection` stays open. Its code is committed and its task 6.1 ran end to end
 on OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real
 sessions, the approved novel edits counted against the 0 of 26 baseline, which only the
