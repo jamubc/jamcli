@@ -53,6 +53,10 @@ test('the brief carries the steps, the filters, the depth, the report path, and 
   expect(brief).toContain('3 independent lines of inquiry');
   expect(brief).toContain('background: true on agent "research"');
   expect(brief).toContain('at least 6 distinct sources in full with web_fetch');
+  // Children are told apart on the board, only search and read, and the parent holds its turn until they end.
+  expect(brief).toContain('Start each child\'s prompt with a short title for its line');
+  expect(brief).toContain('must not start tasks of its own, run shell commands, or write files');
+  expect(brief).toContain('call task_result with wait_seconds 600 for every child');
   expect(brief).toContain('Pass freshness "oneWeek" to every web_search.');
   expect(brief).toContain('site: terms, and prefer them as sources: docs.example.org.');
   expect(brief).toContain('Never cite these domains, and drop their results: spam.test.');
