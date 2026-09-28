@@ -1,7 +1,8 @@
 # Protocols
 
-JamCLI speaks MCP, ACP (both sides), and LSP. The code lives in `src/core/mcp/`,
-`src/acp/`, `src/services/AcpClient.ts`, `src/tui/observer.ts`, and `src/core/lsp/`.
+JamCLI speaks MCP (both sides), ACP (both sides), and LSP. The code lives in
+`src/core/mcp/`, `src/mcp/`, `src/acp/`, `src/services/AcpClient.ts`,
+`src/tui/observer.ts`, and `src/core/lsp/`.
 
 ## MCP
 
@@ -17,6 +18,36 @@ JamCLI speaks MCP, ACP (both sides), and LSP. The code lives in `src/core/mcp/`,
 - Past `tool_search.threshold` MCP tools, their schemas are held back and the model loads
   them with `search_tools`; built-in tools stay listed, and a tool denied by a rule is
   never loadable. Resource text is redacted like file content.
+
+## JamCLI as an MCP server
+
+`jamcli mcp serve` speaks MCP on stdio, so any agent host can use JamCLI the way a person
+does. Add it once, for example `claude mcp add jamcli -- jamcli mcp serve`.
+
+- **Sessions, for delegating work.** `session_start` opens a session in a directory (its
+  project root is found from it, as `jamcli` does when started there); `session_send`
+  sends a prompt or any `/command`; `session_answer` answers a call waiting for approval
+  (`allow_once`, `allow_session`, `deny`) or a list a command offered; `session_state`
+  reports; `session_stop` ends one, which stays in history. Each is the same session an
+  editor opens over ACP, with the same runtime, commands, and permissions. A call returns
+  when the turn ends, when the session needs an answer, or after `wait_ms`, with what
+  happened since the caller last read it, in words and as structured content; progress
+  notifications carry it meanwhile.
+- **Terminals, for using the interface itself.** `terminal_start` runs the ordinary
+  `jamcli`, launched as the shipped build launches it, in a pseudo-terminal read through a
+  terminal emulator; `terminal_type`, `terminal_keys`, `terminal_screen`, `terminal_wait`,
+  `terminal_resize`, and `terminal_stop` use it. JamCLI has no mode for being driven: the
+  only thing set is `JAMCLI_ACP_ENDPOINT`, so the interface's observer says whether it is
+  working or waiting. Each terminal keeps an asciinema recording under the state
+  directory's `mcp-terminals/`. The emulator is an xterm-compatible terminal: it does not
+  speak kitty's keyboard protocol.
+- **What is the person's stays theirs.** A call to a tool that always asks (a commit, a
+  lesson from `/reflect`) and a choice marked as the person's (trusting a project's hooks)
+  are never the calling agent's to answer: `session_answer` refuses them, and keys sent to
+  a terminal waiting on one are not sent. The person is asked by elicitation in their own
+  host, pushed on a 2025 connection or returned as `input_required` on a 2026-07-28 one.
+  A host that cannot ask (OpenCode today) gets a denial. The bypass confirmation and the
+  hooks trust question in a terminal show only on screen and are the person's by rule.
 
 ## ACP
 

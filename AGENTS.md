@@ -27,6 +27,24 @@ quality review after each, a whole-branch review at the end. Its ledger lives un
 `.superpowers/sdd/`, which is gitignored scratch. Tightly coupled tasks stay inline. Either
 way the four gates hold at every checkpoint.
 
+## Testing JamCLI by using it
+
+To find out whether JamCLI works, use it, the way a person would: through JamCLI's own MCP
+server, `jamcli mcp serve` (see `docs/protocols.md`). `terminal_*` runs the interface
+itself; `session_*` delegates a turn or any `/command`. Do not build a harness of your own
+or reach into the source: the program on the other end must be the one a person runs, or
+the bugs it hides go unfound.
+
+- Run the JamCLI under test in a throwaway fixture project, never this checkout, and give
+  it its own `JAMCLI_STATE_DIR` and a copied `JAMCLI_CONFIG_DIR`, so its sessions stay out
+  of this repository's history and nothing it saves reaches the owner's configuration.
+- Rebuild or restart the server after changing JamCLI; a running server keeps the code it
+  started with.
+- What only the person answers stays theirs: a commit, a lesson from `/reflect`, bypass,
+  trusting a project's hooks. The server asks them; never answer for them.
+- A defect found this way is fixed with a test that fails without the fix, and the
+  terminal's recording is the evidence.
+
 ## Hard rules
 
 - **No em dashes** (U+2014) in anything authored here: commits, specs, docs, comments,

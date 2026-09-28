@@ -17,8 +17,8 @@
 
 ## 4. Docs and process
 
-- [ ] 4.1 `docs/protocols.md` and `README.md`: what `jamcli mcp serve` offers and how a host adds it.
-- [ ] 4.2 `AGENTS.md`: an agent testing JamCLI uses JamCLI's own MCP server, drives it in a throwaway fixture project never this checkout, and leaves the person's answers to the person.
+- [x] 4.1 `docs/protocols.md` and `README.md`: what `jamcli mcp serve` offers and how a host adds it.
+- [x] 4.2 `AGENTS.md`: an agent testing JamCLI uses JamCLI's own MCP server, drives it in a throwaway fixture project never this checkout, and leaves the person's answers to the person.
 
 ## 5. Proof and close
 

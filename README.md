@@ -23,6 +23,9 @@ Protocol.
 - **Speaks the protocols**: MCP (the 2026-07-28 revision with fallback), ACP as an
   agent and as a client, and LSP for diagnostics and navigation.
 - **Runs headless** with JSON or streamed JSON output and a dry-run mode.
+- **Serves other agents** over MCP with `jamcli mcp serve`: an agent host delegates work to
+  a JamCLI session, or uses JamCLI's own interface in a terminal, and whatever only you
+  should answer is asked of you.
 
 ## Install
 
@@ -52,6 +55,7 @@ ollama pull qwen2.5-coder:7b  # any local model with tool calling
 jamcli                        # the interface; first run walks through setup
 jamcli -p "explain src/cli.ts" --output-format json
 jamcli doctor                 # checks providers, models, tools, sandbox, config
+claude mcp add jamcli -- jamcli mcp serve   # let Claude Code delegate to JamCLI
 ```
 
 See [Getting started](docs/getting-started.md).
