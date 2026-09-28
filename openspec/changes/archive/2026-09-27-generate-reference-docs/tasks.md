@@ -25,4 +25,4 @@
 ## 5. Record and close
 
 - [x] 5.1 `site/AGENTS.md` says reference pages are generated and their text is fixed at the definition, and that a proof is checked unless marked `reader`. `openspec/SEQUENCE.md` records this unit. Verified by reading them.
-- [ ] 5.2 Four gates at the root, `bun run build` in `site/`, `openspec validate --strict`, then archive.
+- [x] 5.2 Four gates at the root, `bun run build` in `site/`, `openspec validate --strict`, then archive.

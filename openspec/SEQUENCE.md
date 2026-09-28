@@ -63,9 +63,8 @@ acceptance is 6.2 run that way, the owner approving each lesson, which is why it
 before 6.2 closes. `add-surface-parity` and `add-mcp-server` are stacked on
 `feat/agentic-harness-core`, which is not yet merged to `master`.
 
-`generate-reference-docs` is open, stacked on the same branch: the owner opened it on
-2026-09-27, as a second exception to the working rule while 6.2 waits. It writes the docs site's
-reference pages from the product's definitions and runs every proof in the site build.
+`generate-reference-docs`, a second exception the owner opened on 2026-09-27 while 6.2
+waited, is archived on the same branch; see Closed units below.
 
 `add-session-reflection` stays open. Its code is committed and its task 6.1 ran end to end
 on OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real
@@ -78,6 +77,32 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it.
 
 ## Closed units
+
+### 8. `generate-reference-docs`
+
+Archived as `2026-09-27-generate-reference-docs`, with no spec deltas: the docs site is project
+tooling, not behaviour of JamCLI. The site's reference section (slash commands, built-in tools
+and their parameters, settings, interface keys, command line) is written at every build from
+`BUILTIN_COMMANDS`, `BUILTIN_TOOLS`, `settingsFromSchema()`, the key definitions, and `USAGE`,
+and never committed. The build fails naming any command, visible tool, tool parameter, or
+setting without text of its own. Every `<Proof run>` now runs in the site build; the two a build
+cannot run (`jamcli doctor`, and a test the add-a-tool guide has the reader create) are marked
+`reader` and labelled so. Removing `/exit` from `BUILTIN_COMMANDS` took its row off the built
+page with no page edit, and a broken proof failed the build.
+
+**What making the code the source found.** Importing `BUILTIN_TOOLS` on its own crashed: the
+default registry was filled at module load, inside an import cycle. It is now built on first
+use. 18 settings had no description; they have one at the schema, and six of them
+(`context_management.*`, `general.show_tool_calling_models_only`, `available_models`) are read
+by no session and now say so. The owner's own settings file still sets
+`context_management.enabled`, which does nothing.
+
+**Left open.** The CLI's subcommands are named in three places (`USAGE`, `parseArgs`, and the
+entry point's `HEADLESS_INTENTS`); the page renders `USAGE`, which is what `--help` prints.
+Defaults such as `delegation.max_depth` live in code outside the schema, so the settings table
+cannot show them and `/config get delegation.max_depth` answers "not set" while 2 applies. On
+this machine `jamcli doctor` fails the TypeScript language server check: TypeScript 7 ships no
+`tsserver.js`.
 
 ### 7. `add-surface-parity`
 
