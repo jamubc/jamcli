@@ -39,7 +39,7 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
     await frameWith(setup, (frame) => frame.includes('> /help'));
     setup.mockInput.pressTab();
     // The name is completed with a space after it, which closes the palette.
-    await frameWith(setup, (frame) => /│\/help /.test(frame) && !frame.includes('Up and Down choose'));
+    await frameWith(setup, (frame) => /│ \/help /.test(frame) && !frame.includes('Up and Down choose'));
     setup.mockInput.pressEnter();
     // Help is an overlay: the commands, and the keys.
     const help = await frameWith(setup, (frame) => frame.includes('Keys: Enter sends'));
@@ -54,7 +54,7 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
     setup.mockInput.pressArrow('down');
     setup.mockInput.pressArrow('up');
     await setup.mockInput.typeText('y');
-    await frameWith(setup, (frame) => /│\/copy +│/.test(frame));
+    await frameWith(setup, (frame) => /│ \/copy +│/.test(frame));
     setup.mockInput.pressEscape();
     for (let index = 0; index < 5; index += 1) setup.mockInput.pressBackspace();
     await frameWith(setup, (frame) => frame.includes('Message JamCLI'));

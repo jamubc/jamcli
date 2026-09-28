@@ -874,7 +874,7 @@ export function App(props: AppProps) {
                   />
                 ) : null}
                 {showTodos ? <TodoPanel todos={state.todos} plan={state.plan} plain={plain} colors={theme} /> : null}
-                <box {...framed(plain, theme.border)} paddingLeft={0} paddingRight={0} flexShrink={0} height={plain ? 3 : 5}>
+                <box {...framed(plain, theme.border)} flexShrink={0} height={plain ? 3 : 5}>
                   <textarea
                     ref={composer}
                     focused={!overlay.current && !viewer}

@@ -66,7 +66,7 @@ test('/commit with a message asks nothing of the model, and the message can go b
     expect(context.server.completions().length).toBe(before);
     setup.mockInput.pressArrow('down');
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => /│\/commit docs: say new\s+│/.test(frame));
+    await frameWith(setup, (frame) => /│ \/commit docs: say new\s+│/.test(frame));
     expect(git('rev-list', '--count', 'HEAD').trim()).toBe('1');
   } finally {
     await close();

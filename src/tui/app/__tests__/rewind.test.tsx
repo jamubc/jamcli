@@ -83,7 +83,7 @@ test('/rewind lists the checkpoints, and can put the conversation back to before
     // A new session, without the turn, whose message waits in the composer; the files stay.
     expect(current().sessionId).not.toBe(before);
     expect(rewound).not.toContain('Changed it.');
-    expect(rewound).toMatch(/│change it\s+│/);
+    expect(rewound).toMatch(/│ change it\s+│/);
     expect(read('a.txt')).toBe('new\n');
     expect(current().session.messages.map((message) => message.content)).not.toContain('change it');
   } finally {

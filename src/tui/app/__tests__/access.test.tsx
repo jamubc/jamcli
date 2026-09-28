@@ -90,7 +90,7 @@ test('Ctrl+R searches earlier messages, newest first, and puts the chosen one in
     await setup.mockInput.typeText('first');
     await frameWith(setup, (frame) => frame.includes('> first message'));
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => /│first message +│/.test(frame));
+    await frameWith(setup, (frame) => /│ first message +│/.test(frame));
 
     // A new session still finds what was sent in the last one, and says where.
     const before = current().sessionId;
