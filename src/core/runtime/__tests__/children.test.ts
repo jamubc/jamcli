@@ -334,3 +334,50 @@ test("a run can offer a tool under a description of its own, and only that run",
   await plain.run('hi');
   expect(offered(server.completions().at(-1))).not.toContain('TRIAL-DESCRIPTION');
 });
+
+test('a task reports its agent, model, session, and activity to the work table as it runs', async () => {
+  const work = new WorkTable();
+  const delegate = async (request: DelegationRequest) => {
+    request.onStart?.({ agent: 'quick', model: 'ollama:qwen', sessionId: 'child-1' });
+    request.onEvent?.({ type: 'tool_call', call: { id: 'c1', name: 'grep', arguments: { pattern: 'todo' } } });
+    request.onEvent?.({ type: 'usage', usage: { prompt_tokens: 50, completion_tokens: 10, total_tokens: 60 }, cost: 0.001 });
+    const [item] = work.list();
+    expect(item).toMatchObject({ agent: 'quick', model: 'ollama:qwen', sessionId: 'child-1', tokens: 60, cost: 0.001 });
+    expect(item.detail).toContain('grep');
+    expect(item.label).toBe('quick: look');
+    return { status: 'ok' as const, response: 'done', agent: 'quick', childSessionId: 'child-1' };
+  };
+  const result = await taskRunner({ prompt: 'look' }, { projectRoot: root, delegate, work });
+  expect(result.output).toContain('done');
+  expect(work.events(work.list()[0].id).map((event) => event.type)).toEqual(['tool_call', 'usage']);
+});
+
+test("a background child's prompt reaches whoever answers the parent's calls, and its answered call's result is shown", async () => {
+  const work = new WorkTable();
+  const asked: string[] = [];
+  const shown: string[] = [];
+  const delegate = async (request: DelegationRequest) => {
+    request.onStart?.({ agent: 'quick', model: 'ollama:qwen', sessionId: 'child-1' });
+    const decision = await request.requestApproval!({
+      call: { id: 'c1', name: 'run_command', arguments: { command: 'wc -l a.txt' } },
+      request: { id: 'c1', call: { id: 'c1', name: 'run_command', arguments: { command: 'wc -l a.txt' } }, policyClass: 'execute', summary: 'run_command wc -l a.txt', reason: 'this tool asks before it runs', suggestions: [] },
+    });
+    request.onResult?.({ tool: 'run_command', callId: 'c1', success: true, output: '3 a.txt', durationMs: 1 });
+    return { status: 'ok' as const, response: `decided ${JSON.stringify(decision)}`, agent: request.agent ?? 'quick' };
+  };
+  const ctx = {
+    projectRoot: root,
+    delegate,
+    work,
+    requestApproval: async ({ call, request }: { call: { name: string }; request?: { reason?: string } }) => (asked.push(`${call.name}: ${request?.reason}`), { allow: true, scope: 'once' as const }),
+    onNestedResult: (result: { output?: string }) => shown.push(result.output ?? ''),
+  };
+  const started = await taskRunner({ agent: 'quick', prompt: 'count', background: true }, ctx);
+  const id = started.metadata!.id as string;
+  await Bun.sleep(10);
+  // The prompt names the child that asks, so two asking at once can be told apart.
+  expect(asked).toEqual([`run_command: agent quick (${id}) asks, and this tool asks before it runs`]);
+  expect(shown).toEqual(['3 a.txt']);
+  const result = await taskResultRunner({ id }, ctx);
+  expect(result.output).toContain('decided {"allow":true,"scope":"once"}');
+});

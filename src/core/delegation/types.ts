@@ -1,4 +1,4 @@
-import type { ApprovalDecision, ApprovalRequest, ToolCall, ToolResult } from '../types.js';
+import type { AgentEvent, ApprovalDecision, ApprovalRequest, ToolCall, ToolResult } from '../types.js';
 import type { EffortLevel, ReasoningLevel } from '../routing/capabilities.js';
 
 /** Ask whoever answers a call's approvals about a call nested inside it, such as a child run's. */
@@ -13,11 +13,17 @@ export interface DelegationRequest {
   /** Replaces the agent's effort for this child only. */
   effort?: EffortLevel;
   maxTurns: number;
-  /** A background child outlives the call that started it, so it cannot ask anyone. */
+  /** A background child outlives the call that started it; it still asks through `requestApproval`. */
   background: boolean;
   signal?: AbortSignal;
   /** The child's reply as it streams. */
   onText?: (delta: string) => void;
+  /** The child's session is open and about to run: the agent and model it resolved to. */
+  onStart?: (child: { agent: string; model: string; sessionId: string }) => void;
+  /** Every event of the child's run, as it happens, so the person can look in on it. */
+  onEvent?: (event: AgentEvent) => void;
+  /** What the person watching has said to the child since it last asked, so it can hear them. */
+  heard?: () => string[];
   requestApproval?: NestedApproval;
   /** A call the child asked about through `requestApproval`, once it has a result. */
   onResult?: (result: ToolResult) => void;

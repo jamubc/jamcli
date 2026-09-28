@@ -1,4 +1,5 @@
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
+import type { WorkTable } from '../work.js';
 import { canDelegate, childTurns, delegationTranscriptLine } from '../delegation/bounds.js';
 import type { DelegationOutcome, DelegationRequest } from '../delegation/types.js';
 import type { CategoryChain } from '../../types/config.js';
@@ -30,6 +31,25 @@ const taskId = () => `task-${Date.now().toString(36)}-${Math.random().toString(3
 const labelFor = (agent: string | undefined, prompt: string) => `${agent ?? 'default agent'}: ${prompt.replace(/\s+/g, ' ').trim().slice(0, 60)}`;
 
 const taskOf = (ctx: ToolContext, id: unknown): BackgroundTask | undefined => ctx.work?.get<BackgroundTask>(String(id ?? ''))?.record;
+
+/**
+ * What a child reports to the work table as it runs: the agent and model it resolved to,
+ * its session, and each of its events, so the person can see what it is doing and look in,
+ * and what the person says to it, which it reads with its next step. Its prompts name the
+ * agent that asks, so two children asking at once can be told apart.
+ */
+const watched = (work: WorkTable, id: string, prompt: string, ask: ToolContext['requestApproval']): Pick<DelegationRequest, 'onStart' | 'onEvent' | 'heard' | 'requestApproval'> => {
+  let agent = 'a child agent';
+  return {
+    onStart: (child) => {
+      agent = `agent ${child.agent}`;
+      work.update(id, { ...child, label: labelFor(child.agent, prompt) });
+    },
+    onEvent: (event) => work.record(id, event),
+    heard: () => work.drainSaid(id),
+    ...(ask ? { requestApproval: ({ call, request }) => ask({ call, request: request && { ...request, reason: `${agent} (${id}) asks, and ${request.reason}` } }) } : {}),
+  };
+};
 
 const taskSchema: JsonSchema = {
   type: 'object',
@@ -107,7 +127,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
   // A foreground child is listed while it runs, so the person can see it and stop it; its result comes back here, so there is no news to tell.
   const controller = new AbortController();
   ctx.signal?.addEventListener('abort', () => controller.abort(), { once: true });
-  const entry = ctx.work?.add({ id: taskId(), kind: 'task', label: labelFor(agent, prompt), record: undefined, told: true, stop: () => controller.abort() });
+  const entry = ctx.work?.add({ id: taskId(), kind: 'task', label: labelFor(agent, prompt), record: undefined, told: true, stop: () => controller.abort(), ...(agent ? { agent } : {}) });
   let outcome: DelegationOutcome;
   try {
     outcome = await ctx.delegate({
@@ -121,6 +141,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
       signal: controller.signal,
       onText: ctx.onProgress,
       requestApproval: ctx.requestApproval,
+      ...(entry ? watched(ctx.work!, entry.id, prompt, ctx.requestApproval) : {}),
       onResult: ctx.onNestedResult,
     });
   } catch (error) {
@@ -165,6 +186,7 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
       task.controller.abort();
       task.status = 'cancelled';
     },
+    ...(options.agent ? { agent: options.agent } : {}),
   });
   ctx
     .delegate!({
@@ -174,6 +196,8 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
       onText: (delta) => {
         task.output += delta;
       },
+      ...watched(work, task.id, options.prompt, ctx.requestApproval),
+      onResult: ctx.onNestedResult,
     })
     .then((outcome) => {
       if (task.status === 'running') task.status = outcome.status;
@@ -257,7 +281,7 @@ Do it yourself when:
 
 Writing the prompt: the child starts with nothing. Brief it like a capable colleague who just walked in. Say what you are trying to achieve and why, what you already know or have ruled out, the exact files and lines involved, and what form the answer should take. Say whether it should change code or only report. Never delegate understanding: "based on your findings, fix it" hands the child the synthesis you owe.
 
-background: true starts the child and returns an id at once. You are told when it ends; collect it with task_result. Use it only when you have other work to do meanwhile.`;
+background: true starts the child and returns an id at once, and you are told when it ends; collect it with task_result. Prefer it for a fan-out of two or more children, and whenever you have other work to do meanwhile: the person sees each child on the plan board as it runs, with what it is doing and what it has cost, and can look in on any of them. Children started in the same step run at the same time either way.`;
 
 /**
  * The `task` description the model chooses from: one line per agent, its description and

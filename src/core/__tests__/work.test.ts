@@ -65,3 +65,47 @@ test('ended entries the model was told of are forgotten past a limit', () => {
   expect(table.list().some((item) => item.id === 'job_0')).toBe(false);
   expect(table.list().some((item) => item.id === 'job_last')).toBe(true);
 });
+
+test("a child's events give its activity, tokens, and cost, are kept for a viewer, and reach whoever watches", async () => {
+  const table = new WorkTable();
+  entry(table, 'task_1', 'task');
+  const heard: string[] = [];
+  const stop = table.watchEvents('task_1', (event) => heard.push(event.type));
+  const changes: string[] = [];
+  table.watch(() => changes.push(table.list()[0].detail ?? ''));
+  table.update('task_1', { agent: 'quick', model: 'ollama:qwen', sessionId: 's1' });
+  table.record('task_1', { type: 'step_start', step: 1 });
+  table.record('task_1', { type: 'reasoning', delta: 'hmm' });
+  table.record('task_1', { type: 'tool_call', call: { id: 'c1', name: 'read_file', arguments: { path: 'a.txt' } } });
+  table.record('task_1', { type: 'usage', usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 }, cost: 0.002 });
+  table.record('task_1', { type: 'text', delta: 'Found it.\nThe bug is ' });
+  table.record('task_1', { type: 'text', delta: 'in a.txt' });
+  table.record('task_1', { type: 'usage', usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } });
+  // A request's context is not kept: it is the bulk of a log and no viewer shows it.
+  table.record('task_1', { type: 'request', system: 'x' });
+  const item = table.list()[0];
+  expect(item).toMatchObject({ agent: 'quick', model: 'ollama:qwen', sessionId: 's1', detail: 'The bug is in a.txt', tokens: 135, cost: 0.002 });
+  expect(table.events('task_1').map((event) => event.type)).toEqual(['step_start', 'reasoning', 'tool_call', 'usage', 'text', 'text', 'usage']);
+  expect(heard).toHaveLength(8);
+  // Activity is told once it settles, not once per token; the update was told at once.
+  expect(changes).toEqual(['']);
+  await Bun.sleep(200);
+  expect(changes).toEqual(['', 'The bug is in a.txt']);
+  stop();
+  table.record('task_1', { type: 'text', delta: '!' });
+  expect(heard).toHaveLength(8);
+  expect(table.events('nope')).toEqual([]);
+});
+
+test('what the person says to a running child is kept for it, shown to whoever looks in, and read once', () => {
+  const table = new WorkTable();
+  entry(table, 'task_1', 'task');
+  expect(table.say('task_1', 'check css too')).toBe(true);
+  expect(table.say('task_1', 'and js')).toBe(true);
+  expect(table.events('task_1')).toMatchObject([{ type: 'notice', message: 'You said: check css too' }, { type: 'notice', message: 'You said: and js' }]);
+  expect(table.drainSaid('task_1')).toEqual(['check css too', 'and js']);
+  expect(table.drainSaid('task_1')).toEqual([]);
+  table.end('task_1', 'ok');
+  expect(table.say('task_1', 'too late')).toBe(false);
+  expect(table.say('nope', 'nobody')).toBe(false);
+});

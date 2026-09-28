@@ -58,8 +58,8 @@ const STATUS: Record<string, DelegationOutcome['status']> = { ok: 'ok', cancelle
 /**
  * Children run in this process as runtimes of their own, with their own session. A child
  * decides with its parent's permission engine, so nothing it is configured with can widen
- * what the parent allows. What the parent would ask about, the child asks the parent's surface,
- * unless it runs in the background, where nobody can answer and the call is not made.
+ * what the parent allows. What the parent would ask about, the child asks the parent's
+ * surface, in the background too; where nobody can answer, the call is not made.
  */
 export function childLauncher(options: ChildLauncherOptions): Delegate {
   const { agents, defaultAgent } = options.agents;
@@ -116,6 +116,7 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         ...(options.configService ? { configService: options.configService } : {}),
         sandbox: options.sandbox,
         parent,
+        ...(request.heard ? { heard: request.heard } : {}),
         observer: options.observer?.(),
       });
     } catch (error: any) {
@@ -124,16 +125,20 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
     }
 
     try {
+      request.onStart?.({ agent: name, model, sessionId: child.sessionId });
       // The calls the parent's surface was asked about, whose results it shows under the prompt it gave.
       const asked = new Set<string>();
       const result = await child.run(request.prompt, (event) => {
+        request.onEvent?.(event);
         if (event.type === 'text') request.onText?.(event.delta);
         if (event.type === 'tool_result' && asked.has(event.result.callId ?? '')) request.onResult?.(event.result);
         // A grandchild's request keeps the session that made it.
         if (event.type === 'usage') options.onUsage?.({ ...event, delegatedSession: event.delegatedSession ?? child.sessionId });
         if (event.type !== 'approval_request') return;
-        if (request.background || !request.requestApproval) {
-          event.decide({ allow: false, by: 'mode', feedback: 'a background task cannot ask for approval, so this call was not made.' });
+        // A child asks whoever answers its parent's calls, in the background too: the surface
+        // that started the parent can still answer after the call that started the child returned.
+        if (!request.requestApproval) {
+          event.decide({ allow: false, by: 'mode', feedback: 'nobody can answer a child task here, so this call was not made.' });
           return;
         }
         asked.add(event.call.id);

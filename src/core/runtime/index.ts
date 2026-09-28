@@ -114,6 +114,8 @@ export interface RuntimeOptions {
   configService?: ConfigService;
   /** Set on a delegated run: the session that started it, whose policy it decides with. */
   parent?: ParentSession;
+  /** Set on a delegated run the person can look in on: what they have said to it since it last asked. */
+  heard?: () => string[];
   /** Log level and files, from `-v`, `--log-file`, and `--trace-file`. The environment is read when absent. */
   observe?: ObserveSettings;
   /** Record into this observer instead, under `parentSpan`: a delegated run shares its parent's. */
@@ -282,6 +284,12 @@ export interface Runtime {
   watchWork(listener: () => void): () => void;
   /** Stop one of them. False when nothing by that id is running. */
   stopWork(id: string): boolean;
+  /** What one child agent has done so far, as its own events, oldest first, for looking in on it. */
+  workEvents(id: string): AgentEvent[];
+  /** Each further event of that child as it happens; returns how to stop listening. */
+  watchWorkEvents(id: string, listener: (event: AgentEvent) => void): () => void;
+  /** Say something to a running child; it reads it with its next step. False when nothing by that id runs. */
+  sayToWork(id: string, text: string): boolean;
   /**
    * Plant a tester's note at this point of the session log. Notes are for people reading
    * the session back; the model never sees them.
@@ -808,6 +816,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       pinned: () => pinnedState(workRoot),
       // Only the top-level session tells the model what ended: a child sharing the table must not take the news.
       ...(options.parent ? {} : { news: () => workTable.drainEnded().map(workNews) }),
+      ...(options.heard ? { heard: options.heard } : {}),
       // A delegated run shares the working copy; the checkpoint before its task call covers it.
       ...(options.surface === 'child' ? {} : { beforeChange: takeCheckpoint, afterChange: settleCheckpoint }),
     });
@@ -1294,6 +1303,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     work: () => workTable.list(),
     watchWork: (listener) => workTable.watch(listener),
     stopWork: (id) => workTable.stop(id),
+    workEvents: (id) => workTable.events(id),
+    watchWorkEvents: (id, listener) => workTable.watchEvents(id, listener),
+    sayToWork: (id, text) => workTable.say(id, text),
     note: (text) => recorder.recordNote(text),
     notes: () => log.events().flatMap((event) => (event.type === 'note' ? [{ text: event.text, ts: event.ts }] : [])),
 

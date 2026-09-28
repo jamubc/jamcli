@@ -77,7 +77,7 @@ export const DEFAULT_TRUST_CONFIG: TrustConfig = {
 
 export const DEFAULT_DELEGATION_CONFIG: DelegationConfig = {
   max_depth: 2,
-  max_concurrent: 3,
+  max_concurrent: 5,
   max_turns_per_child: 8,
 };
 

@@ -85,6 +85,8 @@ export interface AgentOptions {
    * agents, one line each. The lines reach the model with the next message it reads.
    */
   news?: () => string[];
+  /** What the person watching this run has said since it was last asked, for a run they can look in on. */
+  heard?: () => string[];
 }
 
 interface StepOutput {
@@ -258,6 +260,8 @@ export class CoreAgent implements Agent {
     // Work that ended between turns is news the model reads with the prompt.
     const ended = this.options.news?.() ?? [];
     if (ended.length) prompt = [prompt, `[Work ended since your last turn:\n${ended.join('\n')}]`].filter(Boolean).join('\n\n');
+    const heard = this.options.heard?.() ?? [];
+    if (heard.length) prompt = [prompt, `[The person watching says:\n${heard.join('\n')}]`].filter(Boolean).join('\n\n');
     if (prompt) record(userMessage(prompt));
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
@@ -423,12 +427,15 @@ export class CoreAgent implements Agent {
       const results = screened.results;
       // Work that ended during this step is news the model reads with the step's last result.
       const endedNow = this.options.news?.() ?? [];
+      // What the person watching said during this step reaches the model the same way.
+      const heardNow = this.options.heard?.() ?? [];
       for (let i = 0; i < calls.length; i += 1) {
         let output = this.truncate(results[i].output);
         // A post_tool hook may add context, or, exiting 2, a reason the model reads; the call has run either way.
         const after = await hookVerdict(hooks, 'post_tool', { session: working, call: calls[i], result: results[i], output }, emit);
         const added = [...after.context, ...(after.block !== undefined ? [`A post_tool hook says: ${after.block}`] : [])];
         if (i === calls.length - 1 && endedNow.length) added.push(`[Work ended during this step:\n${endedNow.join('\n')}]`);
+        if (i === calls.length - 1 && heardNow.length) added.push(`[The person watching says:\n${heardNow.join('\n')}]`);
         if (added.length) output = `${output}\n\n${added.join('\n')}`;
         record({
           role: 'tool',
