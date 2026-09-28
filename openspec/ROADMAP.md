@@ -121,6 +121,37 @@ the next thing to try. Findings about JamCLI's behavior are defects to fix in co
 lessons for `AGENTS.md`; lessons stay with `/reflect`. The person reviews every proposal.
 It needs `add-mcp-server`.
 
+**Seed findings, 2026-09-28.** Four agents used JamCLI through `jamcli mcp serve` in
+`monaco-code-editor` on `opencode-go:deepseek-v4.1-flash`, all in default mode. Sessions
+`2026-09-28-c465faeb` (reading), `-cb7a64cb` (edits), `-8302e556` (commands), and
+`-cd20d039` (the interface, recorded as `mcp-terminals/t1.cast` under that run's state
+directory). Every answer and edit they checked was correct. What stands between that and
+a person trusting it:
+
+1. Approval volume. 58 approvals in four sessions, 43 of them `run_command`, 41 answered
+   once. About half ran nothing that writes or executes. Two causes, both checked in code:
+   the only built-in allow rules are `run_command(cd *)` and `run_command(pwd)`
+   (`src/core/permissions/config.ts`, `BUILTIN_RULES`), so `git status`, `ls`, `wc`, and
+   `grep` ask in default mode; and neither `run_command`'s description
+   (`src/core/tools/command.ts`) nor `toolGuidance` steers the model to `read_file`,
+   `grep`, and `glob`, which never ask. Candidates: a built-in allow list of read-only
+   commands where the analyzer finds no redirect and no hidden part, and a description
+   that sends reads and searches to the read tools.
+2. Not yet measured: the same trials in auto mode, which is JamCLI's own answer to
+   approval volume. Run that before choosing between the two candidates above.
+3. One logical change to one file arrived as three approvals; one small feature spent
+   many read-only and `web_fetch` calls before its first edit. Candidates: one approval
+   for a turn's edits to one file, and a nudge after a run of calls with no change.
+4. `/diff` shows the whole working tree, other sessions' edits included, while `/rewind`
+   is the session's own. Candidate: a diff from the session's first checkpoint, over the
+   files it touched.
+5. The interface: growing the terminal from 60x20 to 120x40 shows a garbled frame for
+   about three seconds; Escape on the `/` list leaves the filter text in the composer;
+   long lines at 60 columns are cut with no mark; a finished tool line hides its
+   arguments.
+6. `/export` reports the path relative to the project (`../../../../tmp/...`) where it
+   was given an absolute one.
+
 ### 5. `add-connections`
 
 A connection is a named way to reach a provider: a provider kind, a base URL, a dialect,
