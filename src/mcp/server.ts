@@ -271,6 +271,7 @@ function registerTerminalTools(server: McpServer, terminals: Map<string, DrivenT
 
   /** Send input, unless the interface waits on the person: then ask them, and type their answer. */
   const input = async (terminal: DrivenTerminal, bytes: string, ctx: ToolContext, waitMs: number) => {
+    if (terminal.state === 'exited') return { ...screenReply(terminal, await terminal.terminal.drawn(), 'jamcli has exited, so nothing was sent.'), isError: true };
     if (terminal.personWaits) {
       const tool = terminal.waitingOn!.tool;
       const asked = await askPerson(ctx, `terminal-${terminal.id}-${tool}`, {
@@ -294,7 +295,7 @@ function registerTerminalTools(server: McpServer, terminals: Map<string, DrivenT
         'Start the jamcli interface itself in a terminal, in a directory: the same program a person runs, with nothing special for being driven. Use it to try JamCLI as a person would and see what it shows. Returns the terminal id and its screen once it settles.',
       inputSchema: z.object({
         cwd: z.string().describe('Absolute path of the directory to run jamcli in.'),
-        args: z.array(z.string()).optional().describe('Arguments to jamcli, such as ["--model", "provider:model"].'),
+        args: z.array(z.string()).optional().describe('Arguments to the jamcli interface, such as ["--screen-reader"]. The model is the configured one; /model changes it.'),
         cols: z.number().int().min(20).max(400).optional(),
         rows: z.number().int().min(5).max(200).optional(),
         wait_ms: wait,
@@ -319,7 +320,7 @@ function registerTerminalTools(server: McpServer, terminals: Map<string, DrivenT
       const terminal = find(id);
       if (!terminal) return unknown(id);
       // Text and its Enter arrive apart, as a person's do: pasted text ending in Enter is taken as a paste, not a send.
-      if (enter !== false && !terminal.personWaits) {
+      if (enter !== false && !terminal.personWaits && terminal.state !== 'exited') {
         terminal.terminal.type(text);
         await Bun.sleep(100);
         return input(terminal, keyBytes('enter')!, ctx as ToolContext, wait_ms ?? 15_000);

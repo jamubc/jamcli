@@ -80,12 +80,15 @@ export class DelegatedSession {
     this.ended = undefined;
     const run = async () => {
       if (this.controller.isCommand?.(text)) {
+        // A list left waiting is shown by the report, in the words MCP answers it with; one that was settled is said here.
+        const lists: string[] = [];
         await this.controller.runCommand!(text, {
-          entry: (entry) => (entry.kind === 'event' ? this.onEvent(entry.event) : this.say(`${entryText(entry)}\n`)),
+          entry: (entry) => (entry.kind === 'event' ? this.onEvent(entry.event) : entry.kind === 'choice' ? lists.push(`${entryText(entry)}\n`) : this.say(`${entryText(entry)}\n`)),
           turn: async (prompt, turn) => this.finish(await this.controller.run(prompt, (event) => this.onEvent(event), turn)),
           mode: (mode) => this.say(`[mode ${mode}]\n`),
           refresh: () => undefined,
         });
+        if (!this.controller.waitingChoice?.()) for (const list of lists) this.say(list);
       } else {
         this.finish(await this.controller.run(text, (event) => this.onEvent(event)));
       }

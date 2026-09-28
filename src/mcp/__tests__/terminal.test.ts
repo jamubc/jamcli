@@ -60,3 +60,12 @@ test('the terminal resizes, and names a key it does not know', async () => {
   expect(Math.max(...screenOf(resized).split('\n').map((line) => line.length))).toBeLessThanOrEqual(70);
   expect(await call('terminal_keys', { terminal: 't1', keys: ['hyper+q'] })).toMatchObject({ error: true, text: expect.stringContaining('Not keys: hyper+q') });
 }, 60_000);
+
+test('a jamcli that has exited says so, with what it last showed, and takes nothing more', async () => {
+  const { call } = await serve();
+  const started = await call('terminal_start', { cwd: context.project, args: ['--no-such-option'], cols: 80, rows: 10 });
+  expect(started.report.state).toBe('exited');
+  expect(started.report.screen).toContain('Unknown option: --no-such-option');
+  const typed = await call('terminal_type', { terminal: 't1', text: 'hello' });
+  expect(typed).toMatchObject({ error: true, text: expect.stringContaining('jamcli has exited, so nothing was sent.') });
+}, 60_000);
