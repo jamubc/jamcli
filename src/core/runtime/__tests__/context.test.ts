@@ -234,8 +234,8 @@ test('a model whose window is a guess is compacted only when its provider refuse
 });
 
 test('a context compaction cannot bring under the threshold is reported once, and not retried every step', async () => {
-  // The system prompt and tool definitions alone are over this window's threshold.
-  configure({ models: { 'ollama:fake-model': { context_window: 4_000 } } });
+  // The system prompt and the core tools alone are over this window's threshold.
+  configure({ models: { 'ollama:fake-model': { context_window: 3_000 } } });
   const runtime = await start();
   expect(runtime.contextUsage().used).toBeGreaterThan(runtime.contextUsage().trigger);
   fs.writeFileSync(path.join(root, 'a.txt'), 'small');

@@ -12,6 +12,12 @@ export interface PromptInputs {
   date?: Date;
   /** Plan mode adds a note, so the model knows why it can only read. */
   mode?: PermissionMode;
+  /** How the project checks itself, and what the harness runs of it, in one sentence. */
+  gates?: string;
+  /** `provider:model` of the session, so the model knows which one it is and when that changes. */
+  model?: string;
+  /** Replaces the tool guidance block, for a trial that searches the prompt. */
+  guidance?: string;
 }
 
 const DEFAULT_IDENTITY =
@@ -20,18 +26,25 @@ const DEFAULT_IDENTITY =
 const offers = (tools: ToolSummary[]) => (name: string) => tools.some((tool) => tool.name === name);
 
 /** Guidance that names only the tools this session actually offers. The todo list and ask_user carry their own rules in their descriptions. */
-const toolGuidance = (tools: ToolSummary[]): string => {
+const toolGuidance = (tools: ToolSummary[], gates?: string): string => {
   const has = offers(tools);
   const lines = ['Working with tools:', '- Inspect the project with tools instead of guessing at its contents.'];
+  const readers = ['read_file', 'grep', 'glob'].filter(has);
   const finders = ['glob', 'grep'].filter(has);
   if (finders.length) lines.push(`- Find files with ${finders.join(' and ')}, then read what matters with read_file.`);
-  if (has('edit')) lines.push('- Read a file before changing it, and prefer edit for changes to existing files.');
+  if (readers.length && has('run_command')) {
+    lines.push(`- Read, search, and list with ${readers.join(', ')}. They never ask. Use run_command for commands, not for reading files or listing directories.`);
+  }
+  if (has('edit')) lines.push('- Read a file once, then make every change to it in one edit. Re-read only what an error says changed.');
   if (has('run_command')) {
-    lines.push('- Check your work with the project\'s own tests or build through run_command when you can.');
+    lines.push(gates ? '- A step is done when its check ran and passed. Say what ran and what it showed. If a gate fails, fix it before saying anything is done.' : '- Check your work with the project\'s own tests or build through run_command when you can.');
     lines.push('- A server, a watcher, or anything that does not exit on its own runs with background: true. Read it with command_output and stop it with command_kill; you are told when it ends. Never wait on it in the foreground.');
   }
+  lines.push('- A result that reads "withheld by the trust gate" was removed by a screen on tool output, not by chance. Ask for it another way, or tell the person.');
+  lines.push('- When a note says the model or the mode changed, the messages above it were written under the old one. Do not describe them as errors.');
   lines.push('- When a tool can do something, call it rather than describing the call.');
   lines.push('- If no tool is needed, answer directly.');
+  if (gates) lines.push('', gates);
   return lines.join('\n');
 };
 
@@ -74,13 +87,14 @@ export const planNote = (tools: ToolSummary[]): string => {
 
 /**
  * The system prompt every surface sends: the profile's instructions, the project's rules,
- * guidance for the offered tools, and the facts of the environment.
+ * guidance for the offered tools, and the facts of the environment. It changes only when
+ * the tools, the rules, the mode, or the model do, so a provider's cache holds across steps.
  */
 export function buildRuntimePrompt(inputs: PromptInputs): string {
   const parts = [inputs.profile?.system_prompt_override?.trim() || DEFAULT_IDENTITY];
   const rules = inputs.rulesText?.trim();
   if (rules) parts.push(rules);
-  if (inputs.tools.length) parts.push(toolGuidance(inputs.tools));
+  if (inputs.tools.length) parts.push(inputs.guidance ?? toolGuidance(inputs.tools, inputs.gates));
   if (inputs.mode === 'plan') parts.push(planNote(inputs.tools));
   // The person's own date: the UTC one is tomorrow in an American evening and yesterday in an Asian morning.
   const now = inputs.date ?? new Date();
@@ -92,6 +106,7 @@ export function buildRuntimePrompt(inputs: PromptInputs): string {
       `- Working directory: ${inputs.cwd}`,
       `- Platform: ${inputs.platform ?? process.platform}`,
       `- Date: ${date}`,
+      ...(inputs.model ? [`- Model: ${inputs.model}`] : []),
     ].join('\n')
   );
   return parts.join('\n\n');

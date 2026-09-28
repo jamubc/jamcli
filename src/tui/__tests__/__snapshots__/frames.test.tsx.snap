@@ -151,8 +151,8 @@ exports[`screen reader mode, through a reply, a tool, and a prompt 1`] = `
 You: read the notes
 Tool read_file notes.txt, N ms, done
 JamCLI: It says alpha.
-You: list
-Tool run_command ls, asking
+You: remove them
+Tool run_command rm notes.txt, asking
 
 
 
@@ -167,12 +167,12 @@ Tool run_command ls, asking
 
 
 
-Permission needed: Allow run_command ls?                 Escape denies and stops
-ls
+Permission needed: Allow run_command rm notes.txt?       Escape denies and stops
+rm notes.txt
 Default mode asks before tools that run commands.
 
 1: Allow once
-2: Allow this session   run_command(ls)   pattern 1 of 2, Up and Down change it
+2: Allow this session   run_command(rm notes.txt) ...of 3, Up and Down change it
 3: Allow this project   the same rule · .jamcli/config.local.json
 4: Deny, continue
 5: Deny with feedback

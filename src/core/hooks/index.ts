@@ -41,7 +41,8 @@ export interface HookFailure {
 }
 
 export interface HookBus {
-  on<K extends HookEventName>(event: K, handler: HookHandler<K>, name?: string): () => void;
+  /** `internal` marks the harness's own handlers, which run on every event and are not traced as hooks. */
+  on<K extends HookEventName>(event: K, handler: HookHandler<K>, name?: string, options?: { internal?: boolean }): () => void;
   emit<K extends HookEventName>(event: K, payload: HookPayloads[K]): Promise<HookFailure[]>;
   /** Run the handlers in order and keep what each returned, as a hook's verdict. */
   collect<K extends HookEventName>(event: K, payload: HookPayloads[K]): Promise<{ results: unknown[]; failures: HookFailure[] }>;
@@ -54,6 +55,7 @@ export interface HookBus {
 interface Registration {
   name: string;
   handler: HookHandler;
+  internal: boolean;
 }
 
 /** Told of every handler run, with when it started and ended, for tracing. */
@@ -65,12 +67,13 @@ export const createHookBus = (options: { enabled?: boolean; onRun?: HookRunObser
   let enabled = options.enabled ?? true;
   let counter = 0;
 
-  const on = <K extends HookEventName>(event: K, handler: HookHandler<K>, name?: string) => {
+  const on = <K extends HookEventName>(event: K, handler: HookHandler<K>, name?: string, registerOptions: { internal?: boolean } = {}) => {
     const list = registrations.get(event) ?? [];
     counter += 1;
     const registration: Registration = {
       name: name ?? `${event}-${counter}`,
       handler: handler as HookHandler,
+      internal: Boolean(registerOptions.internal),
     };
     list.push(registration);
     registrations.set(event, list);
@@ -100,7 +103,7 @@ export const createHookBus = (options: { enabled?: boolean; onRun?: HookRunObser
         failures.push(failure);
         recorded.push(failure);
       }
-      options.onRun?.({ event, handler: registration.name, startMs, endMs: Date.now(), ...(message ? { error: message } : {}) });
+      if (!registration.internal || message) options.onRun?.({ event, handler: registration.name, startMs, endMs: Date.now(), ...(message ? { error: message } : {}) });
     }
     return { results, failures };
   };

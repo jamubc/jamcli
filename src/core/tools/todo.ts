@@ -20,6 +20,8 @@ export interface TodoItem {
   status: TodoStatus;
   active_form?: string;
   check?: string;
+  /** Set by the harness, never by the model: the gates that passed on the tree the item was completed on. */
+  verified?: { gate: string; tree: string };
 }
 
 function resolveSession(session: unknown): string {
@@ -44,6 +46,10 @@ function normalizeItem(raw: unknown): TodoItem | null {
   if (typeof record.check === 'string' && record.check.trim().length) {
     item.check = record.check.trim();
   }
+  const verified = record.verified as Record<string, unknown> | undefined;
+  if (verified && typeof verified.gate === 'string' && typeof verified.tree === 'string') {
+    item.verified = { gate: verified.gate, tree: verified.tree };
+  }
   return item;
 }
 
@@ -55,9 +61,26 @@ export function formatTodos(todos: TodoItem[]): string {
       const marker = todo.status === 'completed' ? 'x' : todo.status === 'in_progress' ? '~' : ' ';
       const active = todo.active_form ? ` (active: ${todo.active_form})` : '';
       const check = todo.check ? `\n   check: ${todo.check}` : '';
-      return `${index + 1}. [${marker}] ${todo.content}${active}${check}`;
+      const verified = todo.verified ? ` [verified: ${todo.verified.gate}, tree ${todo.verified.tree.slice(0, 7)}]` : '';
+      return `${index + 1}. [${marker}] ${todo.content}${active}${verified}${check}`;
     })
     .join('\n');
+}
+
+/**
+ * Stamp every completed item that the gates have not yet vouched for on this tree. The
+ * harness calls this once its gates pass; the model has no way to.
+ */
+export async function stampTodos(ctx: Pick<ToolContext, 'projectRoot'>, stamp: { gate: string; tree: string }, session: string = DEFAULT_SESSION): Promise<number> {
+  const todos = await readTodos(ctx, session);
+  let stamped = 0;
+  for (const todo of todos) {
+    if (todo.status !== 'completed' || todo.verified?.tree === stamp.tree) continue;
+    todo.verified = { ...stamp };
+    stamped += 1;
+  }
+  if (stamped) await writeTodos(ctx, session, todos);
+  return stamped;
 }
 
 /** The session's todo list as saved, or an empty list when there is none or it cannot be read. */
@@ -73,7 +96,7 @@ export async function readTodos(ctx: Pick<ToolContext, 'projectRoot'>, session: 
   }
 }
 
-async function writeTodos(ctx: ToolContext, session: string, todos: TodoItem[]): Promise<string> {
+async function writeTodos(ctx: Pick<ToolContext, 'projectRoot'>, session: string, todos: TodoItem[]): Promise<string> {
   const file = resolveTodoFile(ctx, session);
   ensureProjectStateDir(ctx.projectRoot);
   await writeJson(file, { session, updated_at: new Date().toISOString(), todos }, { spaces: 2 });
@@ -89,14 +112,19 @@ export async function todoWriteRunner(args: Record<string, any>, ctx: ToolContex
   if (!Array.isArray(raw)) {
     throw new Error('todo_write requires a "todos" array.');
   }
+  const session = resolveSession(args.session);
+  const previous = await readTodos(ctx, session);
   const todos = raw.map((entry, index) => {
     const item = normalizeItem(entry);
     if (!item) {
       throw new Error(`todo item at index ${index} needs a non-empty "content".`);
     }
+    // A stamp is the harness's, so the model's rewrite neither sets one nor loses one it earned.
+    delete item.verified;
+    const earned = previous.find((known) => known.content === item.content)?.verified;
+    if (earned && item.status === 'completed') item.verified = earned;
     return item;
   });
-  const session = resolveSession(args.session);
   const file = await writeTodos(ctx, session, todos);
 
   return {

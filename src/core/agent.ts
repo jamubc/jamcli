@@ -6,7 +6,7 @@ import { HeadTailBuffer } from './tools/command.js';
 import { screenToolResults, type Classifier, type ScreeningCandidate } from './trust/index.js';
 import { requestCost } from './catalog/cost.js';
 import type { ModelPrice } from './catalog/types.js';
-import { KEEP_SHARE, compact, estimateRequest, isContextOverflow, type ContextBudget, type TokenCounter } from './context/index.js';
+import { ELIDE_AT, KEEP_SHARE, chooseBoundary, compact, elide, estimateRequest, isContextOverflow, type ContextBudget, type TokenCounter } from './context/index.js';
 import { emitHookEvent, hookVerdict, type HookBus } from './hooks/index.js';
 import type { AgentLoopConfig } from '../types/config.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
@@ -74,6 +74,10 @@ export interface AgentOptions {
   };
   /** State every summary carries as it is, read when a compaction happens: the todo list and where the plan is. */
   pinned?: () => Promise<string | undefined>;
+  /** Paths still in play, such as the todo list's, whose results elision leaves whole. */
+  protectedPaths?: () => Promise<string[]>;
+  /** The share of the compaction trigger at which older results are stubbed once. */
+  elideAt?: number;
   /** Replaces credentials in tool output. Defaults to the credentials in the environment. */
   redact?: Redactor;
   /** Called once per step, before the first call that may change something, to take a checkpoint. */
@@ -87,6 +91,11 @@ export interface AgentOptions {
   news?: () => string[];
   /** What the person watching this run has said since it was last asked, for a run they can look in on. */
   heard?: () => string[];
+  /**
+   * What the harness must tell the model with its next prompt, each already in the
+   * bracket form the other notes use: a model or mode change, a handoff. Drained on read.
+   */
+  turnNotes?: () => string[];
 }
 
 interface StepOutput {
@@ -118,6 +127,8 @@ export class CoreAgent implements Agent {
   private readonly redact: Redactor;
   private trustNoted = false;
   private reasoningSince?: number;
+  /** Whether this session has run elision at the planned crossing since its last compaction. */
+  private elidedAhead = false;
 
   constructor(private readonly options: AgentOptions = {}) {
     const loop = options.loop;
@@ -262,6 +273,8 @@ export class CoreAgent implements Agent {
     if (ended.length) prompt = [prompt, `[Work ended since your last turn:\n${ended.join('\n')}]`].filter(Boolean).join('\n\n');
     const heard = this.options.heard?.() ?? [];
     if (heard.length) prompt = [prompt, `[The person watching says:\n${heard.join('\n')}]`].filter(Boolean).join('\n\n');
+    const notes = this.options.turnNotes?.() ?? [];
+    if (notes.length) prompt = [prompt, ...notes].filter(Boolean).join('\n\n');
     if (prompt) record(userMessage(prompt));
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
@@ -294,6 +307,12 @@ export class CoreAgent implements Agent {
       steps += 1;
       emit({ type: 'step_start', step: steps });
 
+      // At a planned point short of the trigger, older results shrink once, deterministically,
+      // so the summary that follows has less to read; never at every step, since each rewrite breaks the cached prefix.
+      if (context && compactable && !this.elidedAhead && this.countContext(working.messages) > context.budget.trigger * (this.options.elideAt ?? ELIDE_AT)) {
+        this.elidedAhead = true;
+        working = await this.elideNow(working, Math.floor(context.budget.budget * KEEP_SHARE), emit);
+      }
       if (context && compactable && this.countContext(working.messages) > context.budget.trigger) {
         try {
           const fitted = await this.compactNow(working, emit, signal, 'auto');
@@ -467,6 +486,20 @@ export class CoreAgent implements Agent {
     return this.options.context!.counter.count({ system: this.options.systemPrompt, tools: this.requestTools(), messages });
   }
 
+  /** Stage E: stub the older results the boundary would summarize, and record each stub. */
+  private async elideNow(working: JamSession, keepTokens: number, emit: (e: AgentEvent) => void): Promise<JamSession> {
+    const boundary = chooseBoundary(working.messages, keepTokens);
+    if (boundary === undefined) return working;
+    const protectedPaths = await this.options.protectedPaths?.().catch(() => []);
+    const { messages, elisions } = elide(working.messages, boundary, { protectedPaths });
+    if (!elisions.length) return working;
+    for (const elision of elisions) emit({ type: 'elision', ...elision });
+    // The kept messages' reasoning was signed against results that are now stubs.
+    this.reasoningSince = prefixSetNow();
+    await clockPast(this.reasoningSince);
+    return { ...working, messages, updatedAt: Date.now() };
+  }
+
   /**
    * Replace the older part of the conversation with a summary, report it, and account for
    * the summary request. Returns the session unchanged when nothing can be compacted.
@@ -489,12 +522,14 @@ export class CoreAgent implements Agent {
     if (asked.context.length) focus = [focus, ...asked.context].filter(Boolean).join('\n');
     const before = this.countContext(working.messages);
     const started = Date.now();
+    const keep = keepTokens ?? Math.floor(context.budget.budget * KEEP_SHARE);
+    working = await this.elideNow(working, keep, emit);
     const pinned = await this.options.pinned?.().catch(() => undefined);
     const result = await compact({
       messages: working.messages,
       provider,
       model: this.options.model,
-      keepTokens: keepTokens ?? Math.floor(context.budget.budget * KEEP_SHARE),
+      keepTokens: keep,
       focus,
       ...(pinned ? { pinned } : {}),
       signal,
@@ -502,6 +537,7 @@ export class CoreAgent implements Agent {
       contextLength: this.options.contextLength,
     });
     if (!result) return { session: working, compacted: false };
+    this.elidedAhead = false;
     // The kept messages' reasoning was signed against the conversation the summary replaced.
     this.reasoningSince = prefixSetNow();
     await clockPast(this.reasoningSince);

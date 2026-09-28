@@ -190,7 +190,7 @@ test('a pattern granted for the session stops the prompts it was made for', asyn
   server.enqueue(
     { toolCalls: [command('c1', 'echo one')] },
     { toolCalls: [command('c2', 'echo two')] },
-    { toolCalls: [command('c3', 'ls')] },
+    { toolCalls: [command('c3', 'touch c.txt')] },
     { text: 'done' }
   );
   const asked: string[] = [];
@@ -199,7 +199,7 @@ test('a pattern granted for the session stops the prompts it was made for', asyn
     asked.push(event.call.arguments.command);
     event.decide({ allow: true, scope: 'session', pattern: 'run_command(echo *)' });
   });
-  expect(asked).toEqual(['echo one', 'ls']);
+  expect(asked).toEqual(['echo one', 'touch c.txt']);
 });
 
 const detected = detectSandbox({ projectRoot: os.tmpdir() });

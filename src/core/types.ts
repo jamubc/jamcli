@@ -181,6 +181,26 @@ export type AgentEvent =
   | { type: 'elicitation_request'; id: string; request: ElicitationRequest; respond: (answer: ElicitationAnswer) => void }
   /** A message the engine appended to the conversation: the prompt, a reply, or a tool result. */
   | { type: 'message'; message: ChatMessage }
+  /** A gate ran on a tree: the project's own check, run by the harness or recognized in the model's call. */
+  | {
+      type: 'gate';
+      tier: 'T0' | 'T1' | 'T2' | 'T3';
+      name: string;
+      command: string;
+      tree?: string;
+      status: 'passed' | 'failed' | 'skipped';
+      durationMs: number;
+      step?: number;
+      byModel?: boolean;
+      /** What the model reads of it: the verdict, the error lines, the tail. */
+      shaped: string;
+    }
+  /** An older tool result was replaced by a stub before any summary, and by how much it shrank. */
+  | { type: 'elision'; stage: string; message: number; tokensRemoved: number; stub: string }
+  /** The harness steered the turn: allowed a read-only command, refused a repeated read, denied a stop. */
+  | { type: 'steer'; handler: 'M1' | 'M2' | 'M3' | 'M5'; callId?: string; detail: string }
+  /** The handoff file was rendered from the log. */
+  | { type: 'handoff'; path: string; bytes: number; reason: 'session_end' | 'reset' | 'drop' }
   /** How an approval request was answered. */
   | {
       type: 'approval_decision';

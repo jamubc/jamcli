@@ -21,6 +21,9 @@ export function projectMessages(events: TranscriptEvent[]): ChatMessage[] {
       messages.push(event.message);
     } else if (event.type === 'compaction') {
       messages = [summaryMessage(event.summary, event.ts), ...messages.slice(event.replaced)];
+    } else if (event.type === 'elision') {
+      const target = messages[event.message];
+      if (target?.role === 'tool') messages[event.message] = { ...target, content: event.stub };
     }
   }
   return messages;

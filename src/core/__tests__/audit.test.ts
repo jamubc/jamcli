@@ -310,7 +310,8 @@ test('F20: compaction never separates a tool call from its result (4.3)', async 
     { text: 'Read a, b, and c.' },
     { text: 'done' },
   ]);
-  const bulky: ToolDispatcher = { ...echoDispatcher(), execute: async (call) => ({ tool: call.name, success: true, output: 'x'.repeat(4_000), durationMs: 0 }) };
+  // Each result differs, so nothing is elided as a duplicate and the compaction the test is about happens.
+  const bulky: ToolDispatcher = { ...echoDispatcher(), execute: async (call) => ({ tool: call.name, success: true, output: `${call.name} ${'x'.repeat(4_000)}`, durationMs: 0 }) };
   const agent = new CoreAgent({
     provider,
     dispatcher: bulky,

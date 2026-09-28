@@ -1,4 +1,5 @@
-import type { AgentEvent } from '../types.js';
+import type { AgentEvent, TokenUsage } from '../types.js';
+import type { TranscriptEvent } from './events.js';
 import type { NewTranscriptEvent, SessionLog } from './log.js';
 
 export interface TranscriptRecorderOptions {
@@ -28,6 +29,8 @@ export class TranscriptRecorder {
   private turnStart: number | undefined;
   /** The system prompt and tools last recorded, so a request that carries the same is not written again. */
   private context: string | undefined;
+  /** The session so far, as the end event summarizes it. */
+  private readonly totals = { promptTokens: 0, cachedTokens: 0, contexts: 0, gates: 0, steers: 0 };
 
   constructor(
     readonly log: SessionLog,
@@ -37,7 +40,25 @@ export class TranscriptRecorder {
     const events = log.events();
     this.started = events.some((event) => event.type === 'message');
     this.written = events.filter((event) => event.type !== 'session').length;
-    for (const event of events) if (event.type === 'context') this.context = contextKey(event.system, event.tools);
+    for (const event of events) {
+      if (event.type === 'context') this.context = contextKey(event.system, event.tools);
+      this.count(event);
+    }
+  }
+
+  /** What the session's requests carried, how much was cached, and how often the harness stepped in. */
+  summary(): NonNullable<Extract<TranscriptEvent, { type: 'end' }>['summary']> {
+    const { promptTokens, cachedTokens, contexts, gates, steers } = this.totals;
+    return { promptTokens, cachedTokens, cacheBreaks: Math.max(0, contexts - 1), gates, steers };
+  }
+
+  private count(event: { type: string; usage?: TokenUsage; delegated?: string }): void {
+    if (event.type === 'usage' && event.usage && !event.delegated) {
+      this.totals.promptTokens += event.usage.prompt_tokens ?? 0;
+      this.totals.cachedTokens += event.usage.cached_tokens ?? 0;
+    } else if (event.type === 'context') this.totals.contexts += 1;
+    else if (event.type === 'gate') this.totals.gates += 1;
+    else if (event.type === 'steer') this.totals.steers += 1;
   }
 
   /**
@@ -117,8 +138,31 @@ export class TranscriptRecorder {
           trigger: event.trigger,
         });
         return;
+      case 'gate':
+        this.write({
+          type: 'gate',
+          tier: event.tier,
+          name: event.name,
+          command: event.command,
+          ...(event.tree ? { tree: event.tree } : {}),
+          status: event.status,
+          durationMs: event.durationMs,
+          ...(event.step ? { step: event.step } : {}),
+          ...(event.byModel ? { byModel: true } : {}),
+          shaped: event.shaped,
+        });
+        return;
+      case 'elision':
+        this.write({ type: 'elision', stage: event.stage, message: event.message, tokensRemoved: event.tokensRemoved, stub: event.stub });
+        return;
+      case 'steer':
+        this.write({ type: 'steer', handler: event.handler, ...(event.callId ? { callId: event.callId } : {}), detail: event.detail });
+        return;
+      case 'handoff':
+        this.write({ type: 'handoff', path: event.path, bytes: event.bytes, reason: event.reason });
+        return;
       case 'turn_end':
-        this.write({ type: 'end', status: event.status });
+        this.write({ type: 'end', status: event.status, summary: this.summary() });
         if (this.started) this.guard(() => this.log.updateIndex());
         return;
       default:
@@ -147,6 +191,7 @@ export class TranscriptRecorder {
     this.guard(() => {
       for (const entry of batch) {
         this.log.append(entry);
+        this.count(entry as { type: string; usage?: TokenUsage; delegated?: string });
         if (entry.type === 'message' && entry.message.role === 'user') this.turnStart = this.written;
         this.written += 1;
       }

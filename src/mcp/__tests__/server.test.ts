@@ -113,18 +113,18 @@ test("/commit's confirmation is the person's too: the caller cannot say yes to i
 test('allow_session grants a pattern the call offers, which covers later calls, and nothing it does not offer', async () => {
   const { call, start } = await serve();
   const session = await start();
-  context.provider.enqueue({ toolCalls: [{ id: 'r1', name: 'run_command', arguments: { command: 'ls -la' } }] }, { text: 'Listed.' });
-  const asked = await call('session_send', { session, text: 'list the files' });
-  expect(asked.report.waiting.suggestions).toContain('run_command(ls *)');
-  expect(asked.text).toContain('run_command(ls *)');
+  context.provider.enqueue({ toolCalls: [{ id: 'r1', name: 'run_command', arguments: { command: 'touch b.txt' } }] }, { text: 'Touched.' });
+  const asked = await call('session_send', { session, text: 'touch b' });
+  expect(asked.report.waiting.suggestions).toContain('run_command(touch *)');
+  expect(asked.text).toContain('run_command(touch *)');
   const refused = await call('session_answer', { session, approval: 'allow_session', pattern: 'run_command(*)' });
   expect(refused.error).toBe(true);
-  expect(refused.text).toContain('run_command(ls *)');
-  expect((await call('session_answer', { session, approval: 'allow_session', pattern: 'run_command(ls *)' })).report.status).toBe('idle');
-  context.provider.enqueue({ toolCalls: [{ id: 'r2', name: 'run_command', arguments: { command: 'ls a.txt' } }] }, { text: 'Listed again.' });
-  const again = await call('session_send', { session, text: 'list a.txt' });
+  expect(refused.text).toContain('run_command(touch *)');
+  expect((await call('session_answer', { session, approval: 'allow_session', pattern: 'run_command(touch *)' })).report.status).toBe('idle');
+  context.provider.enqueue({ toolCalls: [{ id: 'r2', name: 'run_command', arguments: { command: 'touch c.txt' } }] }, { text: 'Touched again.' });
+  const again = await call('session_send', { session, text: 'touch c' });
   expect(again.report).toMatchObject({ status: 'idle', ended: 'ok' });
-  expect(again.text).toContain('Listed again.');
+  expect(again.text).toContain('Touched again.');
 }, 60_000);
 
 test('a stopped session says it was stopped and how to resume it', async () => {

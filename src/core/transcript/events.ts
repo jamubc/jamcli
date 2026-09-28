@@ -93,7 +93,35 @@ export type TranscriptEvent =
       /** The index, among events after the header, of the message that began the turn. */
       turn?: number;
     }
-  | { v: 2; type: 'end'; ts: number; status: RunStatus };
+  /** A gate ran on a tree, by the harness or by the model. `shaped` is what the model read of it. */
+  | {
+      v: 2;
+      type: 'gate';
+      ts: number;
+      tier: 'T0' | 'T1' | 'T2' | 'T3';
+      name: string;
+      command: string;
+      tree?: string;
+      status: 'passed' | 'failed' | 'skipped';
+      durationMs: number;
+      step?: number;
+      byModel?: boolean;
+      shaped?: string;
+    }
+  /** An older tool result, at `message` in the conversation as it then stood, became `stub` before any summary. */
+  | { v: 2; type: 'elision'; ts: number; stage: string; message: number; tokensRemoved: number; stub: string }
+  /** The harness steered the turn, and how. */
+  | { v: 2; type: 'steer'; ts: number; handler: string; callId?: string; detail: string }
+  /** The handoff file was rendered from this log. */
+  | { v: 2; type: 'handoff'; ts: number; path: string; bytes: number; reason: 'session_end' | 'reset' | 'drop' }
+  | {
+      v: 2;
+      type: 'end';
+      ts: number;
+      status: RunStatus;
+      /** The session so far: what its requests carried, how much of it the provider had cached, and how the harness intervened. */
+      summary?: { promptTokens: number; cachedTokens: number; cacheBreaks: number; gates: number; steers: number };
+    };
 
 export type TranscriptEventType = TranscriptEvent['type'];
 

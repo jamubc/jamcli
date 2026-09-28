@@ -152,3 +152,11 @@ test('the providers report says where each key comes from, and never shows one',
   expect(text).toContain('- lab: https://lab.example/v1, anthropic format, key from $LAB_KEY (not set)');
   expect(text).not.toContain('sk-ant-secret-value');
 });
+
+test('the cost report says how much of the prompt the provider cached, and how often the prefix changed', () => {
+  const usage = (prompt: number, completion: number) => ({ prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion });
+  const spend = { cost: 0.01, requests: 3, unpriced: 0, models: [{ model: 'anthropic:claude-x', requests: 3, unpriced: 0, cost: 0.01, usage: usage(30_000, 300) }], delegated: { cost: 0, requests: 0, unpriced: 0 } };
+  expect(costReport(spend, { promptTokens: 30_000, cachedTokens: 24_000, cacheBreaks: 1 })).toContain("Cached: 80% of 30k prompt tokens were served from the provider's cache; the request prefix changed 1 time.");
+  expect(costReport(spend, { promptTokens: 30_000, cachedTokens: 0, cacheBreaks: 0 })).toContain('Cached: the provider reported no cached tokens; the request prefix never changed.');
+  expect(costReport(spend)).not.toContain('Cached');
+});

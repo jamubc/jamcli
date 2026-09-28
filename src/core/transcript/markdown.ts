@@ -178,6 +178,19 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
       case 'checkpoint':
         out.push(`*Checkpoint \`${event.ref}\`${event.files?.length ? `: ${event.files.join(', ')}` : ''}*`);
         break;
+      case 'gate':
+        out.push(`> **Gate** ${event.name} (${event.tier}${event.byModel ? ', run by the model' : ''}): ${event.status}${event.tree ? ` on tree \`${event.tree.slice(0, 7)}\`` : ''} in ${took(event.durationMs)}`);
+        if (event.status === 'failed' && event.shaped) out.push(fenced(event.shaped, 'text'));
+        break;
+      case 'elision':
+        if (options.debug) out.push(`*Elided message ${event.message} (${event.stage}): ${event.tokensRemoved} tokens*`);
+        break;
+      case 'steer':
+        out.push(`> **Harness** (${event.handler}): ${event.detail}`);
+        break;
+      case 'handoff':
+        out.push(`*Handoff written to \`${event.path}\` (${event.reason})*`);
+        break;
       case 'end':
         out.push(`*Turn ended: ${event.status}${turnStart === undefined ? '' : `, after ${took(event.ts - turnStart)}`}*`, '---');
         turnStart = undefined;

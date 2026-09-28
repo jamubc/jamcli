@@ -15,12 +15,16 @@ import { SessionLog, TranscriptRecorder, ensureProjectStateDir, newSessionId } f
 import { createBuiltinRegistry } from '../tools/registry.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
-import type { EditorBridge } from '../../types/tools.js';
+import type { EditorBridge, JsonSchema } from '../../types/tools.js';
 import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type ToolSummary } from './tools.js';
 import { childLauncher, type ParentSession } from './children.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
+import { readTodos, stampTodos } from '../tools/todo.js';
+import { executeBatch } from '../tools/dispatch.js';
+import { HeadTailBuffer, MAX_COMMAND_TIMEOUT_MS } from '../tools/command.js';
+import { Ledger, detectGates, readResetHandoff, registerVerifyMiddleware, renderHandoff, runGate, writeHandoff, type Gate, type GateRow, type HandoffReason } from '../verify/index.js';
 import { effortFor, thinkingFor, type EffortLevel, type ReasoningLevel } from '../routing/capabilities.js';
 import { sessionPermissions } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
@@ -31,6 +35,10 @@ import { WorkTable, workNews, type WorkItem } from '../work.js';
 import { parseRule, type Decision, type Rule, type RuleScope } from '../permissions/rules.js';
 import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type SandboxSettings } from '../sandbox/index.js';
 import { buildRuntimePrompt } from './prompt.js';
+import { registerSteerMiddleware } from './steer.js';
+import { completeWithinCap } from '../providers/complete.js';
+import { estimateRequest } from '../context/estimate.js';
+import { describeGates } from '../verify/index.js';
 import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
 import { loadSkills, skillInstructions, skillsPromptText, type Skill } from '../ext/skills.js';
@@ -64,9 +72,29 @@ const EDITABLE: RuleScope[] = ['session', 'local', 'project', 'user'];
 const LIST_TIMEOUT_MS = 5_000;
 /** The per-tool block of the legacy MCP file, whose rules are edited in that file. */
 const LEGACY_TOOLS_FILE = '.jamcli/mcp.json';
+/** Characters a handoff may take of the first prompt: about 600 tokens. */
+const HANDOFF_NOTE_CHARS = 2_400;
 
 /** The surface a runtime serves. It is recorded with every decision in the session log. */
 export type Surface = 'tui' | 'headless' | 'acp' | 'workflow' | 'child';
+
+/** What a harness search may vary, in place of the shipped constants. */
+export interface HarnessOverrides {
+  /** Replaces the tool guidance block of the system prompt. */
+  guidance?: string;
+  /** Programs the harness treats as read-only commands, replacing the built-in list. */
+  readOnlyCommands?: string[];
+  /** How many times a turn's stop may be denied for a failing gate. */
+  maxStopDenials?: number;
+  /** The last duration above which the after-edit gate waits for the stop instead. */
+  afterEditBoundMs?: number;
+  /** The gate tiers a stop runs, in order. */
+  stopTiers?: ('T1' | 'T2')[];
+  /** The share of the compaction trigger at which older results are stubbed. */
+  elideAt?: number;
+  /** Per tool: the description or wire schema offered instead of its own. */
+  tools?: Record<string, { description?: string; wireSchema?: JsonSchema }>;
+}
 
 export interface RuntimeOptions {
   projectRoot: string;
@@ -89,6 +117,12 @@ export interface RuntimeOptions {
   effort?: EffortLevel;
   /** Descriptions to offer instead of tools' own, by name: how a trial compares tool prompts. */
   toolDescriptions?: Record<string, string>;
+  /**
+   * The harness surface a trial searches: prompt parts, middleware constants, and tool
+   * wire schemas, each in place of the shipped value. Never read from configuration;
+   * an accepted value lands in the source as a commit.
+   */
+  harness?: HarnessOverrides;
   /** A delegated run's agent rules, read before the project's, which win a conflict. */
   agentRules?: { agent: string; source: string; text: string };
   /** `--allow-tool` names for this run. */
@@ -188,6 +222,15 @@ export interface Runtime {
   readonly modelInfo: ModelInfo;
   /** What the session has cost so far, by model, with requests that had no known price counted apart. */
   spend(): SpendSummary;
+  /** How much of what the session sent the provider had cached, and how often the request prefix changed. */
+  cacheStats(): { promptTokens: number; cachedTokens: number; cacheBreaks: number };
+  /** The gates this project declares, which the harness runs after edits and before a turn ends with them. */
+  readonly gates: Gate[];
+  /**
+   * Render the handoff from the log now, marked for the next session to read on its first
+   * turn, as `/handoff` asks. Resolves to nothing when the session has no messages yet.
+   */
+  handoff(): Promise<{ path: string; bytes: number } | undefined>;
   /** How full the context is: the next request's estimate against the model's budget. */
   contextUsage(): ContextUsage;
   /**
@@ -487,29 +530,38 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
             })()
           : undefined));
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
-  // Past a threshold, MCP tools are offered through search_tools rather than in every request.
+  // Past a threshold, MCP tools are offered through search_tools rather than in every request;
+  // so is the extended tier of built-ins when the model's window has no room for it.
   const searchThreshold = config.tool_search?.threshold ?? DEFAULT_TOOL_SEARCH_THRESHOLD;
   const loadedTools = new Set<string>();
-  const searching = Boolean(mcpServers && searchThreshold > 0 && mcpServers.size > searchThreshold);
-  if (searching) {
-    registry.register(
-      toolSearchTool({
-        deferred: () =>
-          toolSet.summaries
-            .filter((tool) => tool.source === 'mcp' && !loadedTools.has(tool.name))
-            .map((tool) => ({ name: tool.name, description: tool.description, ...(tool.server ? { server: tool.server } : {}) })),
-        load: (names) => {
-          for (const name of names) {
-            if (loadedTools.has(name)) continue;
-            loadedTools.add(name);
-            // Added to the running turn's list too, so the next request carries it.
-            const tool = toolSet.summaries.find((entry) => entry.name === name);
-            if (tool) toolSet.definitions.push({ type: 'function', function: { name, description: tool.description, parameters: tool.parameters as Record<string, unknown> } });
-          }
-        },
-      })
-    );
-  }
+  const searchingMcp = Boolean(mcpServers && searchThreshold > 0 && mcpServers.size > searchThreshold);
+  /** Decided once the model's window is known: whether the extended tier is held behind search_tools. */
+  let extendedHeld = false;
+  /** The task and delegate families are offered once one of them has started, not before. */
+  const FAMILY_TOOLS = new Set(['task_status', 'task_result', 'task_cancel', 'delegate_status', 'delegate_result', 'delegate_cancel']);
+  let familyReleased = false;
+  const searchable = (name: string) => !loadedTools.has(name) && ((searchingMcp && Boolean(mcpServers?.has(name))) || (extendedHeld && !mcpServers?.has(name) && registry.get(name)?.tier !== 'core' && name !== 'search_tools'));
+  const held = (name: string) => FAMILY_TOOLS.has(name) && !familyReleased;
+  const offerNow = (names: string[]) => {
+    for (const name of names) {
+      const tool = toolSet.summaries.find((entry) => entry.name === name);
+      // Added to the running turn's list too, so the next request carries it.
+      if (tool && !toolSet.definitions.some((entry) => entry.function.name === name)) toolSet.definitions.push({ type: 'function', function: { name, description: tool.description, parameters: tool.parameters as Record<string, unknown> } });
+    }
+  };
+  registry.register({
+    ...toolSearchTool({
+      deferred: () =>
+        toolSet.summaries
+          .filter((tool) => searchable(tool.name))
+          .map((tool) => ({ name: tool.name, description: tool.description, ...(tool.server ? { server: tool.server } : {}) })),
+      load: (names) => {
+        for (const name of names) loadedTools.add(name);
+        offerNow(names);
+      },
+    }),
+    hidden: true,
+  });
   /** The servers that are on, for `@server:uri` references and `/server:prompt` commands. */
   const enabledServers = async () => (mcp ? (await mcp.listServers()).filter((server) => server.enabled !== false) : []);
   const resourceReader =
@@ -592,19 +644,22 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       for (const rule of rules) permissions.add({ ...rule, scope: 'session' });
     }
   };
-  const buildTools = (): ToolSet =>
-    createToolSet({
+  const buildTools = (): ToolSet => {
+    const anySearchable = registry.visible().some((tool) => permissions.offers(tool.name) && searchable(tool.name));
+    return createToolSet({
       registry,
       mcpServers,
       permissions,
-      alsoOffer: turnOffer,
+      alsoOffer: [...turnOffer, ...(anySearchable ? ['search_tools'] : [])],
       grantProject,
-      ...(searching ? { deferred: (name: string) => Boolean(mcpServers?.has(name)) && !loadedTools.has(name) } : {}),
+      deferred: (name: string) => searchable(name) || held(name),
       ...(options.dryRun ? { dryRun: recordDryRun } : {}),
       descriptions: {
         ...(taskTool ? { task: taskDescription(routableAgents(agents.agents, config.api_registry), agents.defaultAgent) } : {}),
         ...options.toolDescriptions,
+        ...Object.fromEntries(Object.entries(options.harness?.tools ?? {}).flatMap(([name, tool]) => (tool.description ? [[name, tool.description]] : []))),
       },
+      schemas: Object.fromEntries(Object.entries(options.harness?.tools ?? {}).flatMap(([name, tool]) => (tool.wireSchema ? [[name, tool.wireSchema]] : []))),
       context: () => ({
         projectRoot: workRoot,
         ignorePatterns: mcpConfig.ignore_patterns,
@@ -626,6 +681,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         },
       }),
     });
+  };
   let toolSet = buildTools();
   /** The mode held before plan mode, which an approved exit returns to. */
   let modeBeforePlan: PermissionMode | undefined;
@@ -636,11 +692,30 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     modeBeforePlan = mode === 'plan' ? from : undefined;
     reassemble();
     recorder.switchPermissionMode(from, mode);
+    if (session.messages.length) turnNotes.push(`[Mode changed: ${from} to ${mode}. Earlier calls were decided under ${from}.]`);
     return undefined;
   };
 
   const rules = applyRules(loadRules(workRoot, cwd), undefined);
   const hooks: HookBus = createHookBus({ onRun: (run) => observation?.hookRun(run) });
+  // The task and delegate families are offered from the step after one starts.
+  hooks.on(
+    'post_tool',
+    ({ call }) => {
+      if (familyReleased || (call.name !== 'task' && call.name !== 'delegate')) return undefined;
+      familyReleased = true;
+      offerNow(toolSet.summaries.filter((tool) => FAMILY_TOOLS.has(tool.name)).map((tool) => tool.name));
+      return undefined;
+    },
+    'family tools',
+    { internal: true }
+  );
+  /** The working copy the last changing step left, as its checkpoint keyed it, and whether this turn changed it. */
+  let lastTree: string | undefined;
+  let changedThisTurn = false;
+  let currentStep = 0;
+  /** Records a gate row once the verification middleware is up; the language server's verdict is tier T0. */
+  let verify: { record: (row: GateRow) => void } | undefined;
   // After an edit, the model reads the errors the language server finds in what it changed.
   if (lsp?.available.length && config.lsp?.diagnostics_after_edit !== false) {
     hooks.on(
@@ -654,10 +729,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
               ? [call.arguments.path]
               : [];
         const reports: string[] = [];
-        for (const file of files.filter((file) => lsp.serves(file))) {
+        const served = files.filter((file) => lsp.serves(file));
+        for (const file of served) {
           const { diagnostics } = await lsp.diagnostics(path.resolve(workRoot, file), 3000).catch(() => ({ diagnostics: [] }));
           const errors = diagnostics.filter((item) => (item.severity ?? 1) === 1);
           if (errors.length) reports.push(...errors.slice(0, 20).map((item) => redact(formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item))));
+        }
+        if (served.length && lastTree && verify) {
+          verify.record({ tier: 'T0', name: 'lsp', command: 'language server diagnostics', tree: lastTree, step: currentStep, status: reports.length ? 'failed' : 'passed', durationMs: 0, ts: Date.now() });
         }
         return reports.length ? { context: [`The language server reports errors after this change:\n${reports.join('\n')}`] } : undefined;
       },
@@ -729,6 +808,12 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     ? `Rules for the ${options.agentRules.agent} agent, from ${options.agentRules.source}:\n${options.agentRules.text}`
     : undefined;
   if (options.agentRules) notices.push(`This run follows the ${options.agentRules.agent} agent's rules from ${options.agentRules.source}.`);
+  // Chosen before the provider, which may send it: some route and cache per conversation.
+  const sessionId = options.sessionId ?? newSessionId();
+  let choice = resolveModel(options.model ?? config.model, profile, config.api_registry);
+  // The project's own gates, detected once; their durations come from the ledger once the log is open.
+  const gates = detectGates(workRoot);
+  let ledger: Ledger | undefined;
   const buildPrompt = () =>
     buildRuntimePrompt({
       profile,
@@ -744,12 +829,26 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       projectRoot: workRoot,
       cwd,
       mode: permissions.mode,
+      gates: gates.length && permissions.mode !== 'plan' ? describeGates(gates, (name) => ledger?.lastDuration(name)) : undefined,
+      model: `${choice.provider}:${choice.model}`,
+      ...(options.harness?.guidance ? { guidance: options.harness.guidance } : {}),
     });
   let systemPrompt = buildPrompt();
-
-  // Chosen before the provider, which may send it: some route and cache per conversation.
-  const sessionId = options.sessionId ?? newSessionId();
-  let choice = resolveModel(options.model ?? config.model, profile, config.api_registry);
+  /**
+   * Whether the extended tier fits: the window's budget, less what the prompt and the core
+   * tools cost, must leave twice the output reserve. Decided from the model's window, once
+   * it is known, so a small local model is offered what it has room for.
+   */
+  const decideTiers = (): boolean => {
+    const budget = budgetFor();
+    const core = toolSet.definitions.filter((definition) => registry.get(definition.function.name)?.tier === 'core');
+    const base = estimateRequest({ system: systemPrompt, tools: core, messages: [] });
+    // A guessed window is not held against; only the provider's refusal compacts it, and only a known one narrows the tools.
+    const hold = windowKnown() && budget.budget - base < 2 * budget.outputReserve;
+    const changed = hold !== extendedHeld;
+    extendedHeld = hold;
+    return changed;
+  };
   let provider: ChatProvider | undefined = options.provider;
   let providerError: string | undefined;
   if (!provider) {
@@ -777,6 +876,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let reasoningSince = prefixSetNow();
   /** A guessed window is not compacted ahead of; Ollama's window is the one JamCLI asks for, so it is always known. */
   const windowKnown = () => modelInfo.sources.contextWindow !== 'default' || modelInfo.provider === 'ollama';
+  if (decideTiers()) {
+    toolSet = buildTools();
+    systemPrompt = buildPrompt();
+  }
   // A run's own settings, as a delegated agent's, win over the configured default.
   let thinking: Thinking =
     options.reasoning || options.effort
@@ -813,18 +916,37 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       trustOffNote: gated(),
       redact,
       signal: options.signal,
-      pinned: () => pinnedState(workRoot),
+      pinned: pinnedWithGates,
+      ...(options.harness?.elideAt !== undefined ? { elideAt: options.harness.elideAt } : {}),
+      protectedPaths: async () => {
+        const todos = await readTodos({ projectRoot: workRoot });
+        return todos.filter((todo) => todo.status !== 'completed').flatMap((todo) => `${todo.content} ${todo.check ?? ''}`.match(/[\w./-]+\.[A-Za-z0-9]+/g) ?? []);
+      },
       // Only the top-level session tells the model what ended: a child sharing the table must not take the news.
       ...(options.parent ? {} : { news: () => workTable.drainEnded().map(workNews) }),
       ...(options.heard ? { heard: options.heard } : {}),
+      turnNotes: () => turnNotes.splice(0),
       // A delegated run shares the working copy; the checkpoint before its task call covers it.
       ...(options.surface === 'child' ? {} : { beforeChange: takeCheckpoint, afterChange: settleCheckpoint }),
     });
   let agent = buildAgent();
-  /** What is offered, and what the model is told, depend on the mode and the rules. */
+  /** What the harness must tell the model with its next prompt, each in bracket form. */
+  const turnNotes: string[] = [];
+  /** The pinned state a summary carries, with one line per gate from the ledger. */
+  async function pinnedWithGates(): Promise<string | undefined> {
+    const state = await pinnedState(workRoot);
+    const tail = ledger?.tail() ?? [];
+    if (!tail.length) return state;
+    return [state, `Gates:\n${tail.join('\n')}`].filter(Boolean).join('\n\n');
+  }
+  /** What is offered, and what the model is told, depend on the mode, the rules, and the model's window. */
   const reassemble = () => {
     toolSet = buildTools();
     systemPrompt = buildPrompt();
+    if (decideTiers()) {
+      toolSet = buildTools();
+      systemPrompt = buildPrompt();
+    }
     reasoningSince = prefixSetNow();
     agent = buildAgent();
   };
@@ -845,9 +967,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       });
   let session = options.sessionId ? log.toSession() : createSession(projectRoot, log.id);
   /** A continued session keeps what it cost before, as each request was priced then. */
-  const ledger = options.sessionId ? CostLedger.fromEvents(log.events()) : new CostLedger();
+  const costLedger = options.sessionId ? CostLedger.fromEvents(log.events()) : new CostLedger();
   const account = (event: AgentEvent) => {
-    if (event.type === 'usage') ledger.record({ model: event.model, usage: event.usage, cost: event.cost, delegated: Boolean(event.delegatedSession) });
+    if (event.type === 'usage') costLedger.record({ model: event.model, usage: event.usage, cost: event.cost, delegated: Boolean(event.delegatedSession) });
     // The agent that compacted moved its own; later agents start from here.
     if (event.type === 'compaction') reasoningSince = prefixSetNow();
   };
@@ -886,9 +1008,97 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const after = await checkpointStore.settle(pending.taken, pending.label);
       if (pending.taken.kind === 'git' && !after) return;
       const { taken, label } = pending;
+      lastTree = after ?? taken.ref;
+      changedThisTurn = true;
       recorder.recordCheckpoint({ ref: taken.ref, ...(taken.files ? { files: taken.files } : {}), ...(after ? { after } : {}), label });
     } catch (error: any) {
       checkpointsOff(error);
+    }
+  }
+  hooks.on(
+    'turn_start',
+    () => {
+      changedThisTurn = false;
+    },
+    'verify turn tree',
+    { internal: true }
+  );
+
+  // Verification: the project's own gates, run through the same path as a model's command.
+  ledger = Ledger.fromEvents(log.events());
+  const gateLedger = ledger;
+  if (gateLedger.all().length) systemPrompt = buildPrompt();
+  let gateController: AbortController | undefined;
+  const runGateCommand = async (command: string) => {
+    const emit = emitting ?? (() => undefined);
+    gateController = new AbortController();
+    if (options.signal?.aborted) gateController.abort();
+    const call: ToolCall = { id: `gate-${Date.now().toString(36)}`, name: 'run_command', arguments: { command, timeout_ms: MAX_COMMAND_TIMEOUT_MS } };
+    try {
+      const batch = await executeBatch([call], { dispatcher: toolSet.dispatcher, emit, signal: gateController.signal, projectRoot: workRoot, session, hooks, redact });
+      const [result] = batch.results;
+      return { status: result.status ?? (result.success ? ('ok' as const) : ('error' as const)), output: result.output, durationMs: result.durationMs };
+    } finally {
+      gateController = undefined;
+    }
+  };
+  verify = registerVerifyMiddleware(hooks, {
+    gates,
+    ledger: gateLedger,
+    currentTree: () => lastTree,
+    changedThisTurn: () => changedThisTurn,
+    step: () => currentStep,
+    run: (gate) => runGate(gate, { run: runGateCommand, tree: lastTree, step: currentStep }),
+    emit: (event) => emitting?.(event),
+    todos: { read: () => readTodos({ projectRoot: workRoot }), stamp: async (stamp) => void (await stampTodos({ projectRoot: workRoot }, stamp)) },
+    backpressure: options.surface !== 'child',
+    ...(options.harness?.maxStopDenials !== undefined ? { maxStopDenials: options.harness.maxStopDenials } : {}),
+    ...(options.harness?.afterEditBoundMs !== undefined ? { afterEditBoundMs: options.harness.afterEditBoundMs } : {}),
+    ...(options.harness?.stopTiers ? { stopTiers: options.harness.stopTiers } : {}),
+  });
+  registerSteerMiddleware(hooks, {
+    projectRoot: workRoot,
+    ...(options.harness?.readOnlyCommands ? { readOnlyCommands: new Set(options.harness.readOnlyCommands) } : {}),
+    modeWouldAsk: (call) => {
+      const verdict = permissions.decide(call);
+      return verdict.decision === 'ask' && verdict.by === 'mode';
+    },
+    currentTree: () => lastTree,
+    emit: (event) => emitting?.(event),
+  });
+  /** The handoff, rendered from the log. A reset the person asked for is not overwritten by the session's end. */
+  const writeHandoffNow = async (reason: HandoffReason): Promise<{ path: string; bytes: number } | undefined> => {
+    if (options.parent) return undefined;
+    const events = log.events();
+    if (!events.some((event) => event.type === 'message')) return undefined;
+    if (reason === 'session_end') {
+      const lastHandoff = events.map((event, index) => ({ event, index })).filter(({ event }) => event.type === 'handoff').at(-1);
+      if (lastHandoff && (lastHandoff.event as { reason?: string }).reason === 'reset' && !events.slice(lastHandoff.index + 1).some((event) => event.type === 'message')) return undefined;
+    }
+    const todos = await readTodos({ projectRoot: workRoot });
+    const written = writeHandoff(workRoot, renderHandoff(events, todos, { sessionId: log.id, reason }));
+    recorder.handle({ type: 'handoff', ...written, reason });
+    return written;
+  };
+  hooks.on('compaction', ({ strategy }) => (strategy === 'drop' ? writeHandoffNow('drop').then(() => undefined) : undefined), 'handoff on drop', { internal: true });
+  hooks.on('pre_compact', () => ({ context: ['The todo list and the gate results are pinned after the summary; do not restate them.'] }), 'M6 pinned note', { internal: true });
+  // A handoff the last session left for this one reaches the model with the first prompt, within a fixed budget.
+  if (!options.sessionId && !options.parent) {
+    const reset = readResetHandoff(workRoot);
+    if (reset && reset.session !== log.id) {
+      const buffer = new HeadTailBuffer(HANDOFF_NOTE_CHARS);
+      buffer.push(reset.text);
+      turnNotes.push(`[Handoff from the previous session ${reset.session}:\n${buffer.toString()}]`);
+      const off = hooks.on(
+        'turn_start',
+        () => {
+          emitting?.({ type: 'steer', handler: 'M1', detail: `handoff from session ${reset.session} read with the first prompt` });
+          off();
+        },
+        'handoff read',
+        { internal: true }
+      );
+      notices.push(`The handoff session ${reset.session} left in .jamcli/handoff.md reaches the model with the first prompt.`);
     }
   }
   const checkpointList = (): CheckpointInfo[] =>
@@ -908,9 +1118,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** One request outside the conversation, counted and priced like the session's others. */
   async function completeOnce(prompt: string, request: { maxOutputTokens?: number; signal?: AbortSignal } = {}): Promise<string> {
     if (!provider) throw new Error(providerError ?? 'No model provider is configured for this session.');
-    const result = await provider.complete([{ role: 'user', content: prompt, timestamp: Date.now() }], {
+    const result = await completeWithinCap(provider, [{ role: 'user', content: prompt, timestamp: Date.now() }], {
       model: choice.model,
-      maxOutputTokens: answerOutputTokens(modelInfo, request.maxOutputTokens ?? 800),
+      maxOutputTokens: answerOutputTokens(modelInfo, request.maxOutputTokens ?? 800) ?? request.maxOutputTokens ?? 800,
       contextLength: modelInfo.contextWindow,
       ...(request.signal ? { signal: request.signal } : {}),
     });
@@ -975,7 +1185,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const info = await catalog.resolve(asked.provider, asked.model, provider);
       if (asked !== choice) return;
       modelInfo = info;
-      agent = buildAgent();
+      if (decideTiers()) reassemble();
+      else agent = buildAgent();
       if (info.sources.contextWindow === 'default' && info.provider !== 'ollama') {
         const notice =
           `JamCLI does not know the context window of ${info.provider}:${info.model}, so it compacts the conversation only when the provider refuses it as too long. ` +
@@ -1002,12 +1213,16 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
   const switchModel = (ref: string) => {
     const next = resolveModel(ref, profile, config.api_registry);
+    const before = `${choice.provider}:${choice.model}`;
     provider = observed(createChatProvider(next.provider, config.api_registry, { sessionId: log.id }), next.provider);
     providerError = undefined;
     choice = next;
     modelInfo = catalog.lookup(next.provider, next.model, provider.family);
-    agent = buildAgent();
+    // The prompt names the model, so the switch rebuilds it; the model reads the change with its next prompt.
+    reassemble();
     recorder.switchModel(`${next.provider}:${next.model}`);
+    const after = `${next.provider}:${next.model}`;
+    if (before !== after && session.messages.length) turnNotes.push(`[Model changed: ${before} to ${after}. Messages above were written by ${before}.]`);
     modelReady = resolveModelInfo();
   };
 
@@ -1046,8 +1261,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return modelInfo;
     },
     spend() {
-      return ledger.summary();
+      return costLedger.summary();
     },
+    cacheStats() {
+      const { promptTokens, cachedTokens, cacheBreaks } = recorder.summary();
+      return { promptTokens, cachedTokens, cacheBreaks };
+    },
+    gates,
+    handoff: () => writeHandoffNow('reset'),
     contextUsage() {
       const budget = budgetFor();
       return {
@@ -1147,6 +1368,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       if (running) throw new Error('A turn is already running in this session.');
       running = true;
       const emit = (event: AgentEvent) => {
+        if (event.type === 'step_start') currentStep = event.step;
         account(event);
         recorder.handle(event);
         observation?.event(event);
@@ -1228,6 +1450,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     cancel() {
       for (const respond of [...waitingElicitations]) respond({ action: 'cancel' });
+      gateController?.abort();
       (turnAgent ?? agent).cancel(session.id);
     },
 
@@ -1312,6 +1535,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     async close() {
       // Cancelling a turn leaves jobs running; closing the session that owns them stops them.
       if (!options.parent) workTable.stopAll();
+      await writeHandoffNow('session_end').catch(() => undefined);
       await hookVerdict(hooks, 'session_end', { session, status: 'closed', turns });
       await mcp?.close?.();
       await lsp?.close();

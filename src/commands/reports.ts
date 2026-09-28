@@ -54,12 +54,17 @@ export function contextReport(usage: ContextUsage, messages: number): string {
   return lines.join('\n');
 }
 
-export function costReport(spend: SpendSummary): string {
+export function costReport(spend: SpendSummary, cache?: { promptTokens: number; cachedTokens: number; cacheBreaks: number }): string {
   if (spend.requests === 0) return 'No requests yet, so nothing has been spent.';
   const lowerBound = spend.unpriced > 0;
   const lines = [
     `This session: ${formatUsd(spend.cost)}${lowerBound ? ' or more' : ''} over ${plural(spend.requests, 'request')}.`,
   ];
+  if (cache && cache.promptTokens > 0) {
+    const share = Math.round((100 * cache.cachedTokens) / cache.promptTokens);
+    const breaks = cache.cacheBreaks === 0 ? 'the request prefix never changed' : `the request prefix changed ${plural(cache.cacheBreaks, 'time')}`;
+    lines.push(cache.cachedTokens > 0 ? `Cached: ${share}% of ${formatTokens(cache.promptTokens)} prompt tokens were served from the provider's cache; ${breaks}.` : `Cached: the provider reported no cached tokens; ${breaks}.`);
+  }
   if (lowerBound) lines.push(`${plural(spend.unpriced, 'request')} had no known price and ${spend.unpriced === 1 ? 'is' : 'are'} not in the total.`);
   lines.push('', 'By model:');
   for (const model of spend.models) {

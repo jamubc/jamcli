@@ -234,7 +234,19 @@ const cost: SlashCommand = {
   summary: 'Show what this session has spent, by model',
   source: 'built-in',
   run(ctx) {
-    ctx.show(costReport(ctx.runtime.spend()));
+    ctx.show(costReport(ctx.runtime.spend(), ctx.runtime.cacheStats()));
+  },
+};
+
+const handoff: SlashCommand = {
+  name: 'handoff',
+  summary: 'Write .jamcli/handoff.md from this session, for the next session to read with its first prompt',
+  source: 'built-in',
+  async run(ctx) {
+    if (waitForTurn(ctx, 'write the handoff')) return;
+    const written = await ctx.runtime.handoff();
+    if (!written) return ctx.notice('info', 'Nothing to hand off yet: the session has no messages.');
+    ctx.notice('info', `Handoff written to ${written.path} (${written.bytes} bytes). Start a new session with /clear; it reads the handoff with its first prompt.`);
   },
 };
 
@@ -736,6 +748,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   permissions,
   context,
   cost,
+  handoff,
   compact,
   clear,
   resume,

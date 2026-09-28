@@ -102,9 +102,9 @@ test('screen reader mode, through a reply, a tool, and a prompt', async () => {
     context.server.enqueue({ toolCalls: [{ id: 'r1', name: 'read_file', arguments: { path: 'notes.txt' } }] }, { text: 'It says alpha.' });
     await send(setup, 'read the notes');
     await frameWith(setup, (frame) => frame.includes('JamCLI: It says alpha.') && frame.includes(', ready'));
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'ls' } }] });
-    await send(setup, 'list');
-    expect(normalize(await frameWith(setup, (frame) => frame.includes('Permission needed: Allow run_command ls?')))).toMatchSnapshot();
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'rm notes.txt' } }] });
+    await send(setup, 'remove them');
+    expect(normalize(await frameWith(setup, (frame) => frame.includes('Permission needed: Allow run_command rm notes.txt?')))).toMatchSnapshot();
     setup.mockInput.pressEscape();
     await frameWith(setup, (frame) => frame.includes('denied'));
   } finally {
