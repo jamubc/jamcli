@@ -37,6 +37,8 @@ export interface Theme {
    * inverts the row instead.
    */
   chosen: Color | 'inverse';
+  /** A line whose work is done, between text and dim, so the live turn stands out from what settled. */
+  settled: Color;
   /** Diff lines: backgrounds and the + and - signs. */
   diff: { addedBg: string; removedBg: string; addedSign: Color; removedSign: Color };
   /** Token colors for Markdown, code, and diffs. Monochrome keeps only bold, italic, and underline. */
@@ -68,6 +70,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     border: '#3b4261',
     selection: { bg: '#33467c' },
     chosen: '#292e42',
+    settled: '#9aa0b8',
     diff: { addedBg: '#1a4d1a', removedBg: '#4d1a1a', addedSign: '#22c55e', removedSign: '#ef4444' },
     tokens: {
       heading: '#7aa2f7',
@@ -95,6 +98,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     border: '#9ca0b0',
     selection: { bg: '#c9d4ee' },
     chosen: '#dce0e8',
+    settled: '#4c4f64',
     diff: { addedBg: '#dafbe1', removedBg: '#ffebe9', addedSign: '#1a7f37', removedSign: '#cf222e' },
     tokens: {
       heading: '#1e66f5',
@@ -122,6 +126,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     border: '#ffffff',
     selection: { bg: '#ffffff', fg: '#000000' },
     chosen: '#005f87',
+    settled: '#e8e8e8',
     diff: { addedBg: '#003300', removedBg: '#330000', addedSign: '#00ff5f', removedSign: '#ff5f5f' },
     tokens: {
       heading: '#00d7ff',
@@ -149,6 +154,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     border: TERMINAL,
     selection: 'inverse',
     chosen: 'inverse',
+    settled: TERMINAL,
     diff: { addedBg: 'transparent', removedBg: 'transparent', addedSign: TERMINAL, removedSign: TERMINAL },
     tokens: {},
   },

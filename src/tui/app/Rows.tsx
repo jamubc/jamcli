@@ -191,7 +191,7 @@ export function RowView({
     case 'tool':
       return (
         <box flexDirection="column">
-          <text {...sel} fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent} {...toggles}>
+          <text {...sel} fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : row.phase === 'ok' || row.phase === 'cancelled' ? theme.settled : theme.accent} {...toggles}>
             {toolLine(row)}
           </text>
           {open && row.diff ? (
