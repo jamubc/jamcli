@@ -40,7 +40,9 @@ export function buildRuntimePrompt(inputs: PromptInputs): string {
   if (rules) parts.push(rules);
   if (inputs.tools.length) parts.push(toolGuidance(inputs.tools));
   if (inputs.mode === 'plan') parts.push(PLAN_NOTE);
-  const date = (inputs.date ?? new Date()).toISOString().slice(0, 10);
+  // The person's own date: the UTC one is tomorrow in an American evening and yesterday in an Asian morning.
+  const now = inputs.date ?? new Date();
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   parts.push(
     [
       'Environment:',

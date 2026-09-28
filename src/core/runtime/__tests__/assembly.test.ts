@@ -141,11 +141,26 @@ test('tool guidance names only the tools that are offered', () => {
       tools: names.map((name) => ({ name, description: '', parameters: {}, policyClass: 'read', source: 'builtin' })),
       projectRoot: '/p',
       cwd: '/p',
-      date: new Date('2026-09-23T00:00:00Z'),
+      date: new Date(2026, 8, 23, 12),
       platform: 'linux',
     });
   expect(only(['read_file'])).not.toContain('run_command');
   expect(only(['read_file', 'run_command'])).toContain('run_command');
   expect(only([])).not.toContain('Working with tools');
   expect(only([])).toContain('- Date: 2026-09-23');
+});
+
+test("the date is the person's local date, not the UTC one", () => {
+  const zone = process.env.TZ;
+  const dateIn = (tz: string, date: Date) => {
+    process.env.TZ = tz;
+    try {
+      return buildRuntimePrompt({ tools: [], projectRoot: '/p', cwd: '/p', date, platform: 'linux' }).match(/- Date: (.+)/)?.[1];
+    } finally {
+      process.env.TZ = zone;
+    }
+  };
+  // Evening in California is already tomorrow in UTC, and morning in Tokyo still yesterday.
+  expect(dateIn('America/Los_Angeles', new Date('2026-09-28T03:30:00Z'))).toBe('2026-09-27');
+  expect(dateIn('Asia/Tokyo', new Date('2026-09-27T16:30:00Z'))).toBe('2026-09-28');
 });
