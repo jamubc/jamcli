@@ -101,7 +101,8 @@ test('a call that would ask is not made, the model is told why, and the run carr
     },
   ]);
   const told = server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
-  expect(told.content).toContain('--allow-tool edit');
+  // The remedy names the narrowest rule, never the whole tool.
+  expect(told.content).toContain("--allowed-tools 'edit(a.txt)'");
   const approval = SessionLog.open(root, result.session_id).events().find((event) => event.type === 'approval');
   expect(approval).toMatchObject({ allow: false, by: 'mode', surface: 'headless' });
 });

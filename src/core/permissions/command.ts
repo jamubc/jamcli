@@ -25,6 +25,21 @@ const SEPARATORS = ['&&', '||', '|&', ';;', ';', '|', '&', '\n'];
 const LEADING_KEYWORDS = new Set(['!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until', 'time', '{']);
 const CLOSING_WORDS = new Set(['fi', 'done', 'esac', 'then', 'else', 'do', '{', '}']);
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'ash', 'pwsh']);
+/** Programs that run whatever code their arguments or input carry: a rule about them is a rule about anything. */
+const INTERPRETERS = new Set([...SHELLS, 'node', 'bun', 'deno', 'python', 'python2', 'python3', 'perl', 'ruby', 'php', 'osascript']);
+/** Flags under which an interpreter takes its program from the argument after them. */
+const INLINE_CODE_FLAGS = new Set(['-c', '-e', '-E', '-p', '--eval', '--print']);
+/** Arguments that make an interpreter print and exit rather than read a program. */
+const INERT_FLAGS = new Set(['--version', '-v', '-V', '--help', '-h']);
+/** Programs that raise privileges: whatever follows runs as someone else. */
+const ESCALATORS = new Set(['sudo', 'doas', 'su']);
+/** Programs that only start the command after them, which is the one a rule is about. */
+const WRAPPERS = new Set(['env', 'exec', 'command', 'builtin', 'nohup', 'nice', 'timeout', 'caffeinate', 'stdbuf']);
+/** Variables whose value decides which program runs, so setting one hides the program. */
+const LOADER_VARIABLES = /^(PATH|LD_[A-Z_]+|DYLD_[A-Z_]+|NODE_OPTIONS|BASH_ENV|ENV|IFS|PYTHONPATH|PYTHONSTARTUP|PERL5OPT|PERL5LIB|RUBYOPT|GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_PAGER|PAGER)$/;
+
+/** Whether a program runs whatever it is handed, so no rule can name what it will do. */
+export const isInterpreter = (program: string): boolean => INTERPRETERS.has(program.replace(/^.*\//, ''));
 
 interface Heredoc {
   delimiter: string;
@@ -91,24 +106,69 @@ const programOf = (part: string) => part.split(/\s+/)[0] ?? '';
 
 const runsCode = (raw: string) => raw.includes('$(') || raw.includes('`') || raw.includes('<(') || raw.includes('>(');
 
-/** Constructs whose real command is inside an argument, so no rule can see it. */
+const flagName = (word: string) => word.split('=')[0];
+
+/**
+ * Constructs whose real command is inside an argument, so no rule can see it: a shell or
+ * interpreter given code inline or on its input, privilege escalation, and flags that name
+ * a program for the tool to run, such as git's pager or npm's script shell.
+ */
 const hiddenIn = (part: string): string | undefined => {
   const words = part.split(/\s+/);
   const program = words[0]?.replace(/^.*\//, '') ?? '';
+  const rest = words.slice(1);
   if (program === 'eval') return 'eval';
   if (program === 'source' || program === '.') return `${program} runs a script`;
-  if (SHELLS.has(program) && words.includes('-c')) return `${program} -c`;
+  if (ESCALATORS.has(program)) return `${program} raises privileges`;
+  if (INTERPRETERS.has(program)) {
+    const inline = rest.find((word) => INLINE_CODE_FLAGS.has(word));
+    if (inline) return `${program} ${inline}`;
+    if (!rest.some((word) => !word.startsWith('-')) && !(rest.length && rest.every((word) => INERT_FLAGS.has(word)))) return `${program} runs code from its input`;
+  }
   if (program === 'xargs') return 'xargs runs a command from its input';
-  if (program === 'find' && words.some((word) => /^-(exec|execdir|ok|okdir)$/.test(word))) return 'find -exec';
+  if (program === 'find' && rest.some((word) => /^-(exec|execdir|ok|okdir)$/.test(word))) return 'find -exec';
+  if (program === 'git') {
+    // Only git's own flags, before the subcommand, name programs it runs.
+    const own = rest.slice(0, rest.findIndex((word) => !word.startsWith('-')) === -1 ? rest.length : rest.findIndex((word) => !word.startsWith('-')));
+    const named = own.find((word) => word.startsWith('-c') || ['--config-env', '--exec-path'].includes(flagName(word)));
+    if (named) return `git ${named.startsWith('-c') ? '-c' : flagName(named)}`;
+    if (rest[own.length] === 'config') return 'git config';
+  }
+  if (['npm', 'yarn', 'pnpm'].includes(program) && rest.some((word) => flagName(word) === '--script-shell')) return `${program} --script-shell`;
+  if (program === 'npx') {
+    const flag = rest.find((word) => ['-c', '-p', '--package'].includes(flagName(word)));
+    if (flag) return `npx ${flagName(flag)}`;
+  }
+  if (program === 'make' && rest.some((word) => word.startsWith('SHELL='))) return 'make SHELL=';
   return undefined;
 };
 
-const cleanPart = (raw: string): string | undefined => {
+const isAssignment = (word: string) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(word);
+
+/**
+ * One simple command as a rule sees it: control keywords, wrappers such as `nohup` or
+ * `env`, and leading variable assignments are stripped, so the program a rule names is the
+ * one that runs. An assignment that changes which program runs, such as `PATH=`, hides it.
+ */
+const cleanPart = (raw: string): { part: string; hidden?: string } | undefined => {
   let words = raw.replace(/\\\n/g, ' ').trim().split(/\s+/).filter(Boolean);
   while (words.length && LEADING_KEYWORDS.has(words[0])) words = words.slice(1);
   if (words.length && words[words.length - 1] === '}') words = words.slice(0, -1);
-  if (!words.length || (words.length === 1 && CLOSING_WORDS.has(words[0]))) return undefined;
-  return words.join(' ');
+  let hidden: string | undefined;
+  for (;;) {
+    while (words.length && isAssignment(words[0])) {
+      const name = words[0].split('=')[0];
+      if (LOADER_VARIABLES.test(name)) hidden ??= `${name} changes what runs`;
+      words = words.slice(1);
+    }
+    if (!words.length || !WRAPPERS.has(words[0].replace(/^.*\//, ''))) break;
+    words = words.slice(1);
+    // The wrapper's own flags and counts, such as `timeout -k 5 30`, are not the program.
+    while (words.length && (words[0].startsWith('-') || /^\d+[smhd]?$/.test(words[0]))) words = words.slice(1);
+  }
+  if (!words.length) return hidden ? { part: '', hidden } : undefined;
+  if (words.length === 1 && CLOSING_WORDS.has(words[0])) return undefined;
+  return { part: words.join(' '), ...(hidden ? { hidden } : {}) };
 };
 
 export function analyzeCommand(command: string): CommandAnalysis {
@@ -255,10 +315,12 @@ export function analyzeCommand(command: string): CommandAnalysis {
 
   const parts: string[] = [];
   for (const raw of rawParts) {
-    const part = cleanPart(raw);
-    if (!part) continue;
-    parts.push(part);
-    const reason = hiddenIn(part);
+    const cleaned = cleanPart(raw);
+    if (!cleaned) continue;
+    if (cleaned.hidden) hidden.push(cleaned.hidden);
+    if (!cleaned.part) continue;
+    parts.push(cleaned.part);
+    const reason = hiddenIn(cleaned.part);
     if (reason) hidden.push(reason);
   }
   return { parts, hidden: [...new Set(hidden)], redirects };

@@ -4,7 +4,7 @@ import { planCommit } from './git/commit.js';
 import { createTwoFilesPatch } from 'diff';
 import type { ApprovalPreview, ApprovalRequest, PolicyClass, ToolCall } from './types.js';
 import { replaceLiteral } from './tools/textEdit.js';
-import { analyzeCommand } from './permissions/command.js';
+import { analyzeCommand, isInterpreter } from './permissions/command.js';
 import { draftLesson } from './reflection/lesson.js';
 import { patchPaths } from './permissions/subjects.js';
 import { planFile } from './tools/plan.js';
@@ -47,7 +47,9 @@ const isWord = (token: string | undefined) => !!token && /^[A-Za-z0-9._:-]+$/.te
  * Patterns a grant could remember, most specific first, in the rule syntax the permission
  * engine matches. A compound command is judged part by part, so each suggestion lists a
  * rule for every part. Nothing is suggested when the command hides code, because such a
- * command always asks and a grant could not change that.
+ * command always asks and a grant could not change that. An interpreter such as `node` or
+ * `python` is never offered whole: `node *` would be a rule about anything, so the rung
+ * that names only the program is left out, and the script it runs is named instead.
  */
 export function suggestPatterns(call: ToolCall): string[] {
   // A commit is asked for every time, so no grant is offered for one.
@@ -59,10 +61,12 @@ export function suggestPatterns(call: ToolCall): string[] {
     const words = analysis.parts.map((part) => part.split(/\s+/));
     const exact = joined(analysis.parts.map((part) => `run_command(${part})`));
     const subcommand = joined(
-      words.map((tokens) => (tokens.length > 1 && isWord(tokens[1]) ? `run_command(${tokens[0]} ${tokens[1]} *)` : `run_command(${tokens[0]} *)`))
+      words.map((tokens) =>
+        tokens.length > 1 && isWord(tokens[1]) ? `run_command(${tokens[0]} ${tokens[1]} *)` : isInterpreter(tokens[0]) ? `run_command(${tokens.join(' ')})` : `run_command(${tokens[0]} *)`
+      )
     );
-    const program = joined(words.map((tokens) => `run_command(${tokens[0]} *)`));
-    return [...new Set([exact, subcommand, program])];
+    const program = words.some((tokens) => isInterpreter(tokens[0])) ? [] : [joined(words.map((tokens) => `run_command(${tokens[0]} *)`))];
+    return [...new Set([exact, subcommand, ...program])];
   }
   if (call.name === 'apply_patch') {
     const files = patchPaths(argString(call, 'patch') ?? '');

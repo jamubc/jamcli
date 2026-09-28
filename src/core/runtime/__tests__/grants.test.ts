@@ -43,8 +43,17 @@ test('suggestions are rules the engine matches, one per part of a compound comma
   expect(suggestPatterns({ id: 'm', name: 'github__create_issue', arguments: {} })).toEqual(['github__create_issue', 'github__*']);
 });
 
+test('an interpreter is never offered whole, since a rule about it would be a rule about anything', () => {
+  expect(suggestPatterns(command('node server.js --port 3001'))).toEqual(['run_command(node server.js --port 3001)', 'run_command(node server.js *)']);
+  expect(suggestPatterns(command('python -m pytest tests'))).toEqual(['run_command(python -m pytest tests)']);
+  expect(suggestPatterns(command('python -c "print(1)"'))).toEqual([]);
+  expect(suggestPatterns(command('sudo apt update'))).toEqual([]);
+  expect(suggestPatterns(command('node build.js && npm test'))).toEqual(['run_command(node build.js), run_command(npm test)', 'run_command(node build.js *), run_command(npm test *)']);
+  expect(suggestPatterns(command('env CI=1 npm test'))).toEqual(['run_command(npm test)', 'run_command(npm test *)', 'run_command(npm *)']);
+});
+
 test('every suggestion, once granted, allows the call it was made for', () => {
-  const calls = [command('npm test --watch'), command('npm test && npm run lint'), command('cd web && make build')];
+  const calls = [command('npm test --watch'), command('npm test && npm run lint'), command('cd web && make build'), command('env CI=1 nohup node server.js')];
   for (const call of calls) {
     for (const suggestion of suggestPatterns(call)) {
       const engine = new PermissionEngine({ projectRoot: root, ...toolNaming(createBuiltinRegistry()) });

@@ -56,6 +56,38 @@ test('substitution and other hidden code are found wherever they appear', () => 
   expect(analyzeCommand('npm test && npm run build').hidden).toEqual([]);
 });
 
+test('interpreters, escalation, and settings that change what runs are hidden', () => {
+  expect(analyzeCommand('python3 -c "import os"').hidden).toContain('python3 -c');
+  expect(analyzeCommand('node -e "process.exit()"').hidden).toContain('node -e');
+  expect(analyzeCommand('bash <<EOF\nrm -rf /\nEOF').hidden).toContain('bash runs code from its input');
+  expect(analyzeCommand('python -').hidden).toContain('python runs code from its input');
+  expect(analyzeCommand('bash build.sh').hidden).toEqual([]);
+  expect(analyzeCommand('node --version').hidden).toEqual([]);
+  expect(analyzeCommand('sudo rm -rf /').hidden).toContain('sudo raises privileges');
+  expect(analyzeCommand("git -c core.pager='less' log").hidden).toContain('git -c');
+  expect(analyzeCommand('git --exec-path=/tmp/x status').hidden).toContain('git --exec-path');
+  expect(analyzeCommand('git config core.hooksPath /tmp/h').hidden).toContain('git config');
+  expect(analyzeCommand('git commit -c HEAD').hidden).toEqual([]);
+  expect(analyzeCommand('npm --script-shell /tmp/x test').hidden).toContain('npm --script-shell');
+  expect(analyzeCommand('npx -p evil tsc').hidden).toContain('npx -p');
+  expect(analyzeCommand('npx tsc --noEmit').hidden).toEqual([]);
+  expect(analyzeCommand('make SHELL=/tmp/x').hidden).toContain('make SHELL=');
+  expect(analyzeCommand('PATH=/tmp/x npm test').hidden).toContain('PATH changes what runs');
+  expect(analyzeCommand('LD_PRELOAD=x.so ls').hidden).toContain('LD_PRELOAD changes what runs');
+  expect(analyzeCommand('PATH=/tmp/x; npm test').hidden).toContain('PATH changes what runs');
+  expect(analyzeCommand('CI=1 npm test').hidden).toEqual([]);
+});
+
+test('wrappers and assignments are stripped, so a rule names the program that runs', () => {
+  expect(analyzeCommand('nohup npm start').parts).toEqual(['npm start']);
+  expect(analyzeCommand('env CI=1 npm test').parts).toEqual(['npm test']);
+  expect(analyzeCommand('CI=1 FOO=bar npm test').parts).toEqual(['npm test']);
+  expect(analyzeCommand('timeout -k 5 30 npm test').parts).toEqual(['npm test']);
+  expect(analyzeCommand('nice -n 5 exec npm test').parts).toEqual(['npm test']);
+  expect(analyzeCommand('command -v npm').parts).toEqual(['npm']);
+  expect(analyzeCommand('env').parts).toEqual([]);
+});
+
 test('redirections are collected and kept out of the parts', () => {
   const result = analyzeCommand('npm test > log.txt 2>&1 && cat < in.txt >> ~/out.log 2>/dev/null');
   expect(result.parts).toEqual(['npm test', 'cat']);

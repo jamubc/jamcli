@@ -81,11 +81,11 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
     if (event.type === 'approval_request') {
       const reason = event.request?.reason ?? 'this tool asks before it runs';
       permissionDenials.push({ tool: event.call.name, callId: event.call.id, arguments: event.call.arguments ?? {}, reason });
-      event.decide({
-        allow: false,
-        by: 'mode',
-        feedback: `a headless run cannot ask for approval, and ${reason}. The user can pass --allow-tool ${event.call.name} to allow it.`,
-      });
+      // The narrowest rule the prompt would have offered, never the whole tool: a rule about
+      // run_command as such would allow any command the model writes.
+      const narrowest = event.request?.suggestions[0];
+      const remedy = narrowest ? `The user can pass --allowed-tools '${narrowest}' to allow it.` : 'No rule can allow it ahead of time; it asks the person every time.';
+      event.decide({ allow: false, by: 'mode', feedback: `a headless run cannot ask for approval, and ${reason}. ${remedy}` });
     } else if (event.type === 'notice') {
       notices.push({ level: event.level ?? 'info', message: event.message });
     }

@@ -138,7 +138,8 @@ test('a ! command with output past the limit is recorded cut short, with the not
   const runtime = await start({ allowTools: ['run_command'] });
   try {
     const events: AgentEvent[] = [];
-    const ran = await runtime.run('bun -e "console.log(\'x\'.repeat(4000))"', (event) => events.push(event), { shell: true });
+    // `bun -e` runs code no rule can see, so even the flag does not allow it ahead; the person answers.
+    const ran = await runtime.run('bun -e "console.log(\'x\'.repeat(4000))"', (event) => (event.type === 'approval_request' ? event.decide(true) : events.push(event)), { shell: true });
     expect(ran.status).toBe('ok');
     // The person sees the whole output; what the model reads is bounded and says what was cut.
     expect(ran.response.length).toBeGreaterThan(3_000);
@@ -153,8 +154,10 @@ test('a ! command with output past the limit is recorded cut short, with the not
 test('a ! command cancelled while it runs reports cancelled, not ok', async () => {
   const runtime = await start({ allowTools: ['run_command'] });
   try {
-    const turn = runtime.run('bun -e "setTimeout(() => {}, 30000)"', () => {}, { shell: true });
+    let started = false;
+    const turn = runtime.run('bun -e "setTimeout(() => {}, 30000)"', (event) => (event.type === 'approval_request' ? event.decide(true) : event.type === 'tool_call' && (started = true)), { shell: true });
     await Bun.sleep(400);
+    expect(started).toBe(true);
     runtime.cancel();
     const ran = await turn;
     expect(ran.status).toBe('cancelled');
