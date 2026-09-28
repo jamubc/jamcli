@@ -12,7 +12,7 @@ the transcript, the composer, the palettes, and the status line.
 | Escape | Stops a running turn; closes a list or a picker |
 | Shift+Tab | Changes the permission mode |
 | Ctrl+R | Searches earlier messages |
-| Ctrl+O | The detailed transcript, in place of the conversation, and again to return |
+| Ctrl+O | The detailed transcript, every block open, and again to return |
 | Ctrl+T | Shows or hides the todo list |
 | Page Up, Page Down | Scrolls the transcript; at the top, Page Up shows earlier rows |
 | Ctrl+L | Redraws the screen |
@@ -66,7 +66,7 @@ same place.
   drawn as a bar in the theme's color, in lists and in the prompt alike, so what a click
   does is plain before the click.
 - Click a tool's line to show or hide that tool's output, and a thinking line to show or
-  hide that thinking. These are one block at a time; Ctrl+O shows the whole session log.
+  hide that thinking. These are one block at a time; Ctrl+O opens them all at once.
 
 Copying goes to the system clipboard. Over SSH, or where there is none, it goes through
 the terminal (OSC 52), which reaches the machine you sit at if the terminal supports it.
@@ -77,7 +77,10 @@ besides the conversation, the system prompt and every tool definition as they we
 recorded whenever they changed, and the text of any result the trust gate withheld from
 the model. In auto mode it shows each trust-gate request too: the classifier, what it was
 sent and what it answered, or why the request failed, and every result's verdict and
-whether it was kept.
+whether it was kept. Every event carries its time in UTC, and each turn end how long the
+turn took. `/export` and `jamcli sessions export` write the same Markdown without what only
+debugging needs: the model's reasoning, the requests' system prompt and tools, and the
+trust gate's requests. The header counts the reasoning left out.
 
 ## Thinking
 
@@ -92,15 +95,18 @@ mode the window does not run: the line says only that thinking is under way.
 ## The detailed transcript
 
 The transcript is compact: a tool call is its one line, and thinking is the line it left
-behind. Ctrl+O shows the detailed transcript in place of the conversation and the
-composer: every event of the session log, rendered exactly as `/copy debug` copies it,
-with what each request carried and what the model was not shown. It is read when it
-opens, so reopen it to see what came after. Up and Down scroll a line, Page Up and Page
-Down a page, Home and End go to the top and the bottom, `v` writes it beside the log as
-`<session>.debug.md` and opens it in VS Code with `code`, and `?` lists these keys.
+behind. Ctrl+O shows the detailed transcript in place of the composer, for reading the
+session back: the same rows with every block open, all the thinking, every tool's output,
+and the diffs. A click on a tool or thinking line hides that block there, and the
+conversation's own blocks stay as they were. Up and Down scroll a line, Page Up and Page
+Down a page, as far back as the conversation draws, Home and End go to the top and the
+bottom, and `?` lists these keys. What only debugging needs, such as what each request
+carried, is not shown there: `v` writes the whole session log, as `/copy debug` renders it,
+beside the log as `<session>.debug.md` and opens it in VS Code with `code`.
+
 Ctrl+O again, Escape, or Ctrl+C returns to the conversation, with any draft where it
 was; those keys close the viewer before they stop a turn, answer a prompt, or leave. It
-opens behind a permission prompt too, so the log can be read before the call is
+opens behind a permission prompt too, so the session can be read before the call is
 answered, and the prompt takes its keys again once the viewer closes.
 
 ## The status line

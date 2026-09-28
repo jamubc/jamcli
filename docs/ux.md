@@ -57,7 +57,7 @@ glyphs.
 | detail | a diff for edits, the output tail for commands, match counts for searches |
 | notice | retries, compaction, trust gate removals, hook failures |
 
-Tool blocks collapse to one line when finished. Ctrl+O shows the detailed transcript, the whole session log.
+Tool blocks collapse to one line when finished. Ctrl+O shows the detailed transcript, every block open.
 
 **Status line**, left to right:
 
