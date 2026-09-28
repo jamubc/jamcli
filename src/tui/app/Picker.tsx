@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/react */
 import { useRef } from 'react';
-import { useTerminalDimensions } from '@opentui/react';
+import { ListRow } from './ListRow.js';
 import { useClickable, wheelStep } from './mouse.js';
-import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
+import { framed, usePlain, useSelectable, useTheme } from './theme.js';
 import type { ChoiceItem } from '../../commands/types.js';
 
 /** The rows the list shows for a filter: the matching choices, or the typed text first. */
@@ -64,10 +64,7 @@ export function Picker(props: {
   const sel = useSelectable();
   const clickable = useClickable();
   const plain = usePlain();
-  const { width: columns } = useTerminalDimensions();
-  // The frame takes two columns of border and two of padding.
-  const room = Math.max(20, columns - 4);
-  const fit = (line: string, width = room) => (line.length > width ? `${line.slice(0, Math.max(0, width - 1))}…` : line);
+  const cut = { wrapMode: 'none' as const, truncate: true };
   const shown = props.items ? shownItems(props.items, props.filter, props.freeText) : undefined;
   const start = useListWindow(props.selected, shown?.length ?? 0, PICKER_ROWS);
   const visible = shown?.slice(start, start + PICKER_ROWS) ?? [];
@@ -78,31 +75,35 @@ export function Picker(props: {
   return (
     <box {...framed(plain, theme.accent)} flexDirection="column" flexShrink={0} onMouseScroll={(event) => wheelStep(event) && props.onScroll?.(wheelStep(event))}>
       <box flexDirection="row" justifyContent="space-between">
-        <text {...sel} fg={theme.accent}>{fit(`${props.title}${counted}`, room - position.length - badge.length - 2)}</text>
-        <text {...sel} fg={theme.dim}>{`${position}${badge}`}</text>
+        <text {...sel} {...cut} fg={theme.accent}>{`${props.title}${counted}`}</text>
+        <text {...sel} {...cut} flexShrink={0} marginLeft={1} fg={theme.dim}>{`${position}${badge}`}</text>
       </box>
-      <text {...sel}>
+      <text {...sel} {...cut}>
         <span fg={theme.dim}>Filter: </span>
-        {props.filter ? <span fg={theme.text}>{fit(props.filter, room - 'Filter: '.length)}</span> : <span fg={theme.dim}>type to narrow the list</span>}
+        {props.filter ? <span fg={theme.text}>{props.filter}</span> : <span fg={theme.dim}>type to narrow the list</span>}
       </text>
       <text {...sel}> </text>
       {shown === undefined ? <text {...sel} fg={theme.dim}>Asking…</text> : null}
-      {shown !== undefined && shown.length === 0 ? <text {...sel} fg={theme.dim}>{fit(props.items?.length ? 'Nothing matches the filter.' : props.empty)}</text> : null}
+      {shown !== undefined && shown.length === 0 ? <text {...sel} fg={theme.dim}>{props.items?.length ? 'Nothing matches the filter.' : props.empty}</text> : null}
       {visible.map((item, index) => {
         const chosen = start + index === props.selected;
-        const text = `${item.label}${item.current ? ' (in use)' : ''}`;
-        // A label longer than the column keeps two spaces before its detail.
-        const label = text.length >= width ? `${text}  ` : text.padEnd(width + 2);
         return (
-          <text {...sel} key={item.key} width="100%" {...chosenRow(theme, chosen)} fg={chosen ? theme.accent : theme.text} {...clickable(() => props.onPick?.(start + index), { over: () => props.onHover?.(start + index) })}>
-            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${label}${item.detail ?? ''}`).padEnd(room)}
-          </text>
+          <ListRow
+            key={item.key}
+            chosen={chosen}
+            mark={chosen ? (plain ? 'Chosen: ' : '> ') : '  '}
+            label={`${item.label}${item.current ? ' (in use)' : ''}`}
+            labelWidth={width + 2}
+            {...(item.detail ? { detail: item.detail } : {})}
+            fg={chosen ? theme.accent : theme.text}
+            {...clickable(() => props.onPick?.(start + index), { over: () => props.onHover?.(start + index) })}
+          />
         );
       })}
       <text {...sel}> </text>
       {/* A note can carry the fix, so it wraps rather than being cut. */}
       {props.note ? <text {...sel} fg={theme.warn} wrapMode="word">{props.note}</text> : null}
-      <text {...sel} fg={theme.dim}>{fit(`${props.hint ?? 'Enter chooses'} · Up/Down move${plain ? '' : ', or click'}`)}</text>
+      <text {...sel} {...cut} fg={theme.dim}>{`${props.hint ?? 'Enter chooses'} · Up/Down move${plain ? '' : ', or click'}`}</text>
     </box>
   );
 }

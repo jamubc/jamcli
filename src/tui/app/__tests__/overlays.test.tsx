@@ -84,13 +84,13 @@ test('? on an empty composer opens help; Enter puts the chosen command in the co
     await setup.mockInput.typeText('spent');
     await frameWith(setup, (frame) => frame.includes('Filter: spent') && frame.includes('> /cost'));
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => /│\/cost /.test(frame) && !frame.includes('Keys: Enter sends'));
+    await frameWith(setup, (frame) => /│ \/cost /.test(frame) && !frame.includes('Keys: Enter sends'));
     setup.mockInput.pressEnter();
     await frameWith(setup, (frame) => frame.includes('No requests yet, so nothing has been spent.'));
 
     // A ? inside a message is only a character.
     await setup.mockInput.typeText('why?');
-    await frameWith(setup, (frame) => /│why\? /.test(frame));
+    await frameWith(setup, (frame) => /│ why\? /.test(frame));
     expect(setup.captureCharFrame()).not.toContain('Keys: Enter sends');
   } finally {
     await close();
@@ -102,21 +102,21 @@ test('/config lists every setting with what it does and where it comes from; a y
   try {
     await send(setup, '/config');
     const listed = await frameWith(setup, (frame) => frame.includes('Settings: what each does, its value, and where it comes from'));
-    expect(listed).toMatch(/model = "ollama:fake-model"\s+your settings · The model sessions start on/);
+    expect(listed).toMatch(/model = "ollama:fake-model"\s+your settings · The model/);
     await setup.mockInput.typeText('model =');
     await frameWith(setup, (frame) => frame.includes('> model = "ollama:fake-model"'));
     setup.mockInput.pressEnter();
     // The value comes along, to edit.
-    await frameWith(setup, (frame) => /│\/config set model ollama:fake-model/.test(frame));
+    await frameWith(setup, (frame) => /│ \/config set model ollama:fake-model/.test(frame));
     setup.mockInput.pressEnter();
     // Once set, the list opens again on the setting just changed.
     await frameWith(setup, (frame) => frame.includes('Applied to this session.') && frame.includes('> model = "ollama:fake-model"') && frame.includes('Filter: type to narrow'));
 
     // Escape takes an edit back out of the composer, unsent, and returns to the list.
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => /│\/config set model ollama:fake-model/.test(frame));
+    await frameWith(setup, (frame) => /│ \/config set model ollama:fake-model/.test(frame));
     setup.mockInput.pressEscape();
-    const backed = await frameWith(setup, (frame) => frame.includes('> model = "ollama:fake-model"') && !/│\/config set/.test(frame));
+    const backed = await frameWith(setup, (frame) => frame.includes('> model = "ollama:fake-model"') && !/│ \/config set/.test(frame));
     expect(backed).toContain('Filter: type to narrow');
 
     // A setting set nowhere is still listed, and a yes/no is chosen here and saved in the person's settings.

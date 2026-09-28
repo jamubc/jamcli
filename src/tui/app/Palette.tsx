@@ -1,10 +1,10 @@
 /** @jsxImportSource @opentui/react */
-import { useTerminalDimensions } from '@opentui/react';
 import type { SlashCommand } from '../../commands/types.js';
 import type { ReferenceItem } from './references.js';
+import { ListRow } from './ListRow.js';
 import { useClickable, wheelStep } from './mouse.js';
 import { useListWindow } from './Picker.js';
-import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
+import { framed, usePlain, useSelectable, useTheme } from './theme.js';
 
 /** How many matches the palette shows at once. */
 export const PALETTE_ROWS = 8;
@@ -18,10 +18,6 @@ export function Palette({ matches, selected, onPick, onHover, onScroll }: { matc
   const sel = useSelectable();
   const clickable = useClickable();
   const plain = usePlain();
-  const { width: columns } = useTerminalDimensions();
-  // Inside the border and padding; a line longer than that is cut, not wrapped.
-  const room = Math.max(20, columns - 4);
-  const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
   const start = useListWindow(selected, matches.length, PALETTE_ROWS);
   const shown = matches.slice(start, start + PALETTE_ROWS);
   const width = Math.min(28, Math.max(...shown.map((command) => command.name.length + (command.args ? command.args.length + 1 : 0))));
@@ -34,12 +30,18 @@ export function Palette({ matches, selected, onPick, onHover, onScroll }: { matc
         shown.map((command, index) => {
           const chosen = start + index === selected;
           const name = `/${command.name}${command.args ? ` ${command.args}` : ''}`;
-          const head = name.length >= width ? `${name} ` : name.padEnd(width + 1);
           const from = command.source === 'built-in' ? '' : ` (${command.source})`;
           return (
-            <text {...sel} key={command.name} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} {...clickable(() => onPick?.(start + index), { over: () => onHover?.(start + index) })}>
-              {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head} ${command.summary}${from}`).padEnd(room)}
-            </text>
+            <ListRow
+              key={command.name}
+              chosen={chosen}
+              mark={chosen ? (plain ? 'Chosen: ' : '> ') : '  '}
+              label={name}
+              labelWidth={width + 2}
+              detail={`${command.summary}${from}`}
+              fg={chosen ? colors.accent : colors.text}
+              {...clickable(() => onPick?.(start + index), { over: () => onHover?.(start + index) })}
+            />
           );
         })
       )}
@@ -54,9 +56,6 @@ export function ReferencePalette({ matches, selected, loading, onPick, onHover, 
   const sel = useSelectable();
   const clickable = useClickable();
   const plain = usePlain();
-  const { width: columns } = useTerminalDimensions();
-  const room = Math.max(20, columns - 4);
-  const fit = (line: string) => (line.length > room ? `${line.slice(0, room - 1)}…` : line);
   const start = useListWindow(selected, matches.length, PALETTE_ROWS);
   const shown = matches.slice(start, start + PALETTE_ROWS);
   const width = Math.min(48, Math.max(0, ...shown.map((item) => item.text.length + 1)));
@@ -66,11 +65,17 @@ export function ReferencePalette({ matches, selected, loading, onPick, onHover, 
       {loading ? <text {...sel} fg={colors.dim}>Looking…</text> : matches.length === 0 ? <text {...sel} fg={colors.dim}>Nothing in the project or the MCP resources matches that.</text> : null}
       {shown.map((item, index) => {
         const chosen = start + index === selected;
-        const head = `@${item.text}`;
         return (
-          <text {...sel} key={item.text} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} {...clickable(() => onPick?.(start + index), { over: () => onHover?.(start + index) })}>
-            {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head.length >= width ? `${head} ` : head.padEnd(width + 1)} ${item.detail}`).padEnd(room)}
-          </text>
+          <ListRow
+            key={item.text}
+            chosen={chosen}
+            mark={chosen ? (plain ? 'Chosen: ' : '> ') : '  '}
+            label={`@${item.text}`}
+            labelWidth={width + 2}
+            detail={item.detail}
+            fg={chosen ? colors.accent : colors.text}
+            {...clickable(() => onPick?.(start + index), { over: () => onHover?.(start + index) })}
+          />
         );
       })}
       <text {...sel} fg={colors.dim}>Up and Down choose · Tab or Enter completes · Escape closes</text>
