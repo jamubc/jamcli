@@ -198,3 +198,26 @@ test("an endpoint's header can carry the conversation's id, and each client with
   expect(first['x-opencode-session']).not.toContain('${');
   expect(first['x-opencode-session']).not.toBe(second['x-opencode-session']);
 });
+
+test('a 400 that gives no reason is asked again, and one that gives a reason is believed at once', async () => {
+  server = startFakeProvider();
+  // A gateway that answers with only the model's name, twice, and then serves.
+  server.enqueue({ status: 400, errorBody: { model: 'm' } }, { status: 400, errorBody: {} }, { text: 'served' });
+  const retries: RetryInfo[] = [];
+  const provider = new OpenAICompatProvider({ baseUrl: server.openaiBaseUrl, retryPolicy: fast });
+  const result = await provider.complete([user('hi')], { model: 'm', onRetry: (info) => retries.push(info) });
+  expect(result.content).toBe('served');
+  expect(retries.map((info) => info.reason)).toEqual(['400 with no reason given {"model":"m"}', '400 with no reason given {}']);
+  expect(server.completions()).toHaveLength(3);
+  // One that never explains itself stops after three asks and says so.
+  server.enqueue({ status: 400, errorBody: { model: 'm' } }, { status: 400, errorBody: { model: 'm' } }, { status: 400, errorBody: { model: 'm' } });
+  const error = (await provider.complete([user('hi')], { model: 'm' }).catch((e) => e)) as ProviderError;
+  expect(error.status).toBe(400);
+  expect(error.message).toContain('It gave no reason, and asking 3 times did not change that.');
+  expect(server.completions()).toHaveLength(6);
+  // A 400 that says why is not asked again.
+  server.enqueue({ status: 400, errorBody: { error: { message: 'messages: text content blocks must be non-empty' } } });
+  const said = (await provider.complete([user('hi')], { model: 'm' }).catch((e) => e)) as ProviderError;
+  expect(said.message).toContain('text content blocks must be non-empty');
+  expect(server.completions()).toHaveLength(7);
+});

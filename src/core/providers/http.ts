@@ -81,6 +81,28 @@ export const extractErrorText = (body: string): string => {
   return trimmed.replace(/\s+/g, ' ').slice(0, MAX_ERROR_TEXT);
 };
 
+/**
+ * A refusal that gives no reason: an empty body, or JSON with no message in it, such as a
+ * gateway answering 400 with only the model's name. It says nothing about the request, so
+ * it is asked again a few times before it is believed. A 400 that says why is believed at once.
+ */
+export const givesNoReason = (status: number, body: string): boolean => {
+  if (status !== 400) return false;
+  const trimmed = body.trim();
+  if (!trimmed) return true;
+  try {
+    const json = JSON.parse(trimmed);
+    if (!json || typeof json !== 'object' || Array.isArray(json)) return false;
+    const said = json.error?.message ?? json.error?.type ?? json.error ?? json.message ?? json.detail ?? json.errors;
+    return said === undefined || said === null || said === '';
+  } catch {
+    return false;
+  }
+};
+
+/** How many attempts, the first included, a refusal that gives no reason gets. */
+const NO_REASON_ATTEMPTS = 3;
+
 /** Seconds, an HTTP date, or `retry-after-ms`, converted to a delay in milliseconds. */
 export const parseRetryAfter = (headers: Headers): number | undefined => {
   const ms = headers.get('retry-after-ms');
@@ -180,9 +202,10 @@ export async function fetchWithRetry(url: string, init: RequestInit, options: Fe
     const body = await response.text().catch(() => '');
     const detail = scrubSecrets(extractErrorText(body), options.secrets);
     const retryable = RETRYABLE_STATUSES.has(response.status);
-    if (retryable && attempt < policy.maxAttempts) {
+    const silent = givesNoReason(response.status, body);
+    if ((retryable && attempt < policy.maxAttempts) || (silent && attempt < Math.min(policy.maxAttempts, NO_REASON_ATTEMPTS))) {
       const delayMs = Math.min(parseRetryAfter(response.headers) ?? backoff(attempt, policy), policy.maxDelayMs);
-      options.onRetry?.({ attempt, delayMs, reason: `${response.status}${detail ? ` ${detail}` : ''}` });
+      options.onRetry?.({ attempt, delayMs, reason: `${response.status}${silent ? ' with no reason given' : ''}${detail ? ` ${detail}` : ''}` });
       await sleep(delayMs, options.signal);
       continue;
     }
@@ -191,7 +214,7 @@ export async function fetchWithRetry(url: string, init: RequestInit, options: Fe
       status: response.status,
       detail,
       retryable,
-      hint: hintFor(options.provider, response.status, detail, options.keyVariable),
+      hint: silent ? `It gave no reason, and asking ${attempt} time${attempt === 1 ? '' : 's'} did not change that.` : hintFor(options.provider, response.status, detail, options.keyVariable),
     });
   }
 }
