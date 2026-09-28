@@ -702,14 +702,14 @@ const note: SlashCommand = {
   name: 'note',
   aliases: ['notes'],
   args: '<text>|clear',
-  summary: 'Pin a sticky note above the conversation, newest on top; clear removes them all',
+  summary: 'Flag a tester note at this point of the session; it is kept in the log and never reaches the model. clear hides them here',
   source: 'built-in',
   run(ctx, args) {
     if (args.toLowerCase() === 'clear') {
       ctx.clearNotes();
-      return ctx.notice('info', 'Notes cleared.');
+      return ctx.notice('info', 'Notes hidden here. The session log keeps them; /copy debug shows them.');
     }
-    if (!args) return ctx.notice('warn', 'Usage: /note <text> pins a note; /notes clear removes them all.');
+    if (!args) return ctx.notice('warn', 'Usage: /note <text> flags a note at this point; /notes clear hides them here.');
     ctx.note(args);
   },
 };

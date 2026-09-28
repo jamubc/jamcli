@@ -56,6 +56,12 @@ export class TranscriptRecorder {
     });
   }
 
+  /** Record a tester's note. A note is worth a session file on its own. */
+  recordNote(text: string): void {
+    this.started = true;
+    this.write({ type: 'note', text });
+  }
+
   readonly handle = (event: AgentEvent): void => {
     switch (event.type) {
       case 'message':

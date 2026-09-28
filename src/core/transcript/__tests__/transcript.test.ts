@@ -281,3 +281,20 @@ test('a trust-gate request is recorded as it went, and /copy debug shows it', ()
   expect(debug).toContain('2. `grep`: withheld, relevance 0.1, injection no, off topic');
   expect(transcriptToMarkdown(log.events())).not.toContain('Trust gate');
 });
+
+test("a tester's note is kept in the log where it was planted, and the export marks it as the person's", () => {
+  const log = SessionLog.create(root, { surface: 'tui' });
+  const recorder = new TranscriptRecorder(log, { surface: 'tui', model: 'm' });
+  // A note before the first message is worth a file on its own.
+  recorder.recordNote('the board overlapped here');
+  recorder.handle({ type: 'message', message: { role: 'user', content: 'fix it', timestamp: 1 } });
+  recorder.recordNote('cost did not update');
+  const notes = log.events().filter((event) => event.type === 'note');
+  expect(notes).toMatchObject([{ text: 'the board overlapped here' }, { text: 'cost did not update' }]);
+  const markdown = transcriptToMarkdown(log.events());
+  expect(markdown).toContain('- Tester notes: 2');
+  expect(markdown).toContain('> ⚑ **HUMAN TESTER** (not sent to the model): cost did not update');
+  expect(markdown.indexOf('the board overlapped here')).toBeLessThan(markdown.indexOf('## User'));
+  // The model never sees a note: the conversation the next request carries has none.
+  expect(JSON.stringify(projectMessages(log.events()))).not.toContain('overlapped');
+});

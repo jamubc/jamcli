@@ -247,8 +247,9 @@ export class CommandHost {
       statusStyle: DEFAULT_STATUS_STYLE,
       setStatusStyle: () => undefined,
       note: (text) => {
+        this.runtime.note(text);
         this.notes.unshift(text);
-        this.emit({ kind: 'output', text: ['Notes, newest first:', ...this.notes.map((line) => `- ${line}`)].join('\n') });
+        this.emit({ kind: 'output', text: ['Tester notes, newest first, kept in the session log:', ...this.notes.map((line) => `- ${line}`)].join('\n') });
       },
       clearNotes: () => {
         this.notes.length = 0;

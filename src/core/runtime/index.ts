@@ -282,7 +282,20 @@ export interface Runtime {
   watchWork(listener: () => void): () => void;
   /** Stop one of them. False when nothing by that id is running. */
   stopWork(id: string): boolean;
+  /**
+   * Plant a tester's note at this point of the session log. Notes are for people reading
+   * the session back; the model never sees them.
+   */
+  note(text: string): void;
+  /** The notes planted in this session, oldest first. */
+  notes(): SessionNote[];
   close(): Promise<void>;
+}
+
+/** A tester's note as the session log holds it. */
+export interface SessionNote {
+  text: string;
+  ts: number;
 }
 
 /** A checkpoint as the session log records it, numbered from 1. */
@@ -1281,6 +1294,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     work: () => workTable.list(),
     watchWork: (listener) => workTable.watch(listener),
     stopWork: (id) => workTable.stop(id),
+    note: (text) => recorder.recordNote(text),
+    notes: () => log.events().flatMap((event) => (event.type === 'note' ? [{ text: event.text, ts: event.ts }] : [])),
 
     async close() {
       // Cancelling a turn leaves jobs running; closing the session that owns them stops them.

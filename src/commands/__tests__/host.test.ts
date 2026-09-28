@@ -101,14 +101,16 @@ test('a command that sends a turn hands it to the surface, with its tools, and w
   expect(turns[0].options).toMatchObject({ offer: expect.arrayContaining(['propose_lesson']) });
 });
 
-test('notes are kept, newest first, and cleared', async () => {
-  const { host, entries } = await open();
+test('notes are kept, newest first, written to the session log, and cleared here only', async () => {
+  const { host, runtime, entries } = await open();
   await host.run('/note first');
   await host.run('/note second');
   expect(host.notes).toEqual(['second', 'first']);
   expect(said(entries)).toContain('- second\n- first');
+  expect(runtime.notes().map((note) => note.text)).toEqual(['first', 'second']);
   await host.run('/notes clear');
   expect(host.notes).toEqual([]);
+  expect(runtime.notes()).toHaveLength(2);
 });
 
 test('a line that names no command says so', async () => {

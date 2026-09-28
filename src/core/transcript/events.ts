@@ -52,6 +52,11 @@ export type TranscriptEvent =
     }
   | { v: 2; type: 'notice'; ts: number; level: 'info' | 'warn' | 'error'; message: string; code?: string; detail?: string }
   /**
+   * A flag the person planted with `/note`: a tester's remark about this point in the
+   * session, for people reading it back. It is never sent to the model.
+   */
+  | { v: 2; type: 'note'; ts: number; text: string }
+  /**
    * What requests carry besides the conversation, as sent: the system prompt and the tool
    * definitions. Written when they differ from the last recorded, so it holds for every
    * request after it until the next one.

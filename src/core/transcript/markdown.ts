@@ -96,6 +96,8 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
     if (header.permissionMode) facts.push(`- Permission mode: ${header.permissionMode}`);
   }
   facts.push(`- Messages: ${messages}`, `- Tokens: ${tokens}`);
+  const notes = events.filter((event) => event.type === 'note').length;
+  if (notes) facts.push(`- Tester notes: ${notes}, marked **HUMAN TESTER** below where they were planted`);
   const reasoning = events.filter((event) => event.type === 'message' && event.message.reasoning).length;
   if (reasoning && !options.debug) facts.push(`- Reasoning: ${reasoning} block${reasoning === 1 ? '' : 's'}, left out here; \`/copy debug\` shows it, and the session log keeps it`);
   const spend = CostLedger.fromEvents(events).summary();
@@ -120,6 +122,10 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
         out.push(`> **Approval**: \`${event.tool}\` \`${event.callId}\` ${verdict} by ${event.by} on ${event.surface}${rule}${feedback}`);
         break;
       }
+      case 'note':
+        // A tester's flag stands out from the run around it: it was planted by a person, at this point, and the model never saw it.
+        out.push(`> ⚑ **HUMAN TESTER** (not sent to the model): ${event.text}`);
+        break;
       case 'notice':
         out.push(`> **Notice** (${event.level}${event.code ? `, ${event.code}` : ''}): ${event.message}`);
         if (options.debug && event.detail !== undefined) out.push('What it concerns, kept for the record and not sent to the model:', fenced(event.detail, 'text'));
