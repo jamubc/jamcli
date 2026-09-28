@@ -1,0 +1,38 @@
+---
+/**
+ * One reference table, as scripts/reference.ts wrote it from the product's own definitions.
+ * The first column is a name, set as code. Nothing here adds text of its own.
+ */
+import reference from '../generated/reference.json';
+
+type TableName = Exclude<keyof typeof reference, 'usage'>;
+
+interface Props {
+  table: TableName;
+}
+
+const { columns, rows } = reference[Astro.props.table];
+---
+
+<table class="jam-reference">
+  <thead>
+    <tr>{columns.map((column) => <th>{column}</th>)}</tr>
+  </thead>
+  <tbody>
+    {
+      rows.map((row) => (
+        <tr>
+          {row.map((cell, index) => (
+            <td>{index === 0 ? <code>{cell}</code> : cell}</td>
+          ))}
+        </tr>
+      ))
+    }
+  </tbody>
+</table>
+
+<style>
+  .jam-reference td:first-child {
+    white-space: nowrap;
+  }
+</style>

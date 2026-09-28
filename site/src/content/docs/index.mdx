@@ -9,7 +9,8 @@ JamCLI is a coding agent that runs in your terminal. It works with local models 
 well as hosted providers, and it asks before it changes anything you have not allowed.
 
 These pages explain how it works from the inside: what the model is told, where its tools come
-from, how to add one, where its commands run, and how another agent can use it.
+from, how to add one, where its commands run, and how another agent can use it. The reference pages list
+the commands, tools, settings, keys, and options, written from the code at every build.
 
 <CardGrid>
   <LinkCard title="How the system prompt is assembled" href="concepts/prompt-assembly/" description="The five parts of the prompt, in order, and when each one appears." />
@@ -18,6 +19,11 @@ from, how to add one, where its commands run, and how another agent can use it.
   <LinkCard title="One command set, every surface" href="concepts/surfaces/" description="Built-in commands in the interface, headless, ACP, and MCP, and which answers stay yours." />
   <LinkCard title="Use JamCLI from another agent" href="guides/use-from-another-agent/" description="jamcli mcp serve: delegate sessions, or use the interface itself through a terminal." />
   <LinkCard title="Add a built-in tool" href="guides/add-a-tool/" description="From an empty file to a tool the model reaches for." />
+  <LinkCard title="Slash commands" href="reference/commands/" description="Every built-in command, written from the command definitions." />
+  <LinkCard title="Built-in tools" href="reference/tools/" description="Every built-in tool, its class and parameters, written from the tool definitions." />
+  <LinkCard title="Settings" href="reference/settings/" description="Every setting and what it takes, written from the configuration schema." />
+  <LinkCard title="Interface keys" href="reference/keys/" description="The default keys and how to rebind them, written from the key definitions." />
+  <LinkCard title="Command line" href="reference/cli/" description="Options and subcommands, as jamcli --help prints them." />
 </CardGrid>
 
 ## How to read these pages

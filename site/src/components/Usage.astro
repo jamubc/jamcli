@@ -1,0 +1,7 @@
+---
+/** What `jamcli --help` prints, as scripts/reference.ts read it from `USAGE`. */
+import { Code } from '@astrojs/starlight/components';
+import reference from '../generated/reference.json';
+---
+
+<Code code={reference.usage} lang="text" />

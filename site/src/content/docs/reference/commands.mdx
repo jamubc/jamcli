@@ -1,0 +1,34 @@
+---
+title: Slash commands
+description: Every built-in JamCLI slash command, with its arguments, aliases, and what it does. The table is written from the command definitions at every build.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+import ReferenceTable from '../../../components/ReferenceTable.astro';
+
+<Aside title="In short">
+These are the built-in commands, in the order `/help` lists them. Each is defined once, and the
+interface, headless runs, ACP, and MCP all run the same set. The table below is written from those
+definitions when the site is built, so it lists exactly what the code defines.
+</Aside>
+
+<ReferenceTable table="commands" />
+
+Arguments in square brackets are optional; arguments in angle brackets are required. `/help
+<command>` explains one command in more detail.
+
+Commands of your own, from files, plugins, or an MCP server's prompts, join this set in a session
+and are not listed here.
+
+Source: <Receipt path="src/commands/builtin/index.ts" symbol="BUILTIN_COMMANDS" />,
+<Receipt path="src/commands/types.ts" symbol="SlashCommand" />,
+<Receipt path="src/commands/custom.ts" />.
+
+<Proof run="bun test src/commands/__tests__/parity.test.ts">
+All pass, one test per built-in command: each runs without a screen, does not fail, and shows or
+sends something.
+</Proof>

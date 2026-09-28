@@ -1,0 +1,35 @@
+---
+title: Settings
+description: Every JamCLI setting, what values it takes, and what it does. The table is written from the configuration schema at every build, the same list /config offers.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+import ReferenceTable from '../../../components/ReferenceTable.astro';
+
+<Aside title="In short">
+Settings live in JSON files, read in layers: your own `config.json`, then the project's
+`.jamcli/config.json`, then `.jamcli/config.local.json`, then environment variables, each layer
+taking precedence over the ones before it.
+`/config` and `jamcli config` read and change them. The table lists every setting in the
+configuration schema, with the same words `/config` shows.
+</Aside>
+
+<ReferenceTable table="settings" />
+
+A dotted key names a setting inside a group: `delegation.max_depth` is `max_depth` in the
+`delegation` object. Your own file is `config.json` in `~/.config/jamcli/`, or in
+`JAMCLI_CONFIG_DIR` when that is set. A key's own text, `api_key`, is left out here, as it is from
+`/config`: store keys with `jamcli auth set` or name a variable with `key_env_var`.
+
+Source: <Receipt path="src/core/config/schema.ts" symbol="ConfigFileSchema" />,
+<Receipt path="src/commands/settings.ts" symbol="settingsFromSchema" />,
+<Receipt path="src/core/config/load.ts" symbol="loadConfig" />.
+
+<Proof run="bun test src/core/config">
+All pass, including the check that the checked-in `docs/config.schema.json` is the one the schema
+generates, so editors see the same descriptions.
+</Proof>

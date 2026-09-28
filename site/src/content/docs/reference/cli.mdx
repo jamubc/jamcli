@@ -1,0 +1,26 @@
+---
+title: Command line
+description: JamCLI's command-line options and subcommands, exactly as jamcli --help prints them. Written from the usage text at every build.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+import Usage from '../../../components/Usage.astro';
+
+<Aside title="In short">
+`jamcli` with no arguments opens the interface. The options below change one run, and the
+subcommands manage sessions, configuration, keys, MCP servers, plugins, and workflows without the
+interface. This is the text `jamcli --help` prints, taken from the same source when the site is
+built.
+</Aside>
+
+<Usage />
+
+Source: <Receipt path="src/cli.ts" symbol="USAGE" />, <Receipt path="src/cli.ts" symbol="parseArgs" />.
+
+<Proof run="bun src/index.tsx --help">
+Prints the text above.
+</Proof>

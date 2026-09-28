@@ -6,15 +6,15 @@
 
 ## 2. Reference data from the definitions
 
-- [ ] 2.1 `site/scripts/reference.ts` writes `site/src/generated/reference.json` from `BUILTIN_COMMANDS`, `BUILTIN_TOOLS`, `settingsFromSchema()`, the interface keys, and `USAGE`; the file is gitignored. Verified by running it and reading the file.
-- [ ] 2.2 It exits 1 naming every command with no summary, visible tool with no description, and setting with no description. Verified by running it against a definition with its text removed, which fails, and restored, which passes. Any entry it names today is given its text at the definition, one commit per area.
-- [ ] 2.3 `site/package.json` runs it before `astro build` and `astro dev`. Verified by `bun run build` in `site/`.
+- [x] 2.1 `site/scripts/reference.ts` writes `site/src/generated/reference.json` from `BUILTIN_COMMANDS`, `BUILTIN_TOOLS`, `settingsFromSchema()`, the interface keys, and `USAGE`; the file is gitignored. Verified by running it and reading the file.
+- [x] 2.2 It exits 1 naming every command with no summary, visible tool with no description, and setting with no description. Verified by running it against a definition with its text removed, which fails, and restored, which passes. Any entry it names today is given its text at the definition, one commit per area.
+- [x] 2.3 `site/package.json` runs it before `astro build` and `astro dev`. Verified by `bun run build` in `site/`.
 
 ## 3. The reference pages
 
-- [ ] 3.1 `ReferenceTable.astro` renders a table from the data, and `site/src/content/docs/reference/` gains `commands`, `tools`, `settings`, `keys`, and `cli` pages, each in the house style: frontmatter, an "In short" aside, receipts to the definition, and a proof. Verified by `bun run build` and reading the built pages in `site/dist/`.
-- [ ] 3.2 `index.mdx` gains a card per page, and the sidebar lists the section. Verified in the built index.
-- [ ] 3.3 Taking a command out of `BUILTIN_COMMANDS` takes its row off the built commands page with no page edit. Verified once by hand and reverted.
+- [x] 3.1 `ReferenceTable.astro` renders a table from the data, and `site/src/content/docs/reference/` gains `commands`, `tools`, `settings`, `keys`, and `cli` pages, each in the house style: frontmatter, an "In short" aside, receipts to the definition, and a proof. Verified by `bun run build` and reading the built pages in `site/dist/`.
+- [x] 3.2 `index.mdx` gains a card per page, and the sidebar lists the section. Verified in the built index.
+- [x] 3.3 Taking a command out of `BUILTIN_COMMANDS` takes its row off the built commands page with no page edit. Verified once by hand and reverted.
 
 ## 4. Proofs the build runs
 

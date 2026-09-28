@@ -26,6 +26,7 @@ export default defineConfig({
         { label: 'Concepts', items: [{ autogenerate: { directory: 'concepts' } }] },
         { label: 'Tools', items: [{ autogenerate: { directory: 'tools' } }] },
         { label: 'Guides', items: [{ autogenerate: { directory: 'guides' } }] },
+        { label: 'Reference', items: [{ autogenerate: { directory: 'reference' } }] },
       ],
       lastUpdated: false,
       plugins: [starlightLlmsTxt()],

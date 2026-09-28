@@ -1,0 +1,49 @@
+---
+title: Built-in tools
+description: Every built-in JamCLI tool the model can call, with its permission class, its parameters, and what it does. The tables are written from the tool definitions at every build.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+import ReferenceTable from '../../../components/ReferenceTable.astro';
+
+<Aside title="In short">
+These tools are registered in every session. The description in each row is the text the model
+reads when it decides whether to call the tool, taken from the tool's definition when the site is
+built. The class is what the permission mode judges. Some tools are added only when a session
+needs them, and are covered in [Where tools come from](../../concepts/tools/).
+</Aside>
+
+## Tools
+
+<ReferenceTable table="tools" />
+
+A tool that always asks is asked about every time: no rule, grant, or mode allows it ahead.
+
+## Parameters
+
+<ReferenceTable table="toolParameters" />
+
+## Older names
+
+These names still work and run the tool they stand for. The model is not shown them.
+
+<ReferenceTable table="aliases" />
+
+## Tools a session adds
+
+`skill`, `search_tools`, `lsp`, and `web_search` are registered when their condition holds: skills
+are installed, MCP servers bring many tools, a language server is available, or a search provider
+is configured. Tools from MCP servers join the same registry.
+
+Source: <Receipt path="src/core/tools/builtins.ts" symbol="BUILTIN_TOOLS" />,
+<Receipt path="src/types/tools.ts" symbol="RegisteredTool" />,
+<Receipt path="src/core/runtime/index.ts" symbol="webSearchTool" />.
+
+<Proof run="bun test src/core/tools/__tests__/registration.test.ts">
+All pass: each named built-in is in the registry with its class, and the built-in tools load on their
+own, which is what this page's tables are written from.
+</Proof>

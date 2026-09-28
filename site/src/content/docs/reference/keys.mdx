@@ -1,0 +1,35 @@
+---
+title: Interface keys
+description: The keys JamCLI's interface uses by default, what each does, and how to rebind them. The table is written from the key definitions at every build.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+import ReferenceTable from '../../../components/ReferenceTable.astro';
+
+<Aside title="In short">
+Each key does one named action. The table gives the default keys for each, taken from the
+interface's definitions when the site is built. Rebind any action in `keybindings.json` in your
+configuration directory.
+</Aside>
+
+<ReferenceTable table="keys" />
+
+`keybindings.json` maps an action to a key or a list of keys:
+
+```json
+{ "cycle_mode": "ctrl+y", "history": ["ctrl+r", "ctrl+s"] }
+```
+
+The keys a question or a list uses (1 to 4, Up, Down, Tab, and Escape to close) are fixed, so they
+read the same everywhere.
+
+Source: <Receipt path="src/tui/app/keys.ts" symbol="DEFAULT_KEYS" />,
+<Receipt path="src/tui/app/keys.ts" symbol="keybindingsFile" />.
+
+<Proof run="bun test src/tui/app/__tests__/keys.test.ts">
+All pass: defaults, rebinding from the file, and keys the file names wrongly.
+</Proof>
