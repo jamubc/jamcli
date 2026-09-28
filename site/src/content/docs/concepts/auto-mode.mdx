@@ -244,7 +244,7 @@ All pass, against a local stand-in for TypeSafe: the key is sent, probabilities 
 the injection is withheld, the usage is counted, and a refused key fails open with its status.
 </Proof>
 
-<Proof run="jamcli doctor">
+<Proof run="jamcli doctor" reader>
 A `model (trust classifier)` line saying the configured classifier answers. With Jev it also says
 "and flags a planted injection". No such line means no classifier is configured and the gate will
 be off in auto mode.

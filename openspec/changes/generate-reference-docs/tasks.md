@@ -18,9 +18,9 @@
 
 ## 4. Proofs the build runs
 
-- [ ] 4.1 `site/scripts/check-proofs.ts` runs every `<Proof run>` not marked `reader` from the repository root, once per distinct command, and fails naming the page and the failing output. Verified by breaking one proof's command, which fails the check, and restoring it.
-- [ ] 4.2 `Proof.astro` takes `reader` and labels checked and reader proofs differently; proofs a build cannot run (`jamcli doctor`, `bun test utcTime`) are marked `reader`. Verified by `bun run build` passing and both labels in `site/dist/`.
-- [ ] 4.3 `site/package.json` runs the check in `build` after the receipt check. Verified by `bun run build`.
+- [x] 4.1 `site/scripts/check-proofs.ts` runs every `<Proof run>` not marked `reader` from the repository root, once per distinct command, and fails naming the page and the failing output. Verified by breaking one proof's command, which fails the check, and restoring it.
+- [x] 4.2 `Proof.astro` takes `reader` and labels checked and reader proofs differently; proofs a build cannot run (`jamcli doctor`, `bun test utcTime`) are marked `reader`. Verified by `bun run build` passing and both labels in `site/dist/`.
+- [x] 4.3 `site/package.json` runs the check in `build` after the receipt check. Verified by `bun run build`.
 
 ## 5. Record and close
 

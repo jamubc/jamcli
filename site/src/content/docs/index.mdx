@@ -33,6 +33,7 @@ the commands, tools, settings, keys, and options, written from the code at every
   file or symbol no longer exists, so a page cannot quietly go stale. Line numbers are left out
   because they change with every edit.
 - **Proofs are commands.** A green block gives a command to run from the repository root and says
-  what it should show.
+  what it should show. The build runs every proof labelled "checked at every build" and fails if one
+  does not pass. A proof labelled "run it yourself" needs your own setup, so the build cannot run it.
 - **For language models:** [`/llms.txt`](llms.txt) indexes these pages, and
   [`/llms-full.txt`](llms-full.txt) is all of them as one plain-text file.

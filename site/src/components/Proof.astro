@@ -1,19 +1,22 @@
 ---
 /**
  * A command to run from the repository root, and what it should show. The slot says what
- * to watch for, and what a different result would mean.
+ * to watch for, and what a different result would mean. scripts/check-proofs.ts runs every
+ * proof at build time and fails the build when one does not exit 0, except a `reader` proof:
+ * one only a reader can run, which the label says.
  */
 import { Code } from '@astrojs/starlight/components';
 
 interface Props {
   run: string;
+  reader?: boolean;
 }
 
-const { run } = Astro.props;
+const { run, reader } = Astro.props;
 ---
 
 <div class="jam-proof">
-  <div class="jam-proof-label">Proof · from the repository root</div>
+  <div class="jam-proof-label">{reader ? 'Proof · run it yourself, from the repository root' : 'Proof · checked at every build, from the repository root'}</div>
   <Code code={run} lang="sh" />
   <div class="jam-proof-expect"><slot /></div>
 </div>
