@@ -19,6 +19,7 @@
 
 - [x] 4.1 `docs/protocols.md` and `README.md`: what `jamcli mcp serve` offers and how a host adds it.
 - [x] 4.2 `AGENTS.md`: an agent testing JamCLI uses JamCLI's own MCP server, drives it in a throwaway fixture project never this checkout, and leaves the person's answers to the person.
+- [x] 4.3 The docs site, with the owner's one-time waiver of `site/NOTE.md`: `concepts/surfaces.mdx` (command parity) and `guides/use-from-another-agent.mdx` (`jamcli mcp serve`), the `alwaysAsks` row of `concepts/tools.mdx`, and `site/AGENTS.md` for future work on the site.
 
 ## 5. Proof and close
 
