@@ -12,7 +12,7 @@ the transcript, the composer, the palettes, and the status line.
 | Escape | Stops a running turn; closes a list or a picker |
 | Shift+Tab | Changes the permission mode |
 | Ctrl+R | Searches earlier messages |
-| Ctrl+O | Expanded view: every block whole, and again for the compact view |
+| Ctrl+O | The detailed transcript, in place of the conversation, and again to return |
 | Ctrl+T | Shows or hides the todo list |
 | Page Up, Page Down | Scrolls the transcript; at the top, Page Up shows earlier rows |
 | Ctrl+L | Redraws the screen |
@@ -66,7 +66,7 @@ same place.
   drawn as a bar in the theme's color, in lists and in the prompt alike, so what a click
   does is plain before the click.
 - Click a tool's line to show or hide that tool's output, and a thinking line to show or
-  hide that thinking. These are one block at a time; Ctrl+O is the whole view.
+  hide that thinking. These are one block at a time; Ctrl+O shows the whole session log.
 
 Copying goes to the system clipboard. Over SSH, or where there is none, it goes through
 the terminal (OSC 52), which reaches the machine you sit at if the terminal supports it.
@@ -89,20 +89,22 @@ turn ends, the window leaves one line behind saying how many lines of thinking t
 were. Click that line to read them, and click it again to put it away. In screen reader
 mode the window does not run: the line says only that thinking is under way.
 
-## The compact and expanded views
+## The detailed transcript
 
-The transcript is compact by default: a tool call is its one line, and thinking is the
-line it left behind. Ctrl+O is the expanded view, where every block shows everything it
-has, whatever each block's own state: all the thinking, every tool's output, and the
-diffs. The status line says `expanded view` while it is on, and Ctrl+O again returns to
-the compact one. Nothing is lost either way, because a block's own line and the expanded
-view are two ways of reading the same rows.
+The transcript is compact: a tool call is its one line, and thinking is the line it left
+behind. Ctrl+O shows the detailed transcript in place of the conversation and the
+composer: every event of the session log, rendered exactly as `/copy debug` copies it,
+with what each request carried and what the model was not shown. It is read when it
+opens, so reopen it to see what came after. Up and Down scroll a line, Page Up and Page
+Down a page, Home and End go to the top and the bottom, `v` writes it beside the log as
+`<session>.debug.md` and opens it in VS Code with `code`, and `?` lists these keys.
+Ctrl+O again, or Escape, returns to the conversation, with any draft where it was. A
+permission prompt that arrives meanwhile still shows, and is answered as usual.
 
 ## The status line
 
 The status line names the mode, the model, the context share, the cost and tokens, the
-sandbox, the MCP server count, the language server count, the expanded view while it is
-on, and the phase. While a turn works, the phase leads the line as the working indicator:
+sandbox, the MCP server count, the language server count, and the phase. While a turn works, the phase leads the line as the working indicator:
 a spinner and the phase's word. With reduced motion, or in screen reader mode, nothing
 moves.
 

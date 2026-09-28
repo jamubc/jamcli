@@ -39,7 +39,7 @@ glyphs.
      │ 37 +  return round(subtotal);
    ⏺ run_command npm test -- cart                     ✗ exit 1 · 3.2s · sandboxed (bwrap)
      │ FAIL src/cart/total.test.ts > rounds each line
-     │ Expected 10.02, received 10.03                              ctrl+o full output
+     │ Expected 10.02, received 10.03                              ctrl+o transcript 
 
  ─────────────────────────────────────────────────────────────────────────────────────────
  > the old test encoded the bug, update it to expect 10.03|
@@ -57,7 +57,7 @@ glyphs.
 | detail | a diff for edits, the output tail for commands, match counts for searches |
 | notice | retries, compaction, trust gate removals, hook failures |
 
-Tool blocks collapse to one line when finished. Ctrl+O toggles full detail.
+Tool blocks collapse to one line when finished. Ctrl+O shows the detailed transcript, the whole session log.
 
 **Status line**, left to right:
 
@@ -124,7 +124,7 @@ current bindings.
 | Escape Escape | rewind menu |
 | Shift+Tab | next permission mode |
 | Ctrl+R | search prompt history |
-| Ctrl+O | toggle tool detail |
+| Ctrl+O | detailed transcript |
 | Ctrl+T | todo panel |
 | Ctrl+L | redraw |
 | Ctrl+C twice | exit |
