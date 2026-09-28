@@ -20,6 +20,8 @@ function confirm(ctx: CommandContext, paths: string[], given: string | undefined
   let message = given ?? '';
   ctx.choose({
     title: 'Commit this?',
+    // A commit is made under the person's name, so only the person says yes to it.
+    personOnly: true,
     items: (given ? Promise.resolve(given) : ctx.runtime.draftCommitMessage(paths)).then(
       (text) => {
         message = text;

@@ -90,3 +90,22 @@ test("the host is refused an answer that is the person's, and a session it does 
   expect(await call('session_answer', { session: 'nope', approval: 'allow_once' })).toMatchObject({ error: true, text: expect.stringContaining('No session nope') });
   expect((await call('session_start', { cwd: 'relative/dir' })).error).toBe(true);
 }, 60_000);
+
+test("/commit's confirmation is the person's too: the caller cannot say yes to it, and the person is asked", async () => {
+  const asked: ElicitationRequest[] = [];
+  const { call, start } = await serve(async (request) => {
+    asked.push(request);
+    return { action: 'accept', content: { answer: 'commit' } };
+  });
+  const git = (...args: string[]) => Bun.spawnSync(['git', ...args], { cwd: context.project });
+  git('init', '-q');
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
+  git('add', 'a.txt');
+  const session = await start();
+  const done = await call('session_send', { session, text: '/commit add a' });
+  expect(asked).toHaveLength(1);
+  expect(asked[0].message).toContain('Commit this?');
+  expect(done.text).not.toContain('Answer with /choose');
+  expect(new TextDecoder().decode(git('log', '--format=%s').stdout).trim()).toBe('add a');
+}, 60_000);

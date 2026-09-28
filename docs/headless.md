@@ -19,10 +19,12 @@ the same permissions. A list the command offers is printed with a key per choice
 each `--choose <key or number>` answers the next list in order:
 
 ```
-jamcli -p "/commit fix the parser" --choose commit
+jamcli -p "/agents" --choose explore
 ```
 
-A list with no answer given is shown and closed. A command that ends refused, in error, or
+A list with no answer given is shown and closed. A list that is the person's to answer,
+such as `/commit`'s confirmation, `/pr`'s push, or trusting a project's hooks, is never
+answered in advance: it is shown, marked as the person's, and closed. A command that ends refused, in error, or
 wanting an argument fails the run with exit code 1 and its reason as `error`. Text that
 names no command, such as a path like `/tmp/x`, is sent to the model as written.
 

@@ -13,6 +13,8 @@ function offerPullRequest(ctx: CommandContext, ready: Promise<BranchState>, titl
   let state: BranchState | undefined;
   ctx.choose({
     title: `Open a pull request from ${head.branch} into ${head.base}?`,
+    // Opened under the person's name, so only the person says yes to it.
+    personOnly: true,
     items: ready
       .then((found) => {
         state = found;
@@ -71,6 +73,7 @@ export const pr: SlashCommand = {
     // The first step: pushing, approved on its own.
     ctx.choose({
       title: `Push ${state.branch} to ${state.remote}?`,
+      personOnly: true,
       items: [
         {
           key: 'push',

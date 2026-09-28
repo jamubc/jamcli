@@ -302,17 +302,23 @@ test('jamcli -p runs a built-in command: its output is the response, and no mode
   expect(server.completions().length).toBe(before);
 }, 30_000);
 
-test('a list a command offers is answered in advance with --choose, as /commit does', async () => {
+test('a list a command offers is answered in advance with --choose', async () => {
+  const { out, code } = await jam(['-p', '/agents', '--choose', '1', '--output-format', 'json']);
+  expect(code).toBe(0);
+  expect(lastLine(out).response).toContain('Answered in advance: 1.');
+  expect(JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.json'), 'utf8')).delegation?.default_agent).toBeDefined();
+}, 30_000);
+
+test("a commit is never answered in advance: it is the person's, so --choose does not make it", async () => {
   const git = (...args: string[]) => Bun.spawnSync(['git', ...args], { cwd: root });
   git('init', '-q');
-  // Its own identity: a fresh CI runner has none, and the commit is made by the child.
+  // Its own identity: a fresh CI runner has none, and a commit would be made by the child.
   git('config', 'user.name', 'Test');
   git('config', 'user.email', 'test@example.com');
   git('add', 'a.txt');
-  const { out, code } = await jam(['-p', '/commit add a', '--choose', 'commit', '--output-format', 'json']);
-  expect(code).toBe(0);
-  expect(lastLine(out).response).toContain('Commit this?');
-  expect(new TextDecoder().decode(git('log', '--format=%s').stdout).trim()).toBe('add a');
+  const { out } = await jam(['-p', '/commit add a', '--choose', 'commit', '--output-format', 'json']);
+  expect(lastLine(out).response).toContain('Only the person may answer this.');
+  expect(new TextDecoder().decode(git('log', '--format=%s').stdout).trim()).toBe('');
 }, 30_000);
 
 test('a list with no answer given is shown with how to answer it, and nothing is chosen', async () => {
