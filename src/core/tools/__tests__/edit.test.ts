@@ -109,3 +109,18 @@ test("a line's text passed as its anchor is called a malformed anchor, not a cha
   expect(thrown.message).not.toContain('changed since it was read');
   expect(await fs.promises.readFile(filePath)).toEqual(before);
 });
+
+test('a find_string that is not in the file says so, says nothing changed, and shows the nearest lines', async () => {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jamcli-edit-nearest-'));
+  try {
+    await fs.promises.writeFile(path.join(dir, 'a.ts'), ['const alpha = 1;', 'export function fetchUser(id: string) {', '  return get(id);', '}', ''].join('\n'));
+    const result = await createBuiltinRegistry().execute('edit', { path: 'a.ts', find_string: 'function fetchUsers(id: string) {', replace_string: 'x' }, { projectRoot: dir });
+    expect(result.success).toBe(false);
+    expect(result.output).toContain('find_string was not found in a.ts, so nothing was changed.');
+    expect(result.output).toContain('Copy the text exactly as read_file shows it');
+    expect(result.output).toContain('Nearest lines:\n2| export function fetchUser(id: string) {');
+    expect(await fs.promises.readFile(path.join(dir, 'a.ts'), 'utf8')).toContain('fetchUser(id: string)');
+  } finally {
+    await fs.promises.rm(dir, { recursive: true, force: true });
+  }
+});

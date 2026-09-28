@@ -94,6 +94,7 @@ const globSchema: JsonSchema = {
 
 export const GLOB_TOOL: RegisteredTool = {
   name: 'glob',
+  tier: 'core',
   description:
     'List paths matching a glob, most recently modified first, honoring .gitignore and the configured ignore patterns.',
   inputSchema: globSchema,

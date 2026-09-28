@@ -107,12 +107,14 @@ export interface ToolSetOptions {
   permissions: PermissionEngine;
   /** Tool names that came from MCP servers, mapped to their server. */
   mcpServers?: Map<string, string>;
-  /** Tools that run when called but whose schemas are held back until `search_tools` loads them. */
+  /** Tools that run when called but whose schemas are held back, until `search_tools` loads them or the harness releases them. */
   deferred?: (name: string) => boolean;
   /** Hidden tools to offer anyway, for the turn that asked for them, such as `/reflect`'s. */
   alsoOffer?: string[];
   /** Descriptions to offer instead of a tool's own, such as `task` listing the agents. */
   descriptions?: Record<string, string>;
+  /** Wire schemas to offer instead of a tool's own, for a trial that searches them. A call is still checked against the tool's full schema. */
+  schemas?: Record<string, JsonSchema>;
   /** The context every call runs with, less what each call supplies. */
   context: () => ToolContext;
   /** Write a pattern the user granted for the project. */
@@ -149,7 +151,8 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
     return {
       name: tool.name,
       description: options.descriptions?.[tool.name] ?? tool.description,
-      parameters: tool.inputSchema,
+      // The model sees the wire schema; a call is checked against the full one.
+      parameters: options.schemas?.[tool.name] ?? tool.wireSchema ?? tool.inputSchema,
       policyClass: tool.policy,
       source: server ? 'mcp' : 'builtin',
       ...(server ? { server } : {}),

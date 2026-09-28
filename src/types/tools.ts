@@ -202,7 +202,18 @@ export type ToolRunner = (args: Record<string, any>, ctx: ToolContext) => Promis
 export interface RegisteredTool {
   name: string;
   description: string;
+  /** What a call is checked against. Everything the runner accepts, legacy names included. */
   inputSchema: JsonSchema;
+  /**
+   * What the model is offered, when that is less than `inputSchema`: the same schema
+   * without legacy or rarely used parameters, and with shorter descriptions.
+   */
+  wireSchema?: JsonSchema;
+  /**
+   * `core` tools are offered on any window; the rest are offered when the window has
+   * room, and otherwise held behind `search_tools`. Absent means the rest.
+   */
+  tier?: 'core' | 'extended';
   policy: RegisteredToolClass;
   runner: ToolRunner;
   /** Registered and callable, but not advertised to the model. */

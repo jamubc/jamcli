@@ -106,11 +106,24 @@ const readFileSchema: JsonSchema = {
   additionalProperties: false,
 };
 
+/** What the model is offered: the same tool without the parameters kept for older callers. */
+const readFileWireSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    path: { type: 'string', description: 'Path relative to the project root.' },
+    offset: { type: 'integer', minimum: 1, description: 'First line, 1-indexed. Defaults to 1.' },
+    limit: { type: 'integer', minimum: 1, description: `Lines to return. Defaults to ${DEFAULT_LINE_WINDOW}.` },
+  },
+  required: ['path'],
+  additionalProperties: false,
+};
+
 export const READ_FILE_TOOL: RegisteredTool = {
   name: 'read_file',
-  description:
-    'Read a text file with line numbers and a stable anchor per line. Large files are read in windows; the result says where to continue.',
+  tier: 'core',
+  description: 'Read a text file with line numbers and an anchor per line. Long files come in windows; the result says where to continue.',
   inputSchema: readFileSchema,
+  wireSchema: readFileWireSchema,
   policy: 'read',
   runner: readFileRunner,
 };

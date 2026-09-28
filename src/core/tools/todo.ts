@@ -155,18 +155,45 @@ const todoReadSchema: JsonSchema = {
   additionalProperties: false,
 };
 
+const todoWriteWireSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    todos: {
+      type: 'array',
+      description: 'The whole list; it replaces the previous one.',
+      items: {
+        type: 'object',
+        properties: {
+          content: { type: 'string' },
+          status: { type: 'string', enum: [...STATUSES], description: 'Defaults to pending.' },
+          active_form: { type: 'string', description: 'Present-tense label while in progress.' },
+          check: { type: 'string', description: 'What proves it done: a test, a command, or what to look at.' },
+        },
+        required: ['content'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['todos'],
+  additionalProperties: false,
+};
+
 export const TODO_TOOLS: RegisteredTool[] = [
   {
     name: 'todo_read',
+    tier: 'core',
     description: 'Read the session todo list persisted under the project .jamcli directory.',
     inputSchema: todoReadSchema,
+    wireSchema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     policy: 'read',
     runner: todoReadRunner,
   },
   {
     name: 'todo_write',
-    description: 'Replace the session todo list, persisted under the project .jamcli directory. One item in progress at a time; completed only after its check passed.',
+    tier: 'core',
+    description: 'Replace the session todo list, kept in the project. One item in progress at a time; completed only after its check passed, which the harness stamps.',
     inputSchema: todoWriteSchema,
+    wireSchema: todoWriteWireSchema,
     policy: 'state',
     runner: todoWriteRunner,
   },

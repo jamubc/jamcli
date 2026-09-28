@@ -56,6 +56,7 @@ export async function writeFile(args: Record<string, any>, ctx: ToolContext): Pr
 
 export const WRITE_FILE_TOOL: RegisteredTool = {
   name: 'write_file',
+  tier: 'core',
   description: 'Create a file, or overwrite one explicitly. Refuses a silent overwrite.',
   inputSchema: writeFileSchema,
   policy: 'write',

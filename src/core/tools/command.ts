@@ -228,6 +228,11 @@ export function formatCommandResult(command: string, result: CommandRunResult, t
   const stdout = result.stdout.trimEnd();
   const stderr = result.stderr.trimEnd();
   const sections = [headline];
+  // A failure names its first error line up front, so the model reads the cause before the noise.
+  if (status === 'error') {
+    const first = `${stderr}\n${stdout}`.split('\n').find((line) => /\berror\b|\bfailed\b|Error:/i.test(line))?.trim();
+    if (first) sections.push(`First error: ${first.length > 300 ? `${first.slice(0, 297)}...` : first}`);
+  }
   if (stdout && stderr) {
     sections.push(`stdout:\n${stdout}`, `stderr:\n${stderr}`);
   } else if (stdout || stderr) {
@@ -416,6 +421,7 @@ const runCommandSchema: JsonSchema = {
 
 export const RUN_COMMAND_TOOL: RegisteredTool = {
   name: 'run_command',
+  tier: 'core',
   description:
     'Run a shell command in the project. Reports the exit code, stdout, and stderr; long output keeps its beginning and end. Use background for long-running processes.',
   inputSchema: runCommandSchema,
@@ -425,6 +431,7 @@ export const RUN_COMMAND_TOOL: RegisteredTool = {
 
 export const COMMAND_OUTPUT_TOOL: RegisteredTool = {
   name: 'command_output',
+  tier: 'core',
   description: 'Read new output from a background command, and whether it is still running.',
   inputSchema: {
     type: 'object',
@@ -441,6 +448,7 @@ export const COMMAND_OUTPUT_TOOL: RegisteredTool = {
 
 export const COMMAND_KILL_TOOL: RegisteredTool = {
   name: 'command_kill',
+  tier: 'core',
   description: 'Stop a background command.',
   inputSchema: {
     type: 'object',

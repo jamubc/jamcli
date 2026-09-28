@@ -3,7 +3,7 @@ import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '..
 import { ANCHOR_LENGTH, anchorAtLine, type LineAnchor } from './anchors.js';
 import { readText, writeText } from './files.js';
 import { resolveProjectPath } from './paths.js';
-import { AmbiguousMatchError, replaceLiteral } from './textEdit.js';
+import { AmbiguousMatchError, FindNotFoundError, nearestLines, replaceLiteral } from './textEdit.js';
 
 export { AmbiguousMatchError };
 
@@ -109,10 +109,22 @@ export async function editRunner(args: Record<string, any>, ctx: ToolContext): P
     }
   }
 
-  const result = replaceLiteral(content, findString, replaceString, target, {
-    all: args.replace_all === true,
-    occurrence: typeof args.occurrence === 'number' ? args.occurrence : undefined,
-  });
+  let result;
+  try {
+    result = replaceLiteral(content, findString, replaceString, target, {
+      all: args.replace_all === true,
+      occurrence: typeof args.occurrence === 'number' ? args.occurrence : undefined,
+    });
+  } catch (error) {
+    // Cause, then remedy, then what the remedy needs: the lines that come nearest to what was asked for.
+    if (!(error instanceof FindNotFoundError)) throw error;
+    const nearest = nearestLines(lines, findString.split('\n')[0], 3);
+    throw new Error(
+      `find_string was not found in ${target}, so nothing was changed. Copy the text exactly as read_file shows it, whitespace included.${
+        nearest.length ? ` Nearest lines:\n${nearest.map((near) => `${near.line}| ${near.text}`).join('\n')}` : ''
+      }`
+    );
+  }
   await writeText(ctx, absolute, result.content);
 
   const { startLine, endLine, replaced } = result;
@@ -167,11 +179,37 @@ const editSchema: JsonSchema = {
   additionalProperties: false,
 };
 
+const editWireSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    path: { type: 'string', description: 'Path relative to the project root.' },
+    find_string: { type: 'string', description: 'Exact text to replace. Must occur once, unless replace_all.' },
+    replace_string: { type: 'string', description: 'Replacement, inserted literally.' },
+    replace_all: { type: 'boolean', description: 'Replace every occurrence.' },
+    anchors: {
+      type: 'array',
+      description: 'Anchors of the lines being edited, from read_file; a stale one rejects the edit.',
+      items: {
+        type: 'object',
+        properties: {
+          line: { type: 'integer', minimum: 1 },
+          anchor: { type: 'string', description: `The ${ANCHOR_LENGTH}-character hash between the bars of a read_file line, not the line's text.` },
+        },
+        required: ['line', 'anchor'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['path', 'find_string'],
+  additionalProperties: false,
+};
+
 export const EDIT_TOOL: RegisteredTool = {
   name: 'edit',
-  description:
-    'Find and replace in a file. Rejects an ambiguous match and refuses an edit whose read anchors are stale.',
+  tier: 'core',
+  description: 'Find and replace in a file. Rejects an ambiguous match and stale anchors.',
   inputSchema: editSchema,
+  wireSchema: editWireSchema,
   policy: 'write',
   runner: editRunner,
 };

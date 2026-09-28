@@ -45,6 +45,30 @@ export class AmbiguousMatchError extends Error {
   }
 }
 
+const trigrams = (text: string): Set<string> => {
+  const normalized = text.replace(/\s+/g, ' ').trim().toLowerCase();
+  const out = new Set<string>();
+  for (let i = 0; i + 3 <= normalized.length; i += 1) out.add(normalized.slice(i, i + 3));
+  return out;
+};
+
+/** The lines that come nearest to `wanted` by shared trigrams, best first, with their numbers. */
+export function nearestLines(lines: string[], wanted: string, limit: number): { line: number; text: string }[] {
+  const target = trigrams(wanted);
+  if (!target.size) return [];
+  return lines
+    .map((text, index) => {
+      const own = trigrams(text);
+      let shared = 0;
+      for (const gram of own) if (target.has(gram)) shared += 1;
+      return { line: index + 1, text, score: own.size ? shared / Math.max(target.size, own.size) : 0 };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.line - b.line)
+    .slice(0, limit)
+    .map(({ line, text }) => ({ line, text: text.length > 120 ? `${text.slice(0, 117)}...` : text }));
+}
+
 const indexesOf = (content: string, needle: string): number[] => {
   const found: number[] = [];
   let index = content.indexOf(needle);

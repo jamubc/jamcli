@@ -90,11 +90,26 @@ const grepSchema: JsonSchema = {
   additionalProperties: false,
 };
 
+const grepWireSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    pattern: { type: 'string', description: 'Regular expression.' },
+    path: { type: 'string', description: 'File or directory to search. Defaults to the project.' },
+    glob: { type: 'string', description: 'Limit to files matching this glob, such as "*.ts".' },
+    case_sensitive: { type: 'boolean', description: 'Defaults to true.' },
+    context: { type: 'integer', minimum: 0, description: `Lines around each match, up to ${MAX_CONTEXT_LINES}.` },
+    output_mode: { type: 'string', enum: ['content', 'files', 'count'], description: 'Matching lines, matching files, or counts per file.' },
+  },
+  required: ['pattern'],
+  additionalProperties: false,
+};
+
 export const GREP_TOOL: RegisteredTool = {
   name: 'grep',
-  description:
-    'Search file contents with a regular expression, honoring .gitignore. Returns matching lines with context, matching files, or counts.',
+  tier: 'core',
+  description: 'Search file contents with a regular expression, honoring .gitignore.',
   inputSchema: grepSchema,
+  wireSchema: grepWireSchema,
   policy: 'read',
   runner: grepRunner,
 };
