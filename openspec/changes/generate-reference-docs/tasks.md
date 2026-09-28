@@ -2,7 +2,7 @@
 
 ## 1. The tool definitions load in any order (refactor)
 
-- [ ] 1.1 `src/core/tools/registry.ts` builds its default registry on first use rather than at module load. Verified by a test in `src/core/tools/__tests__/` that imports `builtins.ts` in a fresh `bun` process before anything else and reads `BUILTIN_TOOLS`, which fails on the current code with "Cannot access 'BUILTIN_TOOLS' before initialization", and by `bun test src/core` passing unchanged.
+- [x] 1.1 `src/core/tools/registry.ts` builds its default registry on first use rather than at module load. Verified by a test in `src/core/tools/__tests__/` that imports `builtins.ts` in a fresh `bun` process before anything else and reads `BUILTIN_TOOLS`, which fails on the current code with "Cannot access 'BUILTIN_TOOLS' before initialization", and by `bun test src/core` passing unchanged.
 
 ## 2. Reference data from the definitions
 

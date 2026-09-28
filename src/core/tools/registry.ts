@@ -192,31 +192,34 @@ export function createBuiltinRegistry(): ToolRegistry {
   return registry;
 }
 
-const defaultRegistry = new ToolRegistry();
-registerBuiltinTools(defaultRegistry);
+let defaultRegistry: ToolRegistry | undefined;
 
+/**
+ * Built on first use, not at load: a tool module's imports can reach this one while
+ * `BUILTIN_TOOLS` is still being defined, so filling it at load would read it too early.
+ */
 export function getDefaultRegistry(): ToolRegistry {
-  return defaultRegistry;
+  return (defaultRegistry ??= createBuiltinRegistry());
 }
 
 export function registerTool(tool: RegisteredTool): void {
-  defaultRegistry.register(tool);
+  getDefaultRegistry().register(tool);
 }
 
 export function getTool(name: string): RegisteredTool | undefined {
-  return defaultRegistry.get(name);
+  return getDefaultRegistry().get(name);
 }
 
 export function listTools(): RegisteredTool[] {
-  return defaultRegistry.list();
+  return getDefaultRegistry().list();
 }
 
 export function listVisibleTools(): RegisteredTool[] {
-  return defaultRegistry.visible();
+  return getDefaultRegistry().visible();
 }
 
 export function validateArgs(name: string, args: unknown): RegistryValidationResult {
-  return defaultRegistry.validateArgs(name, args);
+  return getDefaultRegistry().validateArgs(name, args);
 }
 
 export function executeTool(
@@ -224,5 +227,5 @@ export function executeTool(
   args: unknown,
   ctx: ToolContext
 ): Promise<RegistryToolResult> {
-  return defaultRegistry.execute(name, args, ctx);
+  return getDefaultRegistry().execute(name, args, ctx);
 }

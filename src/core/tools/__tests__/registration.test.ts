@@ -29,3 +29,12 @@ test('the new harness tools are registered with the required policy class', () =
     expect(tool!.inputSchema.type).toBe('object');
   }
 });
+
+test('the built-in tools load on their own, before the registry module', () => {
+  // A fresh process, so no earlier import has already settled the order.
+  const run = Bun.spawnSync(['bun', '-e', "const { BUILTIN_TOOLS } = await import('./src/core/tools/builtins.ts'); console.log(BUILTIN_TOOLS.length)"], {
+    cwd: new URL('../../../../', import.meta.url).pathname,
+  });
+  expect(run.stderr.toString()).toBe('');
+  expect(Number(run.stdout.toString())).toBeGreaterThan(0);
+});
