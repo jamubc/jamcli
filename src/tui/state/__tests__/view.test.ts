@@ -288,3 +288,12 @@ test("a background child's prompt outlives the turn that started it, and the sta
   expect(own.approvals).toEqual([]);
   expect(tool(own, 'c2').phase).toBe('cancelled');
 });
+
+test('a command that sends a turn is shown once, as typed, and a message typed after it is its own row', () => {
+  const state = run([{ type: 'command', text: '/research pipes' }, { type: 'submit', text: '/research pipes' }]);
+  expect(kinds(state)).toEqual(['command']);
+  expect(state.running).toBe(true);
+  expect(kinds(run([{ type: 'submit', text: 'and then' }], state))).toEqual(['command', 'user']);
+  // A different display, as a custom command's, still gets its row.
+  expect(kinds(run([{ type: 'command', text: '/x' }, { type: 'submit', text: 'the prompt' }]))).toEqual(['command', 'user']);
+});
