@@ -65,7 +65,7 @@ function MarkdownView({ content, syntax, streaming }: { content: string; syntax:
 const NOTICE_LABELS = { info: 'Note', warn: 'Warning', error: 'Error' } as const;
 
 /** A row as plain labeled lines, for screen reader mode: who or what, then the words. */
-function PlainRow({ row, onToggle }: { row: Row; onToggle?: (id: number) => void }) {
+function PlainRow({ row, onToggle, open }: { row: Row; onToggle?: (id: number) => void; open: boolean }) {
   const theme = useTheme();
   const sel = useSelectable();
   const click = useClick();
@@ -73,7 +73,7 @@ function PlainRow({ row, onToggle }: { row: Row; onToggle?: (id: number) => void
     case 'user':
       return <text {...sel} fg={theme.text}>{`You: ${row.text}`}</text>;
     case 'assistant': {
-      const thinkingShown = !row.collapsed;
+      const thinkingShown = open;
       return (
         <box flexDirection="column">
           {/* The live window is a moving picture, so plain mode says only that thinking is under way. */}
@@ -90,8 +90,8 @@ function PlainRow({ row, onToggle }: { row: Row; onToggle?: (id: number) => void
       return (
         <box flexDirection="column">
           <text {...sel} fg={theme.text} onMouseUp={click(() => onToggle?.(row.id))}>{`Tool ${toolLine(row, false)}`}</text>
-          {!row.collapsed && row.diff ? <text {...sel} fg={theme.text}>{`Diff:\n${row.diff}`}</text> : null}
-          {!row.collapsed && !row.diff && row.output ? <text {...sel} fg={theme.text}>{`Output:\n${row.output}`}</text> : null}
+          {open && row.diff ? <text {...sel} fg={theme.text}>{`Diff:\n${row.diff}`}</text> : null}
+          {open && !row.diff && row.output ? <text {...sel} fg={theme.text}>{`Output:\n${row.output}`}</text> : null}
         </box>
       );
     case 'notice':
@@ -115,17 +115,21 @@ export function RowView({
   row,
   syntax,
   onToggle,
+  open: shown,
   thinking = thinkingSize(undefined, 80),
 }: {
   row: Row;
   syntax: SyntaxStyle;
   onToggle?: (id: number) => void;
+  /** Whether the row's thinking, output, or diff shows, over its own state; the detailed transcript opens them all. */
+  open?: boolean;
   thinking?: ThinkingSize;
 }) {
   const theme = useTheme();
   const sel = useSelectable();
   const click = useClick();
-  if (usePlain()) return <PlainRow row={row} onToggle={onToggle} />;
+  const open = shown ?? !('collapsed' in row && row.collapsed);
+  if (usePlain()) return <PlainRow row={row} onToggle={onToggle} open={open} />;
   switch (row.kind) {
     case 'user':
       return (
@@ -138,7 +142,7 @@ export function RowView({
       // fixed width so the transcript above it stays still, and leaves one line behind
       // once the answer starts or the turn ends. A click on that line shows all of it.
       const live = Boolean(row.reasoning) && row.streaming && !row.text;
-      const thinkingShown = !row.collapsed;
+      const thinkingShown = open;
       return (
         <box flexDirection="column">
           {live ? (
@@ -163,8 +167,8 @@ export function RowView({
           <text {...sel} fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent} onMouseUp={click(() => onToggle?.(row.id))}>
             {toolLine(row)}
           </text>
-          {!row.collapsed && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}
-          {!row.collapsed && !row.diff && row.output ? <text {...sel} fg={theme.dim}>{row.output}</text> : null}
+          {open && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}
+          {open && !row.diff && row.output ? <text {...sel} fg={theme.dim}>{row.output}</text> : null}
         </box>
       );
     case 'notice':

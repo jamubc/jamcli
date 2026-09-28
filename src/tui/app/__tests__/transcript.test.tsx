@@ -115,7 +115,7 @@ test('thinking runs in a window of the size it is given, then leaves one line a 
   }
 }, 20_000);
 
-test('Ctrl+O shows the detailed transcript in place of the conversation, as /copy debug renders it, and again returns', async () => {
+test('Ctrl+O shows the conversation with every block open in place of the composer, a click hides one there, and again returns', async () => {
   const { setup, close } = await open();
   try {
     const reasoning = 'I should read the file, then say what is in it.';
@@ -125,28 +125,35 @@ test('Ctrl+O shows the detailed transcript in place of the conversation, as /cop
     setup.mockInput.pressEnter();
     const compact = await frameWith(setup, (frame) => frame.includes('It has one line.'));
     expect(compact).not.toContain('the only line');
+    expect(compact).not.toContain('then say what is in it');
     expect(compact).toContain('Message JamCLI');
     await setup.mockInput.typeText('a draft');
-    // The log as /copy debug renders it: the thinking and the tool's output, and no composer.
+    // Every block open, for reading back: the thinking and the tool's output, and no composer.
+    // What only debugging needs, such as what each request carried, is left to v and /copy debug.
     setup.mockInput.pressKey('o', { ctrl: true });
-    const detailed = await frameWith(setup, (frame) => frame.includes('Showing detailed transcript'));
+    const detailed = await frameWith(setup, (frame) => frame.includes('Showing detailed transcript') && frame.includes('the only line'));
     expect(detailed).toContain('Ctrl+O to toggle · ↑↓ scroll · v to open in code · ? for shortcuts');
-    expect(detailed).toContain('the only line');
+    expect(detailed).toContain('then say what is in it');
+    expect(detailed).not.toContain('Sent to the model');
     expect(detailed).not.toContain('Message JamCLI');
     expect(detailed).not.toContain('a draft');
-    // Its keys move through it, and type nothing anywhere.
-    setup.mockInput.pressArrow('up');
-    setup.mockInput.pressArrow('up');
-    const moved = await frameWith(setup, (frame) => frame !== detailed && frame.includes('Showing detailed transcript'));
-    expect(moved).toContain('Showing detailed transcript');
     setup.mockInput.pressKey('?');
-    await frameWith(setup, (frame) => frame.includes('returns to the conversation'));
-    // And the same key puts the conversation back, with the draft where it was.
+    const helped = await frameWith(setup, (frame) => frame.includes('thinking line to hide or show it'));
+    // A click on the tool's line hides its output here.
+    const rows = helped.split('\n');
+    const row = rows.findIndex((line) => line.includes('read_file a.txt'));
+    await setup.mockMouse.click(rows[row].indexOf('read_file'), row);
+    await frameWith(setup, (frame) => frame.includes('then say what is in it') && !frame.includes('the only line'));
+    // The same key puts the conversation back as it was, compact, with the draft where it was.
     setup.mockInput.pressKey('o', { ctrl: true });
     const back = await frameWith(setup, (frame) => !frame.includes('Showing detailed transcript'));
     expect(back).toContain('It has one line.');
     expect(back).not.toContain('the only line');
+    expect(back).not.toContain('then say what is in it');
     expect(back).toContain('a draft');
+    // And it opens with every block open again.
+    setup.mockInput.pressKey('o', { ctrl: true });
+    await frameWith(setup, (frame) => frame.includes('Showing detailed transcript') && frame.includes('the only line'));
   } finally {
     await close();
   }
