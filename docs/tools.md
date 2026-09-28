@@ -52,7 +52,15 @@ Allow a site with a rule such as `web_fetch(domain:docs.python.org)` or
 
 | Tool | Class | What it does |
 |---|---|---|
-| `todo_write`, `todo_read` | state | The session's todo list, shown with `Ctrl+T`. |
+| `todo_write`, `todo_read` | state, read | The session's todo list, shown with `Ctrl+T`. Each item may carry a `check`, what proves it done, and the model is told an item is completed only after its check passed. The list and the plan's location end every compaction summary, so a long session keeps them. |
+| `plan_write` | state | The project's plan, at `.jamcli/plan.md`, offered in plan mode only. The one file the model writes there; edit it by hand and the model reads your version with `read_file`. |
+| `exit_plan_mode` | state, always asks | Offered in plan mode only. Hands the plan to you, shown in the prompt. Approval returns the session to the mode it held before plan mode (or `default`) from the next turn; a denial with feedback goes back to the model. |
+| `ask_user` | state | One question with choices or for typed text, answered in the interface. Where no one can answer (headless, ACP, workflows), the model is told so and states its assumption. |
+
+Turn any of these off the way any tool is turned off: a deny rule with no pattern, such
+as `"deny": ["todo_write", "todo_read"]` in `permissions`, or `/permissions deny
+todo_write user` in the interface. A denied tool is not offered, and the prompt stops
+mentioning it.
 | `task` | delegate | Runs a child on an agent (its model chain and rules), the default when none is named, with an optional reasoning level and a narrowed policy, in the foreground or background. |
 | `task_status`, `task_result`, `task_cancel` | read, delegate | For background tasks. |
 | `delegate` | delegate | Hands a task to another ACP agent. |

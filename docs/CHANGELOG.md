@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Plan mode has its artifacts. `plan_write` keeps the plan at `.jamcli/plan.md`, where
+  you can edit it and the model reads it back; `exit_plan_mode` hands it to you for approval,
+  and approval returns the session to the mode it held before plan mode. The plan-mode
+  note now describes what the harness enforces and names only the tools the session
+  offers.
+- `ask_user` puts one question, with choices or for typed text, to you in the interface.
+  Elsewhere the model is told no one can answer and states its assumption.
+- A todo item may carry a `check`, what proves it done, shown under the item; the model is
+  told an item is completed only after its check passed. The interface shows the list as
+  a checklist above the composer as soon as the model writes one, with the plan's path;
+  `Ctrl+T` hides and shows it.
+- A compaction summary ends with the todo list and the plan's location, so neither is
+  lost in a long session.
+- Any of these is turned off with a deny rule, as any tool is; the prompt then stops
+  mentioning it.
+
 ## 2.0.0
 
 JamCLI 2.0.0 is the rehaul: a terminal-native agent rebuilt around one agent loop, with
