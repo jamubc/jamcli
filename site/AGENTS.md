@@ -24,11 +24,16 @@ Every page follows one shape, and `bun run build` enforces the parts that can be
   `<Receipt path="src/..." symbol="..." />`. Find the exact exported symbol with a search before
   citing it: a guessed one fails the build. Leave line numbers out.
 - **Proofs close the page.** `<Proof run="...">` gives a command run from the repository root and
-  what it shows. Run every one before committing, and quote real output, never expected output.
+  what it shows. The build runs every proof and fails when one does not exit 0. Mark a proof
+  `reader` only when a build cannot run it: it needs the reader's own configuration, the network,
+  or a file the page has them create. Its label then says so. Quote real output, never expected
+  output.
 - **Plain, exact prose.** Say what happens, in the order it happens. Tables for anything with
   more than two attributes per row. No marketing, no filler, no claims the code does not make.
 
 ## What goes where
+
+- `reference/`: pages whose tables are written from the code at every build. See below.
 
 - `concepts/`: how something works and why. One topic per page.
 - `tools/`: one page per built-in tool family: inputs, limits, configuration, permissions.
@@ -46,6 +51,19 @@ Every page follows one shape, and `bun run build` enforces the parts that can be
   the pages it touches.
 - A correction to an existing page is its own commit, apart from new pages.
 
+## Reference pages
+
+`scripts/reference.ts` imports the definitions the product reads (`BUILTIN_COMMANDS`,
+`BUILTIN_TOOLS`, `settingsFromSchema()`, the interface keys, `USAGE`) and writes
+`src/generated/reference.json`, which is never committed. A reference page frames a table with
+the house style and renders it with `ReferenceTable`; it does not copy a row into prose.
+
+The text in a table is the definition's own: a command's summary, a tool's and each parameter's
+description, a setting's schema description, a key's words. To change what a row says, change the
+definition, where the person using JamCLI reads the same words. The script fails the build naming
+any definition that has no text, so a new command, tool, parameter, or setting cannot ship without
+its description.
+
 ## Diagrams
 
 Inline SVG in `src/components/diagrams/`, drawn in `currentColor`, with a `title` and a `desc`
@@ -57,8 +75,9 @@ cannot, and keep it cheap.
 ```bash
 cd site
 bun install
-bun run build    # runs the receipt check first
+bun run build    # checks receipts, runs every proof, writes the reference data, then builds
 ```
 
-Then grep the changed pages for U+2014 and run each page's proofs from the repository root. The
-site is its own project: the root gates do not cover it.
+The build imports the product and runs its tests, so run `bun install` at the repository root
+first. Then grep the changed pages for U+2014, and run any `reader` proof on a page you changed by
+hand. The site is its own project: the root gates do not cover it.
