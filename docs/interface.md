@@ -70,7 +70,9 @@ same place.
 
 Copying goes to the system clipboard. Over SSH, or where there is none, it goes through
 the terminal (OSC 52), which reaches the machine you sit at if the terminal supports it.
-`/copy` copies whole messages the same way.
+`/copy` copies whole messages the same way, and `/copy debug` copies the session's whole
+log as it was recorded: every message, tool call and result, approval, notice, model and
+mode change, and request, one JSON event per line.
 
 ## Thinking
 
