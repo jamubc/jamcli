@@ -92,7 +92,11 @@ const fetchSchema: JsonSchema = {
   type: 'object',
   properties: {
     url: { type: 'string', description: 'An http or https URL.' },
-    prompt: { type: 'string', description: 'What to look for on the page, carried to the refinement stage.' },
+    prompt: {
+      type: 'string',
+      description:
+        'What to look for on the page. On a long page only the parts that mention it come back, with the page\'s full length and how to get all of it; omit it to read the whole page.',
+    },
   },
   required: ['url'],
   additionalProperties: false,

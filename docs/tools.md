@@ -42,7 +42,7 @@ request with `gh`, both after you approve.
 
 | Tool | Class | What it does |
 |---|---|---|
-| `web_fetch` | network | A URL as readable text: HTML reduced to its text with links kept as markdown, navigation and footers dropped, other text types as they are, binary refused. Up to 5 MB, 30 seconds, sent with the `JamCLI` user agent. Responses are cached in memory for 15 minutes. A redirect to another host is not followed; the model is told where it points and must fetch it in a new call, which rules judge for that host. |
+| `web_fetch` | network | A URL as readable text: HTML reduced to its text with links kept as markdown, navigation and footers dropped, other text types as they are, binary refused. Up to 5 MB, 30 seconds, sent with the `JamCLI` user agent. With a `prompt`, a page longer than 9,000 characters comes back as the paragraphs that mention the prompt's words, up to about 6,000 characters, with the page's full length and how to get all of it; a page that mentions none of them comes back from its start, and without a `prompt` the page comes back whole. Responses are cached in memory for 15 minutes. A redirect to another host is not followed; the model is told where it points and must fetch it in a new call, which rules judge for that host. |
 | `web_search` | network | Search the web through a configured provider (LangSearch), with an optional `freshness` hint. Absent unless a provider key resolves through `search.providers.langsearch.{endpoint,api_key,key_env_var}` or `LANGSEARCH_API_KEY`. |
 
 Allow a site with a rule such as `web_fetch(domain:docs.python.org)` or
