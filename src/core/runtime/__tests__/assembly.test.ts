@@ -150,6 +150,31 @@ test('tool guidance names only the tools that are offered', () => {
   expect(only([])).toContain('- Date: 2026-09-23');
 });
 
+test('the plan note describes the harness and names only the plan tools that are offered', () => {
+  const inPlan = (names: string[]) =>
+    buildRuntimePrompt({
+      tools: names.map((name) => ({ name, description: '', parameters: {}, policyClass: 'read', source: 'builtin' })),
+      projectRoot: '/p',
+      cwd: '/p',
+      mode: 'plan',
+    });
+  const full = inPlan(['read_file', 'plan_write', 'plan_read', 'exit_plan_mode', 'ask_user', 'todo_write']);
+  expect(full).toContain('Plan mode is on.');
+  expect(full).toContain('plan_write saves the plan to .jamcli/plan.md');
+  expect(full).toContain('Ask the person with ask_user about');
+  expect(full).toContain('5. Put the steps into the todo list with todo_write');
+  expect(full).toContain('6. Then call exit_plan_mode.');
+  expect(full).toContain('code that exists is not a step done');
+  const bare = inPlan(['read_file']);
+  expect(bare).toContain('Plan mode is on.');
+  expect(bare).not.toContain('plan_write');
+  expect(bare).toContain('by ending your turn with the question');
+  expect(bare).toContain('4. Present the plan in your reply');
+  expect(bare).toContain('5. Then stop. The person approves by switching the mode');
+  expect(bare).not.toContain('todo_write');
+  expect(buildRuntimePrompt({ tools: [], projectRoot: '/p', cwd: '/p', mode: 'default' })).not.toContain('Plan mode is on');
+});
+
 test("the date is the person's local date, not the UTC one", () => {
   const zone = process.env.TZ;
   const dateIn = (tz: string, date: Date) => {

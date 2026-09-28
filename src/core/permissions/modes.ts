@@ -50,6 +50,3 @@ export function modeRefusal(mode: PermissionMode, options: { sandboxed: boolean;
   }
   return undefined;
 }
-
-export const PLAN_NOTE =
-  'Plan mode is on: you can read and search, but not change files, run commands, or delegate. Investigate, then present a plan for the user to approve.';
