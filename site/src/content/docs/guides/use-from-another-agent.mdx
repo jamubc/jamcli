@@ -1,0 +1,143 @@
+---
+title: Use JamCLI from another agent
+description: Add jamcli mcp serve to Claude Code, OpenCode, or any MCP host, then delegate work to JamCLI sessions or use the JamCLI interface itself through a terminal. The twelve tools, what the person still answers, and how to test JamCLI this way without touching your own history or configuration.
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+
+<Aside title="In short">
+`jamcli mcp serve` makes JamCLI a tool for other agents. An agent host adds it once and gets two
+groups of tools: `session_*` to delegate work to a JamCLI session, and `terminal_*` to use the
+JamCLI interface itself, the ordinary program a person runs, in a real terminal. Anything that
+is the person's to answer, such as a commit, is asked of the person in their own host and never
+of the calling agent.
+</Aside>
+
+## Add it once
+
+The server speaks MCP on standard input and output, so any MCP host can start it. In Claude Code:
+
+```bash
+claude mcp add jamcli -- jamcli mcp serve
+```
+
+A running session does not pick up a server added after it started. Start a new one, and the
+`session_*` and `terminal_*` tools are there.
+
+Source: <Receipt path="src/mcp/server.ts" symbol="runMcpServer" />,
+<Receipt path="src/mcp/server.ts" symbol="createMcpServer" />.
+
+## Delegate work: the session tools
+
+A session here is the same session an editor opens over ACP: the same agent, tools, permissions,
+and [built-in commands](../../concepts/surfaces/).
+
+| Tool | Takes | Does |
+|---|---|---|
+| `session_start` | `cwd`, and optionally `model` and `resume` | Opens a session in that directory, finding its project root as `jamcli` does when started there. Returns the session id. |
+| `session_send` | `session`, `text`, optionally `wait_ms` | Sends a prompt or a `/command` line. |
+| `session_answer` | `session`, and `approval` (`allow_once`, `allow_session`, `deny`) with optional `feedback`, or `choice` | Answers a call waiting for approval, or a list a command offered. `choice: "none"` closes the list. |
+| `session_state` | `session`, optionally `wait_ms` | Reports whether a turn runs, what happened since the last read, and what the session waits on. |
+| `session_stop` | `session` | Cancels a running turn and ends the session. It stays in history, to resume with `session_start`. |
+
+A call returns when the turn ends, when the session needs an answer, or after `wait_ms`,
+whichever comes first. What it returns is what happened since the caller last read, in words and
+as structured content. Progress notifications carry it while the turn runs.
+
+Source: <Receipt path="src/mcp/session.ts" symbol="DelegatedSession" />,
+<Receipt path="src/mcp/session.ts" symbol="SessionReport" />,
+<Receipt path="src/mcp/server.ts" symbol="reportText" />.
+
+### One delegated commit
+
+<Steps>
+
+1. The agent calls `session_start` with the project directory, then `session_send` with `/commit`.
+2. Nothing is staged, so `/commit` offers a list: stage everything, or choose with `/diff`. The
+   result shows it, one line per choice with its key.
+3. The agent calls `session_answer` with `choice: "all"`. The model drafts a message.
+4. Confirming the commit is the person's. The server does not return the question to the agent:
+   it asks the person, in their own host, "JamCLI session ... asks you, not the agent driving it:
+   Commit this?"
+5. The person answers: commit with the drafted message, edit it first, or leave it. The agent's
+   call returns with what followed. If their host cannot ask, nothing is committed.
+
+</Steps>
+
+## Use the interface itself: the terminal tools
+
+The session tools reach what JamCLI does. The terminal tools reach what it shows. They run the
+ordinary `jamcli`, launched as the shipped build launches it, in a pseudo-terminal read through a
+terminal emulator. The program on the other end is the one a person runs: JamCLI has no mode for
+being driven. The only thing set is `JAMCLI_ACP_ENDPOINT`, so the interface's observer can say
+whether it is working or waiting, the same observer a person can switch on.
+
+| Tool | Takes | Does |
+|---|---|---|
+| `terminal_start` | `cwd`, optionally `args`, `cols`, `rows` | Starts `jamcli` there. `args` go to the interface, for example `["--screen-reader"]`. |
+| `terminal_type` | `terminal`, `text`, optionally `enter` and `wait_ms` | Types the text, then Enter unless `enter` is false. Returns the screen once it settles. |
+| `terminal_keys` | `terminal`, `keys` | Presses keys in order: `enter`, `escape`, `tab`, `shift+tab`, arrows, `pageup`, `pagedown`, `backspace`, `space`, `ctrl+<letter>`, or one character. |
+| `terminal_screen` | `terminal` | The screen as it is now, and what the interface is doing. |
+| `terminal_wait` | `terminal`, optionally `text` and `wait_ms` | Waits until the screen shows the text, or, without text, until the interface stops working and the screen is still. |
+| `terminal_resize` | `terminal`, `cols`, `rows` | Resizes, as a person resizing the window does. |
+| `terminal_stop` | `terminal` | Stops the terminal and the `jamcli` in it. |
+
+Every terminal is recorded as an asciinema `.cast` file under `mcp-terminals/` in JamCLI's state
+directory. The recording stays after `terminal_stop`, so what the agent saw can be replayed.
+
+The emulator is an xterm-compatible terminal. It does not speak kitty's keyboard protocol, which
+is the same kind of difference there is between any two terminals a person might use.
+
+Source: <Receipt path="src/mcp/terminal.ts" symbol="DrivenTerminal" />,
+<Receipt path="src/mcp/terminal.ts" symbol="InterfaceState" />,
+<Receipt path="src/terminal/terminal.ts" symbol="openTerminal" />,
+<Receipt path="src/terminal/terminal.ts" symbol="jamcliCommand" />.
+
+## What the person still answers
+
+The calling agent never answers for the person:
+
+- An approval for a tool that always asks, such as a commit or a lesson from `/reflect`.
+- A choice a command marks as the person's: confirming `/commit`, pushing and opening with `/pr`,
+  and trusting a project's hooks.
+
+For these, `session_answer` refuses. Keys sent to a terminal waiting on one are not sent: the
+person is asked, and their answer is typed for them. The server asks the person through MCP elicitation, which their host shows as a prompt. Claude Code
+supports it. A host that cannot ask, such as OpenCode today, gets a denial, so the call does not
+happen.
+
+Two questions show only as text on the interface's screen: the bypass confirmation and the
+hooks trust question. The server cannot tell them apart from other text, so they are the
+person's by rule. An agent driving a terminal leaves them for the person.
+
+Source: <Receipt path="src/mcp/server.ts" symbol="askPerson" />.
+
+## Testing JamCLI this way
+
+The terminal tools are how an agent finds out whether JamCLI works: by using it, as a person
+would, rather than through a harness of its own. A few rules keep that honest and harmless:
+
+- **Run it in a throwaway project**, never in a checkout you care about.
+- **Give it its own state and configuration.** Set `JAMCLI_STATE_DIR` to a scratch directory and
+  `JAMCLI_CONFIG_DIR` to a copy of your configuration, so its sessions stay out of your history
+  and nothing it saves reaches your settings.
+- **Restart the server after changing JamCLI.** A running server keeps the code it started with.
+- **Keep the recording.** A defect found this way is fixed with a test that fails without the fix,
+  and the `.cast` file shows what happened.
+
+## Proofs
+
+<Proof run="bun test src/mcp">
+All pass. The session tests delegate a turn, answer an approval and a list, and show that a call
+the person must answer is refused to the agent and asked of the person, or denied where the host
+cannot ask.
+</Proof>
+
+<Proof run="bun test src/terminal">
+All pass: `jamcli` starts in a pseudo-terminal as the shipped build starts it, keys arrive as a
+terminal sends them, and the session is recorded.
+</Proof>

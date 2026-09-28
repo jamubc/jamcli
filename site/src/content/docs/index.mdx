@@ -9,12 +9,14 @@ JamCLI is a coding agent that runs in your terminal. It works with local models 
 well as hosted providers, and it asks before it changes anything you have not allowed.
 
 These pages explain how it works from the inside: what the model is told, where its tools come
-from, and how to add one.
+from, how to add one, where its commands run, and how another agent can use it.
 
 <CardGrid>
   <LinkCard title="How the system prompt is assembled" href="concepts/prompt-assembly/" description="The five parts of the prompt, in order, and when each one appears." />
   <LinkCard title="Where tools come from" href="concepts/tools/" description="Registration, the offered set, and the path of one call." />
   <LinkCard title="Web tools" href="tools/web/" description="web_fetch and web_search: inputs, limits, configuration, permissions." />
+  <LinkCard title="One command set, every surface" href="concepts/surfaces/" description="Built-in commands in the interface, headless, ACP, and MCP, and which answers stay yours." />
+  <LinkCard title="Use JamCLI from another agent" href="guides/use-from-another-agent/" description="jamcli mcp serve: delegate sessions, or use the interface itself through a terminal." />
   <LinkCard title="Add a built-in tool" href="guides/add-a-tool/" description="From an empty file to a tool the model reaches for." />
 </CardGrid>
 

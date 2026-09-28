@@ -1,0 +1,112 @@
+---
+title: One command set, every surface
+description: Every built-in slash command is defined once and runs the same way in the interface, in a headless run, in an editor over ACP, and in a session another agent opens over MCP. How each surface types a command, answers its lists, and shows what it says, and which answers stay the person's.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Receipt from '../../../components/Receipt.astro';
+import Proof from '../../../components/Proof.astro';
+
+<Aside title="In short">
+JamCLI's 36 built-in commands, from `/compact` to `/reflect`, are defined once, in `src/commands/`.
+The interface, a headless run, an editor over ACP, and a session another agent opens over MCP
+all run that one set, so a command does the same thing wherever you type it. Only the way you
+answer a list and read the output changes with the surface. A few answers are never the
+surface's to give: they are the person's.
+</Aside>
+
+## What a command is
+
+A command is a `SlashCommand`: a name, a description, and a function that runs against a
+`CommandContext`. The context is what any surface can offer: show text, send a turn to the model,
+open a session, change the mode, and offer a list of choices. Nothing in it assumes a screen.
+
+A list is a `ChoiceRequest`. On a screen it is an overlay you move through. Where there is no
+screen it becomes numbered lines, each with a key, answered in a later step.
+
+Source: <Receipt path="src/commands/types.ts" symbol="SlashCommand" />,
+<Receipt path="src/commands/types.ts" symbol="CommandContext" />,
+<Receipt path="src/commands/types.ts" symbol="ChoiceRequest" />,
+<Receipt path="src/commands/builtin/index.ts" symbol="BUILTIN_COMMANDS" />.
+
+The interface implements the context itself. Every other surface runs commands through
+`CommandHost`, which implements it without a screen: it turns what a command shows into text,
+holds a list open until it is answered, and passes a turn to the session.
+
+Source: <Receipt path="src/commands/host.ts" symbol="CommandHost" />,
+<Receipt path="src/commands/host.ts" symbol="entryText" />,
+<Receipt path="src/commands/parse.ts" symbol="parseCommand" />.
+
+## Surface by surface
+
+| Surface | How you run a command | How you answer a list | Where the output goes |
+|---|---|---|---|
+| Interface | Type `/name`; `/` lists them | The overlay | The transcript |
+| Headless, `jamcli -p` | `jamcli -p "/name args"` | `--choose <key or number>`, once per list, in order | Standard output, as text, `json`, or `stream-json`. A refused command exits with 1 and says why. |
+| An editor over ACP | Offered in the editor's command list | `/choose <key or number>` in the next prompt, or `/choose none` | Message chunks. `/mode` and `/model` update the editor's mode and model pickers. |
+| Another agent over MCP | `session_send` with `/name args` | `session_answer` with `choice` | The tool result, in words and as structured content |
+
+Source: <Receipt path="src/cli.ts" />,
+<Receipt path="src/cli/run.ts" symbol="runHeadless" />,
+<Receipt path="src/acp/session.ts" symbol="createAcpSession" />,
+<Receipt path="src/mcp/session.ts" symbol="DelegatedSession" />.
+
+For example, a headless run of `/context` in a new project prints what the interface would show:
+
+```text
+$ jamcli -p "/context"
+Context: 4,553 of 868,000 tokens a request may use (1%), over 0 messages.
+Window: 1,000,000 tokens.
+Compaction starts at 737,800 tokens. /compact runs it now, and /compact <focus> steers the summary.
+```
+
+The numbers depend on the model. How to use JamCLI from another agent is in
+[Use JamCLI from another agent](../../guides/use-from-another-agent/).
+
+## Answers that stay the person's
+
+Some answers belong to the person at the keyboard, whatever the surface:
+
+- **A tool that always asks**, such as a commit or a lesson proposed by `/reflect`. Its approval
+  carries `alwaysAsks`, and the interface's observer marks the waiting call as the person's.
+- **A choice a command marks as the person's**: confirming what `/commit` commits, what `/pr`
+  pushes and opens, and whether to run a project's hooks.
+
+Where no person can answer, these fail closed. Headless `--choose` cannot confirm `/commit` or
+`/pr` ahead of time, because a script or an agent can run headless too. Over MCP the calling
+agent is refused, and the person is asked in their own agent host instead.
+
+Source: <Receipt path="src/core/approval.ts" symbol="buildApprovalRequest" />,
+<Receipt path="src/commands/builtin/commit.ts" symbol="commit" />,
+<Receipt path="src/commands/builtin/pr.ts" symbol="pr" />,
+<Receipt path="src/commands/builtin/extensions.ts" symbol="hooksCommand" />.
+
+Two answers are the person's by rule, not by check: the bypass confirmation and the hooks trust
+question when the interface itself runs in a terminal another agent drives. They show only as
+text on the screen, so nothing can tell them apart mechanically. An agent driving the interface
+leaves them alone.
+
+## Why this holds
+
+The commands import no interface code, and the core does not import the commands. A test
+enforces both, so a command cannot quietly come to depend on a screen. A second test runs every
+built-in command through `CommandHost` with no screen, from a list it does not keep: a command
+added later is covered the day it is added.
+
+## Proofs
+
+<Proof run="bun test src/commands/__tests__/parity.test.ts">
+All pass, one test per built-in command: each runs without a screen, does not fail, and shows or
+sends something.
+</Proof>
+
+<Proof run="bun test src/commands/__tests__/layers.test.ts">
+All pass: `src/commands/` imports no OpenTUI, React, or interface code, and `src/core/` does not
+import `src/commands/`.
+</Proof>
+
+<Proof run="bun test src/commands/__tests__/host.test.ts">
+All pass, including a hooks trust question that an answer given in advance does not settle.
+</Proof>
