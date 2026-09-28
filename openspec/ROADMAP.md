@@ -160,9 +160,8 @@ a person trusting it:
 7. The trust gate, seen only in auto mode. A removal notice names the tool but not the
    call, so with two `grep` calls in a turn it cannot be checked which was withheld.
    `/cost` leaves the classifier out of the total when it has no price
-   (`typesafe:jev-latest`, 27 requests in one session). The withheld text is replaced in
-   the tool message (`src/core/agent.ts`, `screen`), so the log keeps the reason but not
-   what was withheld.
+   (`typesafe:jev-latest`, 27 requests in one session). The log now keeps what was
+   withheld as the removal notice's detail (`6f22d4d`).
 8. `/rewind` to an early checkpoint undoes that step only, as D15 records as built; a
    file a later step created stays. The list labels a checkpoint "before edit
    find-replace.js", which reads as a point in time. Either the label or the restore
@@ -182,7 +181,9 @@ a person trusting it:
    in a cloned repository are a real way in); how `disable-model-invocation` is honored
    when the model is the only one that loads skills; whether a resumed session restores
    its recorded mode, which it does not today.
-10. Not in the log: the system prompt and the tool definitions each request carried.
+10. The log did not hold the system prompt or the tool definitions a request carried. It
+    now records them from the request as sent, whenever they change (`6f22d4d`), and
+    `/copy debug` shows them.
 
 ### 5. `add-connections`
 
