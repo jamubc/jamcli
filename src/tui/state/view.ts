@@ -95,6 +95,8 @@ export interface ViewState {
   nextId: number;
   /** The todo list the model last wrote in this session, when it has written one. */
   todos?: TodoView[];
+  /** The plan the model last saved this session: where it is, so the person can edit it. */
+  plan?: { path: string; lines: number };
   /** The person's sticky notes for this interface, newest first. They never reach the model. */
   notes: string[];
 }
@@ -240,7 +242,9 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         ...(madeDiff ? { diff: madeDiff, collapsed: false } : {}),
       }));
       const todos = result.tool === 'todo_write' && result.success && Array.isArray(result.metadata?.todos) ? (result.metadata.todos as TodoView[]) : undefined;
-      return { ...state, rows, approvals: state.approvals.filter((approval) => approval.callId !== result.callId), ...(todos ? { todos } : {}) };
+      const plan =
+        result.tool === 'plan_write' && result.success && typeof result.metadata?.path === 'string' ? { path: result.metadata.path, lines: Number(result.metadata.lines ?? 0) } : undefined;
+      return { ...state, rows, approvals: state.approvals.filter((approval) => approval.callId !== result.callId), ...(todos ? { todos } : {}), ...(plan ? { plan } : {}) };
     }
 
     case 'approval_request': {
@@ -380,7 +384,7 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     case 'load': {
       const { rows, nextId } = rowsFrom(action.messages, state.nextId);
       // Tokens are counted from events, so another session's count starts over.
-      return { ...state, rows, nextId, approvals: [], running: false, todos: undefined, status: { ...state.status, phase: 'idle', retry: undefined, inputTokens: 0, outputTokens: 0 } };
+      return { ...state, rows, nextId, approvals: [], running: false, todos: undefined, plan: undefined, status: { ...state.status, phase: 'idle', retry: undefined, inputTokens: 0, outputTokens: 0 } };
     }
     case 'status':
       return { ...state, status: { ...state.status, ...action.patch } };

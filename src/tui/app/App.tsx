@@ -80,22 +80,31 @@ const ANCHOR_MS = 600;
 
 const WORKING = new Set(['thinking', 'streaming', 'tool', 'retrying', 'compacting']);
 
-const TODO_WORDS: Record<TodoView['status'], string> = { pending: 'to do', in_progress: 'doing', completed: 'done' };
+const TODO_BOXES: Record<TodoView['status'], string> = { pending: '[ ]', in_progress: '[~]', completed: '[x]' };
 
-/** The model's todo list, shown and hidden with the todos key. */
-function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; plain: boolean; colors: Theme }) {
+/** One line of the checklist, as the panel and its test see it. */
+export const todoLine = (todo: TodoView): string =>
+  `${TODO_BOXES[todo.status]} ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}${todo.check ? `\n    check: ${todo.check}` : ''}`;
+
+/**
+ * The model's plan as a checklist, above the composer: shown on its own when a list
+ * first arrives, hidden and shown with the todos key. The plan file is named so the
+ * person can edit it to steer the model.
+ */
+function TodoPanel({ todos, plan, plain, colors }: { todos: TodoView[] | undefined; plan: ViewState['plan']; plain: boolean; colors: Theme }) {
   const sel = selectable(colors);
+  const done = todos?.filter((todo) => todo.status === 'completed').length ?? 0;
   return (
     <box {...framed(plain, colors.border)} flexDirection="column" flexShrink={0}>
-      <text {...sel} fg={colors.accent}>Todo list</text>
+      <text {...sel} fg={colors.accent}>{todos?.length ? `Plan: ${done} of ${todos.length} done` : 'Plan'}{plan ? ` · ${plan.path} (${plan.lines} lines), edit it there to steer the model` : ''}</text>
       {todos?.length ? (
         todos.map((todo, index) => (
-          <text {...sel} key={index} fg={todo.status === 'completed' ? colors.dim : colors.text}>
-            {`${TODO_WORDS[todo.status]}: ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}${todo.check ? `\n   check: ${todo.check}` : ''}`}
+          <text {...sel} key={index} fg={todo.status === 'completed' ? colors.dim : todo.status === 'in_progress' ? colors.accent : colors.text}>
+            {todoLine(todo)}
           </text>
         ))
       ) : (
-        <text {...sel} fg={colors.dim}>No todo list yet. The model writes one with todo_write as it works.</text>
+        <text {...sel} fg={colors.dim}>No checklist yet. The model writes one with todo_write as it works.</text>
       )}
     </box>
   );
@@ -145,6 +154,11 @@ export function App(props: AppProps) {
     // The status line has the session's facts from the first frame, not after an effect.
     first.session.messages.length ? reduceView(initialView(statusOf(first)), { type: 'load', messages: first.session.messages }) : initialView(statusOf(first))
   );
+  // A checklist that has just appeared is shown without asking; the todos key hides it again.
+  const hasTodos = Boolean(state.todos?.length);
+  useEffect(() => {
+    if (hasTodos) setShowTodos(true);
+  }, [hasTodos]);
   const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch, props.observer?.event), [runtime]);
   useEffect(() => props.observer?.attach(runtime), [runtime]);
@@ -859,7 +873,7 @@ export function App(props: AppProps) {
                     onPick={(index) => referenceMatches[index] && completeWith(referenceMatches[index])}
                   />
                 ) : null}
-                {showTodos ? <TodoPanel todos={state.todos} plain={plain} colors={theme} /> : null}
+                {showTodos ? <TodoPanel todos={state.todos} plan={state.plan} plain={plain} colors={theme} /> : null}
                 <box {...framed(plain, theme.border)} paddingLeft={0} paddingRight={0} flexShrink={0} height={plain ? 3 : 5}>
                   <textarea
                     ref={composer}

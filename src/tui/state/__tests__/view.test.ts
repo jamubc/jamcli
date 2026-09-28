@@ -194,6 +194,9 @@ test('the todo list is the one the model last wrote, and another session has non
     event({ type: 'tool_result', result: { tool: 'todo_write', success: true, output: 'ok', durationMs: 1, callId: 't1', metadata: { todos } } }),
   ]);
   expect(state.todos).toEqual(todos);
+  // A saved plan is kept by path, so the panel can say where to edit it.
+  state = reduceView(state, event({ type: 'tool_result', result: { tool: 'plan_write', success: true, output: 'saved', durationMs: 1, callId: 'p1', metadata: { path: '.jamcli/plan.md', lines: 12 } } }));
+  expect(state.plan).toEqual({ path: '.jamcli/plan.md', lines: 12 });
   // A failed write, or another tool's metadata, changes nothing.
   state = reduceView(state, event({ type: 'tool_result', result: { tool: 'todo_write', success: false, output: 'bad', durationMs: 1, callId: 't2', metadata: { todos: [] } } }));
   state = reduceView(state, event({ type: 'tool_result', result: { tool: 'read_file', success: true, output: 'x', durationMs: 1, callId: 'r1', metadata: { todos: [] } } }));

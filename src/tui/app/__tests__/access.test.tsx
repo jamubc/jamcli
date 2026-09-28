@@ -105,23 +105,37 @@ test('Ctrl+R searches earlier messages, newest first, and puts the chosen one in
   }
 }, 30_000);
 
-test('Ctrl+T shows the todo list the model last wrote, and hides it again', async () => {
+test('the checklist appears on its own when the model writes one, with its checks and the plan, and Ctrl+T hides and shows it', async () => {
   const { setup, close } = await open({}, { size: tall });
   try {
     setup.mockInput.pressKey('t', { ctrl: true });
-    await frameWith(setup, (frame) => frame.includes('No todo list yet.'));
+    await frameWith(setup, (frame) => frame.includes('No checklist yet.'));
+    setup.mockInput.pressKey('t', { ctrl: true });
+    await frameWith(setup, (frame) => !frame.includes('No checklist yet.'));
     const todos = [
       { content: 'Read the parser', status: 'completed' },
-      { content: 'Fix the bug', status: 'in_progress', active_form: 'Fixing the bug' },
+      { content: 'Fix the bug', status: 'in_progress', active_form: 'Fixing the bug', check: 'bun test test/parse passes' },
       { content: 'Add a test', status: 'pending' },
     ];
-    context.server.enqueue({ toolCalls: [{ id: 't1', name: 'todo_write', arguments: { todos } }] }, { text: 'Planned.' });
+    context.server.enqueue(
+      { toolCalls: [{ id: 'p1', name: 'plan_write', arguments: { content: '# Plan\n1. Fix the bug' } }] },
+      { toolCalls: [{ id: 't1', name: 'todo_write', arguments: { todos } }] },
+      { text: 'Planned.' }
+    );
+    // The plan is written in plan mode, through the same command a person uses.
+    await send(setup, '/mode plan');
+    await frameWith(setup, (frame) => frame.includes('plan'));
     await send(setup, 'plan it');
-    const shown = await frameWith(setup, (frame) => frame.includes('doing: Fixing the bug'));
-    expect(shown).toContain('done: Read the parser');
-    expect(shown).toContain('to do: Add a test');
+    // Nobody pressed the key: the list showed itself.
+    const shown = await frameWith(setup, (frame) => frame.includes('[~] Fixing the bug'));
+    expect(shown).toContain('Plan: 1 of 3 done');
+    expect(shown).toContain('[x] Read the parser');
+    expect(shown).toContain('[ ] Add a test');
+    expect(shown).toContain('check: bun test test/parse passes');
     setup.mockInput.pressKey('t', { ctrl: true });
-    await frameWith(setup, (frame) => !frame.includes('doing: Fixing the bug'));
+    await frameWith(setup, (frame) => !frame.includes('[~] Fixing the bug'));
+    setup.mockInput.pressKey('t', { ctrl: true });
+    await frameWith(setup, (frame) => frame.includes('[~] Fixing the bug'));
   } finally {
     await close();
   }
