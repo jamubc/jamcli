@@ -39,10 +39,10 @@ and [built-in commands](../../concepts/surfaces/).
 | Tool | Takes | Does |
 |---|---|---|
 | `session_start` | `cwd`, and optionally `model` and `resume` | Opens a session in that directory, finding its project root as `jamcli` does when started there. Returns the session id. |
-| `session_send` | `session`, `text`, optionally `wait_ms` | Sends a prompt or a `/command` line. |
-| `session_answer` | `session`, and `approval` (`allow_once`, `allow_session`, `deny`) with optional `feedback`, or `choice` | Answers a call waiting for approval, or a list a command offered. `choice: "none"` closes the list. |
+| `session_send` | `session`, `text`, optionally `wait_ms` | Sends a prompt or a `/command` line. Refused while a list waits for its answer. |
+| `session_answer` | `session`, and `approval` (`allow_once`, `allow_session`, `deny`) with optional `feedback` or `pattern`, or `choice` | Answers a call waiting for approval, or a list a command offered. A waiting call lists the patterns `allow_session` may grant, narrowest first; `pattern` picks one, the first when absent. `choice: "none"` closes the list. |
 | `session_state` | `session`, optionally `wait_ms` | Reports whether a turn runs, what happened since the last read, and what the session waits on. |
-| `session_stop` | `session` | Cancels a running turn and ends the session. It stays in history, to resume with `session_start`. |
+| `session_stop` | `session` | Cancels a running turn and ends the session. It stays in history, and a later call on it says how to resume it with `session_start`. |
 
 A call returns when the turn ends, when the session needs an answer, or after `wait_ms`,
 whichever comes first. What it returns is what happened since the caller last read, in words and

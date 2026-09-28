@@ -26,9 +26,13 @@ does. Add it once, for example `claude mcp add jamcli -- jamcli mcp serve`.
 
 - **Sessions, for delegating work.** `session_start` opens a session in a directory (its
   project root is found from it, as `jamcli` does when started there); `session_send`
-  sends a prompt or any `/command`; `session_answer` answers a call waiting for approval
-  (`allow_once`, `allow_session`, `deny`) or a list a command offered; `session_state`
-  reports; `session_stop` ends one, which stays in history. Each is the same session an
+  sends a prompt or any `/command`, and is refused while a list waits for its answer;
+  `session_answer` answers a call waiting for approval (`allow_once`, `allow_session`,
+  `deny`) or a list a command offered. A waiting call lists the patterns a session grant
+  may take, narrowest first, as the interface's prompt offers them, and `allow_session`
+  takes one as `pattern`, the first when absent. `session_state` reports; `session_stop`
+  ends one, which stays in history, and a later call on it says how to resume it with
+  `session_start`. Each is the same session an
   editor opens over ACP, with the same runtime, commands, and permissions. A call returns
   when the turn ends, when the session needs an answer, or after `wait_ms`, with what
   happened since the caller last read it, in words and as structured content; progress
