@@ -55,24 +55,24 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-session-reflection`, waiting at its task 6.2. `add-surface-parity`, `add-mcp-server`,
-and `generate-reference-docs`, which the owner opened on 2026-09-27 as exceptions to the
-working rule while 6.2 waited, are archived; see Closed units below. `add-mcp-server` is how
-6.2 now runs: an agent drives `/reflect` through `jamcli mcp serve`, and the owner approves
-each lesson in their own host. On 2026-09-27 the owner merged the whole stack to `master`,
-`add-session-reflection` still open, so work starts again from one branch.
-
-`add-session-reflection` stays open. Its code is committed and its task 6.1 ran end to end
-on OpenCode Go. What remains is 6.2: `/reflect` on at least 10 of the owner's real
-sessions, the approved novel edits counted against the 0 of 26 baseline, which only the
-owner's approvals can produce. `add-agents`, `reconcile-shipped-behavior`, and
-`fix-observed-session-defects` closed 2026-09-27; see Closed units below.
-`add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
-approve it before any task begins, and `git checkout 9d9f5c6 --
-openspec/changes/add-windows-support` restores its proposal from the commit that recorded
+None. Every unit up to `add-session-reflection` is archived, and the owner merged the whole
+stack to `master` on 2026-09-27, so work starts again from one branch. The next unit is the
+first open one in `ROADMAP.md`. `add-windows-support` is shelved, not in the active changes
+tree: it waits for the owner to approve it before any task begins, and `git checkout 9d9f5c6
+-- openspec/changes/add-windows-support` restores its proposal from the commit that recorded
 it.
 
 ## Closed units
+
+### 10. `add-session-reflection`
+
+Archived as `2026-09-27-add-session-reflection`: 2 requirements added (Failure Signals,
+Session Reflection). `/reflect` reads a session's failure signals and proposes edits to
+skills, rules, or agents, each behind the citation and novelty gates and each applied only on
+the person's approval. Task 6.1 ran end to end on OpenCode Go. Task 6.2, `/reflect` on 10 of
+the owner's real sessions measured against the 0 of 26 baseline, was not run: the owner
+closed the unit without it. Whether the gates turn the earlier 0 of 26 into approved novel
+edits is therefore not measured.
 
 ### 9. `add-mcp-server`
 

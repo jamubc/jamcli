@@ -56,4 +56,6 @@
   fixed in `5aff758`.
 - [ ] 6.2 Run `/reflect` on at least 10 real sessions; record approved novel edits in
   `SEQUENCE.md` against the 0 of 26 baseline.
-- [ ] 6.3 Four gates, then archive.
+  - Not run. The owner closed the unit on 2026-09-27 without it, having moved on; the 0 of 26
+    baseline has no measured counterpart.
+- [x] 6.3 Four gates, then archive.
