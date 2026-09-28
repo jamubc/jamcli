@@ -141,6 +141,23 @@ test('/config lists every setting with what it does and where it comes from; a y
   }
 }, 30_000);
 
+test('a paste lands in the filter, and Backspace edits it', async () => {
+  const { setup, close } = await open({}, { size: tall });
+  try {
+    await send(setup, '/theme');
+    await frameWith(setup, (frame) => frame.includes('Themes'));
+    await setup.mockInput.pasteBracketedText('high-con');
+    const pasted = await frameWith(setup, (frame) => frame.includes('Filter: high-con') && !frame.includes('monochrome'));
+    expect(pasted).toContain('> high-contrast');
+    setup.mockInput.pressBackspace();
+    await frameWith(setup, (frame) => frame.includes('Filter: high-co') && !frame.includes('Filter: high-con'));
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Theme: high-contrast.'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('/theme changes the colors at once and saves the choice for every project', async () => {
   const { setup, close } = await open({}, { size: tall });
   try {

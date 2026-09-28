@@ -404,7 +404,8 @@ export function App(props: AppProps) {
    * The overlay open over the composer: the request, its choices once they arrive, the
    * filter typed so far, and the chosen row. Keys read the ref, which changes at once.
    */
-  type Open = { request: ChoiceRequest; items?: ChoiceItem[]; note?: string; filter: string; index: number };
+  type Open = { request: ChoiceRequest; items?: ChoiceItem[]; note?: string; filter: string; index: number; serial: number };
+  const serial = useRef(0);
   const overlay = useRef<Open | undefined>(undefined);
   const [, setOverlayView] = useState(0);
   const setOverlay = (next: Open | undefined) => {
@@ -419,7 +420,7 @@ export function App(props: AppProps) {
   const startAt = (request: ChoiceRequest, items: ChoiceItem[]) => Math.max(0, items.findIndex((item) => (request.at === undefined ? item.current : item.key === request.at)));
   const pick = (request: ChoiceRequest) => {
     const items = Array.isArray(request.items) ? request.items : undefined;
-    setOverlay({ request, filter: '', index: items ? startAt(request, items) : 0, ...(items ? { items } : {}) });
+    setOverlay({ request, filter: '', index: items ? startAt(request, items) : 0, serial: (serial.current += 1), ...(items ? { items } : {}) });
     if (items) return;
     const pending = request.items as Promise<{ items: ChoiceItem[]; note?: string }>;
     const still = () => overlay.current?.request === request;
@@ -660,19 +661,18 @@ export function App(props: AppProps) {
     }
     const open = overlay.current;
     if (open) {
-      // The overlay takes every key, including the Enter that closes it and hands focus back.
-      key.preventDefault();
+      // The list takes the keys that move through it; the filter's input takes the rest.
       const shown = open.items ? shownItems(open.items, open.filter, open.request.freeText) : [];
       const last = Math.max(0, shown.length - 1);
       const step = { down: 1, up: -1, pagedown: PICKER_ROWS, pageup: -PICKER_ROWS }[key.name as 'down'];
       if (key.name === 'escape') {
+        key.preventDefault();
         setOverlay(undefined);
         open.request.dismissed?.();
+      } else if (step) {
+        key.preventDefault();
+        setOverlay({ ...open, index: Math.min(Math.max(0, open.index + step), last) });
       }
-      else if (step) setOverlay({ ...open, index: Math.min(Math.max(0, open.index + step), last) });
-      else if (key.name === 'return') chooseOverlay(open.index);
-      else if (key.name === 'backspace') setOverlay({ ...open, filter: open.filter.slice(0, -1), index: 0 });
-      else if (!key.ctrl && !key.meta && key.sequence && key.sequence.length === 1 && key.sequence >= ' ') setOverlay({ ...open, filter: open.filter + key.sequence, index: 0 });
       return;
     }
     if (viewer) {
@@ -835,6 +835,7 @@ export function App(props: AppProps) {
               <box flexDirection="column" flexShrink={0} visible={!viewer}>
                 {overlay.current ? (
                   <Picker
+                    key={overlay.current.serial}
                     title={overlay.current.request.title}
                     items={overlay.current.items}
                     note={overlay.current.note ?? overlay.current.request.note}
@@ -843,6 +844,8 @@ export function App(props: AppProps) {
                     filter={overlay.current.filter}
                     selected={overlay.current.index}
                     onPick={chooseOverlay}
+                    onFilter={(filter) => overlay.current && setOverlay({ ...overlay.current, filter, index: 0 })}
+                    onSubmit={() => overlay.current && chooseOverlay(overlay.current.index)}
                     onHover={(index) => overlay.current && overlay.current.index !== index && setOverlay({ ...overlay.current, index })}
                     onScroll={(step) => {
                       const open = overlay.current;

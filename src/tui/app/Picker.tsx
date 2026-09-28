@@ -59,6 +59,10 @@ export function Picker(props: {
   onHover?: (index: number) => void;
   /** The wheel turned over the list: move the selection by this many rows. */
   onScroll?: (step: number) => void;
+  /** The filter was typed into. */
+  onFilter?: (filter: string) => void;
+  /** Enter in the filter: choose the chosen row. */
+  onSubmit?: () => void;
 }) {
   const theme = useTheme();
   const sel = useSelectable();
@@ -78,10 +82,10 @@ export function Picker(props: {
         <text {...sel} {...cut} fg={theme.accent}>{`${props.title}${counted}`}</text>
         <text {...sel} {...cut} flexShrink={0} marginLeft={1} fg={theme.dim}>{`${position}${badge}`}</text>
       </box>
-      <text {...sel} {...cut}>
-        <span fg={theme.dim}>Filter: </span>
-        {props.filter ? <span fg={theme.text}>{props.filter}</span> : <span fg={theme.dim}>type to narrow the list</span>}
-      </text>
+      <box flexDirection="row">
+        <text {...sel} fg={theme.dim} flexShrink={0}>Filter: </text>
+        <input focused flexGrow={1} value={props.filter} placeholder="type to narrow the list" placeholderColor={theme.dim} textColor={theme.text} cursorColor={theme.text} onInput={props.onFilter} onSubmit={props.onSubmit} />
+      </box>
       <text {...sel}> </text>
       {shown === undefined ? <text {...sel} fg={theme.dim}>Asking…</text> : null}
       {shown !== undefined && shown.length === 0 ? <text {...sel} fg={theme.dim}>{props.items?.length ? 'Nothing matches the filter.' : props.empty}</text> : null}
