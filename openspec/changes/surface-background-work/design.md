@@ -53,7 +53,10 @@ the `user_prompt_submit` hook's context already goes; and after each batch's res
 recorded, where the list is appended to the last result's output, as a `post_tool` hook's
 context is. The runtime supplies `news` from `table.drainEnded()`, one line per entry:
 `job_ab12 (npm start) exited with code 1 after 42s; read it with command_output`. A
-background task's line names `task_result`. Alternative considered: emit an event and
+background task's line names `task_result`. Only the top-level runtime supplies `news`: a
+child shares the table, and if it drained the news it would take it from the session the
+person talks to. A foreground child is added as already told, since its result comes back
+in the call that started it. Alternative considered: emit an event and
 have the surface inject a message. Rejected: the model's conversation is the agent's to
 write, and a surface-injected message would differ per surface.
 

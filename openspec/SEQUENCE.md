@@ -64,6 +64,17 @@ layout, so the frame snapshots diff as wording. `land-interface-rhythm` follows 
 carries the spacing, the rail, the indentation and the tone layers. Both are recorded in
 `ROADMAP.md` under the inserted interface units, with `/btw` after them.
 
+Later on 2026-09-28, after a review of the approval path and of sessions
+`2026-09-28-e9b87fc7` and `2026-09-28-040643ab`, the owner had two further units built on
+the same branch, each as its own change, both with every task checked except the live
+drive, which is deferred to the owner: `surface-background-work` (one work table per
+session, ends told to the model with the next message it reads, `/jobs`, the status line
+count, consecutive delegations run together) and `redraw-plan-board-and-prompt` (the board
+drawn by mark and color with its running work and clock, kept up beside a prompt; the
+prompt saying a command once). Three permission fixes from the same review landed as
+fixes outside a change: an interpreter is never offered whole and its inline code is
+hidden, an MCP tool asks whatever its server claims, and `command_kill` does not ask.
+
 On 2026-09-28 the owner had the `land-interface-rhythm` work started at once, outside a
 change, on the same branch: flex rows and a hand pointer on every clickable line, the
 picker's filter on an input, the composer gutter, the rail as a border, the thinking window

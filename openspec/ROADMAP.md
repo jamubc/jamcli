@@ -319,6 +319,17 @@ long lines cut with no mark at 60 columns, a finished tool line hiding its argum
 Escape on the `/` list leaving its filter text in the composer, and the garbled frame for
 about three seconds after a large resize.
 
+### B2. `surface-background-work` and `redraw-plan-board-and-prompt`
+
+Inserted 2026-09-28 from the owner's review of sessions `2026-09-28-e9b87fc7` and
+`2026-09-28-040643ab`, and built the same day. The first gives each session one table of
+what runs beside the turn (`src/core/work.ts`), tells the model when any of it ends with
+the next message it reads, runs consecutive `task` calls together, and adds `/jobs` and
+the status line count. The second draws the board by mark and color with its running work
+and a clock, keeps it up beside a prompt, and has the prompt say a command once. What B
+still owes after them: the flex-prop lists, tone layers beyond `settled`, and the resize
+garble, which did not reproduce.
+
 ### C. `add-btw`
 
 Raised by the owner on 2026-09-27, after A and B. `/btw` is a side exchange that does not
