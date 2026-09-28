@@ -262,6 +262,84 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       });
     });
 
+  const delegates = (index: number) => ctx.dispatcher.policyClass?.(calls[index].name) === 'delegate';
+
+  /** Take the step's checkpoint before its first call that may change something. */
+  const changeAhead = async (index: number) => {
+    const current = hooked.get(index)!.call;
+    if (changing || !changes(current)) return;
+    changing = true;
+    await ctx.beforeChange?.(current).catch(() => undefined);
+  };
+
+  /**
+   * Decide one call and act on everything but running it: a denial is answered and settled,
+   * a question is put to whoever answers, a grant is remembered. `run` means it may run now;
+   * `settled` means it has its result; `cancelled` means the turn ended while it waited, and
+   * it has no result yet.
+   */
+  const settleDecision = async (index: number): Promise<'run' | 'settled' | 'cancelled'> => {
+    const call = calls[index];
+    const current = hooked.get(index)!.call;
+    const verdict = decide(index);
+    if (verdict.decision === 'deny') {
+      // A rule or the mode said no. The model hears why, and the rest of the step goes on.
+      ctx.emit({
+        type: 'approval_decision',
+        callId: call.id,
+        tool: call.name,
+        allow: false,
+        scope: 'once',
+        by: verdict.by ?? 'policy',
+        ...(verdict.rule ? { rule: verdict.rule } : {}),
+        ...(verdict.reason ? { reason: verdict.reason } : {}),
+      });
+      const result = resultFor(call, 'denied', `Not run: ${verdict.reason ?? 'the permission policy denies it'}.`);
+      ctx.emit({ type: 'tool_result', result });
+      settle(index, result);
+      return 'settled';
+    }
+    if (verdict.decision === 'ask') {
+      const decision = await waitForDecision(current, undefined, verdict.reason);
+      if (decision === 'cancelled') {
+        stopped = 'cancelled';
+        return 'cancelled';
+      }
+      const read = readDecision(decision);
+      ctx.emit(answered(call, read));
+      if (!read.allow) {
+        const output =
+          read.by !== 'user'
+            ? `Not run: ${read.feedback ?? `denied by ${read.by}`}`
+            : read.feedback
+              ? `Tool call was denied, feedback: ${read.feedback}`
+              : 'Tool call was denied.';
+        const result = resultFor(call, 'denied', output);
+        ctx.emit({ type: 'tool_result', result });
+        settle(index, result);
+        // Only a person saying no takes the rest of the step back.
+        if (read.by === 'user') {
+          denial = { feedback: read.feedback, proceed: read.proceed };
+          stopped = 'denied';
+        }
+        return 'settled';
+      }
+      if (read.scope !== 'once') ctx.dispatcher.grant?.(current, read.scope, read.pattern);
+    } else if (verdict.by && recorded(call)) {
+      ctx.emit({
+        type: 'approval_decision',
+        callId: call.id,
+        tool: call.name,
+        allow: true,
+        scope: 'once',
+        by: verdict.by,
+        ...(verdict.rule ? { rule: verdict.rule } : {}),
+        ...(verdict.reason ? { reason: verdict.reason } : {}),
+      });
+    }
+    return 'run';
+  };
+
   for (let i = 0; i < calls.length; ) {
     const call = calls[i];
     if (!stopped && ctx.signal.aborted) stopped = 'cancelled';
@@ -299,72 +377,42 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       continue;
     }
 
-    const current = hooked.get(i)!.call;
-    const verdict = decide(i);
-    if (verdict.decision === 'deny') {
-      // A rule or the mode said no. The model hears why, and the rest of the step goes on.
-      ctx.emit({
-        type: 'approval_decision',
-        callId: call.id,
-        tool: call.name,
-        allow: false,
-        scope: 'once',
-        by: verdict.by ?? 'policy',
-        ...(verdict.rule ? { rule: verdict.rule } : {}),
-        ...(verdict.reason ? { reason: verdict.reason } : {}),
-      });
-      const result = resultFor(call, 'denied', `Not run: ${verdict.reason ?? 'the permission policy denies it'}.`);
-      ctx.emit({ type: 'tool_result', result });
-      settle(i, result);
-      i += 1;
+    // Consecutive delegations are decided one after another, then run together: a fan-out is a fan-out.
+    if (delegates(i)) {
+      const group: number[] = [];
+      for (let j = i; j < calls.length; j += 1) {
+        if (remaining !== undefined && group.length >= remaining) break;
+        await announce(j);
+        if (!delegates(j)) break;
+        group.push(j);
+      }
+      const runnable: number[] = [];
+      let next = i;
+      for (const j of group) {
+        const fate = await settleDecision(j);
+        next = fate === 'cancelled' ? j : j + 1;
+        if (fate === 'run') runnable.push(j);
+        if (stopped) break;
+      }
+      if (runnable.length) {
+        await changeAhead(runnable[0]);
+        const done = await Promise.all(runnable.map((index) => perform(index)));
+        runnable.forEach((index, k) => settle(index, done[k]));
+        ran += runnable.length;
+        if (remaining !== undefined) remaining -= runnable.length;
+      }
+      i = next;
       continue;
     }
-    if (verdict.decision === 'ask') {
-      const decision = await waitForDecision(current, undefined, verdict.reason);
-      if (decision === 'cancelled') {
-        stopped = 'cancelled';
-        continue;
-      }
-      const read = readDecision(decision);
-      ctx.emit(answered(call, read));
-      if (!read.allow) {
-        const output =
-          read.by !== 'user'
-            ? `Not run: ${read.feedback ?? `denied by ${read.by}`}`
-            : read.feedback
-              ? `Tool call was denied, feedback: ${read.feedback}`
-              : 'Tool call was denied.';
-        const result = resultFor(call, 'denied', output);
-        ctx.emit({ type: 'tool_result', result });
-        settle(i, result);
-        // Only a person saying no takes the rest of the step back.
-        if (read.by === 'user') {
-          denial = { feedback: read.feedback, proceed: read.proceed };
-          stopped = 'denied';
-        }
-        i += 1;
-        continue;
-      }
-      if (read.scope !== 'once') ctx.dispatcher.grant?.(current, read.scope, read.pattern);
-    } else if (verdict.by && recorded(call)) {
-      ctx.emit({
-        type: 'approval_decision',
-        callId: call.id,
-        tool: call.name,
-        allow: true,
-        scope: 'once',
-        by: verdict.by,
-        ...(verdict.rule ? { rule: verdict.rule } : {}),
-        ...(verdict.reason ? { reason: verdict.reason } : {}),
-      });
+
+    const fate = await settleDecision(i);
+    if (fate === 'cancelled') continue;
+    if (fate === 'run') {
+      await changeAhead(i);
+      settle(i, await perform(i));
+      ran += 1;
+      if (remaining !== undefined) remaining -= 1;
     }
-    if (!changing && changes(current)) {
-      changing = true;
-      await ctx.beforeChange?.(current).catch(() => undefined);
-    }
-    settle(i, await perform(i));
-    ran += 1;
-    if (remaining !== undefined) remaining -= 1;
     i += 1;
   }
 

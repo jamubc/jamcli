@@ -61,6 +61,44 @@ test("only a person's denial takes back the rest of the step", async () => {
   expect(byUser.outcome.denial).toEqual({ feedback: undefined, proceed: false });
 });
 
+test('consecutive delegations are asked for in order and then run together; a denial among them still stops the step', async () => {
+  const timeline: string[] = [];
+  const slow = (verdicts: Record<string, DispatchVerdict>): ToolDispatcher => ({
+    ...dispatcher(verdicts, { t1: 'delegate', t2: 'delegate', t3: 'delegate', after: 'write' }),
+    execute: async (item) => {
+      timeline.push(`start:${item.name}`);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      timeline.push(`end:${item.name}`);
+      return { tool: item.name, success: true, output: `${item.name} ran`, durationMs: 0 };
+    },
+  });
+  const asked: string[] = [];
+  const { outcome } = await run([call('t1'), call('t2'), call('t3'), call('after')], slow({ t1: { decision: 'ask' }, t2: { decision: 'ask' } }), (event) => {
+    if (event.type === 'approval_request') {
+      asked.push(event.call.name);
+      event.decide(true);
+    }
+  });
+  expect(asked).toEqual(['t1', 't2']);
+  // All three start before any ends, and the write after them waits for them.
+  expect(timeline.slice(0, 3)).toEqual(['start:t1', 'start:t2', 'start:t3']);
+  expect(timeline.indexOf('start:after')).toBeGreaterThan(timeline.indexOf('end:t3'));
+  expect(outcome.results.map((result) => [result.tool, result.status])).toEqual([
+    ['t1', 'ok'],
+    ['t2', 'ok'],
+    ['t3', 'ok'],
+    ['after', 'ok'],
+  ]);
+  expect(outcome.ran).toBe(4);
+
+  timeline.length = 0;
+  const denied = await run([call('t1'), call('t2'), call('t3')], slow({ t2: { decision: 'ask' } }), (event) => {
+    if (event.type === 'approval_request') event.decide(false);
+  });
+  expect(denied.outcome.results.map((result) => result.status)).toEqual(['ok', 'denied', 'cancelled']);
+  expect(timeline).toEqual(['start:t1', 'end:t1']);
+});
+
 test('allowed changes are recorded with who allowed them; reads and the plan are not', async () => {
   const target = dispatcher(
     {
