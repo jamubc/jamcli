@@ -76,8 +76,9 @@ test('MCP tools run through the same registry, schemas, and policy as built-ins'
   expect(notices).toEqual(['MCP server broken is unavailable: spawn failed']);
   const set = createToolSet({ registry, mcpServers: servers, permissions: engineFor(registry), context: () => ({ projectRoot: os.tmpdir() }) });
 
-  expect(set.summaries.find((tool) => tool.name === 'srv__lookup')).toMatchObject({ source: 'mcp', server: 'srv', policyClass: 'read' });
-  expect(set.dispatcher.requiresApproval('srv__lookup')).toBe(false);
+  // A server's read-only annotation is its own claim, so the tool asks like any other until a rule allows it.
+  expect(set.summaries.find((tool) => tool.name === 'srv__lookup')).toMatchObject({ source: 'mcp', server: 'srv', policyClass: 'execute' });
+  expect(set.dispatcher.requiresApproval('srv__lookup')).toBe(true);
   expect(set.dispatcher.requiresApproval('srv__deploy')).toBe(true);
 
   const result = await set.dispatcher.execute({ id: 'c', name: 'srv__lookup', arguments: { q: 'hi' } });

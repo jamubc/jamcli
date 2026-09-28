@@ -78,7 +78,8 @@ const allow = (event: AgentEvent) => {
 
 const surfaces: Record<string, () => Promise<string>> = {
   headless: async () =>
-    (await runHeadless({ prompt: PROMPT, projectRoot: root, allowTools: ['edit'], runtime: { mcp } })).sessionId,
+    // An MCP tool asks like any other, whatever the server says about it, so the flag names it too.
+    (await runHeadless({ prompt: PROMPT, projectRoot: root, allowTools: ['edit', 'docs__lookup'], runtime: { mcp } })).sessionId,
   acp: async () => {
     const session = await createAcpSession({ projectRoot: root, cwd: root, runtime: { mcp } });
     await session.run(PROMPT, allow);

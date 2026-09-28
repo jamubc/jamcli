@@ -48,13 +48,14 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, what: string): Promise<
 
 /**
  * An MCP server tool as a registry entry, so it is validated, decided, and recorded like
- * a built-in. A tool the server marks read-only runs without asking; any other asks.
+ * a built-in. Every one asks until a rule allows it: a server's read-only annotation is
+ * the server's claim about itself, and a claim does not decide what runs without asking.
  */
 const mcpTool = (descriptor: McpToolDescriptor, source: McpSource): RegisteredTool => ({
   name: descriptor.name,
   description: descriptor.description || `${descriptor.nativeName ?? descriptor.name} from MCP server ${descriptor.serverId}`,
   inputSchema: descriptor.inputSchema ?? { type: 'object', additionalProperties: true },
-  policy: descriptor.annotations?.readOnlyHint ? 'read' : 'execute',
+  policy: 'execute',
   runner: async (args) => {
     const result = await source.callServerTool(descriptor, args);
     return { output: result.output, ...(result.isError ? { status: 'error' as const } : {}) };
