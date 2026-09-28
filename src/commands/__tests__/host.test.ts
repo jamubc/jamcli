@@ -129,3 +129,21 @@ test('a list offered as text shows each choice with its key and how to answer', 
   });
   expect(text).toBe(['Pick one', '  1. Apple (in use) · red  [a]', '  2. Banana  [b]', '', 'Answer with /choose <number or key>.'].join('\n'));
 });
+
+test('/copy debug copies the session log exactly as it was recorded, every event', async () => {
+  let copied = '';
+  const { host, runtime, entries } = await open({ copy: async (text) => ((copied = text), 'system') });
+  await host.run('/copy debug');
+  expect(copied).toBe('');
+  expect(said(entries)).toContain('Nothing is recorded yet');
+  context.server.enqueue({ text: 'Hello back.' });
+  await runtime.run('say hello', () => undefined);
+  await host.run('/copy debug');
+  const file = fs.readFileSync(path.join(context.root, '.jamcli', 'history', `${runtime.session.id}.jsonl`), 'utf8');
+  expect(copied).toBe(file);
+  expect(JSON.parse(copied.split('\n')[0])).toMatchObject({ type: 'session', id: runtime.session.id });
+  expect(copied).toContain('say hello');
+  expect(copied).toContain('"type":"usage"');
+  await host.run('/copy debug 3');
+  expect(said(entries)).toContain('Usage: /copy');
+});

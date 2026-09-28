@@ -435,15 +435,29 @@ export function copiedLine(text: string, how: 'system' | 'terminal'): string {
 
 const copy: SlashCommand = {
   name: 'copy',
-  args: '[o] [count]',
-  summary: 'Copy the conversation to the clipboard; o copies only replies, and a count the last few',
+  args: '[o] [count] | debug',
+  summary: 'Copy the conversation to the clipboard; o copies only replies, a count the last few, and debug the whole session log as it was recorded',
   source: 'built-in',
   async run(ctx, args) {
     const words = args.split(/\s+/).filter(Boolean);
+    const usage = 'Usage: /copy [o] [count], or /copy debug, such as /copy, /copy o, /copy o 3, or /copy debug.';
+    if (words[0] === 'debug') {
+      // A partial log is not the log, so debug takes nothing after it.
+      if (words.length > 1) return ctx.notice('warn', usage);
+      const file = sessionFileFor(ctx.projectRoot, ctx.runtime.session.id);
+      if (!fs.existsSync(file)) return ctx.notice('info', 'Nothing is recorded yet: the log starts with the first message.');
+      // Every event, as the recorder wrote it: the log is the record, so nothing is reshaped or left out.
+      const log = fs.readFileSync(file, 'utf8');
+      const lines = log.split('\n').filter(Boolean).length;
+      const how = await ctx.copy(log);
+      if (how) ctx.notice('info', `Copied the session log, ${lines} event${lines === 1 ? '' : 's'} from ${displayPath(file, ctx.projectRoot)}, ${copiedLine(log, how)}`);
+      else ctx.notice('warn', `This terminal cannot take text for the clipboard, so nothing was copied. The log is ${displayPath(file, ctx.projectRoot)}.`);
+      return;
+    }
     const onlyReplies = words[0] === 'o';
     const limitText = onlyReplies ? words[1] : words[0];
     const limit = limitText === undefined ? undefined : Number(limitText);
-    if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) return ctx.notice('warn', 'Usage: /copy [o] [count], such as /copy, /copy o, or /copy o 3.');
+    if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) return ctx.notice('warn', usage);
     const messages = ctx.runtime.session.messages.filter((message) => (onlyReplies ? message.role === 'assistant' : message.role === 'user' || message.role === 'assistant') && message.content?.trim());
     const chosen = limit ? messages.slice(-limit) : messages;
     if (!chosen.length) return ctx.notice('info', 'Nothing to copy yet.');
