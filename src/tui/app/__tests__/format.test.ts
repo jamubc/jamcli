@@ -14,6 +14,9 @@ test('a tool line leads with the call, then the change, the time, and who decide
   expect(toolLine(row)).toBe('✓ edit a.txt · +2 −1 · 1.5 s');
   // With no marks to carry it, the state is a word, after the facts rather than in front of the call.
   expect(toolLine({ ...row, diff: undefined, phase: 'denied', durationMs: 3, decision: { allow: false, by: 'user', scope: 'once' } }, false)).toBe('edit a.txt, 3 ms, denied, denied by you');
+  // A grant names its rule where it was given, so what the session now allows is read there.
+  expect(toolLine({ ...row, diff: undefined, phase: 'ok', durationMs: 3, decision: { allow: true, by: 'user', scope: 'session', rule: 'edit(src/**)' } })).toBe('✓ edit a.txt · 3 ms · allowed by you · edit(src/**)');
+  expect(toolLine({ ...row, diff: undefined, phase: 'ok', durationMs: 3, decision: { allow: true, by: 'user', scope: 'session', rule: 'edit(src/**)' } }, false)).toBe('edit a.txt, 3 ms, done, allowed by you with edit(src/**)');
   // A call the policy decided says nothing about who: only the person's own decision is named.
   expect(toolLine({ ...row, diff: undefined, phase: 'timeout', durationMs: undefined, decision: { allow: true, by: 'policy', scope: 'once' } })).toBe('⏱ edit a.txt');
   expect(toolLine({ ...row, diff: undefined, phase: 'running', durationMs: undefined })).toBe('● edit a.txt');

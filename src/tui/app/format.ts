@@ -67,7 +67,8 @@ export function toolLine(row: Extract<Row, { kind: 'tool' }>, marks = true): str
   const phase = TOOL_PHASES[row.phase];
   const duration = formatDuration(row.durationMs);
   const stat = row.diff ? diffStat(row.diff) : undefined;
-  const decided = row.decision?.by === 'user' ? `${row.decision.allow ? 'allowed' : 'denied'} by you` : undefined;
+  // A grant names the rule the person chose, so what "this session" now covers is read where it was given.
+  const decided = row.decision?.by === 'user' ? `${row.decision.allow ? 'allowed' : 'denied'} by you${row.decision.allow && row.decision.rule ? `${marks ? ' · ' : ' with '}${row.decision.rule}` : ''}` : undefined;
   if (!marks) {
     const facts = [stat ? `${stat.added} line${stat.added === 1 ? '' : 's'} added and ${stat.removed} removed` : undefined, duration || undefined, phase.word, decided];
     return `${row.summary}, ${facts.filter(Boolean).join(', ')}`;
