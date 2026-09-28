@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
+    "dev": "bun scripts/reference.ts && astro dev",
+    "reference": "bun scripts/reference.ts",
     "check": "bun scripts/check-receipts.ts",
-    "build": "bun scripts/check-receipts.ts && astro build",
+    "build": "bun scripts/check-receipts.ts && bun scripts/reference.ts && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

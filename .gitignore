@@ -56,3 +56,6 @@ Thumbs.db
 agents.config.json
 scripts/test-history.ts
 release/
+
+# The site's reference data, written from the definitions at every build
+site/src/generated/
