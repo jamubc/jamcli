@@ -115,7 +115,7 @@ test('thinking runs in a window of the size it is given, then leaves one line a 
   }
 }, 20_000);
 
-test('the expanded view shows every block whole, and the compact view puts them back', async () => {
+test('Ctrl+O shows the detailed transcript in place of the conversation, as /copy debug renders it, and again returns', async () => {
   const { setup, close } = await open();
   try {
     const reasoning = 'I should read the file, then say what is in it.';
@@ -124,20 +124,29 @@ test('the expanded view shows every block whole, and the compact view puts them 
     await setup.mockInput.typeText('read a.txt');
     setup.mockInput.pressEnter();
     const compact = await frameWith(setup, (frame) => frame.includes('It has one line.'));
-    expect(compact).toContain('✓ done: read_file a.txt');
     expect(compact).not.toContain('the only line');
-    expect(compact).not.toContain('then say what is in it');
-    expect(compact).not.toContain('expanded view');
-    // One key opens everything at once: the thinking and the tool's output, with no row touched.
+    expect(compact).toContain('Message JamCLI');
+    await setup.mockInput.typeText('a draft');
+    // The log as /copy debug renders it: the thinking and the tool's output, and no composer.
     setup.mockInput.pressKey('o', { ctrl: true });
-    const wide = await frameWith(setup, (frame) => frame.includes('the only line'));
-    expect(wide).toContain('then say what is in it');
-    expect(wide).toContain('expanded view');
-    // And the same key puts the compact view back.
+    const detailed = await frameWith(setup, (frame) => frame.includes('Showing detailed transcript'));
+    expect(detailed).toContain('Ctrl+O to toggle · ↑↓ scroll · v to open in code · ? for shortcuts');
+    expect(detailed).toContain('the only line');
+    expect(detailed).not.toContain('Message JamCLI');
+    expect(detailed).not.toContain('a draft');
+    // Its keys move through it, and type nothing anywhere.
+    setup.mockInput.pressArrow('up');
+    setup.mockInput.pressArrow('up');
+    const moved = await frameWith(setup, (frame) => frame !== detailed && frame.includes('Showing detailed transcript'));
+    expect(moved).toContain('Showing detailed transcript');
+    setup.mockInput.pressKey('?');
+    await frameWith(setup, (frame) => frame.includes('Escape returns to the conversation'));
+    // And the same key puts the conversation back, with the draft where it was.
     setup.mockInput.pressKey('o', { ctrl: true });
-    const back = await frameWith(setup, (frame) => !frame.includes('the only line'));
-    expect(back).not.toContain('then say what is in it');
+    const back = await frameWith(setup, (frame) => !frame.includes('Showing detailed transcript'));
     expect(back).toContain('It has one line.');
+    expect(back).not.toContain('the only line');
+    expect(back).toContain('a draft');
   } finally {
     await close();
   }

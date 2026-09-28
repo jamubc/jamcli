@@ -13,7 +13,7 @@ export type ToolPhase = 'pending' | 'waiting' | 'running' | ToolStatus;
 
 export type Row =
   | { kind: 'user'; id: number; text: string }
-  /** What the model said, with the thinking that came before it. The thinking shows as one line until this row, or the whole view, is expanded. */
+  /** What the model said, with the thinking that came before it. The thinking shows as one line until this row is opened. */
   | { kind: 'assistant'; id: number; text: string; reasoning: string; streaming: boolean; collapsed: boolean }
   | {
       kind: 'tool';
@@ -75,8 +75,6 @@ export interface StatusData {
   /** The language servers that can run here, by name. */
   lspServers: number;
   phase: Phase;
-  /** The expanded view: every row shows everything it has, whatever each row's own state. */
-  expanded: boolean;
   retry?: { attempt: number; delayMs: number; reason: string };
 }
 
@@ -111,8 +109,6 @@ export type ViewAction =
   | { type: 'command'; text: string }
   | { type: 'output'; text: string; diff?: string }
   | { type: 'toggle'; id: number }
-  /** Show everything, or go back to the compact view. */
-  | { type: 'expand'; on?: boolean }
   | { type: 'clear' }
   /** Put a sticky note on top of the others. */
   | { type: 'note'; text: string }
@@ -145,7 +141,7 @@ export function initialView(status: Partial<StatusData> = {}): ViewState {
     running: false,
     nextId: 1,
     notes: [],
-    status: { mode: 'default', model: '', sandbox: 'none', costUsd: null, unpriced: 0, inputTokens: 0, outputTokens: 0, mcpServers: 0, lspServers: 0, phase: 'idle', expanded: false, ...status },
+    status: { mode: 'default', model: '', sandbox: 'none', costUsd: null, unpriced: 0, inputTokens: 0, outputTokens: 0, mcpServers: 0, lspServers: 0, phase: 'idle', ...status },
   };
 }
 
@@ -397,8 +393,6 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
     }
     case 'toggle':
       return { ...state, rows: updateRow(state.rows, (row) => row.id === action.id && (row.kind === 'tool' || row.kind === 'assistant'), (row) => ({ ...row, collapsed: !row.collapsed })) };
-    case 'expand':
-      return { ...state, status: { ...state.status, expanded: action.on ?? !state.status.expanded } };
     case 'clear':
       return { ...state, rows: [], approvals: [] };
     case 'note':

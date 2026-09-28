@@ -92,7 +92,6 @@ function statusEntries(status: StatusData): StatusPart[] {
   parts.push({ text: status.sandbox === 'none' ? 'no sandbox' : `sandbox ${status.sandbox}`, drop: 4 });
   if (status.mcpServers) parts.push({ text: `MCP ${status.mcpServers}`, drop: 2 });
   if (status.lspServers) parts.push({ text: `LSP ${status.lspServers}`, drop: 1 });
-  if (status.expanded) parts.push({ text: 'expanded view', drop: 6 });
   const phase = status.phase === 'retrying' && status.retry ? `retrying (${status.retry.attempt}): ${status.retry.reason}` : PHASE_WORDS[status.phase];
   parts.push({ text: phase });
   return parts;

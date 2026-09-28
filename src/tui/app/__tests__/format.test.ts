@@ -63,12 +63,6 @@ test('thinking that is done shows as one line saying how much of it there is', (
   expect(thinkingLine('only this', false, false)).toBe('thinking, 1 line');
 });
 
-test('the status line says when the view is expanded', () => {
-  const status = { ...initialView().status, expanded: true, phase: 'idle' as const };
-  expect(statusParts(status)).toEqual(['default mode', 'no model', 'no sandbox', 'expanded view', 'ready']);
-  expect(statusParts({ ...status, expanded: false })).not.toContain('expanded view');
-});
-
 test('a diff is drawn in the lines of its hunks, not its headers', () => {
   expect(diffRows(diff)).toBe(5);
   const twoHunks = `${diff}@@ -20,2 +21,2 @@\n-twenty\n+TWENTY\n`;

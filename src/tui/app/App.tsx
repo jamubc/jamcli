@@ -1,6 +1,8 @@
 /** @jsxImportSource @opentui/react */
 import path from 'path';
 import fs from 'fs';
+import { spawn } from 'child_process';
+import { debugTranscript } from '../../core/transcript/index.js';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import { fitPhrase, isMicro, microPhrase, microSetting } from './micro.js';
@@ -278,6 +280,37 @@ export function App(props: AppProps) {
     if (!selectingTranscript.current) return;
     selectingTranscript.current = false;
     transcript.current?.stopAutoScroll();
+  };
+
+  /**
+   * The detailed transcript: the session log as `/copy debug` renders it, read when it opens,
+   * in place of the conversation and the composer until it is closed. The composer stays
+   * mounted underneath, so a draft survives it.
+   */
+  const [viewer, setViewer] = useState<{ file: string; lines: string[] } | undefined>(undefined);
+  const [viewerHelp, setViewerHelp] = useState(false);
+  const viewerBox = useRef<ScrollBoxRenderable | null>(null);
+  const openViewer = () => {
+    const log = debugTranscript(projectRoot, runtime.sessionId);
+    if (!log) return dispatch({ type: 'notice', level: 'info', text: 'Nothing is recorded yet: the log starts with the first message.' });
+    composer.current?.blur();
+    setViewerHelp(false);
+    setViewer({ file: log.file, lines: log.text.split('\n') });
+  };
+  const closeViewer = () => {
+    setViewer(undefined);
+    if (!overlay.current) composer.current?.focus();
+  };
+  /** The detailed transcript, written beside the log, opened in VS Code. */
+  const openViewerInCode = (shown: { file: string; lines: string[] }) => {
+    const target = shown.file.replace(/\.jsonl$/, '.debug.md');
+    fs.writeFileSync(target, shown.lines.join('\n'), 'utf8');
+    const child = spawn('code', [target], { detached: true, stdio: 'ignore' });
+    child.on('error', (error: NodeJS.ErrnoException) =>
+      dispatch({ type: 'notice', level: 'warn', text: error.code === 'ENOENT' ? `The code command is not on PATH, so the transcript was not opened. It is ${path.relative(projectRoot, target)}.` : `Could not open ${path.relative(projectRoot, target)} in code: ${error.message}` })
+    );
+    child.unref();
+    flashFor(`Opening ${path.relative(projectRoot, target)} in code`);
   };
 
   const approval = state.approvals[0];
@@ -600,6 +633,19 @@ export function App(props: AppProps) {
       else if (!key.ctrl && !key.meta && key.sequence && key.sequence.length === 1 && key.sequence >= ' ') setOverlay({ ...open, filter: open.filter + key.sequence, index: 0 });
       return;
     }
+    if (viewer) {
+      // The detailed transcript takes the keys that move through it, and gives the rest back.
+      key.preventDefault();
+      const box = viewerBox.current;
+      if (bound('tool_detail', key) || key.name === 'escape') return closeViewer();
+      if (key.name === 'up' || key.name === 'down') return box?.scrollBy(key.name === 'up' ? -1 : 1);
+      if (bound('page_up', key) || bound('page_down', key)) return box?.scrollBy(bound('page_up', key) ? -1 : 1, 'viewport');
+      if (key.name === 'home') return box?.scrollTo(0);
+      if (key.name === 'end') return box?.scrollTo(box.scrollHeight);
+      if (key.sequence === 'v' && !key.ctrl && !key.meta) return openViewerInCode(viewer);
+      if (key.sequence === '?') return setViewerHelp((shown) => !shown);
+      return;
+    }
     const draft = composer.current?.plainText ?? '';
     // Text a list put in the composer to finish: Escape takes it back out, unsent, and returns.
     if (key.name === 'escape' && prefillBack.current && !controller.running) {
@@ -675,10 +721,9 @@ export function App(props: AppProps) {
       controller.cycleMode();
       return;
     }
-    // The expanded view: every block shows everything it has, until it is turned off again.
     if (bound('tool_detail', key)) {
       key.preventDefault();
-      return dispatch({ type: 'expand' });
+      return openViewer();
     }
     if (bound('history', key)) {
       key.preventDefault();
@@ -715,12 +760,25 @@ export function App(props: AppProps) {
               <text {...sel} fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
             </box>
             {state.notes.length ? <NotesPanel notes={state.notes} plain={plain} colors={theme} /> : null}
-            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
+            {viewer ? (
+              <box flexDirection="column" flexGrow={1}>
+                <text {...sel} fg={theme.accent} flexShrink={0}>{`${plain ? 'Note: ' : ''}Showing detailed transcript · ${keysFor(keys.bindings, 'tool_detail')} to toggle · ↑↓ scroll · v to open in code · ? for shortcuts`}</text>
+                {viewerHelp ? (
+                  <text {...sel} fg={theme.dim} flexShrink={0}>{`↑↓ a line · ${keysFor(keys.bindings, 'page_up')} and ${keysFor(keys.bindings, 'page_down')} a page · Home and End the top and bottom · v writes it beside the log and opens it in code · ${keysFor(keys.bindings, 'tool_detail')} or Escape returns to the conversation`}</text>
+                ) : null}
+                <scrollbox ref={viewerBox} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
+                  {viewer.lines.map((line, index) => (
+                    <text key={index} {...sel} fg={theme.text}>{line || ' '}</text>
+                  ))}
+                </scrollbox>
+              </box>
+            ) : null}
+            <scrollbox ref={transcript} visible={!viewer} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
               {hidden ? (
                 <text {...sel} fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
               ) : null}
               {(hidden ? state.rows.slice(hidden) : state.rows).map((row) => (
-                <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} expanded={state.status.expanded} onToggle={(id) => dispatch({ type: 'toggle', id })} />
+                <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} onToggle={(id) => dispatch({ type: 'toggle', id })} />
               ))}
             </scrollbox>
             {approval ? (
@@ -744,7 +802,7 @@ export function App(props: AppProps) {
                 }}
               />
             ) : (
-              <box flexDirection="column" flexShrink={0}>
+              <box flexDirection="column" flexShrink={0} visible={!viewer}>
                 {overlay.current ? (
                   <Picker
                     title={overlay.current.request.title}
@@ -789,7 +847,7 @@ export function App(props: AppProps) {
                 <box {...framed(plain, theme.border)} paddingLeft={0} paddingRight={0} flexShrink={0} height={plain ? 3 : 5}>
                   <textarea
                     ref={composer}
-                    focused={!overlay.current}
+                    focused={!overlay.current && !viewer}
                     textColor={theme.text}
                     focusedTextColor={theme.text}
                     placeholderColor={theme.dim}
