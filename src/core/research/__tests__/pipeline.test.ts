@@ -52,7 +52,8 @@ test('the brief carries the steps, the filters, the depth, the report path, and 
   expect(brief).toContain('Research this question and write a cited report: What changed in Bun 1.4?');
   expect(brief).toContain('3 independent lines of inquiry');
   expect(brief).toContain('background: true on agent "research"');
-  expect(brief).toContain('at least 6 distinct sources in full with web_fetch');
+  expect(brief).toContain('at least 6 distinct sources with web_fetch rather than trust search snippets, passing a prompt that names what it wants from each page');
+  expect(brief).toContain('After each source it reads, a child writes one line of what that source showed and its URL');
   // Children are told apart on the board, only search and read, and the parent holds its turn until they end.
   expect(brief).toContain('Start each child\'s prompt with a short title for its line');
   expect(brief).toContain('must not start tasks of its own, run shell commands, or write files');
