@@ -161,6 +161,26 @@ test('decisions, notices, usage, and turn ends are recorded with who decided', a
   expect(events.at(-1)).toMatchObject({ type: 'notice', level: 'warn', message: 'heads up', code: 'x' });
 });
 
+test('what each request carried is recorded from the request itself, once until it changes', async () => {
+  const log = SessionLog.create(root, { surface: 'cli' });
+  const recorder = new TranscriptRecorder(log, { surface: 'cli', model: 'm' });
+  const provider = createScriptedProvider([{ text: 'One.' }, { text: 'Two.' }, { text: 'Three.' }]);
+  const agent = (systemPrompt: string) => new CoreAgent({ provider, model: 'm', systemPrompt, dispatcher: dispatcher(), toolDefinitions: defs('read_a') });
+  let session = (await agent('You are JamCLI.').run(createSession(root, log.id), 'first', recorder.handle)).session!;
+  session = (await agent('You are JamCLI.').run(session, 'second', recorder.handle)).session!;
+  const contexts = () => log.events().filter((event) => event.type === 'context');
+  // Exactly what the provider was sent: the system message and the tool definitions, not a rebuilt copy.
+  expect(contexts()).toHaveLength(1);
+  expect(contexts()[0]).toMatchObject({ system: provider.calls[0].messages[0].content, tools: provider.calls[0].options.tools });
+  expect(provider.calls[0].messages[0]).toMatchObject({ role: 'system', content: 'You are JamCLI.' });
+
+  // A later process on the same log records only a change.
+  const resumed = new TranscriptRecorder(SessionLog.open(root, log.id), { surface: 'cli', model: 'm' });
+  await agent('You are JamCLI, in plan mode.').run(session, 'third', resumed.handle);
+  expect(contexts()).toHaveLength(2);
+  expect(contexts()[1]).toMatchObject({ system: 'You are JamCLI, in plan mode.' });
+});
+
 test('a model switch is recorded and later usage is attributed to the new model', () => {
   const log = SessionLog.create(root, { surface: 'tui' });
   const recorder = new TranscriptRecorder(log, { surface: 'tui', model: 'a' });

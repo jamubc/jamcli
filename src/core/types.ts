@@ -1,4 +1,5 @@
 import type { ElicitationAnswer, ElicitationRequest } from './mcp/connect.js';
+import type { ToolDefinition } from './providers/types.js';
 export interface TokenUsage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -159,7 +160,10 @@ export type AgentEvent =
       /** How long it took, the summary request included. */
       durationMs?: number;
     }
-  | { type: 'notice'; message: string; level?: 'info' | 'warn' | 'error'; code?: string }
+  /** A request is about to go to the model: the system prompt and tool definitions it carries, as sent. */
+  | { type: 'request'; system?: string; tools?: ToolDefinition[] }
+  /** `detail` is for the record only, such as what the trust gate withheld; no surface shows it to the model. */
+  | { type: 'notice'; message: string; level?: 'info' | 'warn' | 'error'; code?: string; detail?: string }
   | {
       type: 'approval_request';
       call: ToolCall;

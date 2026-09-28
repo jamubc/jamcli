@@ -542,6 +542,9 @@ export class CoreAgent implements Agent {
     let text = '';
     let reasoning = '';
     let done: StreamChunk | undefined;
+    // What this request carries besides the conversation, taken from the request itself for the record.
+    const system = messages[0]?.role === 'system' ? messages[0].content : undefined;
+    emit({ type: 'request', ...(system !== undefined ? { system } : {}), ...(tools ? { tools } : {}) });
     try {
       for await (const chunk of provider.streamChat(messages, {
         model: this.options.model,
@@ -630,7 +633,7 @@ export class CoreAgent implements Agent {
     const out = [...results];
     for (const removal of screening.dropped) {
       const candidate = candidates[removal.index];
-      emit({ type: 'notice', level: 'warn', code: 'trust_gate', message: `Removed ${candidate.tool} result: ${removal.reason}` });
+      emit({ type: 'notice', level: 'warn', code: 'trust_gate', message: `Removed ${candidate.tool} result: ${removal.reason}`, detail: candidate.output });
       out[candidate.result] = { ...out[candidate.result], output: `[This result was withheld by the trust gate: ${removal.reason}.]` };
     }
     return { results: out, ...(screening.usage ? { usage: screening.usage } : {}) };

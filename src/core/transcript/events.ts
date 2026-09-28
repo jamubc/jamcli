@@ -1,3 +1,4 @@
+import type { ToolDefinition } from '../providers/types.js';
 import type { ApprovalScope, ChatMessage, RunStatus, TokenUsage } from '../types.js';
 
 /**
@@ -48,7 +49,13 @@ export type TranscriptEvent =
       /** The delegated session that made the request, when this session did not. */
       delegated?: string;
     }
-  | { v: 2; type: 'notice'; ts: number; level: 'info' | 'warn' | 'error'; message: string; code?: string }
+  | { v: 2; type: 'notice'; ts: number; level: 'info' | 'warn' | 'error'; message: string; code?: string; detail?: string }
+  /**
+   * What requests carry besides the conversation, as sent: the system prompt and the tool
+   * definitions. Written when they differ from the last recorded, so it holds for every
+   * request after it until the next one.
+   */
+  | { v: 2; type: 'context'; ts: number; system?: string; tools?: ToolDefinition[] }
   | { v: 2; type: 'model'; ts: number; from?: string; to: string }
   | { v: 2; type: 'permission_mode'; ts: number; from: string; to: string }
   | {

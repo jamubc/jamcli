@@ -10,6 +10,8 @@ export interface TranscriptRecorderOptions {
   onError?: (error: Error) => void;
 }
 
+const contextKey = (system: string | undefined, tools: unknown): string => JSON.stringify([system ?? null, tools ?? null]);
+
 /**
  * Writes engine events to a session log as they happen: every message, approval
  * decision, usage report, notice, and turn end. Nothing is written until the session
@@ -24,6 +26,8 @@ export class TranscriptRecorder {
   private written: number;
   /** Where the message that began the current turn is, in that count. */
   private turnStart: number | undefined;
+  /** The system prompt and tools last recorded, so a request that carries the same is not written again. */
+  private context: string | undefined;
 
   constructor(
     readonly log: SessionLog,
@@ -33,6 +37,7 @@ export class TranscriptRecorder {
     const events = log.events();
     this.started = events.some((event) => event.type === 'message');
     this.written = events.filter((event) => event.type !== 'session').length;
+    for (const event of events) if (event.type === 'context') this.context = contextKey(event.system, event.tools);
   }
 
   /**
@@ -83,8 +88,15 @@ export class TranscriptRecorder {
         return;
       }
       case 'notice':
-        this.write({ type: 'notice', level: event.level ?? 'info', message: event.message, ...(event.code ? { code: event.code } : {}) });
+        this.write({ type: 'notice', level: event.level ?? 'info', message: event.message, ...(event.code ? { code: event.code } : {}), ...(event.detail !== undefined ? { detail: event.detail } : {}) });
         return;
+      case 'request': {
+        const key = contextKey(event.system, event.tools);
+        if (key === this.context) return;
+        this.context = key;
+        this.write({ type: 'context', ...(event.system !== undefined ? { system: event.system } : {}), ...(event.tools ? { tools: event.tools } : {}) });
+        return;
+      }
       case 'compaction':
         this.write({
           type: 'compaction',
