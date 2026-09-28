@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "bun scripts/reference.ts && astro dev",
     "reference": "bun scripts/reference.ts",
-    "check": "bun scripts/check-receipts.ts",
-    "build": "bun scripts/check-receipts.ts && bun scripts/reference.ts && astro build",
+    "check": "bun scripts/check-receipts.ts && bun scripts/check-proofs.ts",
+    "build": "bun scripts/check-receipts.ts && bun scripts/check-proofs.ts && bun scripts/reference.ts && astro build",
     "preview": "astro preview"
   },
   "dependencies": {
