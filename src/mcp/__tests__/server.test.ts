@@ -126,3 +126,13 @@ test('allow_session grants a pattern the call offers, which covers later calls, 
   expect(again.report).toMatchObject({ status: 'idle', ended: 'ok' });
   expect(again.text).toContain('Listed again.');
 }, 60_000);
+
+test('a stopped session says it was stopped and how to resume it', async () => {
+  const { call, start } = await serve();
+  const session = await start();
+  await call('session_stop', { session });
+  const state = await call('session_state', { session });
+  expect(state.error).toBe(true);
+  expect(state.text).toContain(`Session ${session} was stopped`);
+  expect(state.text).toContain(`resume: "${session}"`);
+}, 60_000);

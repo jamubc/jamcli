@@ -124,7 +124,8 @@ export const isRetry = (ctx: ToolContext) => Boolean(ctx.mcpReq.inputResponses &
 export function createMcpServer(sessions = new Map<string, DelegatedSession>(), terminals = new Map<string, DrivenTerminal>()): McpServer {
   const server = new McpServer({ name: 'jamcli', version: JAMCLI_VERSION });
   const find = (id: string) => sessions.get(id);
-  const unknown = (id: string) => failure(`No session ${id}. session_start opens one.`);
+  const stopped = new Set<string>();
+  const unknown = (id: string) => failure(stopped.has(id) ? `Session ${id} was stopped; it stays in history. session_start with resume: "${id}" continues it.` : `No session ${id}. session_start opens one.`);
   const wait = z.number().int().min(0).max(3_600_000).optional().describe(`How long to wait for the turn, in milliseconds, before returning what there is. ${DEFAULT_WAIT_MS} when absent.`);
 
   server.registerTool(
@@ -155,6 +156,7 @@ export function createMcpServer(sessions = new Map<string, DelegatedSession>(), 
         }
       }
       sessions.set(session.id, session);
+      stopped.delete(session.id);
       return reply(session.report());
     }
   );
@@ -238,6 +240,7 @@ export function createMcpServer(sessions = new Map<string, DelegatedSession>(), 
       const session = find(id);
       if (!session) return unknown(id);
       sessions.delete(id);
+      stopped.add(id);
       await session.close();
       return { content: [{ type: 'text' as const, text: `Stopped session ${id}; it stays in history.` }] };
     }
