@@ -16,6 +16,8 @@ export type Waiting =
       summary: string;
       reason: string;
       preview?: ApprovalPreview;
+      /** What allow_session may grant, narrowest first; none when no grant can cover the call. */
+      suggestions: string[];
       /** The tool asks every time: only the person answers it. */
       personOnly: boolean;
     }
@@ -103,12 +105,20 @@ export class DelegatedSession {
     this.notify();
   }
 
-  /** Answer the call waiting for approval. The person's is never answered here. */
-  answerApproval(decision: 'allow_once' | 'allow_session' | 'deny', feedback?: string): void {
+  /**
+   * Answer the call waiting for approval. The person's is never answered here. A session
+   * grant is one of the patterns the call offers, the narrowest when none is named, as the
+   * interface's prompt offers them.
+   */
+  answerApproval(decision: 'allow_once' | 'allow_session' | 'deny', feedback?: string, pattern?: string): void {
     const pending = this.approval;
     if (!pending) throw new Error('No call is waiting for approval.');
     if (pending.waiting.personOnly) throw new Error(`${pending.waiting.tool} always asks the person, so only they answer it.`);
-    this.decide(decision === 'allow_once' ? { allow: true } : decision === 'allow_session' ? { allow: true, scope: 'session' } : { allow: false, ...(feedback ? { feedback } : {}) });
+    const offered = pending.waiting.suggestions;
+    if (pattern !== undefined && decision !== 'allow_session') throw new Error('A pattern goes with allow_session.');
+    if (pattern !== undefined && !offered.includes(pattern)) throw new Error(offered.length ? `${pattern} is not offered for this call. allow_session grants one of: ${offered.join(', ')}.` : 'No grant can cover this call, so it asks every time.');
+    if (decision === 'deny') return this.decide({ allow: false, ...(feedback ? { feedback } : {}) });
+    this.decide(decision === 'allow_session' ? { allow: true, scope: 'session', ...(pattern ? { pattern } : {}) } : { allow: true });
   }
 
   /** Answer the person's own call, with what they said. */
@@ -198,6 +208,7 @@ export class DelegatedSession {
           summary: event.request?.summary ?? event.call.name,
           reason: event.request?.reason ?? 'this tool asks before it runs',
           ...(event.request?.preview ? { preview: event.request.preview } : {}),
+          suggestions: event.request?.suggestions ?? [],
           personOnly: Boolean(event.request?.alwaysAsks),
         },
         decide: event.decide,

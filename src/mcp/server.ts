@@ -30,7 +30,11 @@ export function reportText(report: SessionReport): string {
   if (waiting?.kind === 'approval') {
     lines.push('', `Waiting for approval: ${waiting.summary}. ${waiting.reason}.`);
     if (waiting.preview?.text) lines.push(waiting.preview.text);
-    lines.push(waiting.personOnly ? 'Only the person answers this; they are being asked.' : 'Answer with session_answer: approval allow_once, allow_session, or deny.');
+    if (waiting.personOnly) lines.push('Only the person answers this; they are being asked.');
+    else {
+      lines.push('Answer with session_answer: approval allow_once, allow_session, or deny.');
+      lines.push(waiting.suggestions.length ? `allow_session grants, with pattern, one of: ${waiting.suggestions.join(', ')}. Without a pattern it grants the first.` : 'No grant can cover this call: allow_session allows it this once, and it asks again next time.');
+    }
   } else if (waiting?.kind === 'choice') {
     lines.push('', waiting.title, ...waiting.items.map((item, index) => `  ${index + 1}. ${item.label}${item.detail ? ` · ${item.detail}` : ''}  [${item.key}]`));
     lines.push(waiting.personOnly ? 'Only the person answers this; they are being asked.' : 'Answer with session_answer: choice <key or number>, or none.');
@@ -184,12 +188,13 @@ export function createMcpServer(sessions = new Map<string, DelegatedSession>(), 
       inputSchema: z.object({
         session: z.string(),
         approval: z.enum(['allow_once', 'allow_session', 'deny']).optional().describe('The answer to a call waiting for approval.'),
+        pattern: z.string().optional().describe('With allow_session: which of the patterns the waiting call offers to grant. The narrowest when absent.'),
         feedback: z.string().optional().describe('With deny: why, which the model reads.'),
         choice: z.string().optional().describe('The key or number of the choice, or none to close the list.'),
         wait_ms: wait,
       }),
     },
-    async ({ session: id, approval, feedback, choice, wait_ms }, ctx) => {
+    async ({ session: id, approval, feedback, pattern, choice, wait_ms }, ctx) => {
       const session = find(id);
       if (!session) return unknown(id);
       if (!isRetry(ctx as ToolContext)) {
@@ -199,7 +204,7 @@ export function createMcpServer(sessions = new Map<string, DelegatedSession>(), 
         try {
           if (waiting.kind === 'approval') {
             if (!approval) return failure('A call waits for approval: answer with approval allow_once, allow_session, or deny.');
-            session.answerApproval(approval, feedback);
+            session.answerApproval(approval, feedback, pattern);
           } else {
             if (!choice) return failure('A list waits: answer with choice <key or number>, or none.');
             session.send(`/choose ${choice}`);

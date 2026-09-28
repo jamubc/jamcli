@@ -109,3 +109,20 @@ test("/commit's confirmation is the person's too: the caller cannot say yes to i
   expect(done.text).not.toContain('Answer with /choose');
   expect(new TextDecoder().decode(git('log', '--format=%s').stdout).trim()).toBe('add a');
 }, 60_000);
+
+test('allow_session grants a pattern the call offers, which covers later calls, and nothing it does not offer', async () => {
+  const { call, start } = await serve();
+  const session = await start();
+  context.provider.enqueue({ toolCalls: [{ id: 'r1', name: 'run_command', arguments: { command: 'ls -la' } }] }, { text: 'Listed.' });
+  const asked = await call('session_send', { session, text: 'list the files' });
+  expect(asked.report.waiting.suggestions).toContain('run_command(ls *)');
+  expect(asked.text).toContain('run_command(ls *)');
+  const refused = await call('session_answer', { session, approval: 'allow_session', pattern: 'run_command(*)' });
+  expect(refused.error).toBe(true);
+  expect(refused.text).toContain('run_command(ls *)');
+  expect((await call('session_answer', { session, approval: 'allow_session', pattern: 'run_command(ls *)' })).report.status).toBe('idle');
+  context.provider.enqueue({ toolCalls: [{ id: 'r2', name: 'run_command', arguments: { command: 'ls a.txt' } }] }, { text: 'Listed again.' });
+  const again = await call('session_send', { session, text: 'list a.txt' });
+  expect(again.report).toMatchObject({ status: 'idle', ended: 'ok' });
+  expect(again.text).toContain('Listed again.');
+}, 60_000);
