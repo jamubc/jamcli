@@ -64,6 +64,13 @@ layout, so the frame snapshots diff as wording. `land-interface-rhythm` follows 
 carries the spacing, the rail, the indentation and the tone layers. Both are recorded in
 `ROADMAP.md` under the inserted interface units, with `/btw` after them.
 
+On 2026-09-28 the owner had the `land-interface-rhythm` work started at once, outside a
+change, on the same branch: flex rows and a hand pointer on every clickable line, the
+picker's filter on an input, the composer gutter, the rail as a border, the thinking window
+on a sticky scrollbox, a `settled` theme role, and Escape clearing a half-typed command.
+Of seed finding 5, the resize garble did not reproduce in the test renderer and the
+finished tool line already shows its call since the copy unit, so both are left as seen.
+
 Every unit up to `add-session-reflection` is archived, and the owner merged the whole
 stack to `master` on 2026-09-27, so work starts again from one branch.
 `add-windows-support` is shelved, not in the active changes

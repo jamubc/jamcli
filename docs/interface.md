@@ -57,7 +57,7 @@ same place.
 - Drag across the transcript to select, across as many rows as you like. Releasing copies
   the selection, and the status line says how much. Dragging above or below the
   transcript keeps it scrolling, so a long reply can be selected whole. A double click
-  selects a word. The selection is drawn in the theme's selection colors and stays on its
+  selects a word, a triple click a line, and Ctrl+click extends the selection. The selection is drawn in the theme's selection colors and stays on its
   words when the transcript scrolls, as in a document; monochrome inverts it.
 - The wheel scrolls the transcript, and in a list, the palette, or the `@` list it moves
   the highlight a row per turn; the list scrolls when the highlight reaches its edge.
@@ -67,6 +67,8 @@ same place.
   does is plain before the click.
 - Click a tool's line to show or hide that tool's output, and a thinking line to show or
   hide that thinking. These are one block at a time; Ctrl+O opens them all at once.
+- Over anything a click acts on, the pointer is a hand, where the terminal draws one.
+- While the terminal window is unfocused the working indicator holds still.
 
 Copying goes to the system clipboard. Over SSH, or where there is none, it goes through
 the terminal (OSC 52), which reaches the machine you sit at if the terminal supports it.
