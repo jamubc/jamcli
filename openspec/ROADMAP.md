@@ -137,8 +137,14 @@ a person trusting it:
    `grep`, and `glob`, which never ask. Candidates: a built-in allow list of read-only
    commands where the analyzer finds no redirect and no hidden part, and a description
    that sends reads and searches to the read tools.
-2. Not yet measured: the same trials in auto mode, which is JamCLI's own answer to
-   approval volume. Run that before choosing between the two candidates above.
+2. Measured on 2026-09-28 in auto mode, the same three session trials (sessions
+   `2026-09-28-5d352209`, `-83f8f987`, and the edits run): 12 approvals against 57 in
+   default mode, with the answers and edits still correct. Every one left came from a
+   command the analyzer marks hidden (`$(...)` or `xargs`), which offers no pattern to
+   grant, or from a network tool. A grant for `web_fetch` did not cover `web_search`,
+   though both asked with the same reason, "auto mode asks before tools that reach the
+   network". So auto mode answers the volume, and the candidates above are for default
+   mode and for read-only hidden commands.
 3. One logical change to one file arrived as three approvals; one small feature spent
    many read-only and `web_fetch` calls before its first edit. Candidates: one approval
    for a turn's edits to one file, and a nudge after a run of calls with no change.
@@ -151,6 +157,32 @@ a person trusting it:
    arguments.
 6. `/export` reports the path relative to the project (`../../../../tmp/...`) where it
    was given an absolute one.
+7. The trust gate, seen only in auto mode. A removal notice names the tool but not the
+   call, so with two `grep` calls in a turn it cannot be checked which was withheld.
+   `/cost` leaves the classifier out of the total when it has no price
+   (`typesafe:jev-latest`, 27 requests in one session). The withheld text is replaced in
+   the tool message (`src/core/agent.ts`, `screen`), so the log keeps the reason but not
+   what was withheld.
+8. `/rewind` to an early checkpoint undoes that step only, as D15 records as built; a
+   file a later step created stays. The list labels a checkpoint "before edit
+   find-replace.js", which reads as a point in time. Either the label or the restore
+   should change.
+9. From session `2026-09-28-22b86a6d` in the owner's home directory, the model reasoned
+   wrongly from what JamCLI did not tell it. Turns on `openrouter:inception/mercury-2.5`
+   said they were Mercury, which was true; after a `/model` switch DeepSeek owned those
+   messages and called them a confabulation, since nothing says which model is running
+   or that it changed. A `skill` result was withheld in auto mode, and after the mode went
+   back to default the same call passed, which the model took for a random gate. The
+   owner's own skill was flagged as an injection at 62%. The skill's
+   `disable-model-invocation: true` is read nowhere in `src/`, so the skill was listed and
+   loaded. The log shows each of these; `/copy` did not, which is why `/copy debug`
+   exists. Four decisions for the owner: whether the environment block names the running
+   model and a `/model` or `/mode` switch is told to the model; whether results of skills
+   from the person's own directories skip screening as `state` does (a project's skills
+   in a cloned repository are a real way in); how `disable-model-invocation` is honored
+   when the model is the only one that loads skills; whether a resumed session restores
+   its recorded mode, which it does not today.
+10. Not in the log: the system prompt and the tool definitions each request carried.
 
 ### 5. `add-connections`
 
