@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../providers/types.js';
+import type { ScreenedResult } from '../trust/index.js';
 import type { ApprovalScope, ChatMessage, RunStatus, TokenUsage } from '../types.js';
 
 /**
@@ -56,6 +57,8 @@ export type TranscriptEvent =
    * request after it until the next one.
    */
   | { v: 2; type: 'context'; ts: number; system?: string; tools?: ToolDefinition[] }
+  /** One trust-gate request: what the classifier was sent, what it answered or why it failed, and each result's fate. */
+  | { v: 2; type: 'screening'; ts: number; model?: string; sent?: string; answered?: string; error?: string; results: ScreenedResult[] }
   | { v: 2; type: 'model'; ts: number; from?: string; to: string }
   | { v: 2; type: 'permission_mode'; ts: number; from: string; to: string }
   | {

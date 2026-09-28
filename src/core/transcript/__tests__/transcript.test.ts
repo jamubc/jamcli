@@ -8,7 +8,7 @@ import type { AgentEvent, ChatMessage } from '../../types.js';
 import type { ToolDispatcher } from '../../tools/dispatch.js';
 import { toProviderMessage } from '../../providers/openai-compat.js';
 import { createScriptedProvider } from '../../../testing/scriptedProvider.js';
-import { SessionLog, TranscriptRecorder, parseTranscriptLine, projectMessages, sessionFileFor } from '../index.js';
+import { SessionLog, TranscriptRecorder, parseTranscriptLine, projectMessages, sessionFileFor, transcriptToMarkdown } from '../index.js';
 import { JAMCLI_VERSION } from '../../version.js';
 
 let root: string;
@@ -258,4 +258,26 @@ test('opening a session that does not exist says where it looked', () => {
 test('the recorded version matches package.json', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(import.meta.dir, '../../../../package.json'), 'utf8'));
   expect(JAMCLI_VERSION).toBe(pkg.version);
+});
+
+test('a trust-gate request is recorded as it went, and /copy debug shows it', () => {
+  const log = SessionLog.create(root, { surface: 'cli' });
+  const recorder = new TranscriptRecorder(log, { surface: 'cli', model: 'm' });
+  recorder.handle({ type: 'message', message: { role: 'user', content: 'fix it', timestamp: 1 } });
+  recorder.handle({
+    type: 'screening',
+    model: 'typesafe:jev-latest',
+    exchange: { sent: '{"state":{"task":"fix it"}}', answered: '{"answers":{}}' },
+    results: [
+      { tool: 'read_file', verdict: { relevance: 0.9, injection: false }, withheld: false },
+      { tool: 'grep', verdict: { relevance: 0.1, injection: false, reason: 'off topic' }, withheld: true },
+    ],
+  });
+  expect(log.events().find((event) => event.type === 'screening')).toMatchObject({ model: 'typesafe:jev-latest', sent: '{"state":{"task":"fix it"}}', answered: '{"answers":{}}' });
+  const debug = transcriptToMarkdown(log.events(), { debug: true });
+  expect(debug).toContain('### Trust gate (typesafe:jev-latest)');
+  // JSON is indented for reading; the log keeps it as sent.
+  expect(debug).toContain('"task": "fix it"');
+  expect(debug).toContain('2. `grep`: withheld, relevance 0.1, injection no, off topic');
+  expect(transcriptToMarkdown(log.events())).not.toContain('Trust gate');
 });

@@ -626,6 +626,9 @@ export class CoreAgent implements Agent {
       signal,
       candidates,
     });
+    if (screening.exchange) {
+      emit({ type: 'screening', ...(this.options.trustUsageKey ? { model: this.options.trustUsageKey } : {}), exchange: screening.exchange, results: screening.results ?? [] });
+    }
     if (this.options.trustOffNote && !this.trustNoted) {
       this.trustNoted = true;
       for (const note of screening.notes) emit({ type: 'notice', level: 'info', message: note });

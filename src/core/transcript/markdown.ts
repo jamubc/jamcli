@@ -19,6 +19,15 @@ const prettyArguments = (raw: unknown): string => {
   }
 };
 
+/** Text for reading: JSON indented, anything else as it is. The log keeps it as it was. */
+const readable = (text: string): string => {
+  try {
+    return fenced(JSON.stringify(JSON.parse(text), null, 2), 'json');
+  } catch {
+    return fenced(text, 'text');
+  }
+};
+
 const heading = (message: ChatMessage): string => {
   if (message.role === 'assistant') return message.model ? `## Assistant (${message.model})` : '## Assistant';
   return `## ${message.role.charAt(0).toUpperCase()}${message.role.slice(1)}`;
@@ -86,6 +95,21 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
         out.push(`> **Notice** (${event.level}${event.code ? `, ${event.code}` : ''}): ${event.message}`);
         if (options.debug && event.detail !== undefined) out.push('What it concerns, kept for the record and not sent to the model:', fenced(event.detail, 'text'));
         break;
+      case 'screening': {
+        if (!options.debug) break;
+        out.push(`### Trust gate${event.model ? ` (${event.model})` : ''}`);
+        if (event.sent !== undefined) out.push('Sent to the classifier:', readable(event.sent));
+        if (event.answered !== undefined) out.push('It answered:', readable(event.answered));
+        if (event.error !== undefined) out.push(`The request failed, so every result was kept: ${event.error}`);
+        const fate = (result: (typeof event.results)[number], index: number) => {
+          const verdict = result.verdict
+            ? `relevance ${result.verdict.relevance}, injection ${result.verdict.injection ? 'yes' : 'no'}${result.verdict.reason ? `, ${result.verdict.reason}` : ''}`
+            : 'no verdict';
+          return `${index + 1}. \`${result.tool}\`: ${result.withheld ? 'withheld' : 'kept'}, ${verdict}${result.duplicateOf !== undefined ? `, as a duplicate of ${result.duplicateOf + 1}` : ''}`;
+        };
+        if (event.results.length) out.push(event.results.map(fate).join('\n'));
+        break;
+      }
       case 'context':
         if (!options.debug) break;
         if (event.system !== undefined) out.push('### Sent to the model: system prompt', fenced(event.system, 'text'));

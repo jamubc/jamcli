@@ -90,6 +90,9 @@ export class TranscriptRecorder {
       case 'notice':
         this.write({ type: 'notice', level: event.level ?? 'info', message: event.message, ...(event.code ? { code: event.code } : {}), ...(event.detail !== undefined ? { detail: event.detail } : {}) });
         return;
+      case 'screening':
+        this.write({ type: 'screening', ...(event.model ? { model: event.model } : {}), ...event.exchange, results: event.results });
+        return;
       case 'request': {
         const key = contextKey(event.system, event.tools);
         if (key === this.context) return;
