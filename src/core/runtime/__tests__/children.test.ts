@@ -381,3 +381,30 @@ test("a background child's prompt reaches whoever answers the parent's calls, an
   const result = await taskResultRunner({ id }, ctx);
   expect(result.output).toContain('decided {"allow":true,"scope":"once"}');
 });
+
+test('task_result waits for a running child, holds no longer than the turn, and says when a wait ran out', async () => {
+  let finish!: () => void;
+  const delegate = async (request: DelegationRequest) => {
+    await new Promise<void>((resolve) => (finish = resolve));
+    return { status: 'ok' as const, response: 'the child finished', agent: request.agent ?? 'quick' };
+  };
+  const work = new WorkTable();
+  const controller = new AbortController();
+  const ctx = { projectRoot: root, delegate, work, signal: controller.signal };
+  const id = (await taskRunner({ agent: 'quick', prompt: 'p', background: true }, ctx)).metadata!.id as string;
+  // Without a wait it returns at once, and says how to wait.
+  expect((await taskResultRunner({ id }, ctx)).output).toContain('task_result with wait_seconds holds until it ends');
+  // With one it holds until the child ends, and collects it.
+  const waiting = taskResultRunner({ id, wait_seconds: 30 }, ctx);
+  await Bun.sleep(20);
+  finish();
+  expect((await waiting).output).toContain('the child finished');
+  expect(work.get(id)).toBeUndefined();
+  // A cancelled turn ends the wait at once instead of holding the tool for its full time.
+  const second = (await taskRunner({ agent: 'quick', prompt: 'q', background: true }, ctx)).metadata!.id as string;
+  const held = taskResultRunner({ id: second, wait_seconds: 900 }, ctx);
+  await Bun.sleep(10);
+  controller.abort();
+  expect((await held).output).toContain('is still running after 900 s');
+  finish();
+});

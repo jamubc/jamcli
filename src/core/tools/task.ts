@@ -23,6 +23,8 @@ interface BackgroundTask {
   isolation?: 'worktree';
   startedAt: number;
   controller: AbortController;
+  /** Settles when the child has ended, however it ended, so a result can be waited for. */
+  settled: Promise<void>;
 }
 
 const taskId = () => `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -85,6 +87,39 @@ const idSchema: JsonSchema = {
   additionalProperties: false,
 };
 
+/** The longest one call waits for a child, which the model may ask again for. */
+const MAX_WAIT_SECONDS = 900;
+
+const resultSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'Identifier returned by task.' },
+    wait_seconds: {
+      type: 'integer',
+      minimum: 1,
+      maximum: MAX_WAIT_SECONDS,
+      description: 'Wait up to this long for a task that is still running. Omit it to return at once.',
+    },
+  },
+  required: ['id'],
+  additionalProperties: false,
+};
+
+/** Wait for `promise`, up to `ms`, and give up early when the turn is cancelled. True when it settled. */
+const settledWithin = (promise: Promise<void>, ms: number, signal?: AbortSignal): Promise<boolean> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(() => finish(false), ms);
+    const finish = (settled: boolean) => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      resolve(settled);
+    };
+    const onAbort = () => finish(false);
+    if (signal?.aborted) return finish(false);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    void promise.then(() => finish(true));
+  });
+
 const statusOf = (outcome: DelegationOutcome): ToolRunPayload['status'] =>
   outcome.status === 'ok' ? 'ok' : outcome.status === 'cancelled' ? 'cancelled' : 'error';
 
@@ -118,7 +153,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
     return {
       output: [
         `Started background task ${task.id} on ${agent ? `agent "${agent}"` : 'the default agent'} (max ${maxTurns} turns).`,
-        `Poll it with task_status {"id":"${task.id}"} and collect it with task_result.`,
+        `Poll it with task_status {"id":"${task.id}"}, or collect it with task_result, which takes wait_seconds to hold until it ends.`,
       ].join('\n'),
       metadata: { id: task.id, ...(agent ? { agent } : {}) },
     };
@@ -167,6 +202,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
 function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'background'>): BackgroundTask {
   if (!ctx.work) throw new Error('Background tasks are not available in this session.');
   const work = ctx.work;
+  let settle!: () => void;
   const task: BackgroundTask = {
     id: taskId(),
     agent: options.agent ?? '',
@@ -176,6 +212,7 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
     output: '',
     startedAt: Date.now(),
     controller: new AbortController(),
+    settled: new Promise<void>((resolve) => (settle = resolve)),
   };
   work.add<BackgroundTask>({
     id: task.id,
@@ -208,11 +245,13 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
       task.reason = outcome.reason;
       task.worktree = outcome.worktree?.summary;
       work.end(task.id, task.status);
+      settle();
     })
     .catch((error: any) => {
       task.status = 'error';
       task.reason = error?.message ?? String(error);
       work.end(task.id, 'error');
+      settle();
     });
   return task;
 }
@@ -236,8 +275,14 @@ export async function taskStatusRunner(args: Record<string, any>, ctx: ToolConte
 export async function taskResultRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
   const task = taskOf(ctx, args.id);
   if (!task) return { output: `No background task ${String(args.id ?? '')}.`, status: 'error' };
+  const seconds = Number.isInteger(args.wait_seconds) ? Math.min(Math.max(1, args.wait_seconds), MAX_WAIT_SECONDS) : 0;
+  if (task.status === 'running' && seconds) await settledWithin(task.settled, seconds * 1000, ctx.signal);
   if (task.status === 'running') {
-    return { output: `Task ${task.id} is still running. You are told when it ends; task_status has its state meanwhile.` };
+    return {
+      output: seconds
+        ? `Task ${task.id} is still running after ${seconds} s. Call task_result with wait_seconds again to keep waiting, or task_status for its state.`
+        : `Task ${task.id} is still running. You are told when it ends; task_status has its state meanwhile, and task_result with wait_seconds holds until it ends.`,
+    };
   }
   ctx.work!.forget(task.id);
   const line = delegationTranscriptLine({
@@ -281,7 +326,9 @@ Do it yourself when:
 
 Writing the prompt: the child starts with nothing. Brief it like a capable colleague who just walked in. Say what you are trying to achieve and why, what you already know or have ruled out, the exact files and lines involved, and what form the answer should take. Say whether it should change code or only report. Never delegate understanding: "based on your findings, fix it" hands the child the synthesis you owe.
 
-background: true starts the child and returns an id at once, and you are told when it ends; collect it with task_result. Prefer it for a fan-out of two or more children, and whenever you have other work to do meanwhile: the person sees each child on the plan board as it runs, with what it is doing and what it has cost, and can look in on any of them. Children started in the same step run at the same time either way.`;
+background: true starts the child and returns an id at once; collect it with task_result. Prefer it for a fan-out of two or more children, and whenever you have other work to do meanwhile: the person sees each child on the plan board as it runs, with what it is doing and what it has cost, and can look in on any of them. Children started in the same step run at the same time either way.
+
+A turn that ends while children run does not resume by itself. With nothing else to do, collect every child in one step with task_result and wait_seconds: the calls run together and your turn holds until the children end. If one is still running when its wait is over, call it again.`;
 
 /**
  * The `task` description the model chooses from: one line per agent, its description and
@@ -317,8 +364,8 @@ export const TASK_TOOLS: RegisteredTool[] = [
   },
   {
     name: 'task_result',
-    description: 'Collect the output of a finished background delegated task.',
-    inputSchema: idSchema,
+    description: 'Collect the output of a background delegated task. With wait_seconds it waits for one still running, so a turn can hold until its children end.',
+    inputSchema: resultSchema,
     policy: 'read',
     runner: taskResultRunner,
   },
