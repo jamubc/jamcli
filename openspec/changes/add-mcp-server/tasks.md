@@ -12,8 +12,8 @@
 
 ## 3. The interface through a terminal
 
-- [ ] 3.1 `terminal_start`, `terminal_type`, `terminal_keys`, `terminal_screen`, `terminal_wait`, `terminal_resize`, `terminal_stop`, with the observer watched for settling and for the person's approvals.
-- [ ] 3.2 Tests on the fake provider.
+- [x] 3.1 `terminal_start`, `terminal_type`, `terminal_keys`, `terminal_screen`, `terminal_wait`, `terminal_resize`, `terminal_stop`, with the observer watched for settling and for the person's approvals.
+- [x] 3.2 Tests on the fake provider.
 
 ## 4. Docs and process
 

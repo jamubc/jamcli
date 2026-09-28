@@ -78,6 +78,8 @@ export interface TerminalSession {
   written(): string;
   /** When the program last wrote anything, in milliseconds since the epoch. */
   lastOutput(): number;
+  /** When anything was last typed into it, in milliseconds since the epoch. */
+  lastInput(): number;
   /** The exit code, once the program has left. */
   exited: Promise<number>;
   close(): void;
@@ -106,6 +108,7 @@ export function openTerminal(args: string[], options: OpenTerminalOptions): Term
   let pending: Promise<void> = Promise.resolve();
   let raw = '';
   let last = Date.now();
+  let typed = 0;
   const decoder = new TextDecoder();
   const started = Date.now();
   const record = (kind: 'o' | 'i' | 'r', data: string) => {
@@ -136,7 +139,8 @@ export function openTerminal(args: string[], options: OpenTerminalOptions): Term
   const screen = () => {
     const buffer = emulator.buffer.active;
     const lines: string[] = [];
-    for (let row = 0; row < size.rows; row += 1) lines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '');
+    // Cells past the width stay in the emulator's lines after a narrowing resize until overwritten, and are not on screen.
+    for (let row = 0; row < size.rows; row += 1) lines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true, 0, size.cols) ?? '');
     return lines.join('\n');
   };
   return {
@@ -157,6 +161,7 @@ export function openTerminal(args: string[], options: OpenTerminalOptions): Term
       }
     },
     type: (text) => {
+      typed = Date.now();
       record('i', text);
       terminal.write(text);
     },
@@ -172,6 +177,7 @@ export function openTerminal(args: string[], options: OpenTerminalOptions): Term
     },
     written: () => raw.replace(/\x1b\[[0-9;?>=$ ]*[A-Za-z~]/g, '\n').replace(/\x1b[P\]_][\s\S]*?(\x07|\x1b\\)/g, ''),
     lastOutput: () => last,
+    lastInput: () => typed,
     exited: child.exited,
     close: () => {
       child.kill();

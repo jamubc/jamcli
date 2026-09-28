@@ -6,11 +6,13 @@ import * as z from 'zod/v4';
 import { JAMCLI_VERSION } from '../core/version.js';
 import { resolveJamcliProjectRoot } from '../utils/projectRoot.js';
 import { DelegatedSession, type SessionReport, type Waiting } from './session.js';
+import { DrivenTerminal } from './terminal.js';
+import { keyBytes } from '../terminal/terminal.js';
 
 /** How long a call waits for a turn when the caller does not say. */
 const DEFAULT_WAIT_MS = 120_000;
 
-type ToolContext = { mcpReq: { _meta?: { progressToken?: string | number }; signal: AbortSignal; notify(notification: unknown): Promise<void>; elicitInput(request: unknown): Promise<{ action: string; content?: Record<string, unknown> }>; inputResponses?: unknown } };
+export type ToolContext = { mcpReq: { _meta?: { progressToken?: string | number }; signal: AbortSignal; notify(notification: unknown): Promise<void>; elicitInput(request: unknown): Promise<{ action: string; content?: Record<string, unknown> }>; inputResponses?: unknown } };
 
 /** A tool's result: the report as text a model reads, and as structured content a program reads. */
 const reply = (report: SessionReport) => ({
@@ -53,6 +55,25 @@ function personQuestion(session: DelegatedSession, waiting: Waiting) {
 /** A name for the question that survives the retry a 2026-07-28 client makes after answering it. */
 const questionKey = (waiting: Waiting) => `person-${waiting.kind}-${waiting.id}`.replace(/[^A-Za-z0-9_-]/g, '_');
 
+type PersonAnswer = { action: string; content?: Record<string, unknown> };
+
+/**
+ * Ask the person, never the agent: by elicitation pushed to a 2025 host, or, for a host on
+ * the 2026-07-28 revision, by returning the question for the host to ask before it retries
+ * the call, whose retry carries the answer under `key`. A host that cannot ask answers
+ * `unsupported`, which callers treat as a no.
+ */
+export async function askPerson(ctx: ToolContext, key: string, question: { message: string; requestedSchema: unknown }): Promise<{ answer: PersonAnswer } | { required: ReturnType<typeof inputRequired> }> {
+  const retried = inputResponse(ctx.mcpReq.inputResponses as never, key) as { kind: string } & PersonAnswer;
+  if (retried.kind === 'elicit') return { answer: retried };
+  try {
+    return { answer: await ctx.mcpReq.elicitInput(question) };
+  } catch (error) {
+    if (error instanceof MissingRequiredClientCapabilityError) return { answer: { action: 'unsupported' } };
+    return { required: inputRequired({ inputRequests: { [key]: inputRequired.elicit(question as never) } }) };
+  }
+}
+
 /** Put the person's answer, or its absence, to the session. */
 function applyPersonAnswer(session: DelegatedSession, waiting: Waiting, answer: { action: string; content?: Record<string, unknown> }): void {
   const chosen = answer.action === 'accept' ? String(answer.content?.answer ?? '') : '';
@@ -81,33 +102,22 @@ async function attend(session: DelegatedSession, ctx: ToolContext, waitMs: numbe
     await session.settle(Math.max(0, deadline - Date.now()), ctx.mcpReq.signal, progress);
     const waiting = session.waiting();
     if (!waiting?.personOnly) return reply(session.report());
-    const question = personQuestion(session, waiting);
-    const key = questionKey(waiting);
-    const retried = inputResponse(ctx.mcpReq.inputResponses as never, key) as { kind: string; action?: string; content?: Record<string, unknown> };
-    let answer: { action: string; content?: Record<string, unknown> };
-    if (retried.kind === 'elicit') answer = retried as { action: string; content?: Record<string, unknown> };
-    else {
-      try {
-        answer = await ctx.mcpReq.elicitInput(question);
-      } catch (error) {
-        // A host that cannot ask the person gets no answer from the agent instead: the call is denied.
-        if (error instanceof MissingRequiredClientCapabilityError) answer = { action: 'unsupported' };
-        else return inputRequired({ inputRequests: { [key]: inputRequired.elicit(question) } });
-      }
-    }
+    const asked = await askPerson(ctx, questionKey(waiting), personQuestion(session, waiting));
+    if ('required' in asked) return asked.required;
+    const answer = asked.answer;
     applyPersonAnswer(session, waiting, answer);
     if (Date.now() >= deadline) return reply(session.report());
   }
 }
 
 /** Whether this call is a retry carrying the person's answers, which must not repeat what the first call did. */
-const isRetry = (ctx: ToolContext) => Boolean(ctx.mcpReq.inputResponses && Object.keys(ctx.mcpReq.inputResponses as object).length);
+export const isRetry = (ctx: ToolContext) => Boolean(ctx.mcpReq.inputResponses && Object.keys(ctx.mcpReq.inputResponses as object).length);
 
 /**
  * JamCLI as an MCP server: sessions another agent delegates work to, each the same kind of
  * session an editor opens over ACP, with what is the person's put to the person.
  */
-export function createMcpServer(sessions = new Map<string, DelegatedSession>()): McpServer {
+export function createMcpServer(sessions = new Map<string, DelegatedSession>(), terminals = new Map<string, DrivenTerminal>()): McpServer {
   const server = new McpServer({ name: 'jamcli', version: JAMCLI_VERSION });
   const find = (id: string) => sessions.get(id);
   const unknown = (id: string) => failure(`No session ${id}. session_start opens one.`);
@@ -228,13 +238,164 @@ export function createMcpServer(sessions = new Map<string, DelegatedSession>()):
     }
   );
 
+  registerTerminalTools(server, terminals);
   return server;
+}
+
+/** A terminal's screen, with what the interface is doing and where its recording is. */
+const screenReply = (terminal: DrivenTerminal, screen: string, note?: string) => {
+  const doing =
+    terminal.state === 'exited'
+      ? `exited with code ${terminal.exitCode}`
+      : terminal.personWaits
+        ? `waiting on the person to answer ${terminal.waitingOn!.tool}; they are asked, not you`
+        : terminal.state === 'requires_action'
+          ? `waiting for an answer to ${terminal.waitingOn?.tool ?? 'a call'}: 1 allows once, Escape denies`
+          : terminal.state;
+  const state = { terminal: terminal.id, state: terminal.state, ...(terminal.waitingOn ? { waitingOn: terminal.waitingOn } : {}), recording: terminal.recording, size: terminal.terminal.size };
+  return {
+    content: [{ type: 'text' as const, text: `${note ? `${note}\n` : ''}Terminal ${terminal.id}: ${doing}. Recording: ${terminal.recording}\n\n${screen.replace(/\n+$/, '')}` }],
+    structuredContent: { ...state, screen } as Record<string, unknown>,
+  };
+};
+
+/**
+ * The interface itself, for an agent to use as a person would. Keys meant for a call only
+ * the person answers are not sent: the person is asked, and their answer is typed.
+ */
+function registerTerminalTools(server: McpServer, terminals: Map<string, DrivenTerminal>): void {
+  let next = 0;
+  const find = (id: string) => terminals.get(id);
+  const unknown = (id: string) => failure(`No terminal ${id}. terminal_start opens one.`);
+  const wait = z.number().int().min(0).max(600_000).optional().describe('How long to wait for the screen to settle afterwards, in milliseconds. 15000 when absent.');
+
+  /** Send input, unless the interface waits on the person: then ask them, and type their answer. */
+  const input = async (terminal: DrivenTerminal, bytes: string, ctx: ToolContext, waitMs: number) => {
+    if (terminal.personWaits) {
+      const tool = terminal.waitingOn!.tool;
+      const asked = await askPerson(ctx, `terminal-${terminal.id}-${tool}`, {
+        message: `The JamCLI interface in terminal ${terminal.id} asks you, not the agent driving it, about ${tool}:\n\n${terminal.terminal.screen().trim()}`,
+        requestedSchema: { type: 'object', properties: { answer: { type: 'string', enum: ['allow', 'deny'], description: 'Allow the call once, or deny it.' } }, required: ['answer'] },
+      });
+      if ('required' in asked) return asked.required;
+      const allow = asked.answer.action === 'accept' && asked.answer.content?.answer === 'allow';
+      terminal.terminal.type(allow ? '1' : keyBytes('escape')!);
+      return screenReply(terminal, await terminal.settle(waitMs, undefined, ctx.mcpReq.signal), `The person was asked about ${tool} and ${allow ? 'allowed it once' : 'did not allow it'}; your input was not sent.`);
+    }
+    // A retry carries the person's answer to a question that has since been answered; what it would type was already typed.
+    if (!isRetry(ctx)) terminal.terminal.type(bytes);
+    return screenReply(terminal, await terminal.settle(waitMs, undefined, ctx.mcpReq.signal));
+  };
+
+  server.registerTool(
+    'terminal_start',
+    {
+      description:
+        'Start the jamcli interface itself in a terminal, in a directory: the same program a person runs, with nothing special for being driven. Use it to try JamCLI as a person would and see what it shows. Returns the terminal id and its screen once it settles.',
+      inputSchema: z.object({
+        cwd: z.string().describe('Absolute path of the directory to run jamcli in.'),
+        args: z.array(z.string()).optional().describe('Arguments to jamcli, such as ["--model", "provider:model"].'),
+        cols: z.number().int().min(20).max(400).optional(),
+        rows: z.number().int().min(5).max(200).optional(),
+        wait_ms: wait,
+      }),
+    },
+    async ({ cwd, args, cols, rows, wait_ms }, ctx) => {
+      if (!path.isAbsolute(cwd) || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) return failure(`${cwd} is not an absolute path to a directory.`);
+      next += 1;
+      const terminal = DrivenTerminal.open(`t${next}`, { cwd, ...(args ? { args } : {}), ...(cols ? { cols } : {}), ...(rows ? { rows } : {}) });
+      terminals.set(terminal.id, terminal);
+      return screenReply(terminal, await terminal.settle(wait_ms ?? 15_000, undefined, (ctx as ToolContext).mcpReq.signal));
+    }
+  );
+
+  server.registerTool(
+    'terminal_type',
+    {
+      description: 'Type text into the terminal, as a person types it, then Enter unless enter is false. Returns the screen once it settles.',
+      inputSchema: z.object({ terminal: z.string(), text: z.string(), enter: z.boolean().optional(), wait_ms: wait }),
+    },
+    async ({ terminal: id, text, enter, wait_ms }, ctx) => {
+      const terminal = find(id);
+      if (!terminal) return unknown(id);
+      // Text and its Enter arrive apart, as a person's do: pasted text ending in Enter is taken as a paste, not a send.
+      if (enter !== false && !terminal.personWaits) {
+        terminal.terminal.type(text);
+        await Bun.sleep(100);
+        return input(terminal, keyBytes('enter')!, ctx as ToolContext, wait_ms ?? 15_000);
+      }
+      return input(terminal, text, ctx as ToolContext, wait_ms ?? 15_000);
+    }
+  );
+
+  server.registerTool(
+    'terminal_keys',
+    {
+      description: 'Press keys in the terminal, in order: enter, escape, tab, shift+tab, up, down, left, right, pageup, pagedown, backspace, space, ctrl+<letter>, or a single character. Returns the screen once it settles.',
+      inputSchema: z.object({ terminal: z.string(), keys: z.array(z.string()).min(1), wait_ms: wait }),
+    },
+    async ({ terminal: id, keys, wait_ms }, ctx) => {
+      const terminal = find(id);
+      if (!terminal) return unknown(id);
+      const unknownKeys = keys.filter((key) => keyBytes(key) === undefined);
+      if (unknownKeys.length) return failure(`Not keys: ${unknownKeys.join(', ')}.`);
+      return input(terminal, keys.map((key) => keyBytes(key)!).join(''), ctx as ToolContext, wait_ms ?? 15_000);
+    }
+  );
+
+  server.registerTool(
+    'terminal_screen',
+    { description: 'The terminal\'s screen as it is now, and what the interface is doing.', inputSchema: z.object({ terminal: z.string() }), annotations: { readOnlyHint: true } },
+    async ({ terminal: id }) => {
+      const terminal = find(id);
+      if (!terminal) return unknown(id);
+      return screenReply(terminal, await terminal.terminal.drawn());
+    }
+  );
+
+  server.registerTool(
+    'terminal_wait',
+    {
+      description: 'Wait until the screen shows text, or, without text, until the interface stops working and the screen is still. Returns the screen.',
+      inputSchema: z.object({ terminal: z.string(), text: z.string().optional(), wait_ms: z.number().int().min(0).max(600_000).optional() }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ terminal: id, text, wait_ms }, ctx) => {
+      const terminal = find(id);
+      if (!terminal) return unknown(id);
+      return screenReply(terminal, await terminal.settle(wait_ms ?? 60_000, text, (ctx as ToolContext).mcpReq.signal));
+    }
+  );
+
+  server.registerTool(
+    'terminal_resize',
+    { description: 'Resize the terminal, as a person resizing the window does.', inputSchema: z.object({ terminal: z.string(), cols: z.number().int().min(20).max(400), rows: z.number().int().min(5).max(200), wait_ms: wait }) },
+    async ({ terminal: id, cols, rows, wait_ms }, ctx) => {
+      const terminal = find(id);
+      if (!terminal) return unknown(id);
+      terminal.terminal.resize(cols, rows);
+      return screenReply(terminal, await terminal.settle(wait_ms ?? 15_000, undefined, (ctx as ToolContext).mcpReq.signal));
+    }
+  );
+
+  server.registerTool(
+    'terminal_stop',
+    { description: 'Stop the terminal and the jamcli in it. Its recording stays.', inputSchema: z.object({ terminal: z.string() }) },
+    async ({ terminal: id }) => {
+      const terminal = find(id);
+      if (!terminal) return unknown(id);
+      terminals.delete(id);
+      terminal.close();
+      return { content: [{ type: 'text' as const, text: `Stopped terminal ${id}. Its recording is ${terminal.recording} (asciinema v2: asciinema play <file>).` }] };
+    }
+  );
 }
 
 /** `jamcli mcp serve`: MCP on stdio until the host goes away, then every session stops. */
 export async function runMcpServer(): Promise<number> {
   const sessions = new Map<string, DelegatedSession>();
-  const server = createMcpServer(sessions);
+  const terminals = new Map<string, DrivenTerminal>();
+  const server = createMcpServer(sessions, terminals);
   // The host leaves by closing standard input; until then the server and its sessions stay.
   const left = new Promise<void>((resolve) => {
     process.stdin.once('end', resolve);
@@ -243,6 +404,7 @@ export async function runMcpServer(): Promise<number> {
   const served = serveStdio(() => server);
   await left;
   await Promise.allSettled([...sessions.values()].map((session) => session.close()));
+  for (const terminal of terminals.values()) terminal.close();
   served.close();
   return 0;
 }
