@@ -80,6 +80,11 @@ export interface AgentOptions {
   beforeChange?: (call: ToolCall) => Promise<void>;
   /** Called once that step's calls are done, to settle the checkpoint. */
   afterChange?: () => Promise<void>;
+  /**
+   * What ended beside the turn since it was last asked: background commands and child
+   * agents, one line each. The lines reach the model with the next message it reads.
+   */
+  news?: () => string[];
 }
 
 interface StepOutput {
@@ -250,6 +255,9 @@ export class CoreAgent implements Agent {
       }
       prompt = submitted.context.length ? `${prompt}\n\n${submitted.context.join('\n')}` : prompt;
     }
+    // Work that ended between turns is news the model reads with the prompt.
+    const ended = this.options.news?.() ?? [];
+    if (ended.length) prompt = [prompt, `[Work ended since your last turn:\n${ended.join('\n')}]`].filter(Boolean).join('\n\n');
     if (prompt) record(userMessage(prompt));
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
@@ -413,11 +421,14 @@ export class CoreAgent implements Agent {
         working = this.account(working, screened.usage, this.options.trustUsageKey, this.options.trustPrice, emit);
       }
       const results = screened.results;
+      // Work that ended during this step is news the model reads with the step's last result.
+      const endedNow = this.options.news?.() ?? [];
       for (let i = 0; i < calls.length; i += 1) {
         let output = this.truncate(results[i].output);
         // A post_tool hook may add context, or, exiting 2, a reason the model reads; the call has run either way.
         const after = await hookVerdict(hooks, 'post_tool', { session: working, call: calls[i], result: results[i], output }, emit);
         const added = [...after.context, ...(after.block !== undefined ? [`A post_tool hook says: ${after.block}`] : [])];
+        if (i === calls.length - 1 && endedNow.length) added.push(`[Work ended during this step:\n${endedNow.join('\n')}]`);
         if (added.length) output = `${output}\n\n${added.join('\n')}`;
         record({
           role: 'tool',

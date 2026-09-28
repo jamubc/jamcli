@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
+import type { WorkTable } from '../work.js';
 import { resolveProjectPath } from './paths.js';
 
 export const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
@@ -260,20 +261,8 @@ interface Job {
   endedAt?: number;
 }
 
-const jobs = new Map<string, Job>();
-let exitHookInstalled = false;
-
-const installExitHook = () => {
-  if (exitHookInstalled) return;
-  exitHookInstalled = true;
-  process.once('exit', () => {
-    for (const job of jobs.values()) stopProcess(job.child);
-  });
-};
-
-/** Start a command in the background and return its job at once. */
-export function startBackgroundCommand(options: CommandRunOptions): Job {
-  installExitHook();
+/** Start a command in the background, as an entry of the session's work table, and return its job at once. */
+export function startBackgroundCommand(options: CommandRunOptions, work: WorkTable): Job {
   const child = startProcess(options);
   const job: Job = {
     id: `job_${randomUUID().slice(0, 8)}`,
@@ -292,20 +281,26 @@ export function startBackgroundCommand(options: CommandRunOptions): Job {
   };
   child.stdout?.on('data', onData);
   child.stderr?.on('data', onData);
+  work.add<Job>({ id: job.id, kind: 'job', label: options.command, record: job, stop: () => stopProcess(child) });
   child.on('close', (code, signal) => {
     job.exitCode = code;
     job.signal = signal;
     job.endedAt = Date.now();
+    work.end(job.id, jobState(job));
   });
   child.on('error', (error) => {
     job.unread += `\nCould not start the command: ${error.message}`;
     job.endedAt = Date.now();
+    work.end(job.id, `could not start: ${error.message}`);
   });
-  jobs.set(job.id, job);
   return job;
 }
 
-export const getJob = (id: string): Job | undefined => jobs.get(id);
+const jobOf = (ctx: ToolContext, id: unknown): Job => {
+  const job = ctx.work?.get<Job>(String(id ?? ''))?.record;
+  if (!job) throw new Error(`No background job named ${String(id ?? '')} in this session.`);
+  return job;
+};
 
 const jobState = (job: Job): string => {
   if (job.endedAt === undefined) return `running for ${seconds(Date.now() - job.startedAt)}`;
@@ -338,7 +333,8 @@ async function runCommandRunner(args: Record<string, any>, ctx: ToolContext): Pr
   };
 
   if (args.background === true) {
-    const job = startBackgroundCommand(options);
+    if (!ctx.work) throw new Error('Background commands are not available in this session.');
+    const job = startBackgroundCommand(options, ctx.work);
     return {
       output: `Started ${job.id} in the background: ${command}\nRead its output with command_output and stop it with command_kill.`,
       metadata: { command, cwd, jobId: job.id, background: true },
@@ -380,9 +376,8 @@ async function runCommandRunner(args: Record<string, any>, ctx: ToolContext): Pr
   return { ...payload, output: `${payload.output}${note}`, metadata: { ...payload.metadata, cwd } };
 }
 
-async function commandOutputRunner(args: Record<string, any>): Promise<ToolRunPayload> {
-  const job = getJob(String(args.job_id ?? ''));
-  if (!job) throw new Error(`No background job named ${args.job_id}.`);
+async function commandOutputRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  const job = jobOf(ctx, args.job_id);
   const fresh = job.unread;
   job.unread = '';
   const body = args.all === true ? job.output.toString() : fresh;
@@ -392,10 +387,9 @@ async function commandOutputRunner(args: Record<string, any>): Promise<ToolRunPa
   };
 }
 
-async function commandKillRunner(args: Record<string, any>): Promise<ToolRunPayload> {
-  const job = getJob(String(args.job_id ?? ''));
-  if (!job) throw new Error(`No background job named ${args.job_id}.`);
-  if (job.endedAt === undefined) stopProcess(job.child);
+async function commandKillRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  const job = jobOf(ctx, args.job_id);
+  ctx.work!.stop(job.id);
   return { output: `Stopping ${job.id} (${job.command}).`, metadata: { jobId: job.id } };
 }
 
@@ -412,7 +406,7 @@ const runCommandSchema: JsonSchema = {
     },
     background: {
       type: 'boolean',
-      description: 'Start the command and return a job id at once, for servers and watchers.',
+      description: 'Start the command and return a job id at once, for servers, watchers, and anything that does not exit on its own. You are told when it ends.',
     },
     description: { type: 'string', description: 'A few words on what the command is for, shown to the user.' },
   },

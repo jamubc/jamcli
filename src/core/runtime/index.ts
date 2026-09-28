@@ -27,6 +27,7 @@ import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { PermissionMode } from '../permissions/modes.js';
 import { LOCAL_CONFIG, editRuleList, grantedRules, writeProjectGrant } from '../permissions/grants.js';
+import { WorkTable, workNews, type WorkItem } from '../work.js';
 import { parseRule, type Decision, type Rule, type RuleScope } from '../permissions/rules.js';
 import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type SandboxSettings } from '../sandbox/index.js';
 import { buildRuntimePrompt } from './prompt.js';
@@ -275,6 +276,12 @@ export interface Runtime {
    * request's description. It is counted and priced like the session's other requests.
    */
   complete(prompt: string, options?: { maxOutputTokens?: number; signal?: AbortSignal }): Promise<string>;
+  /** What runs beside the turn, and what ended lately: background commands and child agents. */
+  work(): WorkItem[];
+  /** Called whenever that changes, between turns included; returns how to stop listening. */
+  watchWork(listener: () => void): () => void;
+  /** Stop one of them. False when nothing by that id is running. */
+  stopWork(id: string): boolean;
   close(): Promise<void>;
 }
 
@@ -523,6 +530,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     notices.push(...assembled.notices);
   }
 
+  // What runs beside the turn. A child shares its parent's table, so its jobs are the person's to see and stop too.
+  const workTable = options.parent?.work ?? new WorkTable();
   // Loaded once, so the agents the model is shown and the routing it gets stay in step.
   const agents = loadAgents(projectRoot, config);
   notices.push(...agents.problems);
@@ -534,7 +543,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     mcp,
     env: options.env,
     sandbox,
-    parent: () => ({ sessionId: log.id, depth: depth + 1, permissions, model: `${choice.provider}:${choice.model}` }),
+    parent: () => ({ sessionId: log.id, depth: depth + 1, permissions, work: workTable, model: `${choice.provider}:${choice.model}` }),
     create: createRuntime,
     // While a turn runs, a child's request reaches this session's surface too; a background
     // child that outlives the turn is still counted and recorded.
@@ -582,6 +591,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         env: commandEnv,
         ...(sandbox.kind === 'none' ? {} : { wrapCommand: sandbox.wrap, sandboxNote: sandbox.note }),
         delegate: delegateChild,
+        work: workTable,
         delegationDepth: depth,
         delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
         ...(options.editor ? { editor: options.editor } : {}),
@@ -783,6 +793,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       redact,
       signal: options.signal,
       pinned: () => pinnedState(workRoot),
+      // Only the top-level session tells the model what ended: a child sharing the table must not take the news.
+      ...(options.parent ? {} : { news: () => workTable.drainEnded().map(workNews) }),
       // A delegated run shares the working copy; the checkpoint before its task call covers it.
       ...(options.surface === 'child' ? {} : { beforeChange: takeCheckpoint, afterChange: settleCheckpoint }),
     });
@@ -1266,7 +1278,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     complete: completeOnce,
 
+    work: () => workTable.list(),
+    watchWork: (listener) => workTable.watch(listener),
+    stopWork: (id) => workTable.stop(id),
+
     async close() {
+      // Cancelling a turn leaves jobs running; closing the session that owns them stops them.
+      if (!options.parent) workTable.stopAll();
       await hookVerdict(hooks, 'session_end', { session, status: 'closed', turns });
       await mcp?.close?.();
       await lsp?.close();

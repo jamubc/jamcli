@@ -245,6 +245,21 @@ test('provider retries surface as events', async () => {
   expect(events.find((e) => e.type === 'retry')).toEqual({ type: 'retry', attempt: 1, delayMs: 5, reason: '429 slow down' });
 });
 
+test('what ended beside the turn reaches the model with the next message it reads, once', async () => {
+  const between = 'job_1 (npm start) exited with code 1 after 2.0s. Read its output with command_output.';
+  const during = 'task-1 (reviewer: check) ok after 9.0s. Collect it with task_result.';
+  const queue = [[between], [during]];
+  const provider = createScriptedProvider([{ toolCalls: [{ name: 'read_a', arguments: {} }, { name: 'read_b', arguments: {} }] }, { text: 'done' }]);
+  const agent = new CoreAgent({ provider, model: 'm', dispatcher: fakeDispatcher(), toolDefinitions: toolDefs('read_a', 'read_b'), news: () => queue.shift() ?? [] });
+  const result = await agent.run(createSession(project), 'hi', () => {});
+  const messages = result.session!.messages;
+  expect(messages[0]).toMatchObject({ role: 'user', content: `hi\n\n[Work ended since your last turn:\n${between}]` });
+  const tools = messages.filter((message) => message.role === 'tool');
+  expect(tools[0].content).toBe('read_a output');
+  expect(tools[1].content).toBe(`read_b output\n\n[Work ended during this step:\n${during}]`);
+  expect(queue).toEqual([]);
+});
+
 test('assistant messages record the provider family and signed reasoning', async () => {
   const provider = createScriptedProvider([{ text: 'x', reasoning: 'r', reasoningSignature: 'sig' }], 'anthropic');
   const result = await new CoreAgent({ provider, model: 'm' }).run(createSession(project), 'hi', () => {});

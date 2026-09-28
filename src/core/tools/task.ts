@@ -24,9 +24,12 @@ interface BackgroundTask {
   controller: AbortController;
 }
 
-const background = new Map<string, BackgroundTask>();
+const taskId = () => `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
-const running = () => [...background.values()].filter((task) => task.status === 'running').length;
+/** A child as the person sees it listed: its agent and the start of its task. */
+const labelFor = (agent: string | undefined, prompt: string) => `${agent ?? 'default agent'}: ${prompt.replace(/\s+/g, ' ').trim().slice(0, 60)}`;
+
+const taskOf = (ctx: ToolContext, id: unknown): BackgroundTask | undefined => ctx.work?.get<BackgroundTask>(String(id ?? ''))?.record;
 
 const taskSchema: JsonSchema = {
   type: 'object',
@@ -80,7 +83,7 @@ const lineFor = (outcome: DelegationOutcome) =>
 export async function taskRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
   if (!ctx.delegate) return { output: 'Delegation is not available in this session.', status: 'error' };
   const config = ctx.delegationConfig ?? DEFAULT_DELEGATION_CONFIG;
-  const decision = canDelegate({ depth: ctx.delegationDepth ?? 0, running: running(), config });
+  const decision = canDelegate({ depth: ctx.delegationDepth ?? 0, running: ctx.work?.running('task') ?? 0, config });
   if (!decision.allowed) return { output: `Delegation refused: ${decision.reason}`, status: 'error' };
 
   const agent = typeof args.agent === 'string' && args.agent.trim() ? args.agent.trim() : undefined;
@@ -101,19 +104,30 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
     };
   }
 
-  const outcome = await ctx.delegate({
-    ...(agent ? { agent } : {}),
-    ...(reasoning ? { reasoning } : {}),
-    ...(effort ? { effort } : {}),
-    prompt,
-    maxTurns,
-    ...isolation,
-    background: false,
-    signal: ctx.signal,
-    onText: ctx.onProgress,
-    requestApproval: ctx.requestApproval,
-    onResult: ctx.onNestedResult,
-  });
+  // A foreground child is listed while it runs, so the person can see it and stop it; its result comes back here, so there is no news to tell.
+  const controller = new AbortController();
+  ctx.signal?.addEventListener('abort', () => controller.abort(), { once: true });
+  const entry = ctx.work?.add({ id: taskId(), kind: 'task', label: labelFor(agent, prompt), record: undefined, told: true, stop: () => controller.abort() });
+  let outcome: DelegationOutcome;
+  try {
+    outcome = await ctx.delegate({
+      ...(agent ? { agent } : {}),
+      ...(reasoning ? { reasoning } : {}),
+      ...(effort ? { effort } : {}),
+      prompt,
+      maxTurns,
+      ...isolation,
+      background: false,
+      signal: controller.signal,
+      onText: ctx.onProgress,
+      requestApproval: ctx.requestApproval,
+      onResult: ctx.onNestedResult,
+    });
+  } catch (error) {
+    if (entry) ctx.work!.end(entry.id, 'error');
+    throw error;
+  }
+  if (entry) ctx.work!.end(entry.id, outcome.status);
   if (outcome.status === 'refused' && !outcome.childSessionId) {
     return { output: `Delegation refused: ${outcome.reason ?? 'no model in the chain can serve it'}`, status: 'error' };
   }
@@ -130,8 +144,10 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
 }
 
 function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'background'>): BackgroundTask {
+  if (!ctx.work) throw new Error('Background tasks are not available in this session.');
+  const work = ctx.work;
   const task: BackgroundTask = {
-    id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    id: taskId(),
     agent: options.agent ?? '',
     prompt: options.prompt,
     ...(options.isolation ? { isolation: options.isolation } : {}),
@@ -140,7 +156,16 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
     startedAt: Date.now(),
     controller: new AbortController(),
   };
-  background.set(task.id, task);
+  work.add<BackgroundTask>({
+    id: task.id,
+    kind: 'task',
+    label: labelFor(options.agent, options.prompt),
+    record: task,
+    stop: () => {
+      task.controller.abort();
+      task.status = 'cancelled';
+    },
+  });
   ctx
     .delegate!({
       ...options,
@@ -158,16 +183,18 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
       task.childSessionId = outcome.childSessionId;
       task.reason = outcome.reason;
       task.worktree = outcome.worktree?.summary;
+      work.end(task.id, task.status);
     })
     .catch((error: any) => {
       task.status = 'error';
       task.reason = error?.message ?? String(error);
+      work.end(task.id, 'error');
     });
   return task;
 }
 
-export async function taskStatusRunner(args: Record<string, any>): Promise<ToolRunPayload> {
-  const task = background.get(String(args.id ?? ''));
+export async function taskStatusRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  const task = taskOf(ctx, args.id);
   if (!task) return { output: `No background task ${String(args.id ?? '')}.`, status: 'error' };
   return {
     output: [
@@ -182,13 +209,13 @@ export async function taskStatusRunner(args: Record<string, any>): Promise<ToolR
   };
 }
 
-export async function taskResultRunner(args: Record<string, any>): Promise<ToolRunPayload> {
-  const task = background.get(String(args.id ?? ''));
+export async function taskResultRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  const task = taskOf(ctx, args.id);
   if (!task) return { output: `No background task ${String(args.id ?? '')}.`, status: 'error' };
   if (task.status === 'running') {
-    return { output: `Task ${task.id} is still running. Poll task_status.` };
+    return { output: `Task ${task.id} is still running. You are told when it ends; task_status has its state meanwhile.` };
   }
-  background.delete(task.id);
+  ctx.work!.forget(task.id);
   const line = delegationTranscriptLine({
     agent: task.agent,
     resolvedModel: task.resolvedModel ?? 'unresolved',
@@ -202,11 +229,10 @@ export async function taskResultRunner(args: Record<string, any>): Promise<ToolR
 }
 
 /** Stop a background task and report what it had written so far. */
-export async function taskCancelRunner(args: Record<string, any>): Promise<ToolRunPayload> {
-  const task = background.get(String(args.id ?? ''));
+export async function taskCancelRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
+  const task = taskOf(ctx, args.id);
   if (!task) return { output: `No background task ${String(args.id ?? '')}.`, status: 'error' };
-  task.controller.abort();
-  task.status = 'cancelled';
+  ctx.work!.stop(task.id);
   return { output: `Cancelled ${task.id}.${task.output ? ` Partial output:\n${task.output}` : ''}` };
 }
 
@@ -231,7 +257,7 @@ Do it yourself when:
 
 Writing the prompt: the child starts with nothing. Brief it like a capable colleague who just walked in. Say what you are trying to achieve and why, what you already know or have ruled out, the exact files and lines involved, and what form the answer should take. Say whether it should change code or only report. Never delegate understanding: "based on your findings, fix it" hands the child the synthesis you owe.
 
-background: true starts the child and returns an id at once. Collect it with task_result. Use it only when you have other work to do meanwhile.`;
+background: true starts the child and returns an id at once. You are told when it ends; collect it with task_result. Use it only when you have other work to do meanwhile.`;
 
 /**
  * The `task` description the model chooses from: one line per agent, its description and

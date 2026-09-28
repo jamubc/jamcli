@@ -12,6 +12,7 @@ import { PermissionEngine } from '../../permissions/engine.js';
 import { parseRule, type Rule } from '../../permissions/rules.js';
 import { createBuiltinRegistry } from '../../tools/registry.js';
 import { toolNaming } from '../tools.js';
+import { WorkTable } from '../../work.js';
 
 let server: FakeProviderServer;
 let root: string;
@@ -93,7 +94,7 @@ test('what the parent would ask about, the child asks the parent surface, under 
 test('a child cannot widen the policy it inherits', async () => {
   const deny = (parseRule('run_command', 'deny', 'flag', '--deny-tool run_command') as { rule: Rule }).rule;
   const inherited = new PermissionEngine({ projectRoot: root, rules: [deny], ...toolNaming(createBuiltinRegistry()) });
-  const child = await start({ surface: 'child', allowTools: ['edit', 'run_command'], parent: { sessionId: 'parent', depth: 1, permissions: inherited, model: 'ollama:fake-model' } });
+  const child = await start({ surface: 'child', allowTools: ['edit', 'run_command'], parent: { sessionId: 'parent', depth: 1, permissions: inherited, work: new WorkTable(), model: 'ollama:fake-model' } });
   expect(child.tools.map((tool) => tool.name)).not.toContain('run_command');
   server.enqueue({ toolCalls: [editCall] }, { text: 'asked' });
   const asked: string[] = [];
@@ -277,21 +278,45 @@ test('a background task runs on, reports its status, and can be cancelled with i
     });
     return { status: request.signal?.aborted ? ('cancelled' as const) : ('ok' as const), response: request.signal?.aborted ? '' : 'finished', agent: request.agent ?? 'quick', resolvedModel: 'ollama:m', childSessionId: 'c1' };
   };
-  const ctx = { projectRoot: root, delegate };
+  const work = new WorkTable();
+  const ctx = { projectRoot: root, delegate, work };
   const started = await taskRunner({ agent: 'quick', prompt: 'p', background: true }, ctx);
   const id = started.metadata!.id as string;
-  expect((await taskStatusRunner({ id })).output).toContain(`${id}: running`);
+  expect((await taskStatusRunner({ id }, ctx)).output).toContain(`${id}: running`);
+  // The person sees it listed while it runs, and the model is told once when it ends.
+  expect(work.list()).toMatchObject([{ id, kind: 'task', label: 'quick: p' }]);
+  expect(work.drainEnded()).toEqual([]);
   release();
   await Bun.sleep(5);
-  expect((await taskResultRunner({ id })).output).toContain('finished');
+  expect(work.drainEnded()).toMatchObject([{ id, outcome: 'ok' }]);
+  expect(work.drainEnded()).toEqual([]);
+  expect((await taskResultRunner({ id }, ctx)).output).toContain('finished');
+  expect(work.list()).toEqual([]);
 
   const second = (await taskRunner({ agent: 'quick', prompt: 'p', background: true }, ctx)).metadata!.id as string;
-  expect((await taskCancelRunner({ id: second })).output).toBe(`Cancelled ${second}. Partial output:\npartial `);
+  expect((await taskCancelRunner({ id: second }, ctx)).output).toBe(`Cancelled ${second}. Partial output:\npartial `);
+  // A job id is the session's own: another table knows nothing of it.
+  expect((await taskStatusRunner({ id: second }, { projectRoot: root, work: new WorkTable() })).status).toBe('error');
+});
+
+test('a foreground task is listed while it runs and gone from the running count after', async () => {
+  const work = new WorkTable();
+  let seen: number | undefined;
+  const delegate = async (request: DelegationRequest) => {
+    seen = work.running('task');
+    return { status: 'ok' as const, response: 'done', agent: request.agent ?? 'quick' };
+  };
+  const result = await taskRunner({ agent: 'quick', prompt: 'look' }, { projectRoot: root, delegate, work });
+  expect(result.output).toContain('done');
+  expect(seen).toBe(1);
+  expect(work.running()).toBe(0);
+  // Its result came back in the call, so there is no news of it.
+  expect(work.drainEnded()).toEqual([]);
 });
 
 test('finished background tasks do not count against the concurrency limit', async () => {
   const delegate = async (request: DelegationRequest) => ({ status: 'ok' as const, response: 'done', agent: request.agent ?? 'quick' });
-  const ctx = { projectRoot: root, delegate, delegationConfig: { max_depth: 2, max_concurrent: 1, max_turns_per_child: 2 } };
+  const ctx = { projectRoot: root, delegate, work: new WorkTable(), delegationConfig: { max_depth: 2, max_concurrent: 1, max_turns_per_child: 2 } };
   await taskRunner({ agent: 'quick', prompt: 'a', background: true }, ctx);
   await Bun.sleep(5);
   const next = await taskRunner({ agent: 'quick', prompt: 'b', background: true }, ctx);

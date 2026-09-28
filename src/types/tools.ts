@@ -3,6 +3,7 @@ import type { ToolResult as CoreToolResult } from '../core/types.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../core/mcp/connect.js';
 import type { PermissionMode } from '../core/permissions/modes.js';
 import type { DelegationConfig } from './config.js';
+import type { WorkTable } from '../core/work.js';
 
 /**
  * The five tool names of the original interface. Kept only for the legacy per-tool
@@ -174,6 +175,8 @@ export interface ToolContext {
   searchBackend?: 'auto' | 'ripgrep' | 'builtin';
   /** Starts a child run for the task tool. Supplied by the runtime. */
   delegate?: Delegate;
+  /** The session's background commands and child agents, which the runtime owns. */
+  work?: WorkTable;
   /** How many delegations deep this session is; 0 at the top. */
   delegationDepth?: number;
   delegationConfig?: DelegationConfig;

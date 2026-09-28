@@ -166,6 +166,43 @@ test('a ! command cancelled while it runs reports cancelled, not ok', async () =
   }
 });
 
+test('a background command is listed, told to the model when it ends, outlives a cancelled turn, and dies with the session', async () => {
+  const runtime = await start({ allowTools: ['run_command'] });
+  const running = () => runtime.work().filter((item) => item.endedAt === undefined);
+  const background = (id: string) => ({ toolCalls: [{ id, name: 'run_command', arguments: { command: 'sleep 30', background: true } }] });
+  try {
+    const changes: number[] = [];
+    const stop = runtime.watchWork(() => changes.push(running().length));
+    server.enqueue(background('b1'), { text: 'started' });
+    await runtime.run('start it', () => {});
+    const [job] = runtime.work();
+    expect(job).toMatchObject({ kind: 'job', label: 'sleep 30' });
+    expect(changes).toEqual([1]);
+    // The person stops it from any surface, whether a turn runs or not.
+    expect(runtime.stopWork(job.id)).toBe(true);
+    while (running().length) await Bun.sleep(20);
+    expect(changes.at(-1)).toBe(0);
+    stop();
+    // The model hears of the end with its next prompt, from the session that owns the job.
+    server.enqueue({ text: 'noted' });
+    await runtime.run('and?', () => {});
+    const prompt = server.completions().at(-1)!.body.messages.findLast((message: any) => message.role === 'user').content;
+    expect(prompt).toContain(`and?\n\n[Work ended since your last turn:\n${job.id} (sleep 30) ended by signal SIGTERM after `);
+    expect(prompt).toContain('Read its output with command_output.');
+    // Cancelling a turn leaves the job it started running.
+    server.enqueue(background('b2'), { text: 'again', delayMs: 5_000 });
+    const turn = runtime.run('again', () => {});
+    while (!running().length) await Bun.sleep(10);
+    runtime.cancel();
+    expect((await turn).status).toBe('cancelled');
+    expect(running()).toHaveLength(1);
+  } finally {
+    await runtime.close();
+  }
+  while (runtime.work().some((item) => item.endedAt === undefined)) await Bun.sleep(20);
+  expect(runtime.work().every((item) => item.endedAt !== undefined)).toBe(true);
+});
+
 test('a pre_tool hook sees a ! command and can deny it', async () => {
   const guard = path.join(root, 'guard.sh');
   fs.writeFileSync(guard, '#!/bin/sh\necho "a shell command is frozen" >&2\nexit 2\n', { mode: 0o755 });

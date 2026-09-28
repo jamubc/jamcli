@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import { createBuiltinRegistry } from '../registry.js';
 import { HeadTailBuffer } from '../command.js';
+import { WorkTable } from '../../work.js';
 
 let projectRoot: string;
 
@@ -86,23 +87,39 @@ test('a working directory outside the project is refused', async () => {
 
 test('a background command returns a job whose output and exit can be read later', async () => {
   const registry = createBuiltinRegistry();
-  const started = await registry.execute('run_command', { command: 'sleep 0.2; echo ready', background: true }, { projectRoot });
+  const work = new WorkTable();
+  const started = await registry.execute('run_command', { command: 'sleep 0.2; echo ready', background: true }, { projectRoot, work });
   const jobId = String(started.metadata?.jobId);
   expect(started.output).toContain(jobId);
+  // The person sees it listed while it runs; the model is told once when it ends.
+  expect(work.list()).toMatchObject([{ id: jobId, kind: 'job', label: 'sleep 0.2; echo ready' }]);
+  expect(work.drainEnded()).toEqual([]);
   await sleep(600);
-  const output = await registry.execute('command_output', { job_id: jobId }, { projectRoot });
+  const output = await registry.execute('command_output', { job_id: jobId }, { projectRoot, work });
   expect(output.output).toContain('ready');
   expect(output.output).toContain('exited with code 0');
+  expect(work.drainEnded()).toMatchObject([{ id: jobId, outcome: 'exited with code 0' }]);
+  expect(work.drainEnded()).toEqual([]);
 });
 
-test('command_kill stops a running background command', async () => {
+test('command_kill stops a running background command, and a job is its own session\'s', async () => {
   const registry = createBuiltinRegistry();
-  const started = await registry.execute('run_command', { command: 'sleep 30', background: true }, { projectRoot });
+  const work = new WorkTable();
+  const started = await registry.execute('run_command', { command: 'sleep 30', background: true }, { projectRoot, work });
   const jobId = String(started.metadata?.jobId);
-  await registry.execute('command_kill', { job_id: jobId }, { projectRoot });
+  const elsewhere = await registry.execute('command_output', { job_id: jobId }, { projectRoot, work: new WorkTable() });
+  expect(elsewhere.success).toBe(false);
+  await registry.execute('command_kill', { job_id: jobId }, { projectRoot, work });
   await sleep(300);
-  const output = await registry.execute('command_output', { job_id: jobId }, { projectRoot });
+  const output = await registry.execute('command_output', { job_id: jobId }, { projectRoot, work });
   expect(output.output).toContain('ended by signal');
+  expect(work.running()).toBe(0);
+});
+
+test('a background command needs the session\'s work table', async () => {
+  const result = await run({ command: 'sleep 1', background: true });
+  expect(result.success).toBe(false);
+  expect(result.output).toContain('not available');
 });
 
 test('HeadTailBuffer keeps both ends within its limit', () => {

@@ -8,6 +8,7 @@ import type { Delegate, DelegationOutcome, DelegationRequest } from '../delegati
 import type { ConfigService } from '../../services/ConfigService.js';
 import type { McpSource } from './tools.js';
 import type { PermissionEngine } from '../permissions/engine.js';
+import type { WorkTable } from '../work.js';
 import type { Runtime, RuntimeOptions } from './index.js';
 import type { Sandbox } from '../sandbox/types.js';
 import type { AgentEvent } from '../types.js';
@@ -21,6 +22,8 @@ export interface ParentSession {
   depth: number;
   /** The parent's permission engine, which the child decides with. */
   permissions: PermissionEngine;
+  /** The parent's work table, so what a child starts is the person's to see and stop too. */
+  work: WorkTable;
   /** The model the parent is on now, as `provider:model`, which an agent without a chain runs on. */
   model: string;
 }
