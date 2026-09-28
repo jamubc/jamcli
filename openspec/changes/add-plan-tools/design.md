@@ -37,14 +37,17 @@ message from the `compaction` event's `summary`.
 
 ## Decisions
 
-1. **The plan is a file at `.jamcli/plan.md`, written by `plan_write` (state) and read
-   by `plan_read` (read).** Alternative: a `state`-classed path exception for
+1. **The plan is a file at `.jamcli/plan.md`, written by `plan_write` (state, offered in
+   plan mode only) and read back with `read_file`.** A read tool of its own would cost
+   every request tokens for what `read_file` already does. Alternative: a `state`-classed path exception for
    `write_file`. Rejected: the exception would have to be taught to the permission
    engine and the preview builder, and the model would have to know the path. Two small
    tools mirror `todo_write`/`todo_read`, which already exist and are documented.
 
 2. **`exit_plan_mode` is a `state`-classed tool with `alwaysAsks: true`, taking no
-   arguments.** The engine turns always-asked into `ask` after the mode check, so it is
+   arguments, offered in plan mode only.** A `modes` field on a registered tool keeps a
+   tool out of the modes where it means nothing, so it costs no context there: the fixed
+   cost of a request was 4,361 tokens against a 4,526 trigger under the default window. The engine turns always-asked into `ask` after the mode check, so it is
    offered in plan mode and prompts every time. `previewCall` gains a case that reads the
    plan file, so the person sees the plan where they see a diff for an edit. The runner
    calls `ctx.exitPlanMode()`, which the runtime supplies; the result names the mode the

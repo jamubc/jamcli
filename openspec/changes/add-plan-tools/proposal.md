@@ -13,9 +13,9 @@ long session.
 
 ## What Changes
 
-- **Plan file.** `plan_write` and `plan_read` keep one markdown plan per project under
-  `.jamcli/plan.md`. `plan_write` is `state`-classed, so it is the one write plan mode
-  allows, and the person can edit the file by hand.
+- **Plan file.** `plan_write` keeps one markdown plan per project under `.jamcli/plan.md`.
+  It is `state`-classed and offered in plan mode only, so it is the one write plan mode
+  allows; the person can edit the file by hand, and `read_file` reads it back.
 - **Exit plan mode.** `exit_plan_mode` asks the person every time, showing the plan as
   its preview. Approval switches the session to the mode it was in before plan mode, or
   `default`, from the next turn. A denial with feedback returns the feedback to the model.
@@ -24,7 +24,8 @@ long session.
   one can answer, the tool says so and the model states its assumption.
 - **Todo acceptance checks.** A todo item may carry a `check`: the test, command, or
   observation that proves it done. The tool's description says an item is completed only
-  after its check passed.
+  after its check passed. The interface shows the list as a checklist above the composer
+  as soon as the model writes one, with the plan's path when there is one.
 - **Compaction keeps the plan.** A summary ends with the current todo list and the plan
   file's path and size, so neither is lost to the middle of a long session.
 - **Prompt guidance.** `PLAN_NOTE` names the plan tools and the exit, and the tool

@@ -10,7 +10,8 @@ plan to the person for approval, which ends plan mode.
 #### Scenario: Write the plan in plan mode
 - **WHEN** the mode is `plan` and the model calls `plan_write` with content
 - **THEN** the content is saved as the project's plan under `.jamcli/` and the call runs without asking
-- **AND** `plan_read` returns what the file holds, including edits the person made by hand
+- **AND** reading the file returns what it holds, including edits the person made by hand
+- **AND** outside plan mode `plan_write` and `exit_plan_mode` are not offered, since they mean nothing there
 
 #### Scenario: Present the plan for approval
 - **WHEN** the model calls `exit_plan_mode` and a plan file exists
@@ -25,11 +26,12 @@ plan to the person for approval, which ends plan mode.
 
 #### Scenario: Exit without a plan
 - **WHEN** the model calls `exit_plan_mode` and no plan file exists
-- **THEN** the call fails with a result saying the plan must be written first, and no one is asked
+- **THEN** the prompt says there is no plan
+- **AND** the call fails with a result saying the plan must be written first, whether or not it was allowed, and the mode stays `plan`
 
 #### Scenario: Exit where no one answers
 - **WHEN** `exit_plan_mode` is called in a headless run
-- **THEN** the call is denied as every always-asked call is, and the run's report carries the plan
+- **THEN** the call is denied as every always-asked call is, and the plan stays in the project's plan file for the person
 
 ### Requirement: Ask the Person
 JamCLI SHALL provide `ask_user`, a tool that puts one question, with optional choices, to
@@ -66,6 +68,11 @@ it done, and SHALL show it wherever the item is shown.
 - **WHEN** the model calls `todo_write` with an item that has a `check`
 - **THEN** the check is persisted with the item and returned by `todo_read`
 - **AND** the list the model and the interface see shows the check beside the item
+
+#### Scenario: Show the checklist in the interface
+- **WHEN** the model writes a todo list or the plan in the interface
+- **THEN** the checklist appears above the composer on its own, each item with its state as a checkbox and its check beneath it, and the plan's path when there is one
+- **AND** the todos key hides and shows it
 
 #### Scenario: Completion means the check passed
 - **WHEN** the model reads the `todo_write` tool's description
