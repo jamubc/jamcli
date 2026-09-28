@@ -55,7 +55,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. Every unit up to `add-session-reflection` is archived, and the owner merged the whole
+`add-plan-tools`, on branch `add-plan-tools`, opened 2026-09-27: a plan file, an approved exit
+from plan mode, an `ask_user` tool, todo acceptance checks, and a summary that keeps the todo
+list and plan. Done when `openspec/changes/add-plan-tools/tasks.md` is all checked and the
+change is archived.
+
+Before it: every unit up to `add-session-reflection` is archived, and the owner merged the whole
 stack to `master` on 2026-09-27, so work starts again from one branch. The next unit is the
 first open one in `ROADMAP.md`. `add-windows-support` is shelved, not in the active changes
 tree: it waits for the owner to approve it before any task begins, and `git checkout 9d9f5c6

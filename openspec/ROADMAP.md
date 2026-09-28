@@ -246,6 +246,33 @@ CLI does today (`src/cli/auth.ts:7-8`).
 
 Why last: it has nothing to write until the shapes above exist.
 
+## Inserted unit: `add-plan-tools` (open, 2026-09-27)
+
+Raised by the owner on 2026-09-27 and opened the same day as `openspec/changes/add-plan-tools`,
+ahead of unit 4. Its proposal carries the sources. Each names what already exists so a
+proposal starts from the seam, not from scratch. Sources: Ronacher, "What is plan mode"
+(2025-12-17); Columbia DAPLab, "9 critical failure patterns of coding agents"
+(2026-01-08); claude-world.com tutorials S03, S06, S07, S22.
+
+- **Plan file.** Claude Code's plan is a markdown file the model may edit in plan mode and
+  reads back on exit, and the person can edit it by hand. jamcli has no plan artifact.
+  The nearest seam is `todo_write` (`src/core/tools/todo.ts`): `state`-classed, so it is
+  already the one write plan mode allows, persisted under `.jamcli/`. A plan file would be
+  a second `state`-classed tool or a `state`-classed path exception for `write_file`.
+- **Exit-plan-mode tool.** Today the model cannot leave plan mode; the person cycles it
+  (`src/tui/app/controller.ts` `MODE_CYCLE`) or an ACP client sets it. An exit tool would
+  be a `state`-classed tool that raises an approval request carrying the plan, and the
+  approval switches the mode. The approval path exists (`approval_request` events).
+- **Ask-user tool.** No tool; the model asks by ending its turn with text. A tool would let
+  the interface render options and would record the answer in the transcript. claude-world
+  S22 frames the rule the prompt should carry either way: resolve, inform, ask, or stop,
+  by consequence.
+- **Task tracking that survives long sessions.** `todo_write` already persists to
+  `.jamcli/todos.json` and is offered in plan mode, so `PLAN_NOTE` now tells the model to
+  put the plan's steps there. Gaps against claude-world S03/S07: no per-item acceptance
+  check, no `blockedBy` dependencies, and compaction (`src/core/context/compact.ts`) does
+  not pin the list in the summary; the model must call `todo_read` to recover it.
+
 ## Deliberately not planned
 
 - Graded effort beyond `off | on | auto`. Only Anthropic exposes it; a provider unit if
