@@ -53,6 +53,8 @@ const thisSession = (ctx: CommandContext): SessionChoice =>
 
 /** Reopen this session, so a change to the files it was built from applies. */
 async function reopen(ctx: CommandContext): Promise<void> {
+  // Where the session is not replaced in place, a saved change takes effect in the next one, which is not a failure.
+  if (!ctx.opensSessions) return ctx.notice('info', 'The change is saved, and applies to sessions started from now on.');
   const error = await ctx.openSession(thisSession(ctx));
   if (error) ctx.notice('warn', `The change is saved, but this session could not be reopened with it: ${error}`);
   else ctx.notice('info', 'This session was reopened, so the change applies.');

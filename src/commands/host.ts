@@ -224,6 +224,7 @@ export class CommandHost {
       working: () => undefined,
       refresh: () => options.onRefresh?.(),
       openSession: async () => options.openRefusal,
+      opensSessions: false,
       setMode: (mode) => {
         const refusal = options.runtime.setPermissionMode(mode);
         if (refusal) return notice('warn', `Not switched to ${mode} mode: ${refusal}`);

@@ -80,6 +80,8 @@ export interface CommandContext {
   refresh(): void;
   /** Close this session and open another. Resolves to why not, when it could not. */
   openSession(choice: SessionChoice): Promise<string | undefined>;
+  /** Whether this surface replaces its session in place: the interface does, while headless and ACP keep theirs. */
+  readonly opensSessions: boolean;
   setMode(mode: PermissionMode): void;
   /** Ask the person to confirm bypass mode. */
   confirmBypass(): void;

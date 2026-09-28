@@ -393,6 +393,7 @@ export function App(props: AppProps) {
     working: (phase) => dispatch({ type: 'status', patch: { phase } }),
     refresh: () => controller.refresh(),
     openSession: switchSession,
+    opensSessions: true,
     setMode: (mode) => void controller.setMode(mode),
     confirmBypass: () => setConfirmBypass(true),
     copy: (text) => copyText(text),
