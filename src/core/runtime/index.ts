@@ -20,6 +20,7 @@ import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type Too
 import { childLauncher, type ParentSession } from './children.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
+import { pinnedState } from '../tools/plan.js';
 import { effortFor, thinkingFor, type EffortLevel, type ReasoningLevel } from '../routing/capabilities.js';
 import { sessionPermissions } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
@@ -781,6 +782,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       trustOffNote: gated(),
       redact,
       signal: options.signal,
+      pinned: () => pinnedState(workRoot),
       // A delegated run shares the working copy; the checkpoint before its task call covers it.
       ...(options.surface === 'child' ? {} : { beforeChange: takeCheckpoint, afterChange: settleCheckpoint }),
     });

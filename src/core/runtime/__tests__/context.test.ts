@@ -134,6 +134,26 @@ test('a summary that fails leaves the older steps out, says so, and the turn goe
   expect(orphans(sent)).toEqual([]);
 });
 
+test('a summary ends with the todo list and the plan, and the log rebuilds it so', async () => {
+  configure();
+  const runtime = await start();
+  server.enqueue({ toolCalls: [{ id: 't1', name: 'todo_write', arguments: { todos: [{ content: 'Fix the parser', status: 'in_progress', check: 'bun test test/parse passes' }] } }] }, { text: 'Listed.' });
+  await runtime.run('plan the fix');
+  fs.writeFileSync(path.join(root, '.jamcli', 'plan.md'), '# Plan\n1. Fix it\n');
+  server.enqueue({ text: 'Tests are in test/.' });
+  await runtime.run('and the tests?');
+  server.enqueue({ text: 'Asked to plan the parser fix.' });
+  const { events, onEvent } = collect();
+  expect(await runtime.compact(undefined, onEvent)).toBe(true);
+  const compaction = events.find((event) => event.type === 'compaction') as Extract<AgentEvent, { type: 'compaction' }>;
+  expect(compaction.summary).toEndWith(
+    'Current state, kept through the summary:\nTodo list:\n1. [~] Fix the parser\n   check: bun test test/parse passes\n\nPlan: .jamcli/plan.md (2 lines). Read it with read_file.'
+  );
+  expect(runtime.session.messages[0].content).toContain('Current state, kept through the summary:');
+  const continued = await start({ sessionId: runtime.sessionId });
+  expect(continued.session.messages[0].content).toBe(runtime.session.messages[0].content);
+});
+
 test('/compact summarizes on request, with the focus given, and the next turn builds on it', async () => {
   configure();
   const runtime = await start();

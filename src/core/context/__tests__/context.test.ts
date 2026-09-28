@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import {
+  PINNED_HEADING,
   SUMMARY_PREFIX,
   TokenCounter,
   chooseBoundary,
@@ -150,6 +151,21 @@ test('a summary that fails leaves the older part out and says why; a cut inside 
   // An empty summary is a failed one.
   const empty = (await compact({ messages: turn, provider: createScriptedProvider([{ text: '   ' }]), keepTokens: 1 }))!;
   expect(empty).toMatchObject({ strategy: 'drop', error: 'the summary came back empty' });
+});
+
+test('pinned state ends the summary, and the next compaction carries the request without it', async () => {
+  const turn = [user('refactor the parser'), assistant('', 'a'), result('a'), assistant('', 'b'), result('b')];
+  const pinned = 'Todo list:\n1. [~] Fix the parser\n   check: bun test passes\n\nPlan: .jamcli/plan.md (3 lines). Read it with read_file.';
+  const first = (await compact({ messages: turn, provider: createScriptedProvider([{ text: 'Notes.' }]), keepTokens: 1, pinned }))!;
+  expect(first.summary).toBe(`Notes.\n\nThe request being worked on, verbatim:\nrefactor the parser\n\n${PINNED_HEADING}\n${pinned}`);
+  expect(first.messages[0]).toEqual(summaryMessage(first.summary, first.messages[0].timestamp));
+
+  const again = [...first.messages, assistant('', 'c'), result('c')];
+  const second = (await compact({ messages: again, provider: createScriptedProvider([{ text: 'Later.' }]), keepTokens: 1, pinned: 'Todo list:\n1. [x] Fix the parser' }))!;
+  expect(second.summary).toBe(`Later.\n\nThe request being worked on, verbatim:\nrefactor the parser\n\n${PINNED_HEADING}\nTodo list:\n1. [x] Fix the parser`);
+  // Nothing pinned, nothing added.
+  const bare = (await compact({ messages: turn, provider: createScriptedProvider([{ text: 'Notes.' }]), keepTokens: 1, pinned: '  ' }))!;
+  expect(bare.summary).toBe('Notes.\n\nThe request being worked on, verbatim:\nrefactor the parser');
 });
 
 test('a cancelled compaction stops instead of dropping anything', async () => {

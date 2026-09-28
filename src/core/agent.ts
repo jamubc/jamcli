@@ -72,6 +72,8 @@ export interface AgentOptions {
      */
     proactive?: boolean;
   };
+  /** State every summary carries as it is, read when a compaction happens: the todo list and where the plan is. */
+  pinned?: () => Promise<string | undefined>;
   /** Replaces credentials in tool output. Defaults to the credentials in the environment. */
   redact?: Redactor;
   /** Called once per step, before the first call that may change something, to take a checkpoint. */
@@ -464,12 +466,14 @@ export class CoreAgent implements Agent {
     if (asked.context.length) focus = [focus, ...asked.context].filter(Boolean).join('\n');
     const before = this.countContext(working.messages);
     const started = Date.now();
+    const pinned = await this.options.pinned?.().catch(() => undefined);
     const result = await compact({
       messages: working.messages,
       provider,
       model: this.options.model,
       keepTokens: keepTokens ?? Math.floor(context.budget.budget * KEEP_SHARE),
       focus,
+      ...(pinned ? { pinned } : {}),
       signal,
       maxOutputTokens: this.options.maxOutputTokens,
       contextLength: this.options.contextLength,

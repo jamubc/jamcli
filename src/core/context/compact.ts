@@ -12,6 +12,8 @@ export function isContextOverflow(error: unknown): boolean {
 
 export const SUMMARY_PREFIX = 'Summary of the earlier conversation:';
 const REQUEST_HEADING = 'The request being worked on, verbatim:';
+/** Heads the state a summary must not lose, at its end where the model finds it. */
+export const PINNED_HEADING = 'Current state, kept through the summary:';
 
 /** The message a compaction leaves in place of what it replaced. The session log rebuilds the same one. */
 export const summaryMessage = (summary: string, timestamp: number): ChatMessage => ({
@@ -122,7 +124,10 @@ function latestRequest(messages: ChatMessage[]): string | undefined {
     if (message.role !== 'user') continue;
     if (!isSummary(message)) return message.content;
     const carried = message.content.indexOf(`${REQUEST_HEADING}\n`);
-    return carried >= 0 ? message.content.slice(carried + REQUEST_HEADING.length + 1) : undefined;
+    if (carried < 0) return undefined;
+    const tail = message.content.slice(carried + REQUEST_HEADING.length + 1);
+    const pinned = tail.indexOf(`\n\n${PINNED_HEADING}\n`);
+    return pinned >= 0 ? tail.slice(0, pinned) : tail;
   }
   return undefined;
 }
@@ -135,6 +140,8 @@ export interface CompactInput {
   keepTokens: number;
   /** What the summary should give particular attention to. */
   focus?: string;
+  /** State the summary must carry as it is, such as the todo list: appended at its end. */
+  pinned?: string;
   signal?: AbortSignal;
   maxOutputTokens?: number;
   contextLength?: number;
@@ -190,6 +197,7 @@ export async function compact(input: CompactInput): Promise<CompactResult | unde
     strategy = 'drop';
   }
   if (request) summary += `\n\n${REQUEST_HEADING}\n${request}`;
+  if (input.pinned?.trim()) summary += `\n\n${PINNED_HEADING}\n${input.pinned.trim()}`;
   return {
     messages: [summaryMessage(summary, Date.now()), ...kept],
     replaced: boundary,
