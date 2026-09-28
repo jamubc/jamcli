@@ -91,7 +91,7 @@ function TodoPanel({ todos, plain, colors }: { todos: TodoView[] | undefined; pl
       {todos?.length ? (
         todos.map((todo, index) => (
           <text {...sel} key={index} fg={todo.status === 'completed' ? colors.dim : colors.text}>
-            {`${TODO_WORDS[todo.status]}: ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}`}
+            {`${TODO_WORDS[todo.status]}: ${todo.status === 'in_progress' && todo.active_form ? todo.active_form : todo.content}${todo.check ? `\n   check: ${todo.check}` : ''}`}
           </text>
         ))
       ) : (

@@ -11,18 +11,22 @@ const DEFAULT_SESSION = 'default';
 const STATUSES = ['pending', 'in_progress', 'completed'] as const;
 type TodoStatus = (typeof STATUSES)[number];
 
-/** A single checklist item. `active_form` is the present-tense label for it. */
+/**
+ * A single checklist item. `active_form` is the present-tense label for it; `check` is
+ * what proves it done: a test, a command, or what to look at.
+ */
 export interface TodoItem {
   content: string;
   status: TodoStatus;
   active_form?: string;
+  check?: string;
 }
 
 function resolveSession(session: unknown): string {
   return typeof session === 'string' && session.length ? session : DEFAULT_SESSION;
 }
 
-function resolveTodoFile(ctx: ToolContext, session: string): string {
+function resolveTodoFile(ctx: Pick<ToolContext, 'projectRoot'>, session: string): string {
   const name = session === DEFAULT_SESSION ? TODO_FILE : `todos-${session}.json`;
   return path.join(ctx.projectRoot, JAMCLI_DIR, name);
 }
@@ -37,21 +41,27 @@ function normalizeItem(raw: unknown): TodoItem | null {
   if (typeof record.active_form === 'string' && record.active_form.length) {
     item.active_form = record.active_form;
   }
+  if (typeof record.check === 'string' && record.check.trim().length) {
+    item.check = record.check.trim();
+  }
   return item;
 }
 
-function formatTodos(todos: TodoItem[]): string {
+/** The list as the model reads it: one numbered line per item, its check indented under it. */
+export function formatTodos(todos: TodoItem[]): string {
   if (!todos.length) return 'No todos for this session.';
   return todos
     .map((todo, index) => {
       const marker = todo.status === 'completed' ? 'x' : todo.status === 'in_progress' ? '~' : ' ';
       const active = todo.active_form ? ` (active: ${todo.active_form})` : '';
-      return `${index + 1}. [${marker}] ${todo.content}${active}`;
+      const check = todo.check ? `\n   check: ${todo.check}` : '';
+      return `${index + 1}. [${marker}] ${todo.content}${active}${check}`;
     })
     .join('\n');
 }
 
-async function readTodos(ctx: ToolContext, session: string): Promise<TodoItem[]> {
+/** The session's todo list as saved, or an empty list when there is none or it cannot be read. */
+export async function readTodos(ctx: Pick<ToolContext, 'projectRoot'>, session: string = DEFAULT_SESSION): Promise<TodoItem[]> {
   const file = resolveTodoFile(ctx, session);
   if (!(await pathExists(file))) return [];
   try {
@@ -121,6 +131,10 @@ const todoWriteSchema: JsonSchema = {
             description: 'Progress state of the item. Defaults to pending.',
           },
           active_form: { type: 'string', description: 'Present-tense label shown while the item is in progress.' },
+          check: {
+            type: 'string',
+            description: 'What proves the item done: a test to run, a command and what it must show, or what to look at. Mark the item completed only after this check passed.',
+          },
         },
         required: ['content'],
         additionalProperties: false,
@@ -151,7 +165,8 @@ export const TODO_TOOLS: RegisteredTool[] = [
   },
   {
     name: 'todo_write',
-    description: 'Replace the session todo list, persisted under the project .jamcli directory.',
+    description:
+      'Replace the session todo list, persisted under the project .jamcli directory. Give each item a check that proves it done, keep one item in progress at a time, and mark an item completed only after its check passed.',
     inputSchema: todoWriteSchema,
     policy: 'state',
     runner: todoWriteRunner,

@@ -187,7 +187,7 @@ test('a command and what it reports are rows of their own, and another session s
 test('the todo list is the one the model last wrote, and another session has none', () => {
   const todos: TodoView[] = [
     { content: 'Read the parser', status: 'completed' },
-    { content: 'Fix the bug', status: 'in_progress', active_form: 'Fixing the bug' },
+    { content: 'Fix the bug', status: 'in_progress', active_form: 'Fixing the bug', check: 'bun test src/parser passes' },
   ];
   let state = run([
     event({ type: 'tool_call', call: call('t1', 'todo_write', { todos }) }),

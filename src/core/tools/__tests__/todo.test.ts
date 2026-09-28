@@ -35,6 +35,24 @@ test('todo_write persists a list that todo_read returns', async () => {
   expect(read.metadata?.todos).toEqual(todos);
 });
 
+test('an item keeps its check, and the list the model reads shows it under the item', async () => {
+  const registry = createBuiltinRegistry();
+  const todos = [
+    { content: 'Add the plan tool', status: 'in_progress', check: 'bun test src/core/tools/__tests__/plan.test.ts passes' },
+    { content: 'Write the docs', status: 'pending', check: '  ' },
+  ];
+  const write = await registry.execute('todo_write', { session: 'checks', todos }, { projectRoot });
+  expect(write.success).toBe(true);
+  expect(write.output).toBe('1. [~] Add the plan tool\n   check: bun test src/core/tools/__tests__/plan.test.ts passes\n2. [ ] Write the docs');
+  const read = await registry.execute('todo_read', { session: 'checks' }, { projectRoot });
+  expect(read.metadata?.todos).toEqual([
+    { content: 'Add the plan tool', status: 'in_progress', check: 'bun test src/core/tools/__tests__/plan.test.ts passes' },
+    { content: 'Write the docs', status: 'pending' },
+  ]);
+  // The model is told what completed means.
+  expect(registry.get('todo_write')?.description).toContain('completed only after its check passed');
+});
+
 test('todo lists are scoped per session', async () => {
   const registry = createBuiltinRegistry();
   await registry.execute('todo_write', { session: 'alpha', todos: [{ content: 'alpha task', status: 'pending' }] }, { projectRoot });

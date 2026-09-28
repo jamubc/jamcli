@@ -83,6 +83,8 @@ export interface TodoView {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
   active_form?: string;
+  /** What proves the item done, when the model gave one. */
+  check?: string;
 }
 
 export interface ViewState {
