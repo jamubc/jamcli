@@ -80,7 +80,7 @@ whether it is working or waiting, the same observer a person can switch on.
 |---|---|---|
 | `terminal_start` | `cwd`, optionally `args`, `cols`, `rows` | Starts `jamcli` there. `args` go to the interface, for example `["--screen-reader"]`. |
 | `terminal_type` | `terminal`, `text`, optionally `enter` and `wait_ms` | Types the text, then Enter unless `enter` is false. Returns the screen once it settles. |
-| `terminal_keys` | `terminal`, `keys` | Presses keys in order: `enter`, `escape`, `tab`, `shift+tab`, arrows, `pageup`, `pagedown`, `backspace`, `space`, `ctrl+<letter>`, or one character. |
+| `terminal_keys` | `terminal`, `keys`, optionally `wait_ms` | Presses keys in order: `enter`, `escape`, `tab`, `shift+tab`, arrows, `pageup`, `pagedown`, `backspace`, `space`, `ctrl+<letter>`, or one character. |
 | `terminal_screen` | `terminal` | The screen as it is now, and what the interface is doing. |
 | `terminal_wait` | `terminal`, optionally `text` and `wait_ms` | Waits until the screen shows the text, or, without text, until the interface stops working and the screen is still. |
 | `terminal_resize` | `terminal`, `cols`, `rows` | Resizes, as a person resizing the window does. |
@@ -105,14 +105,15 @@ The calling agent never answers for the person:
 - A choice a command marks as the person's: confirming `/commit`, pushing and opening with `/pr`,
   and trusting a project's hooks.
 
-For these, `session_answer` refuses. Keys sent to a terminal waiting on one are not sent: the
-person is asked, and their answer is typed for them. The server asks the person through MCP elicitation, which their host shows as a prompt. Claude Code
-supports it. A host that cannot ask, such as OpenCode today, gets a denial, so the call does not
-happen.
+In a session, `session_answer` refuses both kinds, and the server asks the person through MCP
+elicitation, which their host shows as a prompt. Claude Code supports it. A host that cannot ask,
+such as OpenCode today, gets a denial, so the call does not happen.
 
-Two questions show only as text on the interface's screen: the bypass confirmation and the
-hooks trust question. The server cannot tell them apart from other text, so they are the
-person's by rule. An agent driving a terminal leaves them for the person.
+In a terminal, less can be checked. An approval for a tool that always asks is caught, because
+the interface's observer marks it: keys sent while it waits are not sent, the person is asked,
+and their answer is typed for them. A list is not caught. It shows only as text on the screen, so
+every choice there, from `/commit`'s confirmation and `/pr`'s push to hooks trust and the bypass
+confirmation, is the person's by rule. An agent driving a terminal leaves them for the person.
 
 Source: <Receipt path="src/mcp/server.ts" symbol="askPerson" />.
 

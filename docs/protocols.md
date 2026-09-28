@@ -43,11 +43,13 @@ does. Add it once, for example `claude mcp add jamcli -- jamcli mcp serve`.
   speak kitty's keyboard protocol.
 - **What is the person's stays theirs.** A call to a tool that always asks (a commit, a
   lesson from `/reflect`) and a choice marked as the person's (trusting a project's hooks)
-  are never the calling agent's to answer: `session_answer` refuses them, and keys sent to
-  a terminal waiting on one are not sent. The person is asked by elicitation in their own
-  host, pushed on a 2025 connection or returned as `input_required` on a 2026-07-28 one.
-  A host that cannot ask (OpenCode today) gets a denial. The bypass confirmation and the
-  hooks trust question in a terminal show only on screen and are the person's by rule.
+  are never the calling agent's to answer in a session: `session_answer` refuses them, and
+  the person is asked by elicitation in their own host, pushed on a 2025 connection or
+  returned as `input_required` on a 2026-07-28 one. A host that cannot ask (OpenCode today)
+  gets a denial. In a terminal, only a call to a tool that always asks is caught: the
+  observer marks it, keys sent while it waits are not sent, and the person is asked. Every
+  choice there, from `/commit`'s confirmation and `/pr`'s push to hooks trust and the
+  bypass confirmation, shows only as screen text and is the person's by rule.
 
 ## ACP
 
