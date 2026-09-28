@@ -268,3 +268,31 @@ test('assistant messages record the provider family and signed reasoning', async
     reasoningBlocks: [{ type: 'thinking', text: 'r', signature: 'sig' }],
   });
 });
+
+test('a delegated run the provider stops answering hands back a report if it can write one, else a digest of what it did', async () => {
+  const call = (name: string, args: Record<string, unknown>) => ({ toolCalls: [{ name, arguments: args }] });
+  const run = async (script: any[]) => {
+    const provider = createScriptedProvider(script);
+    const agent = new CoreAgent({ provider, dispatcher: fakeDispatcher(), toolDefinitions: toolDefs('read_a'), model: 'm', wrapUpOnLimit: true });
+    const result = await agent.run(createSession(project), 'go', () => {});
+    return { result, provider };
+  };
+  // The provider fails the next request for good, then serves the wrap-up: its report is handed back.
+  const reported = await run([{ text: 'Read the first page.', ...call('read_a', { path: 'a.md' }) }, call('read_a', { path: 'b.md' }), { status: 400 }, { text: 'Found: a says X, b says Y.' }]);
+  expect(reported.result.status).toBe('error');
+  expect(reported.result.response).toContain('Stopped early: scripted provider returned 400');
+  expect(reported.result.response).toContain('What it had found:\n\nFound: a says X, b says Y.');
+  expect(reported.result.response).toContain('- read_a a.md');
+  expect(reported.result.response).toContain('- read_a b.md');
+  // The wrap-up request carried its prompt, and offered no tools.
+  expect(JSON.stringify(reported.provider.calls.at(-1))).toContain('The provider has stopped answering');
+  // If the wrap-up is refused too, the digest stands in for the report, from the log alone.
+  const digest = await run([{ text: 'Read the first page.', ...call('read_a', { path: 'a.md' }) }, call('read_a', { path: 'b.md' }), { status: 400 }, { status: 400 }]);
+  expect(digest.result.response).toContain('What it said as it went:\n- Read the first page.');
+  expect(digest.result.response).toContain('What it did, oldest first:\n- read_a a.md\n- read_a b.md');
+  expect(digest.result.response).not.toContain('What it had found');
+  // A run that had done nothing yet, and one nobody delegated, hand back only what they had written.
+  expect((await run([{ status: 400 }])).result.response).toBe('');
+  const top = new CoreAgent({ provider: createScriptedProvider([call('read_a', { path: 'a.md' }), { status: 400 }]), dispatcher: fakeDispatcher(), toolDefinitions: toolDefs('read_a'), model: 'm' });
+  expect((await top.run(createSession(project), 'go', () => {})).response).toBe('');
+});

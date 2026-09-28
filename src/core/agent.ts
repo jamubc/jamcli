@@ -11,6 +11,7 @@ import { emitHookEvent, hookVerdict, type HookBus } from './hooks/index.js';
 import type { AgentLoopConfig } from '../types/config.js';
 import { DEFAULT_AGENT_LOOP_CONFIG } from '../types/config.js';
 import { createRedactor, type Redactor } from './redact.js';
+import { digestOfWork } from './delegation/digest.js';
 
 export interface AgentOptions {
   maxSteps?: number;
@@ -118,6 +119,10 @@ const OUTPUT_LIMIT_REASONS = new Set(['max_tokens', 'length']);
 /** What a delegated run is asked when it runs out of steps, with no tool allowed. */
 const WRAP_UP =
   'You have reached the step limit and cannot call any more tools. Report what you found so far, with the files and lines it rests on, and say plainly what you did not finish.';
+
+/** What a delegated run is asked when the provider stops answering it for good, with no tool allowed. */
+const WRAP_UP_ON_ERROR =
+  'The provider has stopped answering, so you cannot go on. Report what you found so far, with its sources, and say plainly what you did not finish.';
 
 export class CoreAgent implements Agent {
   private readonly running = new Map<string, AbortController>();
@@ -365,7 +370,7 @@ export class CoreAgent implements Agent {
           }
           const message = error?.message ?? String(error);
           emit({ type: 'notice', level: 'error', message });
-          return finish('error', partial, steps, message);
+          return finish('error', await this.handBack(() => working, partial, message, steps > 1, provider, tools, signal, emit, record), steps, message);
         }
       }
 
@@ -484,6 +489,39 @@ export class CoreAgent implements Agent {
   /** The corrected estimate of a request carrying these messages, with the system prompt and tools. */
   private countContext(messages: ChatMessage[]): number {
     return this.options.context!.counter.count({ system: this.options.systemPrompt, tools: this.requestTools(), messages });
+  }
+
+  /**
+   * What a delegated run that stopped for good hands back, so the work it did is not lost with
+   * it: a report if the model can still write one, otherwise a digest of its own log. A run the
+   * person is watching, or one that had done nothing yet, hands back only what it had written.
+   */
+  private async handBack(
+    current: () => JamSession,
+    partial: string,
+    error: string,
+    hadWork: boolean,
+    provider: ChatProvider,
+    tools: ToolDefinition[] | undefined,
+    signal: AbortSignal,
+    emit: (e: AgentEvent) => void,
+    record: (message: ChatMessage) => void
+  ): Promise<string> {
+    if (!this.options.wrapUpOnLimit || !hadWork) return partial;
+    let report = partial.trim();
+    if (!report) {
+      try {
+        record(userMessage(WRAP_UP_ON_ERROR));
+        // Read after the prompt was recorded, so the request carries it.
+        const step = await this.streamStep(provider, this.project(current().messages), tools, signal, emit, 'none');
+        record(this.assistantMessage(step.text, step.reasoning, [], step.done));
+        report = step.text.trim();
+      } catch {
+        // The same provider that refused the work refused the report: the digest stands in for it.
+      }
+    }
+    const digest = digestOfWork(current().messages);
+    return [`Stopped early: ${error}`, report ? `What it had found:\n\n${report}` : '', digest].filter(Boolean).join('\n\n');
   }
 
   /** Stage E: stub the older results the boundary would summarize, and record each stub. */
