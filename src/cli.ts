@@ -17,7 +17,7 @@ import type { AgentEvent } from './core/types.js';
 import { JAMCLI_VERSION } from './core/version.js';
 import type { SpendSummary } from './core/catalog/cost.js';
 
-const SESSIONS_ACTIONS = ['list', 'search', 'show', 'export', 'fork'] as const;
+const SESSIONS_ACTIONS = ['list', 'search', 'show', 'export', 'fork', 'score'] as const;
 type SessionsAction = (typeof SESSIONS_ACTIONS)[number];
 
 export type McpAction = 'add' | 'list' | 'test' | 'remove' | 'login' | 'logout';
@@ -279,7 +279,7 @@ export const USAGE = `Usage: jamcli [options]
       --log-file <path>        Write the log here instead of the state directory's logs/
       --trace-file <path>      Write each span (session, turn, model request, tool call) as JSON lines
 
-  jamcli sessions list|search <query>|show <id>|export <id>|fork <id>
+  jamcli sessions list|search <query>|show <id>|export <id>|fork <id>|score <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
   jamcli doctor [--json] [--no-mcp]   Check providers, models, tools, the sandbox, and configuration
   jamcli config list|get|set|unset|migrate   Read and change configuration, layer by layer
@@ -637,6 +637,16 @@ const runSessionsCommand = async (
   if (!command.query) {
     process.stderr.write(`Usage: jamcli sessions ${command.action} <session-id>\n`);
     return 2;
+  }
+  if (command.action === 'score') {
+    const [{ readTranscript, sessionFileFor }, { score, describeMetrics }] = await Promise.all([import('./core/transcript/index.js'), import('./core/eval/index.js')]);
+    const events = readTranscript(sessionFileFor(projectRoot, command.query));
+    if (!events.length) {
+      process.stderr.write(`No session named ${command.query} in this project.\n`);
+      return 1;
+    }
+    process.stdout.write(`${describeMetrics(score(events))}\n`);
+    return 0;
   }
   const messages = await loadSessionMessages(projectRoot, command.query);
   if (!messages.length) {

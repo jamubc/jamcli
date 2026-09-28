@@ -6,7 +6,7 @@ import { appendUnder, planLesson } from '../lesson.js';
 import type { Signal } from '../signals.js';
 
 let root: string;
-const signals: Signal[] = [{ id: 3, kind: 'tool_error', tool: 'run_command', confidence: 'high', detail: 'npm test failed' }];
+const signals: Signal[] = [{ id: 3, kind: 'tool_error', tool: 'run_command', confidence: 'high', detail: 'npm test failed', signature: 'tool_error/other/run_command/npm test failed' }];
 const lesson = { finding: 'I ran npm; the project uses bun.', cites: [3], file: 'AGENTS.md', section: 'Commands', add: '- Run tests with `bun test`; npm is not installed here.' };
 
 beforeEach(() => {

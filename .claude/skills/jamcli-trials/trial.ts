@@ -11,8 +11,10 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { createRuntime } from '../../../src/core/runtime/index.ts';
+import { createRuntime, type HarnessOverrides } from '../../../src/core/runtime/index.ts';
 import { REFLECTION_TOOLS, reflectTurn } from '../../../src/core/reflection/index.ts';
+import { readTranscript } from '../../../src/core/transcript/index.ts';
+import { score, type Metrics } from '../../../src/core/eval/index.ts';
 import type { AgentEvent } from '../../../src/core/types.ts';
 
 type Check =
@@ -36,6 +38,8 @@ interface Variant {
   config?: Record<string, unknown>;
   /** Replaces the spec's turns. */
   turns?: string[];
+  /** The harness surface: prompt guidance, middleware constants, tool wire schemas, in place of the shipped values. */
+  harness?: HarnessOverrides;
 }
 
 interface Spec {
@@ -142,6 +146,7 @@ async function runOnce(dir: string, variant: Variant): Promise<{ metrics: RunMet
     model: variant.model ?? spec.model,
     ...(variant.effort ? { effort: variant.effort } : {}),
     ...(variant.toolDescriptions ? { toolDescriptions: variant.toolDescriptions } : {}),
+    ...(variant.harness ? { harness: variant.harness } : {}),
     ...(spec.allowTools ? { allowTools: spec.allowTools } : {}),
     ...(spec.maxSteps ? { maxSteps: spec.maxSteps } : {}),
   });
@@ -254,7 +259,9 @@ for (const [name, variant] of Object.entries(spec.variants)) {
         }
       }
       fs.writeFileSync(path.join(outDir, 'sessions', `${label.replace('#', '-')}.transcript.txt`), transcript.join('\n'));
-      results.push({ variant: name, run: index, sessionLog: kept, children, ...metrics, checks, judge: verdict });
+      // The trajectory scores, from the log and the checks, as jamcli sessions score computes them.
+      const scored: Metrics | undefined = fs.existsSync(kept) ? score(readTranscript(kept), checks) : undefined;
+      results.push({ variant: name, run: index, sessionLog: kept, children, ...metrics, checks, judge: verdict, scored });
       const passed = checks.filter((check) => check.pass).length;
       console.log(`${metrics.status}, ${metrics.requests} requests, $${metrics.cost.toFixed(5)}, checks ${passed}/${checks.length}${verdict.score !== null ? `, judge ${verdict.score}` : ''}`);
     } catch (error: any) {
@@ -273,21 +280,30 @@ const rows = Object.keys(spec.variants)
     const runs = results.filter((result) => result.variant === name && result.status !== 'crashed');
     const checks = runs.flatMap((run) => run.checks);
     const scores = runs.map((run) => run.judge?.score).filter((score): score is number => typeof score === 'number');
+    const scored = runs.map((run) => run.scored).filter((entry): entry is Metrics => Boolean(entry));
+    const completed = scored.filter((entry) => entry.success !== false);
+    const pct = (value: number) => `${Math.round(value * 100)}%`;
     return {
       variant: name,
       runs: runs.length,
+      success: scored.some((entry) => entry.success !== undefined) ? pct(scored.filter((entry) => entry.success).length / scored.length) : '-',
       checks: checks.length ? `${checks.filter((check: any) => check.pass).length}/${checks.length}` : '-',
       judge: scores.length ? mean(scores).toFixed(1) : '-',
       requests: mean(runs.map((run) => run.requests)).toFixed(1),
+      tokensPerTask: completed.length ? Math.round(mean(completed.map((entry) => entry.tokensIn + entry.tokensOut))).toLocaleString('en-US') : '-',
+      cached: scored.length ? pct(mean(scored.map((entry) => entry.cachedShare))) : '-',
+      breaks: scored.length ? mean(scored.map((entry) => entry.cacheBreaks)).toFixed(1) : '-',
+      gates: scored.length ? `${mean(scored.map((entry) => entry.gateRuns.length)).toFixed(1)} run, ${mean(scored.map((entry) => entry.gateRuns.filter((gate) => gate.status === 'failed').length)).toFixed(1)} failed` : '-',
+      stopsDenied: scored.length ? mean(scored.map((entry) => entry.falseDone)).toFixed(1) : '-',
       toolErrors: mean(runs.map((run) => run.toolErrors.length)).toFixed(1),
       cost: `$${mean(runs.map((run) => run.cost)).toFixed(5)}`,
       seconds: (mean(runs.map((run) => run.durationMs)) / 1000).toFixed(1),
     };
   });
 const table = [
-  '| variant | runs | checks passed | judge (1-10) | requests | tool errors | cost | seconds |',
-  '|---|---|---|---|---|---|---|---|',
-  ...rows.map((row) => `| ${row.variant} | ${row.runs} | ${row.checks} | ${row.judge} | ${row.requests} | ${row.toolErrors} | ${row.cost} | ${row.seconds} |`),
+  '| variant | runs | success | checks passed | judge (1-10) | requests | tokens per completed task | cached | prefix breaks | gates | stops denied | tool errors | cost | seconds |',
+  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+  ...rows.map((row) => `| ${row.variant} | ${row.runs} | ${row.success} | ${row.checks} | ${row.judge} | ${row.requests} | ${row.tokensPerTask} | ${row.cached} | ${row.breaks} | ${row.gates} | ${row.stopsDenied} | ${row.toolErrors} | ${row.cost} | ${row.seconds} |`),
 ].join('\n');
 const details = results
   .map((result) =>
@@ -298,6 +314,7 @@ const details = results
       result.judge?.reason ? `Judge: ${result.judge.score ?? '?'} - ${result.judge.reason}` : '',
       result.toolErrors?.length ? `Tool errors:\n${result.toolErrors.map((error: string) => `- ${error}`).join('\n')}` : '',
       result.toolCalls ? `Tools: ${Object.entries(result.toolCalls).map(([name, count]) => `${name} ${count}`).join(', ') || 'none'}` : '',
+      result.scored?.signals?.length ? `Signals: ${result.scored.signals.map((signal: any) => `[${signal.id}] ${signal.signature}`).join('; ')}` : '',
       result.children?.length ? `Children: ${result.children.map((child: any) => `${child.id} on ${child.models.join(', ') || 'no request'}`).join('; ')}` : '',
       result.sessionLog ? `Log: ${result.sessionLog}` : '',
       result.response ? `\nFinal reply:\n\n${result.response.slice(0, 2000)}` : '',
