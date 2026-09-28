@@ -50,3 +50,18 @@ describe('SessionController error deduplication', () => {
     expect(errorNotices).toHaveLength(1);
   });
 });
+
+describe('SessionController work watching', () => {
+  test('a background child that spends between turns moves the status cost with its work', () => {
+    let cost = 0.01;
+    let listener: () => void = () => undefined;
+    const runtime = { ...fakeRuntime([], { status: 'ok' } as RunResult), spend: () => ({ requests: 1, cost, unpriced: 0 }), work: () => [], watchWork: (next: () => void) => ((listener = next), () => undefined) };
+    const actions: ViewAction[] = [];
+    const stop = new SessionController(runtime, (action) => actions.push(action)).watchWork();
+    cost = 0.05;
+    listener();
+    const patches = actions.filter((action) => action.type === 'status').map((action: any) => action.patch.costUsd);
+    expect(patches).toEqual([0.01, 0.05]);
+    stop();
+  });
+});

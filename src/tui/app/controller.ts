@@ -42,9 +42,17 @@ export function gitBranch(root: string): string | undefined {
  * the status line current. It knows nothing of rendering.
  */
 /** The status line's facts, read from the runtime. */
+/** What the session has cost, from the runtime's ledger, which children's requests reach even between turns. */
+export function spendOf(runtime: Runtime): Pick<StatusData, 'costUsd' | 'unpriced'> {
+  const spend = runtime.spend();
+  return {
+    costUsd: spend.requests > 0 && spend.unpriced === spend.requests ? null : spend.requests ? spend.cost : null,
+    unpriced: spend.unpriced,
+  };
+}
+
 export function statusOf(runtime: Runtime): Partial<StatusData> {
   const usage = runtime.contextUsage();
-  const spend = runtime.spend();
   // With no model chosen there is no window to measure against, so neither is shown.
   const chosen = Boolean(runtime.model.model);
   return {
@@ -53,8 +61,7 @@ export function statusOf(runtime: Runtime): Partial<StatusData> {
     model: chosen ? `${runtime.model.provider}:${runtime.model.model}${choiceOf(runtime.thinking) === 'auto' ? '' : ` (${choiceOf(runtime.thinking)})`}` : '',
     sandbox: runtime.sandbox.kind,
     contextPercent: chosen && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined,
-    costUsd: spend.requests > 0 && spend.unpriced === spend.requests ? null : spend.requests ? spend.cost : null,
-    unpriced: spend.unpriced,
+    ...spendOf(runtime),
     mcpServers: new Set(runtime.tools.filter((tool) => tool.source === 'mcp').map((tool) => tool.server)).size,
     lspServers: runtime.lspServers.length,
   };
@@ -89,7 +96,11 @@ export class SessionController {
 
   /** Keep the view told of what runs beside the turn, from now until the returned function is called. */
   watchWork(): () => void {
-    const tell = () => this.dispatch({ type: 'work', items: this.runtime.work() });
+    // A background child spends between turns, so the cost is read again with what it is doing.
+    const tell = () => {
+      this.dispatch({ type: 'work', items: this.runtime.work() });
+      this.dispatch({ type: 'status', patch: spendOf(this.runtime) });
+    };
     tell();
     return this.runtime.watchWork(tell);
   }
