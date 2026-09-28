@@ -13,7 +13,8 @@ the transcript, the composer, the palettes, and the status line.
 | Shift+Tab | Changes the permission mode |
 | Ctrl+R | Searches earlier messages |
 | Ctrl+O | The detailed transcript, every block open, and again to return |
-| Ctrl+T | Shows or hides the todo list |
+| Ctrl+T | Shows or hides the plan board: the checklist, and the agents running beside the turn |
+| Up, Down on an empty composer | Choose an agent on the board; Enter looks in on it, Escape lets go |
 | Page Up, Page Down | Scrolls the transcript; at the top, Page Up shows earlier rows |
 | Ctrl+L | Redraws the screen |
 | Ctrl+C twice | Leaves |
@@ -24,6 +25,25 @@ be rebound in `~/.config/jamcli/keybindings.json`, which maps an action to a key
 list: `{ "cycle_mode": "ctrl+y", "history": ["ctrl+r", "ctrl+s"] }`. The actions are
 `send`, `newline`, `interrupt`, `cycle_mode`, `history`, `tool_detail`, `todos`,
 `page_up`, `page_down`, `redraw`, `exit`, and `help`.
+
+## The plan board
+
+The board sits above the composer and appears on its own when the model writes a
+checklist or starts a child agent; Ctrl+T hides and shows it. Its first line is the plan
+in marks, each in the color of its state (green done, yellow running, dim waiting), and the
+count. Under it, each child agent running beside the turn: its state, its agent and task,
+how long it has run, its tokens and cost, and behind a rail what it is doing right now (the
+call it is making, or the last line it said). Then the steps, indented, the running one with
+how long it has run and its check.
+
+Up and Down on an empty composer choose an agent; Enter, or a click on it, opens its run
+in place of the conversation: what it has done so far and each further event as it happens.
+While it runs, a line typed there is said to it, and it reads it with its next step, so you
+can steer or question a child mid-task; `/stop` there stops it. Escape returns, and closes
+this view before it answers any prompt that came up meanwhile. Once the child has ended,
+`o` opens its session as the current one, to read it back or go on with it. An ended agent
+stays on the board for a minute and a half, so its end is seen. A child's permission prompt
+names the agent and task that ask, so two asking at once are told apart.
 
 ## The composer
 

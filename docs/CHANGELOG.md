@@ -17,6 +17,25 @@
   lost in a long session.
 - Any of these is turned off with a deny rule, as any tool is; the prompt then stops
   mentioning it.
+- The plan board draws each step's mark in the color of its state and indents the steps,
+  and lists each child agent running beside the turn: its agent and task, how long it has
+  run, its tokens and cost, and behind a rail what it is doing right now. Up and Down on
+  an empty composer choose a child, Enter or a click looks in on its run as it happens,
+  a line typed there is said to it and read with its next step, `/stop` there stops it, and once
+  it has ended `o` opens its session to go on with it.
+- `/note` plants a tester's flag: shown with a yellow flag and the time, kept in the
+  session log as a `note` event, marked **HUMAN TESTER** by `/export` and `/copy debug`,
+  and never sent to the model. Before, notes lived only on the screen.
+- `/research <question>` runs a research pipeline: the model plans lines of inquiry, fans
+  them out to the new `research` agent in the background, cross-checks, and writes a
+  report in which every claim cites its source. Pipelines are Markdown files under
+  `.jamcli/research/pipelines/` with `angles`, `depth`, `freshness`, `include`,
+  `exclude`, `agent`, and `output`; `/research pipelines` lists them.
+- A session may run five children at once, up from three, and the `task` tool's guidance
+  prefers the background for a fan-out, so each child shows on the board.
+- A background child asks through the parent's surface like a foreground one, and its
+  prompt stays up after the parent's turn ends. Before, every call a background child
+  made that needed approval was refused, so in default mode it could do no real work.
 
 ## 2.0.0
 
