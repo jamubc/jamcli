@@ -1,12 +1,12 @@
 /** @jsxImportSource @opentui/react */
 import type { MarkdownRenderable, SyntaxStyle } from '@opentui/core';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Row } from '../state/view.js';
 import { closeMarkers, compactionLine, noticeLine, thinkingLine, thinkingSize, thinkingText, thinkingWindow, toolLine } from './format.js';
 import type { ThinkingSize } from './format.js';
-import { useClick } from './mouse.js';
+import { useClickable } from './mouse.js';
 import { filetypeOf } from './syntax.js';
-import { usePlain, useSelectable, useTheme, type Selectable } from './theme.js';
+import { chosenRow, usePlain, useSelectable, useTheme, type Selectable } from './theme.js';
 
 /**
  * A unified diff, highlighted as the file it changes. In screen reader mode it is the
@@ -71,7 +71,8 @@ const NOTICE_LABELS = { info: 'Note', warn: 'Warning', error: 'Error' } as const
 function PlainRow({ row, onToggle, open }: { row: Row; onToggle?: (id: number) => void; open: boolean }) {
   const theme = useTheme();
   const sel = useSelectable();
-  const click = useClick();
+  const clickable = useClickable();
+  const toggles = clickable(() => onToggle?.(row.id));
   switch (row.kind) {
     case 'user':
       return <text {...sel} fg={theme.text}>{`You: ${row.text}`}</text>;
@@ -82,7 +83,7 @@ function PlainRow({ row, onToggle, open }: { row: Row; onToggle?: (id: number) =
           {/* The live window is a moving picture, so plain mode says only that thinking is under way. */}
           {row.reasoning && row.streaming && !row.text ? <text {...sel} fg={theme.text}>Thinking...</text> : null}
           {row.reasoning && (row.text || !row.streaming) ? (
-            <text {...sel} fg={theme.text} onMouseUp={click(() => onToggle?.(row.id))}>{`${thinkingLine(row.reasoning, thinkingShown, false)}, ${thinkingShown ? 'shown' : 'hidden'}`}</text>
+            <text {...sel} fg={theme.text} {...toggles}>{`${thinkingLine(row.reasoning, thinkingShown, false)}, ${thinkingShown ? 'shown' : 'hidden'}`}</text>
           ) : null}
           {row.reasoning && thinkingShown ? <text {...sel} fg={theme.text}>{`Thinking: ${row.reasoning}`}</text> : null}
           {row.text ? <text {...sel} fg={theme.text}>{`JamCLI: ${row.text}`}</text> : null}
@@ -92,7 +93,7 @@ function PlainRow({ row, onToggle, open }: { row: Row; onToggle?: (id: number) =
     case 'tool':
       return (
         <box flexDirection="column">
-          <text {...sel} fg={theme.text} onMouseUp={click(() => onToggle?.(row.id))}>{`Tool ${toolLine(row, false)}`}</text>
+          <text {...sel} fg={theme.text} {...toggles}>{`Tool ${toolLine(row, false)}`}</text>
           {open && row.diff ? <text {...sel} fg={theme.text}>{`Diff:\n${row.diff}`}</text> : null}
           {open && !row.diff && row.output ? <text {...sel} fg={theme.text}>{`Output:\n${row.output}`}</text> : null}
         </box>
@@ -130,7 +131,9 @@ export function RowView({
 }) {
   const theme = useTheme();
   const sel = useSelectable();
-  const click = useClick();
+  const clickable = useClickable();
+  const [hot, setHot] = useState(false);
+  const toggles = { ...clickable(() => onToggle?.(row.id), { over: () => setHot(true), out: () => setHot(false) }), ...chosenRow(theme, hot), width: '100%' as const };
   const open = shown ?? !('collapsed' in row && row.collapsed);
   if (usePlain()) return <PlainRow row={row} onToggle={onToggle} open={open} />;
   switch (row.kind) {
@@ -157,7 +160,7 @@ export function RowView({
             </box>
           ) : row.reasoning ? (
             <box key="settled" flexDirection="column">
-              <text {...sel} fg={theme.dim} onMouseUp={click(() => onToggle?.(row.id))}>
+              <text {...sel} fg={theme.dim} {...toggles}>
                 {thinkingLine(row.reasoning, thinkingShown, true, thinking.width)}
               </text>
               {thinkingShown ? <text {...sel} fg={theme.dim}>{thinkingText(row.reasoning, thinking.width)}</text> : null}
@@ -170,7 +173,7 @@ export function RowView({
     case 'tool':
       return (
         <box flexDirection="column">
-          <text {...sel} fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent} onMouseUp={click(() => onToggle?.(row.id))}>
+          <text {...sel} fg={row.phase === 'error' || row.phase === 'timeout' ? theme.error : row.phase === 'denied' ? theme.warn : theme.accent} {...toggles}>
             {toolLine(row)}
           </text>
           {open && row.diff ? <DiffView diff={row.diff} file={row.path} syntax={syntax} /> : null}

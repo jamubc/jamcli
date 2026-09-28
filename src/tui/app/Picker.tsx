@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import { useRef } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
-import { useClick, wheelStep } from './mouse.js';
+import { useClickable, wheelStep } from './mouse.js';
 import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
 import type { ChoiceItem } from '../../commands/types.js';
 
@@ -62,7 +62,7 @@ export function Picker(props: {
 }) {
   const theme = useTheme();
   const sel = useSelectable();
-  const click = useClick();
+  const clickable = useClickable();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   // The frame takes two columns of border and two of padding.
@@ -94,7 +94,7 @@ export function Picker(props: {
         // A label longer than the column keeps two spaces before its detail.
         const label = text.length >= width ? `${text}  ` : text.padEnd(width + 2);
         return (
-          <text {...sel} key={item.key} width="100%" {...chosenRow(theme, chosen)} fg={chosen ? theme.accent : theme.text} onMouseUp={click(() => props.onPick?.(start + index))} onMouseOver={() => props.onHover?.(start + index)}>
+          <text {...sel} key={item.key} width="100%" {...chosenRow(theme, chosen)} fg={chosen ? theme.accent : theme.text} {...clickable(() => props.onPick?.(start + index), { over: () => props.onHover?.(start + index) })}>
             {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${label}${item.detail ?? ''}`).padEnd(room)}
           </text>
         );

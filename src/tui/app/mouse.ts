@@ -1,16 +1,30 @@
 import type { MouseEvent } from '@opentui/core';
 import { useRenderer } from '@opentui/react';
 
-/**
- * A handler for a mouse-up that acts only on a click: a press released where a drag has
- * selected text is the end of a selection, which copies, and never also chooses.
- */
-export function useClick(): (act: () => void) => () => void {
+/** The handlers a row or a line takes to be clickable. */
+export interface Clickable {
+  onMouseUp: () => void;
+  onMouseOver: () => void;
+  onMouseOut: () => void;
+}
+
+/** A click that does not end a text selection, and a hand pointer while over the row. */
+export function useClickable(): (act: () => void, hover?: { over?: () => void; out?: () => void }) => Clickable {
   const renderer = useRenderer();
-  return (act) => () => {
-    if (renderer.getSelection()?.getSelectedText()) return;
-    act();
-  };
+  return (act, hover) => ({
+    onMouseUp: () => {
+      if (renderer.getSelection()?.getSelectedText()) return;
+      act();
+    },
+    onMouseOver: () => {
+      renderer.setMousePointer('pointer');
+      hover?.over?.();
+    },
+    onMouseOut: () => {
+      renderer.setMousePointer('default');
+      hover?.out?.();
+    },
+  });
 }
 
 /** The rows one turn of the wheel moves a list: down is forward, up is back. */

@@ -3,7 +3,7 @@ import type { SyntaxStyle } from '@opentui/core';
 import { useState } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
 import type { PendingApproval } from '../state/view.js';
-import { useClick } from './mouse.js';
+import { useClickable } from './mouse.js';
 import { DiffView } from './Rows.js';
 import { diffRows } from './format.js';
 import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
@@ -57,14 +57,14 @@ export function PermissionPrompt(props: {
   const { approval, queued, syntax, file, selected, feedback, escaping } = props;
   const theme = useTheme();
   const sel = useSelectable();
-  const click = useClick();
+  const clickable = useClickable();
   const plain = usePlain();
   const { width: columns, height } = useTerminalDimensions();
   const previewRows = Math.max(MIN_PREVIEW_ROWS, height - CHROME_ROWS - TRANSCRIPT_ROWS_KEPT - FIXED_ROWS);
   // The frame takes two columns of border and two of padding.
   const room = Math.max(20, columns - 4);
-  const choice = (key: Choice) => click(() => props.onChoose?.(key));
   const [hovered, setHovered] = useState<Choice | undefined>(undefined);
+  const choice = (key: Choice) => clickable(() => props.onChoose?.(key), { over: () => setHovered(key), out: () => setHovered((now) => (now === key ? undefined : now)) });
 
   const diff = approval.preview?.kind === 'diff' ? approval.preview.text : undefined;
   // The rows the diff is drawn in: its hunks, or in screen reader mode every line after a label.
@@ -97,9 +97,7 @@ export function PermissionPrompt(props: {
         {...chosenRow(theme, hovered === key)}
         width="100%"
         fg={theme.text}
-        onMouseUp={choice(key)}
-        onMouseOver={() => setHovered(key)}
-        onMouseOut={() => setHovered((now) => (now === key ? undefined : now))}
+        {...choice(key)}
       >
         <span fg={theme.accent}>{head}</span>
         <span>{what}</span>

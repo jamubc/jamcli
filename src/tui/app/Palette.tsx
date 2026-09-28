@@ -2,7 +2,7 @@
 import { useTerminalDimensions } from '@opentui/react';
 import type { SlashCommand } from '../../commands/types.js';
 import type { ReferenceItem } from './references.js';
-import { useClick, wheelStep } from './mouse.js';
+import { useClickable, wheelStep } from './mouse.js';
 import { useListWindow } from './Picker.js';
 import { chosenRow, framed, usePlain, useSelectable, useTheme } from './theme.js';
 
@@ -16,7 +16,7 @@ export const PALETTE_ROWS = 8;
 export function Palette({ matches, selected, onPick, onHover, onScroll }: { matches: SlashCommand[]; selected: number; onPick?: (index: number) => void; onHover?: (index: number) => void; onScroll?: (step: number) => void }) {
   const colors = useTheme();
   const sel = useSelectable();
-  const click = useClick();
+  const clickable = useClickable();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   // Inside the border and padding; a line longer than that is cut, not wrapped.
@@ -37,7 +37,7 @@ export function Palette({ matches, selected, onPick, onHover, onScroll }: { matc
           const head = name.length >= width ? `${name} ` : name.padEnd(width + 1);
           const from = command.source === 'built-in' ? '' : ` (${command.source})`;
           return (
-            <text {...sel} key={command.name} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
+            <text {...sel} key={command.name} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} {...clickable(() => onPick?.(start + index), { over: () => onHover?.(start + index) })}>
               {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head} ${command.summary}${from}`).padEnd(room)}
             </text>
           );
@@ -52,7 +52,7 @@ export function Palette({ matches, selected, onPick, onHover, onScroll }: { matc
 export function ReferencePalette({ matches, selected, loading, onPick, onHover, onScroll }: { matches: ReferenceItem[]; selected: number; loading: boolean; onPick?: (index: number) => void; onHover?: (index: number) => void; onScroll?: (step: number) => void }) {
   const colors = useTheme();
   const sel = useSelectable();
-  const click = useClick();
+  const clickable = useClickable();
   const plain = usePlain();
   const { width: columns } = useTerminalDimensions();
   const room = Math.max(20, columns - 4);
@@ -68,7 +68,7 @@ export function ReferencePalette({ matches, selected, loading, onPick, onHover, 
         const chosen = start + index === selected;
         const head = `@${item.text}`;
         return (
-          <text {...sel} key={item.text} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} onMouseUp={click(() => onPick?.(start + index))} onMouseOver={() => onHover?.(start + index)}>
+          <text {...sel} key={item.text} width="100%" {...chosenRow(colors, chosen)} fg={chosen ? colors.accent : colors.text} {...clickable(() => onPick?.(start + index), { over: () => onHover?.(start + index) })}>
             {fit(`${chosen ? (plain ? 'Chosen: ' : '> ') : '  '}${head.length >= width ? `${head} ` : head.padEnd(width + 1)} ${item.detail}`).padEnd(room)}
           </text>
         );

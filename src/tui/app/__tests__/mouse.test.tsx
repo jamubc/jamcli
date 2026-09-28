@@ -178,6 +178,33 @@ test('pointing at a permission choice draws it as a bar, so what a click would a
   }
 }, 30_000);
 
+test('over a tool line the pointer is a hand and the line is a bar; off it, both go back', async () => {
+  const { setup, close } = await open();
+  try {
+    const pointers: string[] = [];
+    const set = setup.renderer.setMousePointer.bind(setup.renderer);
+    setup.renderer.setMousePointer = (style) => (pointers.push(style), set(style));
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hovered' } }] }, { text: 'Done.' });
+    await send(setup, 'run it');
+    await frameWith(setup, (frame) => frame.includes('1  Allow once'));
+    await setup.mockMouse.click(where(setup, '1  Allow once').x + 2, where(setup, '1  Allow once').y);
+    await frameWith(setup, (frame) => frame.includes('Done.'));
+    const line = where(setup, 'run_command echo hovered');
+    const chosen = THEMES.dark.chosen as string;
+    expect(sameColor(cellAt(setup, line.x + 2, line.y).bg, chosen)).toBe(false);
+    await setup.mockMouse.moveTo(line.x + 2, line.y);
+    await frameWith(setup, () => sameColor(cellAt(setup, line.x + 2, line.y).bg, chosen));
+    // The bar runs the row's width, past the words.
+    expect(sameColor(cellAt(setup, line.x + 40, line.y).bg, chosen)).toBe(true);
+    expect(pointers.at(-1)).toBe('pointer');
+    await setup.mockMouse.moveTo(line.x + 2, line.y + 3);
+    await frameWith(setup, () => !sameColor(cellAt(setup, line.x + 2, line.y).bg, chosen));
+    expect(pointers.at(-1)).toBe('default');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test("a selection is drawn in the theme's selection colors, and stays on its words when the transcript scrolls", async () => {
   const { setup, copied, close } = await open({}, { size: { width: 80, height: 24 } });
   try {
