@@ -1,6 +1,7 @@
 import type { AgentEvent, ApprovalPreview, ApprovalScope, ChatMessage, ToolCall, ToolStatus } from '../../core/types.js';
 import { describeCall } from '../../core/approval.js';
 import { isSummary } from '../../core/context/compact.js';
+import type { WorkItem } from '../../core/work.js';
 
 /**
  * The interface's view state, and the pure function that folds runtime events into it.
@@ -76,6 +77,8 @@ export interface StatusData {
   lspServers: number;
   phase: Phase;
   retry?: { attempt: number; delayMs: number; reason: string };
+  /** What runs beside the turn: background commands and child agents. */
+  work?: { jobs: number; agents: number };
 }
 
 /** One item of the model's todo list, as its `todo_write` call left it. */
@@ -116,7 +119,9 @@ export type ViewAction =
   | { type: 'clear' }
   /** Put a sticky note on top of the others. */
   | { type: 'note'; text: string }
-  | { type: 'clear_notes' };
+  | { type: 'clear_notes' }
+  /** The runtime's work changed: what runs beside the turn, whether or not one runs. */
+  | { type: 'work'; items: WorkItem[] };
 
 /** Characters of a tool's output a block keeps, from the end. */
 export const OUTPUT_TAIL_CHARS = 4_000;
@@ -405,6 +410,11 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
       return { ...state, notes: [action.text, ...state.notes] };
     case 'clear_notes':
       return { ...state, notes: [] };
+    case 'work': {
+      const running = action.items.filter((item) => item.endedAt === undefined);
+      const work = { jobs: running.filter((item) => item.kind === 'job').length, agents: running.filter((item) => item.kind === 'task').length };
+      return { ...state, status: { ...state.status, work } };
+    }
     default:
       return state;
   }

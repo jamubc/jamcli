@@ -141,6 +141,33 @@ const model: SlashCommand = {
   },
 };
 
+const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}s`;
+
+const jobs: SlashCommand = {
+  name: 'jobs',
+  args: '[stop <id>]',
+  summary: 'List the commands and agents running beside the turn, or stop one',
+  source: 'built-in',
+  run(ctx, args) {
+    const words = args.split(/\s+/).filter(Boolean);
+    if (words[0] === 'stop') {
+      const id = words[1];
+      if (!id) return ctx.notice('warn', 'Name what to stop: /jobs stop <id>. /jobs lists the ids.');
+      const stopped = ctx.runtime.stopWork(id);
+      return ctx.notice(stopped ? 'info' : 'warn', stopped ? `Stopping ${id}.` : `Nothing named ${id} is running.`);
+    }
+    if (words.length) return ctx.notice('warn', '/jobs lists what runs beside the turn; /jobs stop <id> stops one.');
+    const items = ctx.runtime.work();
+    if (!items.length) return ctx.notice('info', 'Nothing runs beside the turn, and nothing has lately.');
+    const now = Date.now();
+    const lines = items.map((item) => {
+      const state = item.endedAt === undefined ? `running ${seconds(now - item.startedAt)}` : `${item.outcome ?? 'ended'} after ${seconds(item.endedAt - item.startedAt)}`;
+      return `${item.id}  ${item.kind === 'job' ? 'command' : 'agent'}  ${state}  ${item.label}`;
+    });
+    ctx.show([...lines, '', 'Stop one with /jobs stop <id>.'].join('\n'));
+  },
+};
+
 const mode: SlashCommand = {
   name: 'mode',
   args: '[plan|default|accept-edits|auto|bypass]',
@@ -718,6 +745,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   commit,
   pr,
   tools,
+  jobs,
   skills,
   commandsList,
   plugins,

@@ -102,6 +102,9 @@ function statusEntries(status: StatusData): StatusPart[] {
   parts.push({ text: status.sandbox === 'none' ? 'no sandbox' : `sandbox ${status.sandbox}`, drop: 4 });
   if (status.mcpServers) parts.push({ text: `MCP ${status.mcpServers}`, drop: 2 });
   if (status.lspServers) parts.push({ text: `LSP ${status.lspServers}`, drop: 1 });
+  // What runs beside the turn is kept longest, since it is what the person may need to stop.
+  const work = [status.work?.jobs ? `${status.work.jobs} job${status.work.jobs === 1 ? '' : 's'}` : '', status.work?.agents ? `${status.work.agents} agent${status.work.agents === 1 ? '' : 's'}` : ''].filter(Boolean);
+  if (work.length) parts.push({ text: work.join(', '), drop: 8 });
   const phase = status.phase === 'retrying' && status.retry ? `retrying (${status.retry.attempt}): ${status.retry.reason}` : PHASE_WORDS[status.phase];
   parts.push({ text: phase });
   return parts;

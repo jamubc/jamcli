@@ -36,6 +36,11 @@ test('the status line names each fact in words, and marks a cost that misses unp
   // A free model's nothing takes no room; nothing plus requests with no price still shows.
   expect(statusParts({ ...status, costUsd: 0, unpriced: 0 })).not.toContain('$0.00');
   expect(statusParts({ ...status, costUsd: 0, unpriced: 2 })).toContain('$0.00+');
+  // What runs beside the turn is counted before the phase, and nothing running takes no room.
+  expect(statusParts({ ...status, work: { jobs: 1, agents: 2 } }).slice(-2)).toEqual(['1 job, 2 agents', 'waiting']);
+  expect(statusParts({ ...status, work: { jobs: 0, agents: 0 } })).not.toContain('0 jobs');
+  // It is kept when the line does not fit, ahead of the counts that only inform.
+  expect(fitStatus({ ...status, work: { jobs: 1, agents: 0 } }, 60, { separator: ' · ' })).toContain('1 job');
 });
 
 test('a reply mid-stream has its open markers closed, so words are styled from their first character', () => {

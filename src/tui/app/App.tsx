@@ -162,6 +162,8 @@ export function App(props: AppProps) {
   const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch, props.observer?.event), [runtime]);
   useEffect(() => props.observer?.attach(runtime), [runtime]);
+  // What runs beside the turn reaches the status line between turns too.
+  useEffect(() => controller.watchWork(), [controller]);
   // Custom commands are read again with each session, so a file added meanwhile is found.
   const custom = useMemo(() => customCommands(projectRoot, BUILTIN_COMMANDS), [projectRoot, runtime]);
   // MCP prompts arrive once the servers answer; the palette gains them then.

@@ -87,6 +87,13 @@ export class SessionController {
     this.dispatch({ type: 'status', patch: this.status() });
   }
 
+  /** Keep the view told of what runs beside the turn, from now until the returned function is called. */
+  watchWork(): () => void {
+    const tell = () => this.dispatch({ type: 'work', items: this.runtime.work() });
+    tell();
+    return this.runtime.watchWork(tell);
+  }
+
   /**
    * Send a message and run a turn on it. Resolves when the turn ends. A custom command
    * shows what was typed, `display`, and sends its prompt with its model and tools.

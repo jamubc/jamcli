@@ -234,6 +234,18 @@ test('/export writes the session as Markdown and will not overwrite a file; /cop
   }
 }, 30_000);
 
+test('/jobs says when nothing runs beside the turn, and /jobs stop names what it did not find', async () => {
+  const { setup, close } = await open({}, { size: tall });
+  try {
+    await send(setup, '/jobs');
+    await frameWith(setup, (frame) => frame.includes('Nothing runs beside the turn'));
+    await send(setup, '/jobs stop job_x');
+    await frameWith(setup, (frame) => frame.includes('Nothing named job_x is running.'));
+  } finally {
+    await close();
+  }
+});
+
 test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes settings through the same code as jamcli config', async () => {
   const { setup, current, close } = await open({}, { size: tall });
   try {

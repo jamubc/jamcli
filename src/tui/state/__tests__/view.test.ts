@@ -90,6 +90,16 @@ test('the status line counts tokens and cost, keeps unpriced requests apart, and
   expect(reduceView(midway, event({ type: 'text', delta: ' more' })).status.retry).toBeUndefined();
 });
 
+test('what runs beside the turn is counted on the status line, and what ended is not', () => {
+  const items = [
+    { id: 'job_1', kind: 'job' as const, label: 'npm start', startedAt: 1 },
+    { id: 'task-1', kind: 'task' as const, label: 'reviewer: check', startedAt: 1 },
+    { id: 'job_0', kind: 'job' as const, label: 'old', startedAt: 0, endedAt: 2, outcome: 'exited with code 0' },
+  ];
+  expect(run([{ type: 'work', items }]).status.work).toEqual({ jobs: 1, agents: 1 });
+  expect(run([{ type: 'work', items: [] }]).status.work).toEqual({ jobs: 0, agents: 0 });
+});
+
 test('notices, compactions, and a turn cut short are shown, and nothing open survives the end', () => {
   const state = run([
     event({ type: 'text', delta: 'partial' }),
