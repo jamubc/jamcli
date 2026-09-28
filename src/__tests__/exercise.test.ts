@@ -105,7 +105,8 @@ test('a session through every command, as a person meets it', async () => {
   await command('/permissions', 'Mode: default.');
   await command('/context', 'Compaction starts at');
   await command('/cost', 'This session:');
-  await command('/tools', '- read_file (read):');
+  // The list is longer than the screen, so the check is for a tool near its end.
+  await command('/tools', '- ask_user (state):');
   await command('/mcp', 'No MCP servers configured.');
   await command('/agents list', 'Agents that delegated work runs on:');
   // With no profile files, it says where they would go: here, the user directory in use.

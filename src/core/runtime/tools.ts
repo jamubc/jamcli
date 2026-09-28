@@ -139,7 +139,9 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
   const { registry, permissions } = options;
   const { canonical, classOf, alwaysAsks } = toolNaming(registry);
   const extra = (options.alsoOffer ?? []).flatMap((name) => registry.get(name) ?? []);
-  const offered = [...registry.visible(), ...extra.filter((tool) => tool.hidden)].filter((tool) => permissions.offers(tool.name));
+  const offered = [...registry.visible(), ...extra.filter((tool) => tool.hidden)].filter(
+    (tool) => permissions.offers(tool.name) && (!tool.modes || tool.modes.includes(permissions.mode))
+  );
   const offeredNames = new Set(offered.map((tool) => tool.name));
   const summaries: ToolSummary[] = offered.map((tool) => {
     const server = options.mcpServers?.get(tool.name);

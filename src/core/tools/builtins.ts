@@ -7,6 +7,7 @@ import { GIT_COMMIT_TOOL, GIT_TOOLS } from './git.js';
 import { GLOB_TOOL } from './glob.js';
 import { GREP_TOOL } from './grep.js';
 import { APPLY_PATCH_TOOL } from './patch.js';
+import { PLAN_TOOLS } from './plan.js';
 import { READ_FILE_TOOL } from './read_file.js';
 import { TASK_TOOLS } from './task.js';
 import { TODO_TOOLS } from './todo.js';
@@ -23,6 +24,7 @@ export const BUILTIN_TOOLS: RegisteredTool[] = [
   APPLY_PATCH_TOOL,
   ...COMMAND_TOOLS,
   ...TODO_TOOLS,
+  ...PLAN_TOOLS,
   ...GIT_TOOLS,
   GIT_COMMIT_TOOL,
   WEB_FETCH_TOOL,

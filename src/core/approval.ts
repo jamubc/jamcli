@@ -7,6 +7,7 @@ import { replaceLiteral } from './tools/textEdit.js';
 import { analyzeCommand } from './permissions/command.js';
 import { draftLesson } from './reflection/lesson.js';
 import { patchPaths } from './permissions/subjects.js';
+import { planFile } from './tools/plan.js';
 
 /**
  * Builds what a surface shows when a tool call needs a decision: one line naming the
@@ -100,6 +101,10 @@ export function previewCall(call: ToolCall, projectRoot: string): ApprovalPrevie
       const files = plan.files.map((file) => `${file.status} ${file.path}`).join('\n');
       const message = argString(call, 'message') ?? '';
       return { kind: 'text', text: clip(`${message.trim()}\n\n${files || 'Nothing is staged.'}\n\n${plan.stat}`, MAX_PREVIEW_CHARS) };
+    }
+    if (call.name === 'exit_plan_mode') {
+      const plan = readIfExists(planFile(projectRoot));
+      return { kind: 'text', text: clip(plan?.trim() || 'There is no plan file; the call will fail.', MAX_PREVIEW_CHARS) };
     }
     if (call.name === 'propose_lesson') {
       const lesson = draftLesson(projectRoot, { file: argString(call, 'file') ?? '', section: argString(call, 'section') ?? '', add: argString(call, 'add') ?? '' });

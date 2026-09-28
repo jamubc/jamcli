@@ -53,6 +53,88 @@ test('plan mode offers only what reads and plans, and tells the model why', asyn
   expect(SessionLog.open(root, runtime.sessionId).events()[0]).toMatchObject({ permissionMode: 'plan' });
 });
 
+const planCall = { id: 'p1', name: 'plan_write', arguments: { content: '# Plan\n1. Edit a.txt to say new.' } };
+const exitCall = { id: 'x1', name: 'exit_plan_mode', arguments: {} };
+const toolResult = (request: any, id: string) => request.body.messages.find((message: any) => message.role === 'tool' && message.tool_call_id === id)?.content;
+
+test('an approved exit hands the plan over as the preview and returns to the mode held before plan', async () => {
+  configure({ mode: 'accept-edits' });
+  const runtime = await start();
+  expect(runtime.setPermissionMode('plan')).toBeUndefined();
+  expect(names(runtime)).toContain('plan_write');
+  expect(names(runtime)).toContain('exit_plan_mode');
+  server.enqueue({ toolCalls: [planCall] }, { toolCalls: [exitCall] }, { text: 'Approved.' });
+  const asked: Extract<AgentEvent, { type: 'approval_request' }>[] = [];
+  await runtime.run('plan the change', (event) => {
+    if (event.type !== 'approval_request') return;
+    asked.push(event);
+    event.decide({ allow: true });
+  });
+  expect(asked.map((event) => event.call.name)).toEqual(['exit_plan_mode']);
+  expect(asked[0].request).toMatchObject({ alwaysAsks: true, preview: { kind: 'text', text: '# Plan\n1. Edit a.txt to say new.' } });
+  expect(fs.readFileSync(path.join(root, '.jamcli', 'plan.md'), 'utf8')).toBe('# Plan\n1. Edit a.txt to say new.\n');
+  expect(toolResult(server.completions().at(-1), 'x1')).toContain('From the next turn the session is in accept-edits mode');
+  expect(runtime.permissionMode).toBe('accept-edits');
+  expect(names(runtime)).toContain('edit');
+  // The plan is written and handed over only in plan mode; read_file reads it back in any mode.
+  for (const planOnly of ['plan_write', 'exit_plan_mode']) expect(names(runtime)).not.toContain(planOnly);
+  const modes = SessionLog.open(root, runtime.sessionId).events().filter((event) => event.type === 'permission_mode');
+  expect(modes).toMatchObject([{ from: 'accept-edits', to: 'plan' }, { from: 'plan', to: 'accept-edits' }]);
+});
+
+test('a declined exit keeps plan mode and returns the feedback; a session that began in plan mode exits to default', async () => {
+  configure({ mode: 'plan' });
+  const runtime = await start();
+  server.enqueue({ toolCalls: [planCall] }, { toolCalls: [exitCall] }, { text: 'Revising.' });
+  await runtime.run('plan the change', (event) => {
+    if (event.type === 'approval_request') event.decide({ allow: false, feedback: 'name the test too' });
+  });
+  expect(toolResult(server.completions().at(-1), 'x1')).toContain('name the test too');
+  expect(runtime.permissionMode).toBe('plan');
+
+  server.enqueue({ toolCalls: [{ ...exitCall, id: 'x2' }] }, { text: 'Approved.' });
+  await runtime.run('hand it over', (event) => {
+    if (event.type === 'approval_request') event.decide({ allow: true });
+  });
+  expect(runtime.permissionMode).toBe('default');
+
+  // Without a plan the prompt says so, and the call fails even when allowed.
+  fs.rmSync(path.join(root, '.jamcli', 'plan.md'));
+  const previews: string[] = [];
+  server.enqueue({ toolCalls: [{ ...exitCall, id: 'x3' }] }, { text: 'Oh.' });
+  runtime.setPermissionMode('plan');
+  await runtime.run('exit', (event) => {
+    if (event.type !== 'approval_request') return;
+    previews.push(event.request?.preview?.text ?? '');
+    event.decide({ allow: true });
+  });
+  expect(previews).toEqual(['There is no plan file; the call will fail.']);
+  expect(toolResult(server.completions().at(-1), 'x3')).toContain('no plan to hand over');
+  expect(runtime.permissionMode).toBe('plan');
+});
+
+test('ask_user reaches the person through the interface, and says no one can answer elsewhere', async () => {
+  configure({ mode: 'plan' });
+  const ask = { id: 'q1', name: 'ask_user', arguments: { question: 'Which store?', choices: ['redis', 'memory'] } };
+  const runtime = await start();
+  server.enqueue({ toolCalls: [ask] }, { text: 'Redis it is.' });
+  const seen: Extract<AgentEvent, { type: 'elicitation_request' }>[] = [];
+  await runtime.run('decide', (event) => {
+    if (event.type !== 'elicitation_request') return;
+    seen.push(event);
+    event.respond({ action: 'accept', content: { answer: 'redis' } });
+  });
+  expect(seen[0].request).toMatchObject({ mode: 'form', server: 'JamCLI', message: 'Which store?' });
+  expect(toolResult(server.completions().at(-1), 'q1')).toBe('redis');
+
+  const headless = await start({ surface: 'headless' });
+  server.enqueue({ toolCalls: [{ ...ask, id: 'q2' }] }, { text: 'Assuming redis.' });
+  const events: AgentEvent[] = [];
+  await headless.run('decide', (event) => void events.push(event));
+  expect(events.some((event) => event.type === 'elicitation_request')).toBe(false);
+  expect(toolResult(server.completions().at(-1), 'q2')).toContain('No one can answer a question on this surface');
+});
+
 test('switching modes changes what is offered and asked, and is recorded', async () => {
   configure({ mode: 'plan' });
   const runtime = await start();

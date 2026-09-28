@@ -19,6 +19,10 @@ const KINDS: Record<string, ToolKind> = {
   git_commit: 'execute',
   todo_write: 'think',
   todo_read: 'think',
+  plan_write: 'think',
+  plan_read: 'think',
+  exit_plan_mode: 'think',
+  ask_user: 'think',
   skill: 'read',
   task: 'think',
   web_fetch: 'fetch',
@@ -49,6 +53,15 @@ const pathsOf = (call: ToolCall): string[] => {
 /** The files a call touches, as absolute paths. */
 export const toolLocations = (call: ToolCall, root: string): ToolCallLocation[] =>
   pathsOf(call).map((file) => ({ path: path.resolve(root, file) }));
+
+/**
+ * What a permission request shows the editor as the call's input: its arguments, and a
+ * text preview when there is one, so a plan handed over for approval is readable there.
+ */
+export function permissionInput(event: Extract<AgentEvent, { type: 'approval_request' }>): Record<string, unknown> {
+  const preview = event.request?.preview;
+  return { ...(event.call.arguments ?? {}), ...(preview?.kind === 'text' ? { preview: preview.text } : {}) };
+}
 
 /** A short title a client can show as is: "edit src/a.ts", "run_command: bun test". */
 export function toolTitle(call: ToolCall): string {

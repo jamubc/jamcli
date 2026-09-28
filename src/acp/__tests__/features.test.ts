@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { PassThrough } from 'node:stream';
 import { AcpServer } from '../server.js';
-import { toolTitle } from '../updates.js';
+import { permissionInput, toolTitle } from '../updates.js';
 import { startFakeProvider, type FakeProviderServer } from '../../testing/fakeProvider.js';
 
 // The SDK's own zod schemas, which its package does not export, checked against every message.
@@ -219,6 +219,16 @@ const editCall = (id: string) => ({ id, name: 'edit', arguments: { path: 'a.txt'
 test('a web_fetch tool call names its URL in the title', () => {
   expect(toolTitle({ id: 'w1', name: 'web_fetch', arguments: { url: 'https://example.com/a' } })).toBe('web_fetch https://example.com/a');
   expect(toolTitle({ id: 'e1', name: 'edit', arguments: { path: 'a.txt' } })).toBe('edit a.txt');
+});
+
+test('a permission request carries a text preview to the editor, so a plan handed over is readable there', () => {
+  const call = { id: 'x1', name: 'exit_plan_mode', arguments: {} };
+  const base = { id: 'a1', call, policyClass: 'state' as const, summary: 'exit_plan_mode', reason: 'it always asks', suggestions: [] };
+  const decide = () => {};
+  expect(permissionInput({ type: 'approval_request', call, decide, request: { ...base, preview: { kind: 'text', text: '# Plan\n1. Edit a.ts' } } })).toEqual({ preview: '# Plan\n1. Edit a.ts' });
+  // A diff is not the call's input; the editor shows it as content when the call runs.
+  expect(permissionInput({ type: 'approval_request', call: editCall('e1'), decide, request: { ...base, call: editCall('e1'), preview: { kind: 'diff', text: '--- a' } } })).toEqual(editCall('e1').arguments);
+  expect(permissionInput({ type: 'approval_request', call, decide })).toEqual({});
 });
 
 test('allow-always grants for the session, so the next call does not ask', async () => {

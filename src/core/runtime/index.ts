@@ -584,9 +584,28 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         delegationDepth: depth,
         delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
         ...(options.editor ? { editor: options.editor } : {}),
+        // Only the interface can put a question to the person; elsewhere ask_user says so.
+        ...(options.surface === 'tui' ? { elicit: elicitFromSurface } : {}),
+        exitPlanMode: () => {
+          if (permissions.mode !== 'plan') return { refusal: 'the session is not in plan mode' };
+          const target = modeBeforePlan ?? 'default';
+          const refusal = switchMode(target);
+          return refusal ? { refusal } : { mode: target };
+        },
       }),
     });
   let toolSet = buildTools();
+  /** The mode held before plan mode, which an approved exit returns to. */
+  let modeBeforePlan: PermissionMode | undefined;
+  const switchMode = (mode: PermissionMode, modeOptions?: { bypassConfirmed?: boolean }): string | undefined => {
+    const from = permissions.mode;
+    const refusal = permissions.setMode(mode, modeOptions);
+    if (refusal || from === mode) return refusal;
+    modeBeforePlan = mode === 'plan' ? from : undefined;
+    reassemble();
+    recorder.switchPermissionMode(from, mode);
+    return undefined;
+  };
 
   const rules = applyRules(loadRules(workRoot, cwd), undefined);
   const hooks: HookBus = createHookBus({ onRun: (run) => observation?.hookRun(run) });
@@ -1043,12 +1062,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     dryRunReport,
 
     setPermissionMode(mode, modeOptions) {
-      const from = permissions.mode;
-      const refusal = permissions.setMode(mode, modeOptions);
-      if (refusal || from === mode) return refusal;
-      reassemble();
-      recorder.switchPermissionMode(from, mode);
-      return undefined;
+      return switchMode(mode, modeOptions);
     },
 
     permissionRules() {

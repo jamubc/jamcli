@@ -133,7 +133,7 @@ const todoWriteSchema: JsonSchema = {
           active_form: { type: 'string', description: 'Present-tense label shown while the item is in progress.' },
           check: {
             type: 'string',
-            description: 'What proves the item done: a test to run, a command and what it must show, or what to look at. Mark the item completed only after this check passed.',
+            description: 'What proves the item done: a test, a command and what it shows, or what to look at.',
           },
         },
         required: ['content'],
@@ -165,8 +165,7 @@ export const TODO_TOOLS: RegisteredTool[] = [
   },
   {
     name: 'todo_write',
-    description:
-      'Replace the session todo list, persisted under the project .jamcli directory. Give each item a check that proves it done, keep one item in progress at a time, and mark an item completed only after its check passed.',
+    description: 'Replace the session todo list, persisted under the project .jamcli directory. One item in progress at a time; completed only after its check passed.',
     inputSchema: todoWriteSchema,
     policy: 'state',
     runner: todoWriteRunner,

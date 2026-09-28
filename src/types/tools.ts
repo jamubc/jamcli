@@ -1,5 +1,7 @@
 import type { Delegate, NestedApproval } from '../core/delegation/types.js';
 import type { ToolResult as CoreToolResult } from '../core/types.js';
+import type { ElicitationAnswer, ElicitationRequest } from '../core/mcp/connect.js';
+import type { PermissionMode } from '../core/permissions/modes.js';
 import type { DelegationConfig } from './config.js';
 
 /**
@@ -183,6 +185,13 @@ export interface ToolContext {
   callId?: string;
   /** The editor's files and terminal, when the session runs in an ACP editor that lends them. */
   editor?: EditorBridge;
+  /** Ask the person one question, as an MCP server would. Absent where no one can answer. */
+  elicit?: (request: ElicitationRequest) => Promise<ElicitationAnswer>;
+  /**
+   * Leave plan mode for the mode held before it, from the next turn. Returns that mode,
+   * or why the switch was refused. Supplied by the runtime.
+   */
+  exitPlanMode?: () => { mode: string } | { refusal: string };
 }
 
 export type ToolRunner = (args: Record<string, any>, ctx: ToolContext) => Promise<ToolRunPayload>;
@@ -199,6 +208,8 @@ export interface RegisteredTool {
   aliasOf?: string;
   /** Asks every time: no rule, grant, or mode allows it ahead, and a deny still stops it. */
   alwaysAsks?: boolean;
+  /** Offered only in these permission modes; a tool that means nothing elsewhere costs no context there. */
+  modes?: PermissionMode[];
 }
 
 export interface RegistryValidationResult {
