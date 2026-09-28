@@ -76,13 +76,13 @@ const help: SlashCommand = {
       const usage = command.name === 'permissions' ? `\n\n${PERMISSIONS_USAGE}` : command.name === 'config' ? `\n\n${CONFIG_USAGE.split('jamcli config').join('/config')}` : '';
       return ctx.show(`/${command.name}${command.args ? ` ${command.args}` : ''}: ${command.summary}.${command.aliases?.length ? ` Also /${command.aliases.join(', /')}.` : ''}${usage}`);
     }
+    const label = (command: SlashCommand) => `/${command.name}${command.args ? ` ${command.args}` : ''}`;
+    const detail = (command: SlashCommand) => `${command.summary}${command.source === 'built-in' ? '' : ` (${command.source})`}`;
+    // The list only fills the composer, so where there are no keys to move through it, and no composer, it is printed.
+    if (!ctx.keyHelp()) return ctx.show(`Commands:\n${commands.map((command) => `  ${label(command)}  ${detail(command)}`).join('\n')}\n/help <command> explains one.`);
     ctx.choose({
       title: 'Commands',
-      items: commands.map((command) => ({
-        key: command.name,
-        label: `/${command.name}${command.args ? ` ${command.args}` : ''}`,
-        detail: `${command.summary}${command.source === 'built-in' ? '' : ` (${command.source})`}`,
-      })),
+      items: commands.map((command) => ({ key: command.name, label: label(command), detail: detail(command) })),
       empty: 'No commands.',
       ...(ctx.keyHelp() ? { note: ctx.keyHelp() } : {}),
       hint: 'Enter puts the command in the composer',

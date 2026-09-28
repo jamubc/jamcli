@@ -146,3 +146,13 @@ test('a prompt sent while a list waits is refused, and the list still waits', as
   expect(refused.text).toContain('A list waits');
   expect((await call('session_state', { session })).report).toMatchObject({ status: 'waiting', waiting: { kind: 'choice' } });
 }, 60_000);
+
+test('/help where there is no screen prints the commands and waits on nothing', async () => {
+  const { call, start } = await serve();
+  const session = await start();
+  const shown = await call('session_send', { session, text: '/help' });
+  expect(shown.report.status).toBe('idle');
+  expect(shown.report.waiting).toBeUndefined();
+  expect(shown.text).toContain('/context');
+  expect(shown.text).toContain('/help <command> explains one.');
+}, 60_000);
