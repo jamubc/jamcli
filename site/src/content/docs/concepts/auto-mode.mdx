@@ -122,6 +122,10 @@ What happens on each turn:
 6. A result the classifier did not mention is kept. If the request fails, times out, or returns
    nothing usable, every result is kept and the failure is reported. The gate fails open.
 
+Every request is kept in the session log: what the classifier was sent and answered, or
+why the request failed, each result's verdict and fate, and the text of a withheld result.
+The model never sees any of it; `/copy debug` shows it.
+
 Source: <Receipt path="src/core/trust/index.ts" symbol="screenToolResults" />,
 <Receipt path="src/core/agent.ts" symbol="screen" />.
 
