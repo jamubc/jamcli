@@ -36,6 +36,24 @@
 - A background child asks through the parent's surface like a foreground one, and its
   prompt stays up after the parent's turn ends. Before, every call a background child
   made that needed approval was refused, so in default mode it could do no real work.
+- The harness steers and verifies. A command that only reads inside the project no
+  longer asks in default mode, and a read repeated on the same tree is refused with the
+  earlier result's first line. The project's own gates (typecheck, lint, tests) are
+  detected and run after a changing step and before a turn ends with changes; a failure
+  sends the model back to it, and a completed todo is stamped with the gate that vouched
+  for it. `/handoff` writes `.jamcli/handoff.md` from the log, as session end and a
+  dropped compaction do, and the next session reads it with its first prompt.
+- Older tool results are stubbed in stages before any summary, at a planned point short
+  of the compaction trigger, so a summary has less to read and less to lose.
+- Each built-in tool offers a shorter wire schema and belongs to a tier: core tools are
+  offered on any window, the rest when there is room and otherwise through
+  `search_tools`; the task family is offered once a task has started. An edit whose
+  `find_string` is not found names the nearest lines, and a failed command leads with its
+  first error line. `/cost` says how much of the prompt the provider cached.
+- `jamcli sessions score <id>` scores a session from its log, with the same signals
+  `/reflect` reads; `scripts/harness-search` searches prompt parts, middleware constants,
+  and wire schemas against task specs and accepts a change only when a held-out split
+  confirms it. `docs/harness-spec.md` specifies the harness surface.
 
 ## 2.0.0
 
