@@ -46,8 +46,8 @@ test('2 allows the chosen pattern for the session, so the same call no longer as
     setup.mockInput.pressArrow('down');
     setup.mockInput.pressKey('2');
     const after = await frameWith(setup, (value) => value.includes('Both ran.'));
-    expect(after).toContain('done: run_command echo first');
-    expect(after).toContain('done: run_command echo second');
+    expect(after).toContain('✓ run_command echo first');
+    expect(after).toContain('✓ run_command echo second');
     expect(after).not.toContain('Allow run_command echo second?');
     expect(runtime.permissionMode).toBe('default');
   } finally {
@@ -83,7 +83,7 @@ test('5 takes feedback, which the model reads, and the turn goes on', async () =
     await setup.mockInput.typeText('use npm run clean');
     setup.mockInput.pressEnter();
     const after = await frameWith(setup, (value) => value.includes('I will use the clean script instead.'));
-    expect(after).toContain('denied: run_command rm -rf build');
+    expect(after).toContain('⊘ run_command rm -rf build');
     const toolMessage = context.server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
     expect(toolMessage.content).toBe('Tool call was denied, feedback: use npm run clean');
   } finally {
@@ -134,7 +134,7 @@ test('4 denies and the turn goes on: the model reads that the call did not run',
     expect(prompt).toContain('[Esc]');
     setup.mockInput.pressKey('4');
     const after = await frameWith(setup, (value) => value.includes('Skipped the delete.'));
-    expect(after).toContain('denied: run_command rm -rf build');
+    expect(after).toContain('⊘ run_command rm -rf build');
     expect(after).not.toContain('Stopped because a tool call was denied.');
     const toolMessage = context.server.completions().at(-1)!.body.messages.find((message: any) => message.role === 'tool');
     expect(toolMessage.content).toBe('Tool call was denied.');
@@ -159,7 +159,7 @@ test('the prompt leaves the transcript its rows, and Page Up scrolls it behind t
     expect(prompt).not.toContain('> list them');
     const paged = await pageUntil(setup, 'pageup', (value) => value.includes('> list them'));
     expect(paged).toContain('1  Allow once');
-    await pageUntil(setup, 'pagedown', (value) => !value.includes('> list them') && value.includes('? asking: run_command'));
+    await pageUntil(setup, 'pagedown', (value) => !value.includes('> list them') && value.includes('? run_command'));
     setup.mockInput.pressKey('1');
     await frameWith(setup, (value) => value.includes('Listed.'));
   } finally {
@@ -219,8 +219,8 @@ test("a subagent's prompts can each be answered, and each goes once it is", asyn
     setup.mockInput.pressKey('1');
     const done = await frameWith(setup, (value) => value.includes('The child counted.'));
     // Each call the person answered shows what it did, not a run that never ends.
-    expect(done).toMatch(/done: run_command echo \$\(echo one\)/);
-    expect(done).toMatch(/done: run_command echo \$\(echo two\)/);
+    expect(done).toMatch(/✓ run_command echo \$\(echo one\)/);
+    expect(done).toMatch(/✓ run_command echo \$\(echo two\)/);
     // The session that showed the prompts records how the person answered them.
     const log = fs.readFileSync(path.join(context.root, '.jamcli', 'history', `${runtime.sessionId}.jsonl`), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
     expect(log.filter((entry) => entry.type === 'approval' && entry.by === 'user').map((entry) => entry.callId)).toEqual(['t1/c1', 't1/c2']);

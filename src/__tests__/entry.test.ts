@@ -70,7 +70,7 @@ test('in a terminal, --screen-reader draws plain labeled lines with no boxes or 
   const booted = (screen: string) => /Status: default mode, .*, ready/.test(screen);
   const plain = await inTerminal(['--screen-reader'], {}, booted);
   expect(plain.drawn).toMatch(/JamCLI, project project, session /);
-  expect(plain.drawn).toContain('Message: Message JamCLI.');
+  expect(plain.drawn).toContain('Message: Message JamCLI');
   expect(plain.drawn).not.toMatch(/[┌┐└┘│─▄█]/);
   expect(plain.code).toBe(0);
   const framed = await inTerminal([], {}, (screen) => /default mode · .* · ready/.test(screen));

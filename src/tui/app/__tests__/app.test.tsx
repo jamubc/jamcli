@@ -42,8 +42,8 @@ test('a call that asks shows the permission prompt, and Escape denies it', async
     setup.mockInput.pressEscape();
     // A person's no, without feedback, ends the turn, and the interface says so.
     const after = await frameWith(setup, (value) => value.includes('Stopped because a tool call was denied.'));
-    expect(after).toContain('denied: run_command echo hello');
-    expect(after).toContain('(denied by you)');
+    expect(after).toContain('⊘ run_command echo hello');
+    expect(after).toContain('denied by you');
     expect(after).not.toContain('Allow run_command');
   } finally {
     await close();
@@ -60,7 +60,7 @@ test('1 allows a call once; Shift+Tab changes the mode; Ctrl+C twice asks to lea
     await frameWith(setup, (value) => value.includes('Allow run_command'));
     setup.mockInput.pressKey('1');
     const after = await frameWith(setup, (value) => value.includes('It printed.'));
-    expect(after).toMatch(/done: run_command echo allowed-output, \d+ ms \(allowed by you\)/);
+    expect(after).toMatch(/✓ run_command echo allowed-output · \d+ ms · allowed by you/);
 
     setup.mockInput.pressTab({ shift: true });
     expect(await frameWith(setup, (value) => value.includes('accept-edits mode'))).toContain('accept-edits mode');
@@ -97,7 +97,7 @@ test('replies render as Markdown, and an edit shows its diff in the prompt and i
     expect(prompt).toMatch(/\+\s*TWO/);
     setup.mockInput.pressKey('1');
     const after = await frameWith(setup, (value) => value.includes('Changed it.'));
-    expect(after).toContain('done: edit a.txt, 1 line added and 1 removed');
+    expect(after).toContain('✓ edit a.txt · +1 −1');
     expect(after).toMatch(/\+\s*TWO/);
     expect(fs.readFileSync(path.join(context.root, 'a.txt'), 'utf8')).toBe('one\nTWO\nthree\n');
   } finally {

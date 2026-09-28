@@ -57,7 +57,7 @@ test('/ opens the palette: Up and Down choose, Enter runs the choice, Tab comple
     await frameWith(setup, (frame) => /│\/copy +│/.test(frame));
     setup.mockInput.pressEscape();
     for (let index = 0; index < 5; index += 1) setup.mockInput.pressBackspace();
-    await frameWith(setup, (frame) => frame.includes('Message JamCLI.'));
+    await frameWith(setup, (frame) => frame.includes('Message JamCLI'));
 
     await setup.mockInput.typeText('/zz');
     await frameWith(setup, (frame) => frame.includes('No command starts with that.'));
@@ -114,7 +114,7 @@ test('/permissions lists the rules, adds one for the session or a file, and remo
     context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo fine' } }] }, { text: 'Ran it.' });
     await send(setup, 'run echo');
     const ran = await frameWith(setup, (frame) => frame.includes('Ran it.'));
-    expect(ran).toContain('done: run_command echo fine');
+    expect(ran).toContain('✓ run_command echo fine');
     expect(ran).not.toContain('Allow run_command');
 
     await send(setup, '/permissions deny grep');
@@ -252,7 +252,7 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
     await frameWith(setup, (frame) => frame.includes('Agents that delegated work runs on:') && frame.includes('- quick (default):'));
     // Choosing a default writes it where /config set would, and reopens the session with it.
     await send(setup, '/agents writing');
-    await frameWith(setup, (frame) => frame.includes('This session was reopened, so the change applies.'));
+    await frameWith(setup, (frame) => frame.includes('Applied to this session.'));
     expect(readJson(path.join(context.root, '.jamcli', 'config.json')).delegation.default_agent).toBe('writing');
     await send(setup, '/agents nobody');
     await frameWith(setup, (frame) => frame.includes('No agent named nobody. The agents are explore, intelligent, quick, writing.'));
@@ -274,7 +274,7 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
     await frameWith(setup, (frame) => frame.includes('ollama:fake-model') && frame.includes('config.json'));
     const before = current();
     await send(setup, '/config set agent_loop.max_steps 7 --scope local');
-    await frameWith(setup, (frame) => frame.includes('This session was reopened, so the change applies.'));
+    await frameWith(setup, (frame) => frame.includes('Applied to this session.'));
     expect(readJson(path.join(context.root, '.jamcli', 'config.local.json')).agent_loop.max_steps).toBe(7);
     expect(current()).not.toBe(before);
     expect(current().sessionId).toBe(before.sessionId);

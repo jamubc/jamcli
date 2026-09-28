@@ -73,14 +73,14 @@ test('a session through every command, as a person meets it', async () => {
   await jam.waitFor('Allow run_command echo approved-output?');
   jam.type('1');
   const approved = await jam.waitFor('Ran it.');
-  expect(approved).toContain('done: run_command echo approved-output');
+  expect(approved).toContain('✓ run_command echo approved-output');
 
   // One rejection: Escape denies, and the turn says so.
   server.enqueue({ toolCalls: [{ id: 'c2', name: 'run_command', arguments: { command: 'rm -rf build' } }] });
   send('clean up');
   await jam.waitFor('Allow run_command rm -rf build?');
   jam.type(KEYS.escape);
-  await jam.waitFor('denied: run_command rm -rf build');
+  await jam.waitFor('⊘ run_command rm -rf build');
 
   // An edit, allowed, which /undo takes back further down.
   server.enqueue({ toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] }, { text: 'Edited it.' });
@@ -130,8 +130,8 @@ test('a session through every command, as a person meets it', async () => {
 
   // /compact summarizes through the model, or says the conversation is too short.
   server.enqueue({ text: 'Summary: said hello, ran one command, refused another.' });
-  const compacted = await command('/compact', /The earlier conversation was summarized: [\d,]+ to [\d,]+ tokens\.|Nothing to compact yet/);
-  expect(compacted.match(/The earlier conversation was summarized/g)?.length ?? 0).toBeLessThanOrEqual(1);
+  const compacted = await command('/compact', /compacted · [\d,]+ → [\d,]+ tokens|Nothing to compact yet/);
+  expect(compacted.match(/compacted · /g)?.length ?? 0).toBeLessThanOrEqual(1);
 
   // /fork and /clear each open another session; /resume brings the first one back.
   await command('/fork', 'Forked ');

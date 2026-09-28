@@ -17,12 +17,13 @@ export const TOOL_PHASES: Record<ToolPhase, { mark: string; word: string }> = {
   cancelled: { mark: '■', word: 'cancelled' },
 };
 
+/** One word each: the status line is a row of labels, not a sentence about what is going on. */
 export const PHASE_WORDS: Record<Phase, string> = {
   idle: 'ready',
   thinking: 'thinking',
   streaming: 'writing',
-  tool: 'running tools',
-  waiting: 'waiting for you',
+  tool: 'running',
+  waiting: 'waiting',
   retrying: 'retrying',
   compacting: 'compacting',
 };
@@ -56,14 +57,23 @@ export function diffRows(diff: string): number {
   return rows;
 }
 
-/** The one line a tool block shows when collapsed. */
+/**
+ * The one line a tool block shows when collapsed: the call first, then what it cost. A
+ * column of these is read for what ran, so the state is the leading mark rather than a
+ * word in front of the call. Screen reader mode has no marks, so there the state is a
+ * word at the end, after the facts it belongs to.
+ */
 export function toolLine(row: Extract<Row, { kind: 'tool' }>, marks = true): string {
   const phase = TOOL_PHASES[row.phase];
   const duration = formatDuration(row.durationMs);
   const stat = row.diff ? diffStat(row.diff) : undefined;
-  const lines = stat ? `, ${stat.added} line${stat.added === 1 ? '' : 's'} added and ${stat.removed} removed` : '';
-  const decided = row.decision?.by === 'user' ? ` (${row.decision.allow ? 'allowed' : 'denied'} by you)` : '';
-  return `${marks ? `${phase.mark} ` : ''}${phase.word}: ${row.summary}${lines}${duration ? `, ${duration}` : ''}${decided}`;
+  const decided = row.decision?.by === 'user' ? `${row.decision.allow ? 'allowed' : 'denied'} by you` : undefined;
+  if (!marks) {
+    const facts = [stat ? `${stat.added} line${stat.added === 1 ? '' : 's'} added and ${stat.removed} removed` : undefined, duration || undefined, phase.word, decided];
+    return `${row.summary}, ${facts.filter(Boolean).join(', ')}`;
+  }
+  const facts = [stat ? `+${stat.added} −${stat.removed}` : undefined, duration || undefined, decided].filter(Boolean);
+  return `${phase.mark} ${row.summary}${facts.length ? ` · ${facts.join(' · ')}` : ''}`;
 }
 
 export function noticeLine(row: Extract<Row, { kind: 'notice' }>, marks = true): string {
@@ -71,8 +81,8 @@ export function noticeLine(row: Extract<Row, { kind: 'notice' }>, marks = true):
 }
 
 export function compactionLine(row: Extract<Row, { kind: 'compaction' }>): string {
-  const how = row.strategy === 'summary' ? 'summarized' : 'left out, because the summary failed';
-  return `The earlier conversation was ${how}${row.trigger === 'auto' ? ' to fit the context window' : ''}: ${row.beforeTokens.toLocaleString('en-US')} to ${row.afterTokens.toLocaleString('en-US')} tokens.`;
+  const how = row.strategy === 'summary' ? 'compacted' : 'dropped, summary failed';
+  return `${how}${row.trigger === 'auto' ? ' to fit the window' : ''} · ${row.beforeTokens.toLocaleString('en-US')} → ${row.afterTokens.toLocaleString('en-US')} tokens`;
 }
 
 /** The status line's parts, left to right. */

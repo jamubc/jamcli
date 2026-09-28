@@ -110,7 +110,7 @@ test('/config lists every setting with what it does and where it comes from; a y
     await frameWith(setup, (frame) => /│\/config set model ollama:fake-model/.test(frame));
     setup.mockInput.pressEnter();
     // Once set, the list opens again on the setting just changed.
-    await frameWith(setup, (frame) => frame.includes('This session was reopened') && frame.includes('> model = "ollama:fake-model"') && frame.includes('Filter: type to narrow'));
+    await frameWith(setup, (frame) => frame.includes('Applied to this session.') && frame.includes('> model = "ollama:fake-model"') && frame.includes('Filter: type to narrow'));
 
     // Escape takes an edit back out of the composer, unsent, and returns to the list.
     setup.mockInput.pressEnter();
@@ -131,7 +131,7 @@ test('/config lists every setting with what it does and where it comes from; a y
     await frameWith(setup, (frame) => frame.includes('sandbox.network, saved in your settings, for every project'));
     setup.mockInput.pressEnter();
     const back = await frameWith(setup, (frame) => /> sandbox\.network = true\s+your settings/.test(frame));
-    expect(back).toContain('This session was reopened');
+    expect(back).toContain('Applied to this session.');
     expect(readJson(userConfig()).sandbox.network).toBe(true);
     // A key's own text is never offered for editing here.
     await setup.mockInput.typeText('api_key');
@@ -176,11 +176,11 @@ test('the monochrome theme draws every state in the terminal\'s own color', asyn
     await send(setup, 'run it');
     await frameWith(setup, (frame) => frame.includes('Allow run_command echo hi?'));
     const plain = colorOf(setup, 'Allow run_command echo hi?');
-    expect(colorOf(setup, 'waiting for you')).toBe(plain);
-    expect(colorOf(setup, 'asking: run_command echo hi')).toBe(plain);
+    expect(colorOf(setup, 'waiting')).toBe(plain);
+    expect(colorOf(setup, 'run_command echo hi')).toBe(plain);
     expect(plain).not.toBe(THEMES.dark.warn);
     setup.mockInput.pressEscape();
-    await frameWith(setup, (frame) => frame.includes('denied: run_command echo hi'));
+    await frameWith(setup, (frame) => frame.includes('⊘ run_command echo hi'));
   } finally {
     await close();
   }

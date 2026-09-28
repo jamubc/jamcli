@@ -198,7 +198,7 @@ test('a # note is confirmed, appended through a tool call, and Escape leaves the
     // The note goes through the edit tool, which asks like any edit in default mode.
     await frameWith(setup, (frame) => frame.includes('Allow edit AGENTS.md?'), 5_000);
     setup.mockInput.typeText('1');
-    await frameWith(setup, (frame) => frame.includes('done: edit AGENTS.md'), 5_000);
+    await frameWith(setup, (frame) => frame.includes('✓ edit AGENTS.md'), 5_000);
     expect(fs.readFileSync(agents, 'utf8')).toBe('# Rules\n\nBe kind.\nAlways run the tests.\n');
     expect(context.server.completions().length).toBe(before);
   } finally {

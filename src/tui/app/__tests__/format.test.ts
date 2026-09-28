@@ -9,16 +9,19 @@ test('a diff is counted by the lines it adds and removes, not its headers', () =
   expect(diffStat('')).toEqual({ added: 0, removed: 0 });
 });
 
-test('a tool line says its state in a word, with the change, the time, and who decided', () => {
+test('a tool line leads with the call, then the change, the time, and who decided', () => {
   const row = { kind: 'tool' as const, id: 1, callId: 'e', tool: 'edit', summary: 'edit a.txt', phase: 'ok' as const, output: '', collapsed: false, diff, durationMs: 1500 };
-  expect(toolLine(row)).toBe('✓ done: edit a.txt, 2 lines added and 1 removed, 1.5 s');
-  expect(toolLine({ ...row, diff: undefined, phase: 'denied', durationMs: 3, decision: { allow: false, by: 'user', scope: 'once' } }, false)).toBe('denied: edit a.txt, 3 ms (denied by you)');
-  expect(toolLine({ ...row, diff: undefined, phase: 'timeout', durationMs: undefined, decision: { allow: true, by: 'policy', scope: 'once' } })).toBe('⏱ timed out: edit a.txt');
+  expect(toolLine(row)).toBe('✓ edit a.txt · +2 −1 · 1.5 s');
+  // With no marks to carry it, the state is a word, after the facts rather than in front of the call.
+  expect(toolLine({ ...row, diff: undefined, phase: 'denied', durationMs: 3, decision: { allow: false, by: 'user', scope: 'once' } }, false)).toBe('edit a.txt, 3 ms, denied, denied by you');
+  // A call the policy decided says nothing about who: only the person's own decision is named.
+  expect(toolLine({ ...row, diff: undefined, phase: 'timeout', durationMs: undefined, decision: { allow: true, by: 'policy', scope: 'once' } })).toBe('⏱ edit a.txt');
+  expect(toolLine({ ...row, diff: undefined, phase: 'running', durationMs: undefined })).toBe('● edit a.txt');
 });
 
 test('the status line names each fact in words, and marks a cost that misses unpriced requests', () => {
   const status = { ...initialView().status, mode: 'plan', model: 'anthropic:claude-x', sandbox: 'bwrap', contextPercent: 41.6, costUsd: 0.0123, unpriced: 1, inputTokens: 12_345, outputTokens: 678, mcpServers: 2, phase: 'waiting' as const };
-  expect(statusParts(status)).toEqual(['plan mode', 'anthropic:claude-x', 'context 42%', '$0.0123+', '12k in, 678 out', 'sandbox bwrap', 'MCP 2', 'waiting for you']);
+  expect(statusParts(status)).toEqual(['plan mode', 'anthropic:claude-x', 'context 42%', '$0.0123+', '12k in, 678 out', 'sandbox bwrap', 'MCP 2', 'waiting']);
   // The language servers that can run here are counted beside MCP, and zero takes no room.
   expect(statusParts({ ...status, lspServers: 3 })).toContain('LSP 3');
   expect(statusParts({ ...status, lspServers: 0 })).not.toContain('LSP 0');
@@ -73,19 +76,19 @@ test('a diff is drawn in the lines of its hunks, not its headers', () => {
 test('a status line that does not fit gives up the least useful facts first, and never the mode or what JamCLI is doing', () => {
   const status = { ...initialView().status, mode: 'default', model: 'opencode-go:deepseek-v4.1-flash', sandbox: 'seatbelt', contextPercent: 1, costUsd: 0.0011, unpriced: 0, inputTokens: 15_000, outputTokens: 558, lspServers: 4, phase: 'waiting' as const };
   const whole = fitStatus(status, 500, { separator: ' · ' });
-  expect(whole).toBe('default mode · opencode-go:deepseek-v4.1-flash · context 1% · $0.0011 · 15k in, 558 out · sandbox seatbelt · LSP 4 · waiting for you');
+  expect(whole).toBe('default mode · opencode-go:deepseek-v4.1-flash · context 1% · $0.0011 · 15k in, 558 out · sandbox seatbelt · LSP 4 · waiting');
   // At 110 columns, as seen on a real run, the phase was cut off; now the LSP count and the tokens go instead.
   const fitted = fitStatus(status, 110, { separator: ' · ' });
   expect(fitted.length).toBeLessThanOrEqual(110);
   expect(fitted).toStartWith('default mode · ');
-  expect(fitted).toEndWith('waiting for you');
+  expect(fitted).toEndWith('waiting');
   expect(fitted).not.toContain('LSP 4');
   expect(fitted).toContain('context 1%');
   // Narrower still, only the mode, a shortened model, and the phase are left.
   const narrow = fitStatus(status, 50, { separator: ' · ' });
   expect(narrow.length).toBeLessThanOrEqual(50);
   expect(narrow).toStartWith('default mode · opencode-go:');
-  expect(narrow).toEndWith('… · waiting for you');
+  expect(narrow).toEndWith('… · waiting');
   // While the indicator shows the phase, the line leaves it out.
   expect(fitStatus({ ...status, phase: 'thinking' }, 500, { separator: ' · ', withoutPhase: true })).not.toContain('thinking');
 });

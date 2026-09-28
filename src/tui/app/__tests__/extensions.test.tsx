@@ -75,7 +75,7 @@ test('a project\'s hooks are asked about once at the start, and run only when tr
   // Trusted as they are, they are not asked about again.
   const third = await open({}, { size: wide });
   try {
-    await frameWith(third.setup, (frame) => frame.includes('Message JamCLI.'));
+    await frameWith(third.setup, (frame) => frame.includes('Message JamCLI'));
     await Bun.sleep(50);
     await third.setup.renderOnce();
     expect(third.setup.captureCharFrame()).not.toContain('Run them?');

@@ -882,7 +882,8 @@ export function App(props: AppProps) {
                     focusedTextColor={theme.text}
                     placeholderColor={theme.dim}
                     cursorColor={theme.text}
-                    placeholder={`${plain ? 'Message: ' : ''}Message JamCLI. ${keysFor(keys.bindings, 'send')} sends, ${keysFor(keys.bindings, 'newline')} adds a line, / lists commands.`}
+                    /* An invitation, not a keybinding manual: the two ways in, and `?` reaches the rest. */
+                    placeholder={plain ? 'Message: Message JamCLI' : 'Message JamCLI · / commands · ? help'}
                     keyBindings={[...chords('send', 'submit'), ...chords('newline', 'newline')]}
                     onSubmit={submit}
                     onContentChange={onDraft}

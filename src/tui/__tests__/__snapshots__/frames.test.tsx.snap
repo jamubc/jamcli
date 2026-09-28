@@ -20,8 +20,8 @@ exports[`the empty session 1`] = `
 
 
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
-│commands.                                                                     │
+│Message JamCLI · / commands · ? help                                          │
+│                                                                              │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 default mode · ollama:fake-model · context N% · no sandbox · ready
@@ -48,8 +48,8 @@ Here is the first part,
 
 
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
-│commands.                                                                     │
+│Message JamCLI · / commands · ? help                                          │
+│                                                                              │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ● writing · default mode · ollama:fake-model · context N% · no sandbox
@@ -60,7 +60,7 @@ exports[`a finished tool block and the reply after it 1`] = `
 "jamcli · project · session <session>
 
 > read the notes
-✓ done: read_file notes.txt, N ms
+✓ read_file notes.txt · N ms
 It lists alpha and beta.
 
 
@@ -76,8 +76,8 @@ It lists alpha and beta.
 
 
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
-│commands.                                                                     │
+│Message JamCLI · / commands · ? help                                          │
+│                                                                              │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 default mode · ollama:fake-model · context N% · no sandbox · ready
@@ -88,7 +88,7 @@ exports[`the permission prompt for a command 1`] = `
 "jamcli · project · session <session>
 
 > run the tests
-? asking: run_command npm test
+? run_command npm test
 
 
 
@@ -108,7 +108,7 @@ exports[`the permission prompt for a command 1`] = `
 │  5  Deny with feedback                                                       │
 │ Up/Down pattern 1/3                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
-default mode · ollama:fake-model · context N% · no sandbox · waiting for you
+default mode · ollama:fake-model · context N% · no sandbox · waiting
 "
 `;
 
@@ -116,7 +116,7 @@ exports[`a diff, in the prompt for an edit 1`] = `
 "jamcli · project · session <session>
 
 > change it
-? asking: edit a.txt, 1 line added and 1 removed
+? edit a.txt · +1 −1
 
 
 
@@ -142,17 +142,17 @@ exports[`a diff, in the prompt for an edit 1`] = `
 │  5  Deny with feedback                                                       │
 │ Up/Down pattern 1/2                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
-default mode · ollama:fake-model · context N% · no sandbox · waiting for you
+default mode · ollama:fake-model · context N% · no sandbox · waiting
 "
 `;
 
 exports[`screen reader mode, through a reply, a tool, and a prompt 1`] = `
 "JamCLI, project project, session <session>
 You: read the notes
-Tool done: read_file notes.txt, N ms
+Tool read_file notes.txt, N ms, done
 JamCLI: It says alpha.
 You: list
-Tool asking: run_command ls
+Tool run_command ls, asking
 
 
 
@@ -176,7 +176,7 @@ Default mode asks before tools that run commands.
 4: Deny, continue
 5: Deny with feedback
 Up/Down pattern 1/2
-Status: default mode, ollama:fake-model, context N%, waiting for you
+Status: default mode, ollama:fake-model, context N%, no sandbox, waiting
 "
 `;
 
@@ -189,7 +189,7 @@ exports[`NO_COLOR: the same frame, every character in the terminal's own colors 
 "jamcli · project · session <session>
 
 > change it
-? asking: edit a.txt, 1 line added and 1 removed
+? edit a.txt · +1 −1
 
 
 
@@ -215,7 +215,7 @@ exports[`NO_COLOR: the same frame, every character in the terminal's own colors 
 │  5  Deny with feedback                                                       │
 │ Up/Down pattern 1/2                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
-default mode · ollama:fake-model · context N% · no sandbox · waiting for you
+default mode · ollama:fake-model · context N% · no sandbox · waiting
 "
 ,
 }
@@ -241,8 +241,8 @@ exports[`an overlay: the list, the one chosen, and how to move 1`] = `
 │ Enter uses it and saves it · Up/Down move, or click                          │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│Message JamCLI. Enter sends, Shift+Enter or Ctrl+J adds a line, / lists       │
-│commands.                                                                     │
+│Message JamCLI · / commands · ? help                                          │
+│                                                                              │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 default mode · ollama:fake-model · context N% · no sandbox · ready

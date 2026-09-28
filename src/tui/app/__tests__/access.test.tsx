@@ -21,7 +21,7 @@ test('screen reader mode draws labeled lines, with no boxes and no marks', async
   try {
     const first = await frameWith(setup, (frame) => frame.includes('Status: default mode, ollama:fake-model'));
     expect(first).toContain('JamCLI, project project');
-    expect(first).toContain('Message: Message JamCLI.');
+    expect(first).toContain('Message: Message JamCLI');
     context.server.enqueue({ text: '**Hello** there.' });
     await send(setup, 'hi');
     const replied = await frameWith(setup, (frame) => frame.includes('JamCLI: **Hello** there.'));
@@ -30,9 +30,9 @@ test('screen reader mode draws labeled lines, with no boxes and no marks', async
     context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] });
     await send(setup, 'run it');
     const asked = await frameWith(setup, (frame) => frame.includes('Permission needed: Allow run_command echo hi?'));
-    expect(asked).toContain('Tool asking: run_command echo hi');
+    expect(asked).toContain('Tool run_command echo hi, asking');
     setup.mockInput.pressEscape();
-    const denied = await frameWith(setup, (frame) => /Tool denied: run_command echo hi, \d+ ms \(denied by you\)/.test(frame));
+    const denied = await frameWith(setup, (frame) => /Tool run_command echo hi, \d+ ms, denied, denied by you/.test(frame));
     expect(denied).toContain('Warning: Stopped because a tool call was denied.');
     await send(setup, '/cost');
     const listed = await frameWith(setup, (frame) => frame.includes('Result: '));
@@ -160,7 +160,7 @@ test('a diff has colored lines in a color theme, and none in monochrome', async 
       if (theme.name === 'monochrome') expect(bg[3]).toBe(0);
       else expect(bg.slice(0, 3)).toEqual([0x1a, 0x4d, 0x1a]);
       setup.mockInput.pressEscape();
-      await frameWith(setup, (frame) => frame.includes('denied: edit a.txt'));
+      await frameWith(setup, (frame) => frame.includes('⊘ edit a.txt'));
     } finally {
       await close();
     }
