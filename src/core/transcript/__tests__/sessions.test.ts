@@ -139,10 +139,10 @@ test('Markdown shows decisions and notices, and fences survive backticks in outp
   ];
   const markdown = transcriptToMarkdown(events.map((event) => ({ v: 2, ts: 0, ...event }) as any), { id: 's1' });
   expect(markdown).toContain('`run_command` `c2` allowed for this session by user on tui, rule `run_command(npm test)`');
-  expect(markdown).toContain('`write_file` `c3` denied by user on tui\n> Feedback: use edit');
-  expect(markdown).toContain('> **Notice** (warn, trust): Removed grep result');
+  expect(markdown).toContain('`write_file` `c3` denied by user on tui · 00:00:00\n> Feedback: use edit');
+  expect(markdown).toContain('> **Notice** (warn, trust): Removed grep result · 00:00:00');
   expect(markdown).toContain('`````text\nhas ```` fences\n`````');
-  expect(markdown).toContain('*Turn ended: refused*');
+  expect(markdown).toContain('*Turn ended: refused, after 0.0s · 00:00:00*');
 });
 
 const cli = (...args: string[]) => {
@@ -156,7 +156,7 @@ test('jamcli sessions show, fork, and export work from the command line', () => 
   const log = record(root, 'describe the plan', 'Here it is.');
   const shown = cli('sessions', 'show', log.id);
   expect(shown.code).toBe(0);
-  expect(shown.out).toContain('## User\n\ndescribe the plan');
+  expect(shown.out).toMatch(/## User · \d\d:\d\d:\d\d\n\ndescribe the plan/);
 
   const forked = cli('sessions', 'fork', log.id);
   expect(forked.code).toBe(0);
@@ -177,9 +177,34 @@ test('an export says what the session cost, whose requests they were, and which 
   log.append({ type: 'usage', model: 'openai:mystery', usage });
   const markdown = transcriptToMarkdown(log.events());
   expect(markdown).toContain('- Cost: $0.0030 over 3 requests, $0.0010 of it by delegated tasks, and 1 unpriced request');
-  expect(markdown).toContain('*Usage (anthropic:claude-x): 100 prompt and 10 completion tokens, $0.0020*');
-  expect(markdown).toContain('*Usage (anthropic:claude-y, delegated session `child-1`): 100 prompt and 10 completion tokens, $0.0010*');
-  expect(markdown).toContain('*Usage (openai:mystery): 100 prompt and 10 completion tokens, unpriced*');
+  expect(markdown).toMatch(/\*Usage \(anthropic:claude-x\): 100 prompt and 10 completion tokens, \$0\.0020 · \d\d:\d\d:\d\d\*/);
+  expect(markdown).toMatch(/\*Usage \(anthropic:claude-y, delegated session `child-1`\): 100 prompt and 10 completion tokens, \$0\.0010 · \d\d:\d\d:\d\d\*/);
+  expect(markdown).toMatch(/\*Usage \(openai:mystery\): 100 prompt and 10 completion tokens, unpriced · \d\d:\d\d:\d\d\*/);
   // A session that made no request has no cost line.
   expect(transcriptToMarkdown(record(root, 'Nothing yet').events())).not.toContain('- Cost:');
+});
+
+test('an export stamps every event with its time, says how long each turn took, and leaves reasoning to the debug copy', () => {
+  const start = Date.UTC(2026, 8, 27, 22, 37, 10);
+  const events: NewTranscriptEvent[] = [
+    { type: 'message', message: { role: 'user', content: 'fix it', timestamp: 1 } },
+    { type: 'message', message: { role: 'assistant', content: 'Done.', reasoning: 'Let me think about the file first.', timestamp: 2 } },
+    { type: 'notice', level: 'warn', message: 'Slow provider' },
+    { type: 'end', status: 'ok' },
+    { type: 'message', message: { role: 'user', content: 'and after midnight?', timestamp: 3 } },
+  ];
+  const at = [start, start + 1_500, start + 2_000, start + 2_400, Date.UTC(2026, 8, 28, 0, 0, 5)];
+  const logged = events.map((event, index) => ({ v: 2, ts: at[index], ...event }) as any);
+  const markdown = transcriptToMarkdown(logged, { id: 's1' });
+  expect(markdown).toContain('Times are UTC');
+  expect(markdown).toContain('## User · 22:37:10');
+  expect(markdown).toContain('## Assistant · 22:37:11');
+  expect(markdown).toContain('> **Notice** (warn): Slow provider · 22:37:12');
+  expect(markdown).toContain('*Turn ended: ok, after 2.4s · 22:37:12*');
+  // A later day names its date.
+  expect(markdown).toContain('## User · 2026-09-28 00:00:05');
+  // Reasoning is counted and left out here; the debug copy has it.
+  expect(markdown).not.toContain('Let me think');
+  expect(markdown).toContain('- Reasoning: 1 block, left out here; `/copy debug` shows it, and the session log keeps it');
+  expect(transcriptToMarkdown(logged, { id: 's1', debug: true })).toContain('Let me think about the file first.');
 });

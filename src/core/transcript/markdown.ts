@@ -33,7 +33,7 @@ const heading = (message: ChatMessage): string => {
   return `## ${message.role.charAt(0).toUpperCase()}${message.role.slice(1)}`;
 };
 
-const renderMessage = (message: ChatMessage, toolNames: Map<string, string>): string[] => {
+const renderMessage = (message: ChatMessage, toolNames: Map<string, string>, debug: boolean): string[] => {
   if (message.role === 'tool') {
     const id = message.tool_call_id ?? '';
     const tool = message.toolName ?? toolNames.get(id) ?? 'tool';
@@ -41,7 +41,8 @@ const renderMessage = (message: ChatMessage, toolNames: Map<string, string>): st
     return [`### Result: ${label.join(' ')}`, fenced(message.content ?? '', 'text')];
   }
   const out = [heading(message)];
-  if (message.reasoning) {
+  // Reasoning is the bulk of a session and rarely what a reader wants; the debug copy keeps it.
+  if (message.reasoning && debug) {
     out.push(`<details><summary>Reasoning</summary>\n\n${message.reasoning}\n\n</details>`);
   }
   if (message.content) out.push(message.content);
@@ -52,10 +53,31 @@ const renderMessage = (message: ChatMessage, toolNames: Map<string, string>): st
   return out;
 };
 
+/** An event's time in UTC, with its date when that is not the day the session began. */
+const clock = (ts: number, day: string): string => {
+  const iso = new Date(ts).toISOString();
+  return iso.slice(0, 10) === day ? iso.slice(11, 19) : `${iso.slice(0, 10)} ${iso.slice(11, 19)}`;
+};
+
+/** How long a turn took, for people: tenths of a second under a minute. */
+const took = (ms: number): string => {
+  const seconds = Math.max(0, ms) / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  return `${Math.floor(seconds / 60)}m ${String(Math.round(seconds % 60)).padStart(2, '0')}s`;
+};
+
+/** The time added to the first line of what an event rendered, inside an italic line's marks. */
+const stamp = (text: string, time: string): string => {
+  const [first, ...rest] = text.split('\n');
+  const timed = /^\*[^*].*\*$/.test(first) ? `${first.slice(0, -1)} · ${time}*` : `${first} · ${time}`;
+  return [timed, ...rest].join('\n');
+};
+
 /**
  * The session as Markdown: every message, tool call, result with its status, approval
- * decision, notice, compaction, model switch, and turn end, in the order they happened.
- * With `debug`, also what each request carried besides the conversation, the system prompt
+ * decision, notice, compaction, model switch, and turn end, in the order they happened,
+ * each with its time, and each turn end with how long the turn took. With `debug`, also the
+ * model's reasoning, what each request carried besides the conversation, the system prompt
  * and the tool definitions as sent, and what a notice kept for the record, such as a
  * result the trust gate withheld.
  */
@@ -74,15 +96,22 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
     if (header.permissionMode) facts.push(`- Permission mode: ${header.permissionMode}`);
   }
   facts.push(`- Messages: ${messages}`, `- Tokens: ${tokens}`);
+  const reasoning = events.filter((event) => event.type === 'message' && event.message.reasoning).length;
+  if (reasoning && !options.debug) facts.push(`- Reasoning: ${reasoning} block${reasoning === 1 ? '' : 's'}, left out here; \`/copy debug\` shows it, and the session log keeps it`);
   const spend = CostLedger.fromEvents(events).summary();
   if (spend.requests) facts.push(`- Cost: ${describeSpend(spend)}`);
+  facts.push('- Times are UTC');
   out.push(facts.join('\n'), '---');
 
+  const day = new Date(header?.ts ?? events[0]?.ts ?? 0).toISOString().slice(0, 10);
   const toolNames = new Map<string, string>();
+  let turnStart: number | undefined;
   for (const event of events) {
+    const before = out.length;
     switch (event.type) {
       case 'message':
-        out.push(...renderMessage(event.message, toolNames));
+        if (event.message.role === 'user') turnStart = event.ts;
+        out.push(...renderMessage(event.message, toolNames, Boolean(options.debug)));
         break;
       case 'approval': {
         const verdict = event.allow ? `allowed ${event.scope === 'once' ? 'once' : `for this ${event.scope}`}` : 'denied';
@@ -144,11 +173,13 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
         out.push(`*Checkpoint \`${event.ref}\`${event.files?.length ? `: ${event.files.join(', ')}` : ''}*`);
         break;
       case 'end':
-        out.push(`*Turn ended: ${event.status}*`, '---');
+        out.push(`*Turn ended: ${event.status}${turnStart === undefined ? '' : `, after ${took(event.ts - turnStart)}`}*`, '---');
+        turnStart = undefined;
         break;
       default:
         break;
     }
+    if (out.length > before && event.type !== 'session') out[before] = stamp(out[before], clock(event.ts, day));
   }
   return `${out.join('\n\n')}\n`;
 }

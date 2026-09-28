@@ -142,10 +142,10 @@ test('/copy debug copies every event of the session log, readably, in the order 
   // Markdown, one block per event, not the log's one JSON object per line.
   expect(copied.split('\n')[0]).toBe(`# Session ${runtime.session.id}`);
   expect(copied).not.toContain('{"v":2');
-  expect(copied).toContain('## User\n\nsay hello');
+  expect(copied).toMatch(/## User · \d\d:\d\d:\d\d\n\nsay hello/);
   expect(copied).toContain('Hello back.');
   expect(copied).toMatch(/\*Usage \(ollama:fake-model\): \d+ prompt/);
-  expect(copied).toContain('*Turn ended: ok*');
+  expect(copied).toMatch(/\*Turn ended: ok, after \d+\.\ds · \d\d:\d\d:\d\d\*/);
   // What the model was sent, from the request: the system prompt and every tool definition.
   expect(copied).toContain('### Sent to the model: system prompt');
   expect(copied).toContain('Environment:');
