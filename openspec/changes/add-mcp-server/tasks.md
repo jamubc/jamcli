@@ -22,5 +22,6 @@
 
 ## 5. Proof and close
 
-- [ ] 5.1 Through a real MCP client on a real model: delegate an edit with an approval, run commands, and use the interface through a terminal. Record what it found and fix what is JamCLI's.
+- [x] 5.1 Through a real MCP client on a real model: delegate an edit with an approval, run commands, and use the interface through a terminal. Record what it found and fix what is JamCLI's.
+  - Done 2026-09-28 on OpenCode Go (`deepseek-v4.1-flash`), jamcli's own MCP client as the host, in a throwaway fixture. Found and fixed: `/commit`'s confirmation and `/pr`'s push and open could be answered by the calling agent (`423e7c1`); a saved `/agents`, `/config`, or `/mcp` change failed a headless run for not reopening a session (`4b8a1be`); a waiting list was shown twice, a terminal whose jamcli had exited reported only the emulator's error, and `terminal_start` suggested `--model`, which the interface does not take (`eefd3b6`). The terminal's observer state needed plain JSON-RPC, since a strict ACP client drops JamCLI's own state updates, and settling had to count from the last key pressed (`3de1c73`).
 - [ ] 5.2 Four gates, `openspec validate --strict`, then archive. 6.2 of `add-session-reflection` then runs through this server with the owner approving each lesson.
