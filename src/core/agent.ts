@@ -289,13 +289,18 @@ export class CoreAgent implements Agent {
           // What compaction cannot bring under the threshold, it will not bring under by trying again this turn.
           if (!fitted.compacted || this.countContext(working.messages) > context.budget.trigger) {
             compactable = false;
-            emit({
-              type: 'notice',
-              level: 'warn',
-              message:
-                `The conversation is still above the compaction threshold (${this.countContext(working.messages).toLocaleString('en-US')} of ` +
-                `${context.budget.trigger.toLocaleString('en-US')} tokens), and nothing more can be summarized this turn. The provider may refuse the request.`,
-            });
+            // Worth a word only when the request may not fit at all: over the threshold but within the
+            // budget, as a short conversation under a large system prompt is, the provider will take it.
+            const count = this.countContext(working.messages);
+            if (count > context.budget.budget) {
+              emit({
+                type: 'notice',
+                level: 'warn',
+                message:
+                  `The conversation is above the context budget (${count.toLocaleString('en-US')} of ` +
+                  `${context.budget.budget.toLocaleString('en-US')} tokens), and nothing more can be summarized this turn. The provider may refuse the request.`,
+              });
+            }
           }
         } catch (error: any) {
           if (signal.aborted || error?.name === 'AbortError') return finish('cancelled', '', steps);

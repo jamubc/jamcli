@@ -242,7 +242,8 @@ test('a context compaction cannot bring under the threshold is reported once, an
   server.enqueue(read('c1', 'a.txt'), { text: 'done' });
   const { events, onEvent } = collect();
   await runtime.run('read a.txt', onEvent);
-  const stuck = events.filter((event) => event.type === 'notice' && event.message.startsWith('The conversation is still above the compaction threshold'));
+  // Over the budget itself, not only the threshold, so the request may not fit: that is worth a word, once.
+  const stuck = events.filter((event) => event.type === 'notice' && event.message.startsWith('The conversation is above the context budget'));
   expect(stuck).toHaveLength(1);
   expect(events.filter((event) => event.type === 'compaction')).toEqual([]);
   expect(server.completions()).toHaveLength(2);
