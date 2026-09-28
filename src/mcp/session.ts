@@ -79,6 +79,8 @@ export class DelegatedSession {
   /** Send a prompt or a command line; the turn runs on while the caller waits or does not. */
   send(text: string): void {
     if (this.turn) throw new Error('A turn is running. Wait for it with session_state, or stop it with session_stop.');
+    // Anything else sent now would close the list unanswered, so the list is answered first.
+    if (this.controller.waitingChoice?.() && !/^\/choose(\s|$)/.test(text.trim())) throw new Error('A list waits: answer it with session_answer choice <key or number>, or none, first.');
     this.ended = undefined;
     const run = async () => {
       if (this.controller.isCommand?.(text)) {

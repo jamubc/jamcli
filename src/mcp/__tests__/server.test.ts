@@ -136,3 +136,13 @@ test('a stopped session says it was stopped and how to resume it', async () => {
   expect(state.text).toContain(`Session ${session} was stopped`);
   expect(state.text).toContain(`resume: "${session}"`);
 }, 60_000);
+
+test('a prompt sent while a list waits is refused, and the list still waits', async () => {
+  const { call, start } = await serve();
+  const session = await start();
+  await call('session_send', { session, text: '/effort' });
+  const refused = await call('session_send', { session, text: 'hello' });
+  expect(refused.error).toBe(true);
+  expect(refused.text).toContain('A list waits');
+  expect((await call('session_state', { session })).report).toMatchObject({ status: 'waiting', waiting: { kind: 'choice' } });
+}, 60_000);
