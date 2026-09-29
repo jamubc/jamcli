@@ -5,8 +5,7 @@ import { describeCall, previewCall } from '../approval.js';
 import type { RestorePreview } from '../git/checkpoints.js';
 import { cleanDraft, draftPrompt, planCommit } from '../git/commit.js';
 import { createSession } from '../state.js';
-import { createChatProvider, listConfiguredProviders } from '../providers/factory.js';
-import { isListableProvider, prefixSetNow, type ChatProvider } from '../providers/types.js';
+import { prefixSetNow, type ChatProvider } from '../providers/types.js';
 import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
 import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
 import type { HookCommand } from '../hooks/commands.js';
@@ -39,9 +38,8 @@ import { parseRule, type Decision, type Rule } from '../permissions/rules.js';
 import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type SandboxSettings } from '../sandbox/index.js';
 import { buildRuntimePrompt } from './prompt.js';
 import { registerSteerMiddleware } from './steer.js';
-import { completeWithinCap } from '../providers/complete.js';
 import { describeGates } from '../verify/index.js';
-import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
+import { SessionModel, configuredSecrets, keyVariables, listModels, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
 import { loadSkills, skillInstructions, skillsPromptText, type Skill } from '../ext/skills.js';
 import { skillTool } from '../tools/skill.js';
@@ -53,8 +51,8 @@ import type { PluginParts } from '../plugins/runtime.js';
 import { lspTool } from '../tools/lsp.js';
 import { webSearchTool } from '../tools/web/index.js';
 import { SearchProviders } from '../tools/web/providers.js';
-import { answerOutputTokens, ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
-import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
+import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
+import { CostLedger, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
 import { loadConfig, permissionLayers, type LoadedConfig } from '../config/load.js';
 import { revealedKeys } from '../config/credentials.js';
@@ -553,7 +551,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     mcp,
     env: options.env,
     sandbox,
-    parent: () => ({ sessionId: log.id, depth: depth + 1, permissions, work: workTable, model: `${choice.provider}:${choice.model}` }),
+    parent: () => ({ sessionId: log.id, depth: depth + 1, permissions, work: workTable, model: sessionModel.ref }),
     create: createRuntime,
     // While a turn runs, a child's request reaches this session's surface too; a background
     // child that outlives the turn is still counted and recorded.
@@ -712,7 +710,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   if (options.agentRules) notices.push(`This run follows the ${options.agentRules.agent} agent's rules from ${options.agentRules.source}.`);
   // Chosen before the provider, which may send it: some route and cache per conversation.
   const sessionId = options.sessionId ?? newSessionId();
-  let choice = resolveModel(options.model ?? config.model, profile, config.api_registry);
+  const sessionModel = new SessionModel({
+    catalog,
+    registry: config.api_registry,
+    profile,
+    sessionId,
+    ref: options.model ?? config.model,
+    ...(options.provider ? { provider: options.provider } : {}),
+    observe: (target, name) => observed(target, name),
+  });
   // The project's own gates, detected once; their durations come from the ledger once the log is open.
   const gates = detectGates(workRoot);
   let ledger: Ledger | undefined;
@@ -732,24 +738,12 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       cwd,
       mode: permissions.mode,
       gates: gates.length && permissions.mode !== 'plan' ? describeGates(gates, (name) => ledger?.lastDuration(name)) : undefined,
-      model: `${choice.provider}:${choice.model}`,
+      model: sessionModel.ref,
       ...(options.harness?.guidance ? { guidance: options.harness.guidance } : {}),
     });
   let systemPrompt = buildPrompt();
   /** Whether the extended tier fits the model's window, decided once the window is known; true when that changed. */
   const decideTiers = (): boolean => offer.decideTiers(systemPrompt, budgetFor(), windowKnown());
-  let provider: ChatProvider | undefined = options.provider;
-  let providerError: string | undefined;
-  if (!provider) {
-    try {
-      provider = createChatProvider(choice.provider, config.api_registry, { sessionId });
-    } catch (error: any) {
-      providerError = error?.message ?? String(error);
-    }
-  }
-  if (provider) provider = observed(provider, choice.provider);
-
-  let modelInfo: ModelInfo = catalog.lookup(choice.provider, choice.model, provider?.family);
   const trustKey = trust.choice ? `${trust.choice.provider}:${trust.choice.model}` : undefined;
   let trustInfo: ModelInfo | undefined = trust.choice ? catalog.lookup(trust.choice.provider, trust.choice.model, trust.provider?.family) : undefined;
 
@@ -757,14 +751,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** Learns how the provider counts this session's requests, across model switches. */
   const counter = new TokenCounter();
   const autoCompact = config.context?.auto_compact !== false;
-  const budgetFor = () => contextBudget(modelInfo.contextWindow, requestedOutputTokens(modelInfo, loop?.max_output_tokens));
+  const budgetFor = () => contextBudget(sessionModel.info.contextWindow, requestedOutputTokens(sessionModel.info, loop?.max_output_tokens));
   /**
    * When the request's prefix was last set: this process's start, a change of system prompt
    * or tools, or a compaction. Signed reasoning from before it is not replayed.
    */
   let reasoningSince = prefixSetNow();
-  /** A guessed window is not compacted ahead of; Ollama's window is the one JamCLI asks for, so it is always known. */
-  const windowKnown = () => modelInfo.sources.contextWindow !== 'default' || modelInfo.provider === 'ollama';
+  /** A guessed window is not compacted ahead of. */
+  const windowKnown = () => sessionModel.windowKnown;
   if (decideTiers()) {
     toolSet = buildTools();
     systemPrompt = buildPrompt();
@@ -776,16 +770,16 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       : thinkingFor(config.effort ?? 'auto');
   const buildAgent = () =>
     new CoreAgent({
-      provider,
-      model: choice.model,
+      provider: sessionModel.provider,
+      model: sessionModel.choice.model,
       temperature: profile.temperature,
       ...(thinking.reasoning ? { reasoning: thinking.reasoning } : {}),
-      ...(thinking.effort ? { effort: effortFor(thinking.effort, modelInfo.efforts), acceptsEffort: modelInfo.effort } : {}),
-      modelUsageKey: `${choice.provider}:${choice.model}`,
-      maxOutputTokens: requestedOutputTokens(modelInfo, loop?.max_output_tokens),
+      ...(thinking.effort ? { effort: effortFor(thinking.effort, sessionModel.info.efforts), acceptsEffort: sessionModel.info.effort } : {}),
+      modelUsageKey: sessionModel.ref,
+      maxOutputTokens: requestedOutputTokens(sessionModel.info, loop?.max_output_tokens),
       context: { budget: budgetFor(), counter, auto: autoCompact, proactive: windowKnown() },
       // Only Ollama sizes its window per request; the others ignore it.
-      contextLength: modelInfo.contextWindow,
+      contextLength: sessionModel.info.contextWindow,
       dispatcher: toolSet.dispatcher,
       toolDefinitions: toolSet.definitions,
       maxSteps: options.maxSteps ?? loop?.max_steps ?? DEFAULT_AGENT_LOOP_CONFIG.max_steps,
@@ -796,9 +790,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       systemPrompt,
       hooks,
       ...(gated() ? { trustClassifier: trust.classifier, trustUsageKey: trustKey, trustPrice: trustInfo?.price } : {}),
-      price: modelInfo.price,
-      thinkingStyle: modelInfo.thinking,
-      alwaysThinks: modelInfo.alwaysThinks,
+      price: sessionModel.info.price,
+      thinkingStyle: sessionModel.info.thinking,
+      alwaysThinks: sessionModel.info.alwaysThinks,
       reasoningSince,
       trustThreshold: config.trust?.threshold,
       trustDedupe: config.trust?.dedupe,
@@ -860,7 +854,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let emitting: ((event: AgentEvent) => void) | undefined;
   const recorder = new TranscriptRecorder(log, {
     surface: options.surface,
-    model: `${choice.provider}:${choice.model}`,
+    model: sessionModel.ref,
     onError: (error) => emitting?.({ type: 'notice', level: 'error', message: `The session log could not be written: ${error.message}` }),
   });
   const checkpoints = new SessionCheckpoints({
@@ -951,28 +945,21 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   }
   /** One request outside the conversation, counted and priced like the session's others. */
   async function completeOnce(prompt: string, request: { maxOutputTokens?: number; signal?: AbortSignal } = {}): Promise<string> {
-    if (!provider) throw new Error(providerError ?? 'No model provider is configured for this session.');
-    const result = await completeWithinCap(provider, [{ role: 'user', content: prompt, timestamp: Date.now() }], {
-      model: choice.model,
-      maxOutputTokens: answerOutputTokens(modelInfo, request.maxOutputTokens ?? 800) ?? request.maxOutputTokens ?? 800,
-      contextLength: modelInfo.contextWindow,
-      ...(request.signal ? { signal: request.signal } : {}),
-    });
-    if (result.usage) {
-      const cost = requestCost(result.usage, modelInfo.price);
-      const event: AgentEvent = { type: 'usage', usage: result.usage, model: `${choice.provider}:${choice.model}`, ...(cost !== undefined ? { cost } : {}) };
+    const { content, usage } = await sessionModel.complete(prompt, request);
+    if (usage) {
+      const event: AgentEvent = { type: 'usage', ...usage };
       account(event);
       recorder.handle(event);
     }
-    return result.content ?? '';
+    return content;
   }
 
 
   observation = observeSession(observer, {
     sessionId: log.id,
     surface: options.surface,
-    provider: choice.provider,
-    model: choice.model,
+    provider: sessionModel.choice.provider,
+    model: sessionModel.choice.model,
     permissionMode: permissions.mode,
     sandbox: sandbox.kind,
     parent: options.observer?.parentSpan,
@@ -1000,11 +987,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
    * sized from the provider's own numbers.
    */
   const resolveModelInfo = async (): Promise<void> => {
-    const asked = choice;
+    const asked = sessionModel.ref;
     try {
-      const info = await catalog.resolve(asked.provider, asked.model, provider);
-      if (asked !== choice) return;
-      modelInfo = info;
+      const info = await sessionModel.resolve();
+      if (!info) return;
       if (decideTiers()) reassemble();
       else agent = buildAgent();
       if (info.sources.contextWindow === 'default' && info.provider !== 'ollama') {
@@ -1015,7 +1001,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         pending.push(notice);
       }
     } catch (error: any) {
-      pending.push(`The details of ${asked.provider}:${asked.model} could not be read: ${error?.message ?? error}`);
+      pending.push(`The details of ${asked} could not be read: ${error?.message ?? error}`);
     }
   };
   let modelReady = resolveModelInfo();
@@ -1032,16 +1018,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
   const switchModel = (ref: string) => {
-    const next = resolveModel(ref, profile, config.api_registry);
-    const before = `${choice.provider}:${choice.model}`;
-    provider = observed(createChatProvider(next.provider, config.api_registry, { sessionId: log.id }), next.provider);
-    providerError = undefined;
-    choice = next;
-    modelInfo = catalog.lookup(next.provider, next.model, provider.family);
+    const before = sessionModel.switch(ref);
+    const after = sessionModel.ref;
     // The prompt names the model, so the switch rebuilds it; the model reads the change with its next prompt.
     reassemble();
-    recorder.switchModel(`${next.provider}:${next.model}`);
-    const after = `${next.provider}:${next.model}`;
+    recorder.switchModel(after);
     if (before !== after && session.messages.length) turnNotes.push(`[Model changed: ${before} to ${after}. Messages above were written by ${before}.]`);
     modelReady = resolveModelInfo();
   };
@@ -1070,10 +1051,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     workRoot,
     get model() {
-      return { ...choice };
+      return sessionModel.choice;
     },
     get modelInfo() {
-      return modelInfo;
+      return sessionModel.info;
     },
     spend() {
       return costLedger.summary();
@@ -1174,7 +1155,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const unsubscribes: (() => void)[] = [];
       try {
         if (turn.model) {
-          const before = `${choice.provider}:${choice.model}`;
+          const before = sessionModel.ref;
           try {
             switchModel(turn.model);
             restoreModel = before;
@@ -1200,8 +1181,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         await Promise.all([modelReady, trustReady]);
         for (const message of pending.splice(0)) emit({ type: 'notice', level: 'warn', message });
         // A command typed after `!` needs no model, and its text is not a prompt to expand.
-        if (!provider && !turn.shell && !turn.tool) {
-          const error = providerError ?? 'No model provider is configured for this session.';
+        if (!sessionModel.provider && !turn.shell && !turn.tool) {
+          const error = sessionModel.providerError ?? 'No model provider is configured for this session.';
           emit({ type: 'notice', level: 'error', message: error });
           return { status: 'error', sessionId: log.id, response: '', turns: 0, usage: { ...session.usage }, error, session };
         }
@@ -1258,33 +1239,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       agent = buildAgent();
     },
 
-    async listModels(timeoutMs = LIST_TIMEOUT_MS) {
-      const problems: string[] = [];
-      await catalog.refreshDirectory();
-      const lists = await Promise.all(
-        listConfiguredProviders(config.api_registry).map(async (id): Promise<ModelInfo[]> => {
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          try {
-            const listed = createChatProvider(id, config.api_registry);
-            if (!isListableProvider(listed)) return [];
-            const late = new Promise<never>((_, reject) => {
-              timer = setTimeout(() => reject(new Error(`did not answer within ${Math.round(timeoutMs / 100) / 10} s`)), timeoutMs);
-            });
-            const offered = await Promise.race([listed.listModels(), late]);
-            return offered.map((entry) => {
-              const info = catalog.lookup(id, entry.id, listed.family, entry.contextWindow ? { contextWindow: entry.contextWindow } : undefined);
-              return info.tools === undefined && entry.supports_tool_calling !== undefined ? { ...info, tools: entry.supports_tool_calling } : info;
-            });
-          } catch (error: any) {
-            problems.push(`${id}: ${redact(error?.message ?? String(error))}`);
-            return [];
-          } finally {
-            clearTimeout(timer);
-          }
-        })
-      );
-      return { models: lists.flat(), problems };
-    },
+    listModels: (timeoutMs = LIST_TIMEOUT_MS) => listModels(catalog, config.api_registry, redact, timeoutMs),
 
     fork(atEvent) {
       return SessionLog.fork(projectRoot, log.id, { atEvent, surface: options.surface }).id;
