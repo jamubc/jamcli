@@ -57,11 +57,11 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-responses-api`, R11 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
-`master`, where the owner has worked since merging the stack on 2026-09-27. The "will not do"
-on OpenAI's Responses API reversed: the client that already falls back to it checked against
-OpenAI's own definitions, told to store nothing, and given its reasoning back. The review it
-comes from is kept verbatim in `openspec/reviews/2026-09-29-architecture-review.md`.
+`run-release`, R12 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
+`master`, where the owner has worked since merging the stack on 2026-09-27. The release job,
+which has never run, run end to end short of the two steps that publish: the tag and the
+provenance attestation stay the owner's. The review it comes from is kept verbatim in
+`openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
 approve it before any task begins, and `git checkout 9d9f5c6 --
@@ -69,6 +69,29 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 25. `add-responses-api`
+
+Archived as `2026-09-29-add-responses-api`: 1 requirement modified (Generic Provider
+Endpoints). R11 of the review units. The "will not do" was stale as well as mistaken: since
+`872dd44` the OpenAI-compatible client asks a model through `/responses` once the endpoint
+refuses it on Chat Completions, and remembers it. What had never happened was a check against
+OpenAI's definitions. OpenAI's documentation site still refuses automated fetches (HTTP 403),
+so the client was checked against `src/resources/responses/responses.ts` in OpenAI's Node
+SDK, which is generated from the same API specification.
+
+The input items, roles, tools, `tool_choice`, reasoning summaries, streamed events, and usage
+all match. One thing did not: the SDK says `store` "defaults to true when omitted", and a stored
+response is kept "for at least 30 days". The client left it unset, so every conversation that
+fell back to the Responses API was kept on the endpoint, where Chat Completions keeps none.
+Every request now sets `store: false`. With nothing stored, reasoning reaches the next call only
+as the encrypted item sent back, so when an effort is set the request asks for it, the message
+keeps it as a reasoning block, and it is replayed like signed thinking: only to its own family,
+only from after the prefix last changed (`88b36cd`). The records now say implemented
+(`6e91c2d`).
+
+Left: no live run, since the models this project runs are served on Chat Completions and the
+fallback never triggers for them. A request with no effort set gets no encrypted reasoning.
 
 ### 24. `add-contributor-gates`
 

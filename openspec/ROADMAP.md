@@ -179,7 +179,7 @@ A linter, a formatter, and `CODEOWNERS`, so rules that live in prose today are h
 tool. "One unit in flight" is a one-person rule, and the history is linear with zero
 merges, so "units on branches" is not what the history shows.
 
-### R11. `add-responses-api`
+### R11. `add-responses-api` (archived 2026-09-29)
 
 Reverse the "will not do" in `docs/conformance.md:34` and `docs/feature-matrix.md:40`. It
 records an agent's sandbox limitation, OpenAI's docs blocked from the build environment,

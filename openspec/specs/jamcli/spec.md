@@ -792,6 +792,12 @@ report provider errors with their cause.
 - **WHEN** Ollama is the configured provider and no network is available
 - **THEN** model listing and chat completion continue to work
 
+#### Scenario: A model served only through the Responses API
+- **WHEN** an OpenAI-compatible endpoint refuses a model on Chat Completions and serves it through the Responses API
+- **THEN** JamCLI asks that model through the Responses API from then on
+- **AND** every such request tells the endpoint to store nothing
+- **AND** when an effort is set, the model's encrypted reasoning is sent back to the same family on the next call
+
 ### Requirement: Category-Based Model Routing
 JamCLI SHALL resolve the model for a unit of work from a named agent that describes the
 kind of work, not from a hardcoded model identifier, and SHALL keep loading the earlier
