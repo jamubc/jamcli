@@ -2,8 +2,7 @@
 
 JamCLI is one runtime with several surfaces. This page is the map. The decisions behind
 it, with alternatives and reasons, are in
-`openspec/changes/rehaul-jamcli/design.md` while that change is open and in the archive
-afterward.
+`openspec/changes/archive/2026-09-26-rehaul-jamcli/design.md`.
 
 ## Layers
 
@@ -69,14 +68,16 @@ neither OpenTUI nor React, and `src/core/` does not import it.
 
 ## Processes
 
-JamCLI runs in one process. Everything it starts is a separate process, launched with the
-minimal environment and, when a sandbox is available, inside it:
+JamCLI runs in one process. Delegated child runs execute in it too, each as a runtime of its
+own with its own session and log, deciding with a permission engine derived from its
+parent's, so a child cannot widen what the parent allows. Everything else JamCLI starts is a
+separate process, launched with the minimal environment and, when a sandbox is available,
+inside it:
 
 - shell commands and background jobs;
 - user hooks and plugin hooks;
 - MCP servers over stdio, including plugin servers;
 - language servers;
-- delegated child runs, which are `jamcli -p` processes;
 - ACP agents JamCLI delegates to.
 
 No third-party code is loaded into the JamCLI process.

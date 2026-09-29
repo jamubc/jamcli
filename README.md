@@ -62,7 +62,7 @@ See [Getting started](docs/getting-started.md).
 
 ## Documentation
 
-Pages marked "not yet written" are listed in `openspec/DEFERRED.md`.
+The published site, built from `site/`, carries the same ground for a person running JamCLI.
 
 | Topic | Page |
 |---|---|
@@ -70,18 +70,18 @@ Pages marked "not yet written" are listed in `openspec/DEFERRED.md`.
 | Configuration layers and every key | [configuration.md](docs/configuration.md) |
 | Permission modes, rules, and the sandbox | [permissions.md](docs/permissions.md) |
 | Built-in tools | [tools.md](docs/tools.md) |
-| Providers, models, keys, cost | not yet written |
-| Sessions, resume, fork, checkpoints | not yet written |
-| Custom commands and skills | not yet written |
-| Hooks | not yet written |
-| Plugins | not yet written |
-| Workflows | not yet written |
-| MCP, ACP, the observer, LSP | not yet written |
-| Headless use | not yet written |
-| The interface, keys, micro mode | not yet written |
-| Security model | not yet written |
-| Upgrading from 1.x | not yet written |
-| Changes | not yet written |
+| Providers, models, keys, cost | [providers.md](docs/providers.md) |
+| Sessions, resume, fork, checkpoints | [sessions.md](docs/sessions.md) |
+| Custom commands and skills | [commands-and-skills.md](docs/commands-and-skills.md) |
+| Hooks | [hooks.md](docs/hooks.md) |
+| Plugins | [plugins.md](docs/plugins.md) |
+| Workflows | [workflows.md](docs/workflows.md) |
+| MCP, ACP, the observer, LSP | [protocols.md](docs/protocols.md) |
+| Headless use | [headless.md](docs/headless.md) |
+| The interface, keys, micro mode | [interface.md](docs/interface.md) |
+| Security model | [security.md](docs/security.md) |
+| Upgrading from 1.x | [migration.md](docs/migration.md) |
+| Changes | [CHANGELOG.md](docs/CHANGELOG.md) |
 | How it stands against other agents | [feature-matrix.md](docs/feature-matrix.md) |
 | Protocol conformance | [conformance.md](docs/conformance.md) |
 | Architecture | [architecture.md](docs/architecture.md) |
@@ -99,7 +99,8 @@ bun run build
 
 `bun run bench` measures startup, first frame, keystroke latency, and memory against
 the budgets. Work is planned in `openspec/`: `openspec/project.md` has the thesis and
-conventions, and `openspec/DEFERRED.md` lists what is not finished.
+conventions, `openspec/SEQUENCE.md` names the open unit and what each closed one left open,
+and `openspec/ROADMAP.md` names the units after it.
 
 ## Status
 

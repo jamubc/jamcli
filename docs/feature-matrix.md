@@ -1,9 +1,13 @@
 # Feature matrix
 
 Where JamCLI stands against the coding CLIs it is benchmarked on, and why each gap is a
-gap. The "Before" column is `openspec/changes/rehaul-jamcli/audit.md`. The "Now" column
-is what the `rehaul-jamcli` change delivered, checked against the code when it closed on
-2026-09-25. Work that did not land is listed in `openspec/DEFERRED.md`.
+gap. The "Before" column is `openspec/changes/archive/2026-09-26-rehaul-jamcli/audit.md`.
+The "Now" column is what the `rehaul-jamcli` change delivered, checked against the code when
+it closed on 2026-09-25. Work that did not land is recorded in `openspec/SEQUENCE.md`.
+
+This is a comparison, not the roadmap's input. Since the 2026-09-29 review
+(`openspec/reviews/2026-09-29-architecture-review.md`), what comes next is decided by the
+scores of a checked-in task corpus run on an open model, not by closing the gaps below.
 
 **Legend:**
 
