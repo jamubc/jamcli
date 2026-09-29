@@ -1,0 +1,69 @@
+name: Evals
+
+# The task corpus, nightly and on demand, on a real open model. The scores are uploaded as an
+# artifact, not committed: a job's own commit would carry an identity other than the owner's.
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+    steps:
+      - name: Say what is missing
+        if: env.OPENCODE_API_KEY == ''
+        run: echo "::notice::The corpus runs on opencode-go:deepseek-v4.1-flash and needs the OPENCODE_API_KEY repository secret. Nothing ran."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.OPENCODE_API_KEY != ''
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: env.OPENCODE_API_KEY != ''
+        with:
+          bun-version: "1.4.2"
+      - name: Install bubblewrap and ripgrep
+        if: env.OPENCODE_API_KEY != ''
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap ripgrep
+          # Auto mode needs a sandbox, and bubblewrap needs unprivileged user namespaces.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Install
+        if: env.OPENCODE_API_KEY != ''
+        run: bun install --frozen-lockfile
+      - name: A configuration with the key taken from the environment
+        if: env.OPENCODE_API_KEY != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/jamcli-config"
+          cat > "$RUNNER_TEMP/jamcli-config/config.json" <<'JSON'
+          {
+            "model": "opencode-go:deepseek-v4.1-flash",
+            "api_registry": {
+              "endpoints": [
+                {
+                  "id": "opencode-go",
+                  "base_url": "https://opencode.ai/zen/go/v1",
+                  "dialect": "openai",
+                  "key_env_var": "OPENCODE_API_KEY",
+                  "headers": { "x-opencode-session": "${session_id}" }
+                }
+              ]
+            }
+          }
+          JSON
+      - name: Run the corpus
+        if: env.OPENCODE_API_KEY != ''
+        # A task that fails is a score, not a broken build: the summary and the artifact carry it.
+        run: |
+          bun evals/run.ts --config-dir "$RUNNER_TEMP/jamcli-config" --concurrency 3 | tee corpus.log || true
+          tail -1 corpus.log >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the scores
+        if: env.OPENCODE_API_KEY != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eval-scores
+          path: evals/scores/
