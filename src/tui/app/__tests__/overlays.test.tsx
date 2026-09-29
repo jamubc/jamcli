@@ -202,3 +202,19 @@ test('the monochrome theme draws every state in the terminal\'s own color', asyn
     await close();
   }
 }, 30_000);
+
+test('a question put to the person shows the session as waiting, and ready again once it is answered', async () => {
+  const { setup, close } = await open({}, { size: tall });
+  try {
+    context.server.enqueue({ toolCalls: [{ id: 'q1', name: 'ask_user', arguments: { question: 'Which colour?', choices: ['red', 'blue'] } }] }, { text: 'Noted.' });
+    await send(setup, 'ask me');
+    const asked = await frameWith(setup, (frame) => frame.includes('Which colour?'));
+    expect(asked).toContain('waiting');
+    expect(asked).not.toContain('running');
+    setup.mockInput.pressEscape();
+    const done = await frameWith(setup, (frame) => frame.includes('Noted.'));
+    expect(done).not.toContain('waiting');
+  } finally {
+    await close();
+  }
+}, 30_000);

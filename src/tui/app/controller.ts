@@ -133,8 +133,16 @@ export class SessionController {
           if (event.type === 'approval_request') this.decisions.set(event.call.id, event.decide);
           if (event.type === 'elicitation_request') {
             // With nobody set to ask, the server hears no rather than waiting forever.
-            if (this.onElicitation) this.onElicitation(event);
-            else event.respond({ action: 'decline' });
+            if (!this.onElicitation) return event.respond({ action: 'decline' });
+            // While the person answers, the turn waits on them, as it does behind a permission prompt.
+            this.dispatch({ type: 'status', patch: { phase: 'waiting' } });
+            this.onElicitation({
+              ...event,
+              respond: (answer) => {
+                this.dispatch({ type: 'status', patch: { phase: this.busy ? 'tool' : 'idle' } });
+                event.respond(answer);
+              },
+            });
             return;
           }
           if (event.type === 'notice' && event.level === 'error') shownErrors.add(event.message);
