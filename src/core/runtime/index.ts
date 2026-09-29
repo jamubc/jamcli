@@ -21,6 +21,7 @@ import { childLauncher, type ParentSession } from './children.js';
 import { SessionCheckpoints, type CheckpointInfo } from './checkpoints.js';
 import { SessionHooks } from './hooks.js';
 import { Elicitations } from './elicit.js';
+import { ToolOffer } from './offer.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
@@ -39,7 +40,6 @@ import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type Sand
 import { buildRuntimePrompt } from './prompt.js';
 import { registerSteerMiddleware } from './steer.js';
 import { completeWithinCap } from '../providers/complete.js';
-import { estimateRequest } from '../context/estimate.js';
 import { describeGates } from '../verify/index.js';
 import { configuredSecrets, keyVariables, resolveModel, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
@@ -497,36 +497,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
   // Past a threshold, MCP tools are offered through search_tools rather than in every request;
   // so is the extended tier of built-ins when the model's window has no room for it.
-  const searchThreshold = config.tool_search?.threshold ?? DEFAULT_TOOL_SEARCH_THRESHOLD;
-  const loadedTools = new Set<string>();
-  const searchingMcp = Boolean(mcpServers && searchThreshold > 0 && mcpServers.size > searchThreshold);
-  /** Decided once the model's window is known: whether the extended tier is held behind search_tools. */
-  let extendedHeld = false;
-  /** The task and delegate families are offered once one of them has started, not before. */
-  const FAMILY_TOOLS = new Set(['task_status', 'task_result', 'task_cancel', 'delegate_status', 'delegate_result', 'delegate_cancel']);
-  let familyReleased = false;
-  const searchable = (name: string) => !loadedTools.has(name) && ((searchingMcp && Boolean(mcpServers?.has(name))) || (extendedHeld && !mcpServers?.has(name) && registry.get(name)?.tier !== 'core' && name !== 'search_tools'));
-  const held = (name: string) => FAMILY_TOOLS.has(name) && !familyReleased;
-  const offerNow = (names: string[]) => {
-    for (const name of names) {
-      const tool = toolSet.summaries.find((entry) => entry.name === name);
-      // Added to the running turn's list too, so the next request carries it.
-      if (tool && !toolSet.definitions.some((entry) => entry.function.name === name)) toolSet.definitions.push({ type: 'function', function: { name, description: tool.description, parameters: tool.parameters as Record<string, unknown> } });
-    }
-  };
-  registry.register({
-    ...toolSearchTool({
-      deferred: () =>
-        toolSet.summaries
-          .filter((tool) => searchable(tool.name))
-          .map((tool) => ({ name: tool.name, description: tool.description, ...(tool.server ? { server: tool.server } : {}) })),
-      load: (names) => {
-        for (const name of names) loadedTools.add(name);
-        offerNow(names);
-      },
-    }),
-    hidden: true,
-  });
+  const offer = new ToolOffer({ registry, mcpServers, searchThreshold: config.tool_search?.threshold ?? DEFAULT_TOOL_SEARCH_THRESHOLD, toolSet: () => toolSet });
+  registry.register({ ...toolSearchTool({ deferred: () => offer.searchList(), load: (names) => offer.load(names) }), hidden: true });
   /** The servers that are on, for `@server:uri` references and `/server:prompt` commands. */
   const enabledServers = async () => (mcp ? (await mcp.listServers()).filter((server) => server.enabled !== false) : []);
   const resourceReader =
@@ -601,14 +573,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     if (problem) emitting?.({ type: 'notice', level: 'warn', message: problem });
   };
   const buildTools = (): ToolSet => {
-    const anySearchable = registry.visible().some((tool) => permissions.offers(tool.name) && searchable(tool.name));
+    const anySearchable = registry.visible().some((tool) => permissions.offers(tool.name) && offer.searchable(tool.name));
     return createToolSet({
       registry,
       mcpServers,
       permissions,
       alsoOffer: [...turnOffer, ...(anySearchable ? ['search_tools'] : [])],
       grantProject,
-      deferred: (name: string) => searchable(name) || held(name),
+      deferred: (name: string) => offer.deferred(name),
       ...(options.dryRun ? { dryRun: recordDryRun } : {}),
       descriptions: {
         ...(taskTool ? { task: taskDescription(routableAgents(agents.agents, config.api_registry), agents.defaultAgent) } : {}),
@@ -658,9 +630,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   hooks.on(
     'post_tool',
     ({ call }) => {
-      if (familyReleased || (call.name !== 'task' && call.name !== 'delegate')) return undefined;
-      familyReleased = true;
-      offerNow(toolSet.summaries.filter((tool) => FAMILY_TOOLS.has(tool.name)).map((tool) => tool.name));
+      offer.afterCall(call.name);
       return undefined;
     },
     'family tools',
@@ -766,21 +736,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       ...(options.harness?.guidance ? { guidance: options.harness.guidance } : {}),
     });
   let systemPrompt = buildPrompt();
-  /**
-   * Whether the extended tier fits: the window's budget, less what the prompt and the core
-   * tools cost, must leave twice the output reserve. Decided from the model's window, once
-   * it is known, so a small local model is offered what it has room for.
-   */
-  const decideTiers = (): boolean => {
-    const budget = budgetFor();
-    const core = toolSet.definitions.filter((definition) => registry.get(definition.function.name)?.tier === 'core');
-    const base = estimateRequest({ system: systemPrompt, tools: core, messages: [] });
-    // A guessed window is not held against; only the provider's refusal compacts it, and only a known one narrows the tools.
-    const hold = windowKnown() && budget.budget - base < 2 * budget.outputReserve;
-    const changed = hold !== extendedHeld;
-    extendedHeld = hold;
-    return changed;
-  };
+  /** Whether the extended tier fits the model's window, decided once the window is known; true when that changed. */
+  const decideTiers = (): boolean => offer.decideTiers(systemPrompt, budgetFor(), windowKnown());
   let provider: ChatProvider | undefined = options.provider;
   let providerError: string | undefined;
   if (!provider) {
