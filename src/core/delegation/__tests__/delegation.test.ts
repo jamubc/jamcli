@@ -34,6 +34,12 @@ test('a concurrent child beyond the bound is refused', () => {
   expect(refusal.reason).toContain('maximum');
 });
 
+test('a child refused for slots its siblings hold is told to do the work, a parent is not', () => {
+  const full = { running: DEFAULT_DELEGATION_CONFIG.max_concurrent, config: DEFAULT_DELEGATION_CONFIG };
+  expect(canDelegate({ depth: 1, ...full }).reason).toContain('Do this part yourself');
+  expect(canDelegate({ depth: 0, ...full }).reason).not.toContain('yourself');
+});
+
 test('a delegation block that sets only some keys keeps the defaults for the rest', () => {
   const partial = { default_agent: 'quick' };
   expect(canDelegate({ depth: DEFAULT_DELEGATION_CONFIG.max_depth, running: 0, config: partial }).allowed).toBe(false);

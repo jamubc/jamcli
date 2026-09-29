@@ -23,9 +23,11 @@ export const canDelegate = (state: DelegationState): DelegationDecision => {
     };
   }
   if (state.running >= config.max_concurrent) {
+    // A child's siblings hold the slots and it cannot outlast them, so a retry only spends its turns.
+    const advice = state.depth > 0 ? ' Do this part yourself in this run; asking again will not free a slot.' : '';
     return {
       allowed: false,
-      reason: `Already running ${state.running} child task(s); the maximum is ${config.max_concurrent}.`,
+      reason: `Already running ${state.running} child task(s); the maximum is ${config.max_concurrent}.${advice}`,
     };
   }
   return { allowed: true };
