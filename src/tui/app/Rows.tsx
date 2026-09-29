@@ -2,7 +2,7 @@
 import type { MarkdownRenderable, SyntaxStyle } from '@opentui/core';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Row } from '../state/view.js';
-import { closeMarkers, compactionLine, noticeLine, thinkingLine, thinkingSize, toolLine } from './format.js';
+import { closeMarkers, compactionLine, keepCitations, noticeLine, thinkingLine, thinkingSize, toolLine } from './format.js';
 import type { ThinkingSize } from './format.js';
 import { useClickable } from './mouse.js';
 import { filetypeOf } from './syntax.js';
@@ -58,7 +58,7 @@ function colorSelection(renderable: Selects, colors: Selectable): void {
 function MarkdownView({ content, syntax, streaming }: { content: string; syntax: SyntaxStyle; streaming: boolean }) {
   const sel = useSelectable();
   const ref = useRef<MarkdownRenderable>(null);
-  const shown = streaming ? closeMarkers(content) : content;
+  const shown = keepCitations(streaming ? closeMarkers(content) : content);
   useEffect(() => {
     if (ref.current) colorSelection(ref.current as unknown as Selects, sel);
   }, [shown, sel.selectionBg, sel.selectionFg]);

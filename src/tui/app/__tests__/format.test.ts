@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { closeMarkers, diffRows, diffStat, fitStatus, statusParts, thinkingLine, thinkingSize, toolLine } from '../format.js';
+import { closeMarkers, diffRows, diffStat, fitStatus, keepCitations, statusParts, thinkingLine, thinkingSize, toolLine } from '../format.js';
 import { initialView } from '../../state/view.js';
 
 const diff = 'Index: a.txt\n===\n--- a.txt\n+++ a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n';
@@ -109,4 +109,16 @@ test('a status line that does not fit gives up the least useful facts first, and
   expect(narrow).toEndWith('… · waiting');
   // While the indicator shows the phase, the line leaves it out.
   expect(fitStatus({ ...status, phase: 'thinking' }, 500, { separator: ' · ', withoutPhase: true })).not.toContain('thinking');
+});
+
+test('bracketed numbers are set as code, so the markdown view does not take them for links', () => {
+  expect(keepCitations('Layered [1] and [6][7], see [3, 4] or [5-7].')).toBe('Layered `[1]` and `[6][7]`, see `[3, 4]` or `[5-7]`.');
+  expect(keepCitations('the value of arr[0] stays')).toBe('the value of arr`[0]` stays');
+  // A real link, a task box, words in brackets, code spans, and fenced code are left as written.
+  expect(keepCitations('a [2](https://x.dev) link')).toBe('a [2](https://x.dev) link');
+  expect(keepCitations('- [ ] open\n- [x] done\nand [sic]')).toBe('- [ ] open\n- [x] done\nand [sic]');
+  expect(keepCitations('already `[1]` code')).toBe('already `[1]` code');
+  expect(keepCitations('```js\nconst a = b[1];\n```\nthen [2]')).toBe('```js\nconst a = b[1];\n```\nthen `[2]`');
+  // A fence still open, as while a reply streams, leaves the rest alone.
+  expect(keepCitations('```\nb[1]')).toBe('```\nb[1]');
 });

@@ -272,3 +272,31 @@ export function closeMarkers(text: string): string {
   if (closers[0] !== code?.run) out = out.trimEnd();
   return out + closers.join('');
 }
+
+/** A run of bracketed numbers, `[1]`, `[6][7]`, `[3, 4]`, `[5-7]`, that is not the text of a link. */
+const NUMBERED_BRACKETS = /(?:\[\d+(?:\s*[,–-]\s*\d+)*\])+(?!\()/g;
+
+/**
+ * A reply with its bracketed numbers set as inline code. The markdown view, which conceals
+ * markup, takes `[1]` for a reference link and hides the brackets, and `[6][7]` for a
+ * reference with a label and drops the 7, so a report's citations came out as stray
+ * digits. As inline code they show as written. Fenced blocks and code spans are left
+ * as they are, and so is a real link, `[text](address)`, which the view draws as one.
+ */
+export function keepCitations(text: string): string {
+  let fenced = false;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (/^ {0,3}(```|~~~)/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      if (fenced) return line;
+      return line
+        .split(/(`+[^`]*`+)/)
+        .map((part, index) => (index % 2 ? part : part.replace(NUMBERED_BRACKETS, '`$&`')))
+        .join('');
+    })
+    .join('\n');
+}

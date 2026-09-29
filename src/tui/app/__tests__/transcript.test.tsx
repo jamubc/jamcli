@@ -181,3 +181,16 @@ test('Escape and Ctrl+C close the detailed transcript first, before they answer 
     await close();
   }
 }, 20_000);
+
+test('a reply shows its citations as written, and a real link still reads as a link', async () => {
+  const { setup, close } = await open({}, { size: { width: 110, height: 24 } });
+  try {
+    context.server.enqueue({ text: 'Order [1] then [6][7] and arr[0] and [2](https://x.dev) end.' });
+    await setup.mockInput.typeText('cite');
+    setup.mockInput.pressEnter();
+    const frame = await frameWith(setup, (value) => value.includes('end.'));
+    expect(frame).toContain('Order [1] then [6][7] and arr[0] and 2 (https://x.dev) end.');
+  } finally {
+    await close();
+  }
+}, 30_000);
