@@ -1,7 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { UiConfig, UiSettings } from '../types/config.js';
+import type { StatusSpinnerStyleId, StatusTextStyleId, UiConfig, UiSettings } from '../types/config.js';
 import { userConfigDir } from '../utils/paths.js';
 import { DEFAULT_TEXT_STYLE_ID, resolveStatusStyle, type StatusStyleDefinition } from './statusStyles.js';
 
@@ -28,10 +28,13 @@ export function mergedUi(ui: UiSettings, legacy: Partial<UiConfig> = legacyUi())
   for (const [name, ref] of Object.entries(ui.custom_status_styles ?? {})) {
     custom[name] = { ...ref, path: path.isAbsolute(ref.path) ? ref.path : path.join(userConfigDir(), ref.path) };
   }
+  // Configuration may name any style; one the styles do not know falls back to the default when resolved.
+  const text = (ui.status_text_style as StatusTextStyleId | undefined) ?? legacy.status_text_style;
+  const spinner = (ui.status_spinner_style as StatusSpinnerStyleId | undefined) ?? legacy.status_spinner_style;
   return {
     status_indicator_style: legacy.status_indicator_style ?? DEFAULT_TEXT_STYLE_ID,
-    ...((ui.status_text_style ?? legacy.status_text_style) ? { status_text_style: ui.status_text_style ?? legacy.status_text_style } : {}),
-    ...((ui.status_spinner_style ?? legacy.status_spinner_style) ? { status_spinner_style: ui.status_spinner_style ?? legacy.status_spinner_style } : {}),
+    ...(text ? { status_text_style: text } : {}),
+    ...(spinner ? { status_spinner_style: spinner } : {}),
     custom_status_styles: custom,
   };
 }

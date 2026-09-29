@@ -265,7 +265,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         delegate: delegateChild,
         work: workTable,
         delegationDepth: depth,
-        delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
+        // A block that sets only some limits keeps the defaults for the rest.
+        delegationConfig: { ...DEFAULT_DELEGATION_CONFIG, ...config.delegation },
         ...(options.editor ? { editor: options.editor } : {}),
         // Only the interface can put a question to the person; elsewhere ask_user says so.
         ...(options.surface === 'tui' ? { elicit: elicitations.ask } : {}),

@@ -1,57 +1,14 @@
-import type { LspSettings } from '../core/lsp/manager.js';
-import type { HookSettings } from '../core/hooks/commands.js';
-import type { McpServerConfig } from './mcp.js';
-import type { PermissionSettings } from '../core/permissions/config.js';
-import type { SandboxSettings } from '../core/sandbox/types.js';
-import type { OtelSettings } from '../core/observe/otlp.js';
-import type { ThinkingChoice } from '../core/routing/capabilities.js';
+import type { ConfigFile } from '../core/config/schema.js';
 
-export interface ApiRegistry {
-  /** `num_ctx` sets the context window Ollama allocates for every request. */
-  ollama?: { endpoint?: string; base_url?: string; num_ctx?: number };
-  openai?: { api_key?: string; key_env_var?: string; base_url?: string };
-  anthropic?: { api_key?: string; key_env_var?: string; base_url?: string };
-  openrouter?: {
-    api_key?: string;
-    key_env_var?: string;
-    base_url?: string;
-    referer?: string;
-    title?: string;
-  };
-  /** TypeSafe, whose Jev judgment model can be the trust gate's classifier. Not a chat provider. */
-  typesafe?: { api_key?: string; key_env_var?: string; base_url?: string };
-  endpoints?: EndpointConfig[];
-}
+export type ApiRegistry = Config['api_registry'];
 
-export interface EndpointConfig {
-  id: string;
-  base_url: string;
-  dialect?: 'openai' | 'anthropic';
-  api_key?: string;
-  key_env_var?: string;
-  headers?: Record<string, string>;
-}
+export type EndpointConfig = NonNullable<ApiRegistry['endpoints']>[number];
 
-export interface SearchProviderConfig {
-  /** The provider API endpoint. The built-in LangSearch endpoint is used when omitted. */
-  endpoint?: string;
-  /** The key itself. Used only when the declared variable is not set. */
-  api_key?: string;
-  /** The environment variable holding the key. Read first. */
-  key_env_var?: string;
-}
+export type SearchProviderConfig = NonNullable<SearchSettings['providers']>[string];
 
-export interface SearchSettings {
-  /** Search providers by name. A name used by a built-in (langsearch) replaces it. */
-  providers?: Record<string, SearchProviderConfig>;
-}
+export type SearchSettings = NonNullable<Config['search']>;
 
-export interface CategoryEntry {
-  model: string;
-  reasoning?: 'off' | 'on' | 'auto';
-  /** How hard the model thinks, where it takes a level. */
-  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-}
+export type CategoryEntry = NonNullable<Config['categories']>[string][number];
 
 export type CategoryChain = CategoryEntry[];
 
@@ -85,32 +42,7 @@ export const DEFAULT_DELEGATION_CONFIG: DelegationConfig = {
  * What configuration says about one model, overriding the provider's metadata and the
  * bundled table. Prices are US dollars per million tokens.
  */
-export interface ModelSettings {
-  context_window?: number;
-  max_output?: number;
-  tools?: boolean;
-  reasoning?: boolean;
-  images?: boolean;
-  thinking?: 'adaptive' | 'budget';
-  always_thinks?: boolean;
-  effort?: boolean;
-  price?: { input: number; output: number; cache_read?: number; cache_write?: number };
-}
-
-export interface ModelInfo {
-  id: string;
-  provider: 'ollama' | 'openai' | 'anthropic' | 'openrouter';
-  name: string;
-  description?: string;
-  supports_tool_calling?: boolean;
-}
-
-export interface ContextManagementConfig {
-  enabled: boolean;
-  max_tokens: number;
-  compression_threshold: number; // 0.0 - 1.0
-  strategy: 'summarize' | 'truncate';
-}
+export type ModelSettings = NonNullable<Config['models']>[string];
 
 export interface AgentLoopConfig {
   /** Model requests per user turn before the loop stops and asks. */
@@ -133,74 +65,16 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   command_timeout_ms: 120_000,
 };
 
-export interface Config {
-  /** The model sessions start on, as `provider:model` or a model on the profile's provider. */
-  model?: string;
-  api_registry: ApiRegistry;
-  active_profile: string;
-  /** How sessions think: off, auto, on, or an effort level. */
-  effort?: ThinkingChoice;
-  telemetry: boolean;
-  available_models?: ModelInfo[];
-  context_management?: ContextManagementConfig;
-  agent_loop?: AgentLoopConfig;
-  general?: GeneralConfig;
-  categories?: Record<string, CategoryChain>;
-  delegation?: DelegationConfig;
-  trust?: TrustConfig;
-  /** Facts about models for the model catalog, keyed `provider:model`. */
-  models?: Record<string, ModelSettings>;
-  /** Context management for every surface. `context_management` configures only the legacy interface. */
-  context?: ContextSettings;
-  permissions?: PermissionSettings;
-  sandbox?: SandboxSettings;
-  /** The OpenTelemetry exporter, off unless `enabled`. */
-  otel?: OtelSettings;
-  /** How the interface looks and moves. */
-  ui?: UiSettings;
-  git?: GitSettings;
-  /** Commands run at lifecycle events (D17). */
-  hooks?: HookSettings;
-  /** When MCP tools are found through `search_tools` instead of sent with every request. */
-  tool_search?: { threshold?: number };
-  /** Language servers: the `lsp` tool and the errors reported after edits. */
-  lsp?: LspSettings;
-  /** Search providers by name, used by `web_search`. */
-  search?: SearchSettings;
-}
+/** The configuration a session reads: every layer merged over the defaults, in the shape the schema validates. */
+export type Config = ConfigFile & Required<Pick<ConfigFile, 'api_registry' | 'active_profile' | 'telemetry'>>;
 
 export type ThemeName = 'dark' | 'light' | 'high-contrast' | 'monochrome';
 
-export interface GitSettings {
-  /** A trailer added to every commit JamCLI makes. Off by default. */
-  attribution?: string;
-  /** Let bypass mode commit without asking. Off by default. */
-  allow_commit_in_bypass?: boolean;
-}
+export type GitSettings = NonNullable<Config['git']>;
 
-export interface UiSettings {
-  /** Defaults to dark. `NO_COLOR` forces monochrome. */
-  theme?: ThemeName;
-  /** Plain labeled lines: no boxes, no marks, no animation. */
-  screen_reader?: boolean;
-  /** No spinner or shimmer. */
-  reduced_motion?: boolean;
-  /** How many lines tall the live thinking window is. Defaults to 3. */
-  thinking_lines?: number;
-  /** How many columns wide the live thinking window is. Defaults to 72. */
-  thinking_width?: number;
-  /** How the working indicator's words are lit. Defaults to glow. */
-  status_text_style?: StatusTextStyleId;
-  /** The working indicator's spinner. Defaults to pulse. */
-  status_spinner_style?: StatusSpinnerStyleId;
-  /** Styles of the person's own, by name, each read from a JSON file. */
-  custom_status_styles?: Record<string, StatusIndicatorStyleRef>;
-}
+export type UiSettings = NonNullable<Config['ui']>;
 
-export interface ContextSettings {
-  /** Summarize older turns on its own when a request nears the model's window. Defaults to true. */
-  auto_compact?: boolean;
-}
+export type ContextSettings = NonNullable<Config['context']>;
 
 /** `subtle` is the Ink interface's name for glow, and still accepted. */
 export type StatusTextStyleId = 'glow' | 'mono' | 'aurora' | 'rainbow' | 'minimal' | 'subtle' | `custom:${string}`;
@@ -246,13 +120,6 @@ export interface ToolPermission {
 
 export type ToolPermissionValue = boolean | ToolPermission;
 
-export interface McpConfig {
-  context_window_limit: number;
-  ignore_patterns: string[];
-  tools: Record<string, ToolPermissionValue>;
-  servers?: McpServerConfig[];
-}
-
 export interface Profile {
   name: string;
   system_prompt_override?: string;
@@ -261,6 +128,3 @@ export interface Profile {
   temperature?: number;
 }
 
-export interface GeneralConfig {
-  show_tool_calling_models_only?: boolean;
-}
