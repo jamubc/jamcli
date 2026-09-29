@@ -446,6 +446,11 @@ export function startFakeProvider(options: FakeProviderOptions = {}): FakeProvid
       }
       if (request.method === 'POST' && path === '/api/chat') {
         record('ollama');
+        // As Ollama does: a listed model that cannot think refuses a request to think.
+        const listed = models.find((entry) => entry.id === body?.model);
+        if (body?.think && listed && !(listed.capabilities ?? ['completion']).includes('thinking')) {
+          return Response.json({ error: `"${body.model}" does not support thinking` }, { status: 400 });
+        }
         return complete('ollama', body);
       }
       if (request.method === 'GET' && path === '/v1/models') {

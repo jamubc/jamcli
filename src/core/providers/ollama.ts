@@ -64,7 +64,8 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
   private readonly endpoint: string;
   private readonly numCtx?: number;
   private readonly retryPolicy: RetryPolicy;
-  private readonly contextCache = new Map<string, number>();
+  /** What `/api/show` said about each model, asked once; a failed show is remembered as unknown. */
+  private readonly shown = new Map<string, Promise<ModelFacts | undefined>>();
 
   constructor(options: OllamaProviderOptions | string = DEFAULT_ENDPOINT) {
     const endpoint = typeof options === 'string' ? options : options.endpoint;
@@ -151,33 +152,47 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       if (status === 'success') finished = true;
     }
     if (!finished) throw new ProviderError({ provider: 'ollama', message: `The pull of ${model} stopped before Ollama said it was done.` });
+    // What was shown before the pull, often that the model was missing, no longer holds.
+    this.shown.delete(model);
+  }
+
+  /** What `/api/show` reports for a model, asked once per model. Unknown when the show fails. */
+  private facts(model: string): Promise<ModelFacts | undefined> {
+    let facts = this.shown.get(model);
+    if (!facts) {
+      facts = this.describeModel(model).catch(() => undefined);
+      this.shown.set(model, facts);
+    }
+    return facts;
   }
 
   /** The model's reported context length from `/api/show`, or undefined when unknown. */
   async modelContextLength(model: string): Promise<number | undefined> {
-    try {
-      return (await this.describeModel(model))?.contextWindow;
-    } catch {
-      // Unknown; the caller falls back.
-      return undefined;
-    }
+    return (await this.facts(model))?.contextWindow;
   }
 
   /** The `num_ctx` to send: the request's, the configured one, or the model's limit capped. */
   async contextFor(model: string, options: ProviderRequestOptions): Promise<number> {
     if (options.contextLength) return options.contextLength;
     if (this.numCtx) return this.numCtx;
-    const cached = this.contextCache.get(model);
-    if (cached) return cached;
     const reported = await this.modelContextLength(model);
-    const chosen = reported ? Math.min(reported, DEFAULT_OLLAMA_CONTEXT_CAP) : FALLBACK_CONTEXT;
-    this.contextCache.set(model, chosen);
-    return chosen;
+    return reported ? Math.min(reported, DEFAULT_OLLAMA_CONTEXT_CAP) : FALLBACK_CONTEXT;
+  }
+
+  /**
+   * The `think` a request carries. Ollama refuses it, in either form, for a model whose
+   * capabilities do not name `thinking`; a server from before capabilities were listed
+   * ignores it, so a model whose capabilities are unknown still gets it.
+   */
+  private async think(model: string, options: ProviderRequestOptions): Promise<{ think?: boolean | 'low' | 'medium' | 'high' }> {
+    if (!options.reasoning) return {};
+    if ((await this.facts(model))?.reasoning === false) return {};
+    // Thinking models think by default, so `off` must be sent, not left out.
+    return { think: options.reasoning === 'off' ? false : ollamaThink(model, options.effort) };
   }
 
   private async body(messages: ChatMessage[], options: ProviderRequestOptions, stream: boolean) {
     const model = requireModel('ollama', options.model);
-    const wantReasoning = options.reasoning === 'on' || options.reasoning === 'auto';
     const nativeOptions: Record<string, unknown> = { num_ctx: await this.contextFor(model, options) };
     if (options.temperature !== undefined) nativeOptions.temperature = options.temperature;
     if (options.maxOutputTokens) nativeOptions.num_predict = options.maxOutputTokens;
@@ -185,8 +200,7 @@ export class OllamaProvider implements ChatProvider, ListableProvider {
       model,
       messages: messages.map(toOllamaMessage),
       stream,
-      // Thinking models think by default, so `off` must be sent, not left out.
-      ...(wantReasoning ? { think: ollamaThink(model, options.effort) } : options.reasoning === 'off' ? { think: false } : {}),
+      ...(await this.think(model, options)),
       ...(options.tools?.length ? { tools: options.tools } : {}),
       options: nativeOptions,
       ...(options.extraParams || {}),

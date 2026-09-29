@@ -57,3 +57,24 @@ test('Ollama sends a level to gpt-oss models and true to every other thinking mo
   await new OllamaProvider({ endpoint: server.ollamaBaseUrl }).complete([user('hi')], { model: 'gpt-oss:20b', reasoning: 'auto', effort: 'low' });
   expect(lastBody().think).toBe('low');
 });
+
+test('Ollama sends think only to a model whose capabilities name thinking, so a model that cannot think still answers', async () => {
+  server = startFakeProvider({
+    models: [
+      { id: 'qwen2.5:1.5b', capabilities: ['completion', 'tools'] },
+      { id: 'qwen3:4b', capabilities: ['completion', 'tools', 'thinking'] },
+    ],
+  });
+  server.enqueue({ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' });
+  const provider = new OllamaProvider({ endpoint: server.ollamaBaseUrl, numCtx: 8192 });
+  expect((await provider.complete([user('hi')], { model: 'qwen2.5:1.5b', reasoning: 'auto' })).content).toBe('a');
+  expect(lastBody().think).toBeUndefined();
+  await provider.complete([user('hi')], { model: 'qwen2.5:1.5b', reasoning: 'off' });
+  expect(lastBody().think).toBeUndefined();
+  await provider.complete([user('hi')], { model: 'qwen3:4b', reasoning: 'auto' });
+  expect(lastBody().think).toBe(true);
+  await provider.complete([user('hi')], { model: 'qwen3:4b', reasoning: 'off' });
+  expect(lastBody().think).toBe(false);
+  // The window was configured, and each model was still shown once, not per request.
+  expect(server.requests.filter((request) => request.path === '/api/show')).toHaveLength(2);
+});
