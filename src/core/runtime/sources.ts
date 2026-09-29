@@ -2,7 +2,7 @@ import type { McpServerConfig } from '../../types/mcp.js';
 import { loadSkills, type Skill } from '../ext/skills.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { parseRule, type Rule } from '../permissions/rules.js';
-import { enabledPlugins, installedPlugins, verifyPlugins } from '../plugins/lock.js';
+import { enabledPlugins, installedPlugins, lockProblems, verifyPlugins } from '../plugins/lock.js';
 import type { PluginParts } from '../plugins/runtime.js';
 import type { SandboxSettings } from '../sandbox/index.js';
 import type { ToolRegistry } from '../tools/registry.js';
@@ -49,7 +49,7 @@ export async function sessionPlugins(options: {
   envFor: (passthrough?: string[]) => Record<string, string>;
 }): Promise<{ plugins: PluginParts; notices: string[] }> {
   const { projectRoot } = options;
-  const notices: string[] = [];
+  const notices: string[] = options.verify ? lockProblems(projectRoot) : [];
   if (options.verify && installedPlugins(projectRoot).length) {
     for (const result of verifyPlugins(projectRoot)) {
       if (!result.ok) notices.push(`Plugin ${result.name} is off: ${result.problem}. Install it again to use it.`);

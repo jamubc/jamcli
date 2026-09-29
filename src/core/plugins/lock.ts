@@ -47,7 +47,30 @@ export const lockFilePath = (scope: PluginScope, projectRoot: string) =>
 
 export const pluginsDir = () => path.join(userDataDir(), 'plugins');
 
+/** The lockfile format this JamCLI reads and writes. */
+const LOCK_VERSION = 1;
+
+/** The version a newer JamCLI wrote the lockfile in, or nothing when this one can read it. */
+export function newerLock(scope: PluginScope, projectRoot: string): number | undefined {
+  try {
+    const version = JSON.parse(fs.readFileSync(lockFilePath(scope, projectRoot), 'utf8'))?.version;
+    return typeof version === 'number' && version > LOCK_VERSION ? version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Why plugins recorded in a lockfile are off in this session: each lockfile a newer JamCLI wrote. */
+export function lockProblems(projectRoot: string): string[] {
+  return (['user', 'project'] as const).flatMap((scope) => {
+    const version = newerLock(scope, projectRoot);
+    return version ? [`${lockFilePath(scope, projectRoot)} was written by a newer JamCLI (lockfile version ${version}), so its plugins are off here.`] : [];
+  });
+}
+
 export function readLock(scope: PluginScope, projectRoot: string): LockFile {
+  // A lockfile a newer JamCLI wrote is not read in a shape this one does not know: its plugins stay off.
+  if (newerLock(scope, projectRoot)) return { version: 1, plugins: {} };
   try {
     const parsed = JSON.parse(fs.readFileSync(lockFilePath(scope, projectRoot), 'utf8'));
     return { version: 1, plugins: parsed?.plugins && typeof parsed.plugins === 'object' ? parsed.plugins : {} };
@@ -58,6 +81,8 @@ export function readLock(scope: PluginScope, projectRoot: string): LockFile {
 
 export function writeLock(scope: PluginScope, projectRoot: string, lock: LockFile) {
   const file = lockFilePath(scope, projectRoot);
+  const newer = newerLock(scope, projectRoot);
+  if (newer) throw new Error(`${file} was written by a newer JamCLI (lockfile version ${newer}); install or remove plugins with that version, so its record is not overwritten.`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, `${JSON.stringify(lock, null, 2)}\n`);

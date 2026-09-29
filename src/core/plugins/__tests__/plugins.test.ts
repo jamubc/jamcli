@@ -369,3 +369,17 @@ test.skipIf(!pluggableSandbox)('a plugin MCP server is started through the sandb
   expect(server.command).not.toBe(process.execPath);
   expect(parts.notices).toEqual([]);
 });
+
+test('a lockfile a newer JamCLI wrote is neither read as this one reads it nor overwritten, and the session says so', async () => {
+  const { lockProblems, writeLock } = await import('../lock.js');
+  const { sessionPlugins } = await import('../../runtime/sources.js');
+  const file = path.join(project, '.jamcli', 'plugins.lock.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ version: 2, plugins: { later: { name: 'later', shape: 'unknown here' } } }));
+  expect(readLock('project', project).plugins).toEqual({});
+  expect(() => writeLock('project', project, { version: 1, plugins: {} })).toThrow('was written by a newer JamCLI (lockfile version 2)');
+  expect(JSON.parse(fs.readFileSync(file, 'utf8')).version).toBe(2);
+  expect(lockProblems(project)).toEqual([`${file} was written by a newer JamCLI (lockfile version 2), so its plugins are off here.`]);
+  const loaded = await sessionPlugins({ projectRoot: project, verify: true, sandboxSettings: {}, envFor: () => ({}) });
+  expect(loaded.notices).toContain(`${file} was written by a newer JamCLI (lockfile version 2), so its plugins are off here.`);
+});
