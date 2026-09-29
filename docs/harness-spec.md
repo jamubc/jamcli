@@ -1,5 +1,8 @@
 # Harness specification
 
+An engineering record, not a reader's guide: what a person sees of the harness is described
+in [architecture.md](architecture.md) and [permissions.md](permissions.md).
+
 The runtime under `src/core/` treated as one searchable surface: observation, context,
 control, action, state, verification, recovery, handoff. The model is fixed. Every gain
 comes from what surrounds it.

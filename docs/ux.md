@@ -1,6 +1,7 @@
 # Interface design
 
-The design brief for the OpenTUI interface built in stage 6 of `rehaul-jamcli`. The
+The design brief for the OpenTUI interface built in stage 6 of `rehaul-jamcli`, kept as an
+engineering record: what a person sees is described in [interface.md](interface.md). The
 frames below are prototypes: they fix the information and its order, not the exact
 glyphs.
 
