@@ -222,3 +222,22 @@ test("a derived engine shares the rules, grants, and mode, and narrows on its ow
   expect(child.offers('edit')).toBe(false);
   expect(child.derive().decide(edit)).toMatchObject({ decision: 'deny', reason: '/look allows only task, read_file' });
 });
+
+test("a mode that allows changes inside the project still asks before the project's .git and .jamcli, which decide what runs", () => {
+  const edit = (target: string) => call('edit', { path: target, find_string: 'a', replace_string: 'b' });
+  const write = (target: string) => call('write_file', { path: target, content: 'x' });
+  for (const mode of ['accept-edits', 'auto'] as const) {
+    const decide = engine([], mode, true);
+    expect(decide.decide(edit('src/a.ts'))).toMatchObject({ decision: 'allow' });
+    for (const planted of [edit('.git/config'), write('.git/hooks/pre-commit'), write('.jamcli/config.json'), edit('.git')]) {
+      expect({ mode, path: planted.arguments.path, verdict: decide.decide(planted) }).toMatchObject({
+        mode,
+        verdict: { decision: 'ask', by: 'mode', reason: expect.stringContaining("the project's .git/ and .jamcli/, whose files decide what git and JamCLI run") },
+      });
+    }
+  }
+  // A rule that names the file still decides it, and a directory merely named like them is ordinary.
+  expect(engine([rule('edit(.git/config)', 'allow', 'session')], 'accept-edits').decide(edit('.git/config'))).toMatchObject({ decision: 'allow', by: 'user' });
+  expect(engine([], 'accept-edits').decide(edit('docs/.github/workflow.yml'))).toMatchObject({ decision: 'allow' });
+  expect(engine([], 'accept-edits').decide(edit('.gitignore'))).toMatchObject({ decision: 'allow' });
+});

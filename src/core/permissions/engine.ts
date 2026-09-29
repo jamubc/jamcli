@@ -59,6 +59,14 @@ const strongest = (rules: Rule[]): Rule | undefined => {
 
 const SAFE_REDIRECTS = new Set(['/dev/null', '/dev/stdout', '/dev/stderr', '/dev/tty']);
 
+/**
+ * The project's own machinery: what is in these decides what git and JamCLI run, as a hook,
+ * an fsmonitor, or a permission rule. A mode's allowance for changes inside the project
+ * does not reach them.
+ */
+const MACHINERY = ['.git', '.jamcli'];
+const isMachinery = (relative: string) => MACHINERY.some((dir) => relative === dir || relative.startsWith(`${dir}/`));
+
 /** What each class of tool does, for the reasons a mode gives. */
 const WHAT_TOOLS_DO: Record<string, string> = {
   read: 'read the project',
@@ -254,6 +262,9 @@ export class PermissionEngine {
       case 'deny':
         return { decision: 'deny', by: 'mode', reason: `${mode} mode does not allow tools that ${what}` };
       case 'inside': {
+        if (subjects.some((subject) => subject.kind === 'path' && subject.relative !== undefined && isMachinery(subject.relative))) {
+          return { decision: 'ask', by: 'mode', reason: `${mode} mode asks before changes to the project's .git/ and .jamcli/, whose files decide what git and JamCLI run` };
+        }
         const inside = subjects.every((subject) => subject.kind !== 'path' || subject.relative !== undefined);
         return inside
           ? { decision: 'allow', by: 'mode', reason: `${mode} mode allows changes inside the project` }

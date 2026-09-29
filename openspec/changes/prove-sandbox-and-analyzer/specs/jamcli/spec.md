@@ -20,7 +20,7 @@ JamCLI SHALL provide the permission modes `plan`, `default`, `accept-edits`, `au
 #### Scenario: The project's own machinery is not an ordinary edit
 - **WHEN** a mode would allow a change inside the project without asking, and the change is under the project's `.git/` or `.jamcli/`
 - **THEN** it asks, unless a rule allows it
-- **AND** the reason says that those files decide what git and JamCLI run
+- **AND** the reason says that their files decide what git and JamCLI run
 
 #### Scenario: Auto mode requires a sandbox
 - **WHEN** the user selects `auto` and no sandbox is available
