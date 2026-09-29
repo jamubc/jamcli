@@ -198,7 +198,7 @@ export type AgentEvent =
   /** An older tool result was replaced by a stub before any summary, and by how much it shrank. */
   | { type: 'elision'; stage: string; message: number; tokensRemoved: number; stub: string }
   /** The harness steered the turn: allowed a read-only command, refused a repeated read, denied a stop. */
-  | { type: 'steer'; handler: 'M1' | 'M2' | 'M3' | 'M5'; callId?: string; detail: string }
+  | { type: 'steer'; handler: 'M1' | 'M2' | 'M5'; callId?: string; detail: string }
   /** The handoff file was rendered from the log. */
   | { type: 'handoff'; path: string; bytes: number; reason: 'session_end' | 'reset' | 'drop' }
   /** How an approval request was answered. */

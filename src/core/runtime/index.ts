@@ -579,7 +579,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const verdict = permissions.decide(call);
       return verdict.decision === 'ask' && verdict.by === 'mode';
     },
-    currentTree: () => checkpoints.lastTree,
     emit: (event) => emitting?.(event),
   });
   /** The handoff, rendered from the log. A reset the person asked for is not overwritten by the session's end. */

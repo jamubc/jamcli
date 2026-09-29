@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import { createRuntime, type RuntimeOptions } from '../index.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
-import type { AgentEvent } from '../../types.js';
+import type { AgentEvent, ToolResult } from '../../types.js';
 
 let server: FakeProviderServer;
 let root: string;
@@ -82,20 +82,22 @@ test('a deny rule still wins over the read-only allowance', async () => {
   await runtime.close();
 });
 
-test('a read repeated with the same arguments on the same tree is refused with the first line of the earlier result', async () => {
+test('a read repeated in one turn reads the file again, so an edit the person made meanwhile is seen', async () => {
   configure({ permissions: { mode: 'accept-edits' } });
   const runtime = await start();
-  server.enqueue({ toolCalls: [read('r1')] }, { toolCalls: [read('r2')] }, { toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] }, { toolCalls: [read('r3')] }, { text: 'done' });
-  const { results, events } = await run(runtime, 'read twice, change, read again');
+  server.enqueue({ toolCalls: [read('r1')] }, { toolCalls: [read('r2')] }, { text: 'done' });
+  const results: ToolResult[] = [];
+  await runtime.run('read it twice', (event) => {
+    if (event.type !== 'tool_result') return;
+    results.push(event.result);
+    // The person changes the file in their editor between the two reads; no step of the turn changed it.
+    if (event.result.callId === 'r1') fs.writeFileSync(path.join(root, 'a.txt'), 'edited by the person\n');
+  });
   expect(results.map((result) => [result.callId, result.status])).toEqual([
     ['r1', 'ok'],
-    ['r2', 'denied'],
-    ['e1', 'ok'],
-    ['r3', 'ok'],
+    ['r2', 'ok'],
   ]);
-  expect(results[1].output).toMatch(/^Not run: a pre_tool hook blocked it: same call, same result; nothing has changed since\. It began: 1\|/);
-  expect(results[3].output).toContain('new');
-  expect((events.filter((event) => event.type === 'steer') as Extract<AgentEvent, { type: 'steer' }>[]).map((steer) => steer.handler)).toEqual(['M3']);
+  expect(results[1].output).toContain('edited by the person');
   await runtime.close();
 });
 
