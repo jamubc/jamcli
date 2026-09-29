@@ -3,8 +3,8 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import type { ChatMessage, JamSession, TokenUsage } from '../types.js';
 import { createSession } from '../state.js';
-import type { TranscriptEvent } from './events.js';
-import { projectMessages, readTranscript } from './read.js';
+import { parseTranscriptLine, type TranscriptEvent } from './events.js';
+import { projectMessages } from './read.js';
 import { historyDirFor, recordSessionSummary, sessionFileFor } from './sessions.js';
 import { JAMCLI_VERSION } from '../version.js';
 
@@ -40,6 +40,15 @@ const addTo = (total: TokenUsage, usage: TokenUsage): TokenUsage => ({
   completion_tokens: total.completion_tokens + (usage.completion_tokens || 0),
   total_tokens: total.total_tokens + (usage.total_tokens || 0),
 });
+
+/** A parsed event made read-only through and through, since every reader of the log shares it. */
+const frozen = <T>(value: T): T => {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) frozen(child);
+    Object.freeze(value);
+  }
+  return value;
+};
 
 interface CreateOptions {
   id?: string;
@@ -133,8 +142,41 @@ export class SessionLog {
     fs.appendFileSync(this.file, `${lines.join('\n')}\n`, 'utf8');
   }
 
+  /** What has been read of the file: its events, how many bytes they came from, and which file it was. */
+  private read: { events: TranscriptEvent[]; bytes: number; inode: number } | undefined;
+
+  /**
+   * Every event in the session file. The file only grows, so after the first read only what
+   * was appended since is parsed, whoever appended it; a line not yet finished waits for the
+   * next read, and a file that shrank or was replaced is read again whole. Every caller gets
+   * the same event objects, so they are frozen: a record in the log is never changed in place.
+   */
   events(): TranscriptEvent[] {
-    return readTranscript(this.file);
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(this.file);
+    } catch {
+      this.read = undefined;
+      return [];
+    }
+    const known = this.read && this.read.inode === stat.ino && stat.size >= this.read.bytes ? this.read : undefined;
+    const from = known?.bytes ?? 0;
+    const events = known?.events ?? [];
+    if (stat.size > from) {
+      const buffer = Buffer.alloc(stat.size - from);
+      const fd = fs.openSync(this.file, 'r');
+      try {
+        fs.readSync(fd, buffer, 0, buffer.length, from);
+      } finally {
+        fs.closeSync(fd);
+      }
+      const end = buffer.lastIndexOf(0x0a);
+      if (end >= 0) events.push(...buffer.subarray(0, end + 1).toString('utf8').split('\n').flatMap(parseTranscriptLine).map(frozen));
+      this.read = { events, bytes: from + end + 1, inode: stat.ino };
+    } else if (!known) {
+      this.read = { events, bytes: 0, inode: stat.ino };
+    }
+    return [...events];
   }
 
   messages(): ChatMessage[] {
