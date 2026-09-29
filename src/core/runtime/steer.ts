@@ -15,8 +15,6 @@ export interface SteerDeps {
   /** The working copy the last changing step left. */
   currentTree: () => string | undefined;
   emit: (event: AgentEvent) => void;
-  /** Programs M2 treats as read-only, in place of the built-in list. */
-  readOnlyCommands?: Set<string>;
 }
 
 const keyOf = (call: ToolCall) => `${call.name}\u0000${JSON.stringify(call.arguments ?? {})}`;
@@ -36,7 +34,7 @@ export function registerSteerMiddleware(bus: HookBus, deps: SteerDeps): void {
     ({ call }): Verdict | undefined => {
       if (call.name !== 'run_command' || typeof call.arguments?.command !== 'string') return undefined;
       const analysis = analyzeCommand(call.arguments.command);
-      if (readOnlyReason(analysis, deps.projectRoot, deps.readOnlyCommands) !== undefined) return undefined;
+      if (readOnlyReason(analysis, deps.projectRoot) !== undefined) return undefined;
       if (!deps.modeWouldAsk(call)) return undefined;
       deps.emit({ type: 'steer', handler: 'M2', callId: call.id, detail: `allowed a read-only command: ${analysis.parts.join(' | ')}` });
       return { decision: 'allow', reason: 'it only reads inside the project' };

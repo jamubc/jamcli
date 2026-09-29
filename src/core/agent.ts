@@ -77,8 +77,6 @@ export interface AgentOptions {
   pinned?: () => Promise<string | undefined>;
   /** Paths still in play, such as the todo list's, whose results elision leaves whole. */
   protectedPaths?: () => Promise<string[]>;
-  /** The share of the compaction trigger at which older results are stubbed once. */
-  elideAt?: number;
   /** Replaces credentials in tool output. Defaults to the credentials in the environment. */
   redact?: Redactor;
   /** Called once per step, before the first call that may change something, to take a checkpoint. */
@@ -314,7 +312,7 @@ export class CoreAgent implements Agent {
 
       // At a planned point short of the trigger, older results shrink once, deterministically,
       // so the summary that follows has less to read; never at every step, since each rewrite breaks the cached prefix.
-      if (context && compactable && !this.elidedAhead && this.countContext(working.messages) > context.budget.trigger * (this.options.elideAt ?? ELIDE_AT)) {
+      if (context && compactable && !this.elidedAhead && this.countContext(working.messages) > context.budget.trigger * ELIDE_AT) {
         this.elidedAhead = true;
         working = await this.elideNow(working, Math.floor(context.budget.budget * KEEP_SHARE), emit);
       }

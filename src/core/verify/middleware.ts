@@ -27,10 +27,6 @@ export interface VerifyDeps {
   };
   /** Whether a stop may be denied. Off for a child: its parent's stop covers the tree. */
   backpressure: boolean;
-  maxStopDenials?: number;
-  afterEditBoundMs?: number;
-  /** The tiers a stop runs, in order. */
-  stopTiers?: ('T1' | 'T2')[];
 }
 
 const gateEvent = (row: GateRow & { shaped?: string }): AgentEvent => ({
@@ -90,7 +86,7 @@ export function registerVerifyMiddleware(bus: HookBus, deps: VerifyDeps): { reco
       const t1 = deps.gates.find((gate) => gate.tier === 'T1');
       if (!t1) return undefined;
       const last = deps.ledger.lastDuration(t1.name);
-      if (last !== undefined && last > (deps.afterEditBoundMs ?? AFTER_EDIT_BOUND_MS)) {
+      if (last !== undefined && last > AFTER_EDIT_BOUND_MS) {
         record({ ...t1, tree, step: deps.step(), status: 'skipped', durationMs: 0, ts: Date.now() });
         return undefined;
       }
@@ -109,7 +105,7 @@ export function registerVerifyMiddleware(bus: HookBus, deps: VerifyDeps): { reco
       const tree = deps.currentTree();
       if (!tree) return undefined;
       const ran: string[] = [];
-      for (const tier of deps.stopTiers ?? (['T1', 'T2'] as const)) {
+      for (const tier of ['T1', 'T2'] as const) {
         const gate = deps.gates.find((candidate) => candidate.tier === tier);
         if (!gate) continue;
         if (deps.ledger.passed(tree, tier)) {
@@ -121,7 +117,7 @@ export function registerVerifyMiddleware(bus: HookBus, deps: VerifyDeps): { reco
         if (run.status === 'skipped') continue;
         ran.push(gate.name);
         if (run.status !== 'failed') continue;
-        if (denials < (deps.maxStopDenials ?? MAX_STOP_DENIALS)) {
+        if (denials < MAX_STOP_DENIALS) {
           denials += 1;
           deps.emit({ type: 'steer', handler: 'M5', detail: `stop denied: ${gate.name} failed on tree ${tree.slice(0, 7)}` });
           return { decision: 'deny', reason: `${run.shaped}\nFix what the gate reports before saying anything is done.` };

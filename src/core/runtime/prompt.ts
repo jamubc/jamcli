@@ -16,8 +16,6 @@ export interface PromptInputs {
   gates?: string;
   /** `provider:model` of the session, so the model knows which one it is and when that changes. */
   model?: string;
-  /** Replaces the tool guidance block, for a trial that searches the prompt. */
-  guidance?: string;
 }
 
 const DEFAULT_IDENTITY =
@@ -94,7 +92,7 @@ export function buildRuntimePrompt(inputs: PromptInputs): string {
   const parts = [inputs.profile?.system_prompt_override?.trim() || DEFAULT_IDENTITY];
   const rules = inputs.rulesText?.trim();
   if (rules) parts.push(rules);
-  if (inputs.tools.length) parts.push(inputs.guidance ?? toolGuidance(inputs.tools, inputs.gates));
+  if (inputs.tools.length) parts.push(toolGuidance(inputs.tools, inputs.gates));
   if (inputs.mode === 'plan') parts.push(planNote(inputs.tools));
   // The person's own date: the UTC one is tomorrow in an American evening and yesterday in an Asian morning.
   const now = inputs.date ?? new Date();

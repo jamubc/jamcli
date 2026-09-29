@@ -28,7 +28,7 @@ const insideProject = (word: string, root: string): boolean => {
  * from the list with no writing flag, every argument stays in the project, nothing is
  * redirected, and nothing runs code the parts do not show.
  */
-export function readOnlyReason(analysis: CommandAnalysis, projectRoot: string, commands: Set<string> = READ_ONLY_COMMANDS): string | undefined {
+export function readOnlyReason(analysis: CommandAnalysis, projectRoot: string): string | undefined {
   const root = path.resolve(projectRoot);
   if (analysis.hidden.length) return analysis.hidden[0];
   if (analysis.redirects.length) return `it redirects to ${analysis.redirects[0].target || 'an expansion'}`;
@@ -36,7 +36,7 @@ export function readOnlyReason(analysis: CommandAnalysis, projectRoot: string, c
   for (const part of analysis.parts) {
     const words = part.split(/\s+/).filter(Boolean);
     const name = program(words[0] ?? '');
-    if (!commands.has(name)) return `${name || part} is not a read-only program`;
+    if (!READ_ONLY_COMMANDS.has(name)) return `${name || part} is not a read-only program`;
     const rest = words.slice(1);
     if (name === 'git') {
       const own = rest.findIndex((word) => !word.startsWith('-'));

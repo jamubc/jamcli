@@ -257,9 +257,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       descriptions: {
         ...(taskTool ? { task: taskDescription(routableAgents(agents.agents, config.api_registry), agents.defaultAgent) } : {}),
         ...options.toolDescriptions,
-        ...Object.fromEntries(Object.entries(options.harness?.tools ?? {}).flatMap(([name, tool]) => (tool.description ? [[name, tool.description]] : []))),
       },
-      schemas: Object.fromEntries(Object.entries(options.harness?.tools ?? {}).flatMap(([name, tool]) => (tool.wireSchema ? [[name, tool.wireSchema]] : []))),
       context: () => ({
         projectRoot: workRoot,
         ignorePatterns: mcpConfig.ignore_patterns,
@@ -413,7 +411,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       mode: permissions.mode,
       gates: gates.length && permissions.mode !== 'plan' ? describeGates(gates, (name) => ledger?.lastDuration(name)) : undefined,
       model: sessionModel.ref,
-      ...(options.harness?.guidance ? { guidance: options.harness.guidance } : {}),
     });
   let systemPrompt = buildPrompt();
   /** Whether the extended tier fits the model's window, decided once the window is known; true when that changed. */
@@ -474,7 +471,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       redact,
       signal: options.signal,
       pinned: pinnedWithGates,
-      ...(options.harness?.elideAt !== undefined ? { elideAt: options.harness.elideAt } : {}),
       protectedPaths: async () => {
         const todos = await readTodos({ projectRoot: workRoot });
         return todos.filter((todo) => todo.status !== 'completed').flatMap((todo) => `${todo.content} ${todo.check ?? ''}`.match(/[\w./-]+\.[A-Za-z0-9]+/g) ?? []);
@@ -576,13 +572,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     emit: (event) => emitting?.(event),
     todos: { read: () => readTodos({ projectRoot: workRoot }), stamp: async (stamp) => void (await stampTodos({ projectRoot: workRoot }, stamp)) },
     backpressure: options.surface !== 'child',
-    ...(options.harness?.maxStopDenials !== undefined ? { maxStopDenials: options.harness.maxStopDenials } : {}),
-    ...(options.harness?.afterEditBoundMs !== undefined ? { afterEditBoundMs: options.harness.afterEditBoundMs } : {}),
-    ...(options.harness?.stopTiers ? { stopTiers: options.harness.stopTiers } : {}),
   });
   registerSteerMiddleware(hooks, {
     projectRoot: workRoot,
-    ...(options.harness?.readOnlyCommands ? { readOnlyCommands: new Set(options.harness.readOnlyCommands) } : {}),
     modeWouldAsk: (call) => {
       const verdict = permissions.decide(call);
       return verdict.decision === 'ask' && verdict.by === 'mode';

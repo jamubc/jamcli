@@ -113,8 +113,6 @@ export interface ToolSetOptions {
   alsoOffer?: string[];
   /** Descriptions to offer instead of a tool's own, such as `task` listing the agents. */
   descriptions?: Record<string, string>;
-  /** Wire schemas to offer instead of a tool's own, for a trial that searches them. A call is still checked against the tool's full schema. */
-  schemas?: Record<string, JsonSchema>;
   /** The context every call runs with, less what each call supplies. */
   context: () => ToolContext;
   /** Write a pattern the user granted for the project. */
@@ -152,7 +150,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
       name: tool.name,
       description: options.descriptions?.[tool.name] ?? tool.description,
       // The model sees the wire schema; a call is checked against the full one.
-      parameters: options.schemas?.[tool.name] ?? tool.wireSchema ?? tool.inputSchema,
+      parameters: tool.wireSchema ?? tool.inputSchema,
       policyClass: tool.policy,
       source: server ? 'mcp' : 'builtin',
       ...(server ? { server } : {}),

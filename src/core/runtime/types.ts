@@ -3,7 +3,7 @@ import type { RestorePreview } from '../git/checkpoints.js';
 import type { ChatProvider } from '../providers/types.js';
 import type { HookCommand } from '../hooks/commands.js';
 import type { ConfigService } from '../../services/ConfigService.js';
-import type { EditorBridge, JsonSchema } from '../../types/tools.js';
+import type { EditorBridge } from '../../types/tools.js';
 import type { McpSource, ToolSummary } from './tools.js';
 import type { ParentSession } from './children.js';
 import type { CheckpointInfo } from './checkpoints.js';
@@ -24,24 +24,6 @@ import type { Observer, Span } from '../observe/observer.js';
 
 /** The surface a runtime serves. It is recorded with every decision in the session log. */
 export type Surface = 'tui' | 'headless' | 'acp' | 'workflow' | 'child';
-
-/** What a harness search may vary, in place of the shipped constants. */
-export interface HarnessOverrides {
-  /** Replaces the tool guidance block of the system prompt. */
-  guidance?: string;
-  /** Programs the harness treats as read-only commands, replacing the built-in list. */
-  readOnlyCommands?: string[];
-  /** How many times a turn's stop may be denied for a failing gate. */
-  maxStopDenials?: number;
-  /** The last duration above which the after-edit gate waits for the stop instead. */
-  afterEditBoundMs?: number;
-  /** The gate tiers a stop runs, in order. */
-  stopTiers?: ('T1' | 'T2')[];
-  /** The share of the compaction trigger at which older results are stubbed. */
-  elideAt?: number;
-  /** Per tool: the description or wire schema offered instead of its own. */
-  tools?: Record<string, { description?: string; wireSchema?: JsonSchema }>;
-}
 
 export interface RuntimeOptions {
   projectRoot: string;
@@ -64,12 +46,6 @@ export interface RuntimeOptions {
   effort?: EffortLevel;
   /** Descriptions to offer instead of tools' own, by name: how a trial compares tool prompts. */
   toolDescriptions?: Record<string, string>;
-  /**
-   * The harness surface a trial searches: prompt parts, middleware constants, and tool
-   * wire schemas, each in place of the shipped value. Never read from configuration;
-   * an accepted value lands in the source as a commit.
-   */
-  harness?: HarnessOverrides;
   /** A delegated run's agent rules, read before the project's, which win a conflict. */
   agentRules?: { agent: string; source: string; text: string };
   /** `--allow-tool` names for this run. */
