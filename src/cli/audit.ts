@@ -1,11 +1,12 @@
 import fs from 'fs';
 import { readJsonSync } from '../utils/fsx.js';
 import path from 'path';
-import { auditConfiguration, renderAuditReport } from '../core/policy/audit.js';
+import { auditConfiguration, renderAuditReport } from '../core/audit/config.js';
+import { loadConfig, permissionLayers } from '../core/config/load.js';
+import { sessionPermissions } from '../core/runtime/permissions.js';
+import { detectSandbox } from '../core/sandbox/index.js';
+import { createBuiltinRegistry } from '../core/tools/registry.js';
 import { resolveJamcliProjectRoot } from '../utils/projectRoot.js';
-import { ConfigService } from '../services/ConfigService.js';
-import type { McpServerConfig } from '../types/mcp.js';
-import type { ToolPermissionValue } from '../types/config.js';
 
 const readJsonIfPresent = (file: string): any | null => {
   try {
@@ -36,24 +37,33 @@ export const projectKeyNames = (projectRoot: string): string[] =>
     return json ? collectKeyNames(json.api_registry ?? {}, 'api_registry').map((key) => `.jamcli/${name} ${key}`) : [];
   });
 
+/** The engine the project's sessions decide with, in the configured mode, from every layer's rules. */
+export function projectEngine(projectRoot: string, env: Record<string, string | undefined> = process.env) {
+  const loaded = loadConfig({ projectRoot, env });
+  const registry = createBuiltinRegistry();
+  const sandbox = detectSandbox({ projectRoot, settings: loaded.config.sandbox ?? {} });
+  const { engine } = sessionPermissions({
+    projectRoot,
+    registry,
+    layers: permissionLayers(loaded),
+    legacyTools: loaded.mcp.tools,
+    sandboxed: sandbox.kind !== 'none',
+    env,
+    commitInBypass: loaded.config.git?.allow_commit_in_bypass === true,
+  });
+  return { engine, registry, mcpServers: loaded.mcp.servers ?? [] };
+}
+
 export const runAuditCli = async (): Promise<number> => {
   const projectRoot = resolveJamcliProjectRoot();
-  const configService = new ConfigService(projectRoot);
-
-  const permissions = (await configService.getToolPermissions()) as unknown as Record<string, ToolPermissionValue>;
-  let mcpServers: McpServerConfig[] = [];
-  try {
-    mcpServers = await configService.listMcpServers();
-  } catch {
-    mcpServers = [];
-  }
-
+  const { engine, registry, mcpServers } = projectEngine(projectRoot);
   const configKeyNames = projectKeyNames(projectRoot);
 
   const report = auditConfiguration({
     projectRoot,
     cwd: process.cwd(),
-    permissions,
+    engine,
+    registry,
     mcpServers: mcpServers.map((server) => ({
       id: server.id,
       command: server.command,
