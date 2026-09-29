@@ -161,7 +161,7 @@ const cleanPart = (raw: string): { part: string; hidden?: string } | undefined =
   while (words.length && LEADING_KEYWORDS.has(words[0])) words = words.slice(1);
   if (words.length && words[words.length - 1] === '}') words = words.slice(0, -1);
   let hidden: string | undefined;
-  /** A wrapper with nothing after it, which then is the program that runs: `env` prints the environment. */
+  /** The last wrapper, which is the program that runs when nothing but assignments follows it: `env x=1` prints the environment. */
   let bare: string[] | undefined;
   for (;;) {
     while (words.length && isAssignment(words[0])) {
@@ -170,11 +170,10 @@ const cleanPart = (raw: string): { part: string; hidden?: string } | undefined =
       words = words.slice(1);
     }
     if (!words.length || !WRAPPERS.has(words[0].replace(/^.*\//, ''))) break;
-    const wrapper = words;
+    bare = words;
     words = words.slice(1);
     // The wrapper's own flags and counts, such as `timeout -k 5 30`, are not the program.
     while (words.length && (words[0].startsWith('-') || /^\d+[smhd]?$/.test(words[0]))) words = words.slice(1);
-    if (!words.length) bare = wrapper;
   }
   if (!words.length && bare) return { part: bare.join(' '), ...(hidden ? { hidden } : {}) };
   if (!words.length) return hidden ? { part: '', hidden } : undefined;

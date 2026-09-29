@@ -118,6 +118,7 @@ test('a wrapper with nothing after it is the program that runs, not nothing', ()
   expect(analyzeCommand('ls | env').parts).toEqual(['ls', 'env']);
   expect(analyzeCommand('nice').parts).toEqual(['nice']);
   expect(analyzeCommand('FOO=1 env -i').parts).toEqual(['env -i']);
+  expect(analyzeCommand('env x=1').parts).toEqual(['env x=1']);
   // With a command after it, the command is still what a rule is about.
   expect(analyzeCommand('env FOO=1 timeout 5 ls').parts).toEqual(['ls']);
 });
