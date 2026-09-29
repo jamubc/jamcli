@@ -31,7 +31,7 @@ Updated as the deferred modules land.
 | Standard | JamCLI role | Status | Evidence | Notes |
 |---|---|---|---|---|
 | OpenAI Chat Completions (and compatible endpoints) | client | implemented | `src/core/providers/__tests__/openai-compat.test.ts` | Streamed usage, retries, and error bodies in stage 2. |
-| OpenAI Responses API | client | not implemented, will not do | | OpenAI's documentation is blocked from the build environment, so the adapter was not built against it; recorded in `docs/feature-matrix.md` and closed as will-not-do. Chat Completions stays fully supported. |
+| OpenAI Responses API | client | implemented, for any model an endpoint serves only through it | `src/core/providers/__tests__/openai-compat.test.ts` | A model refused on Chat Completions is asked through `/responses` and remembered. Every request sets `store: false`, since the API otherwise keeps each response for at least 30 days, and when an effort is set, reasoning reaches the next call as the encrypted item sent back. Checked against the definitions in OpenAI's Node SDK; OpenAI's documentation site refuses automated fetches. The API's built-in tools and `previous_response_id` are not used. |
 | Anthropic Messages | client | implemented, with prompt caching and signed thinking | `src/core/providers/__tests__/anthropic.test.ts` | |
 | Ollama native chat | client | implemented, with `num_ctx` sized from the catalog | `src/core/providers/__tests__/factory.test.ts` | |
 
