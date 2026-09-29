@@ -21,6 +21,7 @@ import { SessionCheckpoints, type CheckpointInfo } from './checkpoints.js';
 import { SessionHooks } from './hooks.js';
 import { Elicitations } from './elicit.js';
 import { ToolOffer } from './offer.js';
+import { registerSkills, sessionMcp, sessionPlugins } from './sources.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
@@ -41,13 +42,10 @@ import { registerSteerMiddleware } from './steer.js';
 import { describeGates } from '../verify/index.js';
 import { SessionModel, configuredSecrets, keyVariables, listModels, trustClassifier, type ModelChoice } from './model.js';
 import { expandReferences } from './references.js';
-import { loadSkills, skillInstructions, skillsPromptText, type Skill } from '../ext/skills.js';
-import { skillTool } from '../tools/skill.js';
+import { skillInstructions, skillsPromptText, type Skill } from '../ext/skills.js';
 import { lessonFor, reflectionTools } from '../reflection/index.js';
 import { DEFAULT_TOOL_SEARCH_THRESHOLD, toolSearchTool } from '../tools/toolSearch.js';
 import { formatDiagnostic, LspManager } from '../lsp/manager.js';
-import { enabledPlugins, installedPlugins, verifyPlugins } from '../plugins/lock.js';
-import type { PluginParts } from '../plugins/runtime.js';
 import { lspTool } from '../tools/lsp.js';
 import { webSearchTool } from '../tools/web/index.js';
 import { SearchProviders } from '../tools/web/providers.js';
@@ -416,25 +414,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   // Only the interface can put a question to the person, and only while a turn runs there.
   const elicitations = new Elicitations({ canAsk: options.surface === 'tui', emit: () => emitting });
   // Skills are listed by name and description; the skill tool loads one when asked.
-  const skillSet = loadSkills(projectRoot);
-  notices.push(...skillSet.problems.map((problem) => `A skill was not loaded: ${problem}`));
-  if (skillSet.skills.length) {
-    registry.register(
-      skillTool({
-        skills: skillSet.skills,
-        activate: (skill) => {
-          if (!skill.allowedTools) return undefined;
-          const label = `the skill ${skill.name}`;
-          const rules = skill.allowedTools.flatMap((text) => {
-            const parsed = parseRule(text, 'allow', 'session', `${label} allowed-tools`);
-            return 'rule' in parsed ? [parsed.rule] : [];
-          });
-          permissions.narrow(rules, label);
-          return `While this skill is active, until this turn ends, only these tools may run: ${permissions.narrowed?.rules.map((rule) => rule.text).join(', ') || 'none'}.`;
-        },
-      })
-    );
-  }
+  const skillSet = registerSkills(registry, projectRoot, (rules, label) => {
+    permissions.narrow(rules, label);
+    return permissions.narrowed?.rules ?? [];
+  });
+  notices.push(...skillSet.notices);
   const reflection = options.parent
     ? undefined
     : {
@@ -447,51 +431,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** Tools offered for the running turn beyond the visible ones, and hooks that exist only while they are. */
   let turnOffer: string[] = [];
   const offerHooks = new Map<string, () => () => void>();
-  // Plugins: each installed copy is hashed again, and one that changed is turned off. The
-  // code that loads them is imported only when one is on, so a session without any pays nothing.
-  if (!options.parent && installedPlugins(projectRoot).length) {
-    for (const result of verifyPlugins(projectRoot)) {
-      if (!result.ok) notices.push(`Plugin ${result.name} is off: ${result.problem}. Install it again to use it.`);
-    }
-  }
-  const plugins: PluginParts = enabledPlugins(projectRoot).length
-    ? await (async () => {
-        const { loadPlugins, pluginParts } = await import('../plugins/runtime.js');
-        const loaded = loadPlugins(projectRoot);
-        notices.push(...loaded.problems);
-        const parts = pluginParts(loaded.plugins, { projectRoot, sandboxSettings, envFor: (passthrough) => envFor(passthrough) });
-        notices.push(...parts.notices);
-        return parts;
-      })()
-    : { processes: [], servers: [], notices: [] };
-  // The MCP client is loaded only when a server is configured: it is the heaviest import a
-  // session would otherwise make for nothing.
-  const serversConfigured = (mcpConfig.servers ?? []).some((server) => server.enabled !== false) || plugins.servers.length > 0;
-  const mcp: McpSource | undefined =
-    options.mcp === false
-      ? undefined
-      : (options.mcp ??
-        (serversConfigured
-          ? await (async () => {
-              const [{ McpManager }, { ConfigService }, { StoredOAuthProvider }, { transportKind }, { detectStore }] = await Promise.all([
-                import('../../services/McpManager.js'),
-                import('../../services/ConfigService.js'),
-                import('../mcp/oauth.js'),
-                import('../mcp/connect.js'),
-                import('../config/credentials.js'),
-              ]);
-              let store: ReturnType<typeof detectStore> | undefined;
-              return new McpManager({
-                // The legacy configuration service loads only when an MCP server needs it.
-                configService: options.configService ?? new ConfigService(projectRoot),
-                envFor: (server) => envFor(server.env_passthrough, server.env),
-                // A signed-in HTTP server's tokens come from the credential store; signing in is `jamcli mcp login`.
-                authFor: (server) => (transportKind(server) === 'http' ? new StoredOAuthProvider(server, (store ??= detectStore(env))) : undefined),
-                elicit: elicitations.ask,
-                extraServers: plugins.servers,
-              });
-            })()
-          : undefined));
+  const { plugins, notices: pluginNotices } = await sessionPlugins({ projectRoot, verify: !options.parent, sandboxSettings, envFor });
+  notices.push(...pluginNotices);
+  const mcp = await sessionMcp({
+    given: options.mcp,
+    projectRoot,
+    servers: mcpConfig.servers ?? [],
+    pluginServers: plugins.servers,
+    ...(options.configService ? { configService: options.configService } : {}),
+    env,
+    envFor,
+    elicit: elicitations.ask,
+  });
   const mcpServers = mcp ? await registerMcpTools(registry, mcp, notices) : undefined;
   // Past a threshold, MCP tools are offered through search_tools rather than in every request;
   // so is the extended tier of built-ins when the model's window has no room for it.
