@@ -2,7 +2,7 @@ import path from 'path';
 import { CoreAgent } from '../agent.js';
 import type { AgentEvent, ApprovalPreview, JamSession, RunResult, ToolCall } from '../types.js';
 import { describeCall, previewCall } from '../approval.js';
-import { CheckpointStore, filesOfCall, type Checkpoint, type RestorePreview } from '../git/checkpoints.js';
+import type { RestorePreview } from '../git/checkpoints.js';
 import { cleanDraft, draftPrompt, planCommit } from '../git/commit.js';
 import { createSession } from '../state.js';
 import { createChatProvider, listConfiguredProviders } from '../providers/factory.js';
@@ -18,6 +18,7 @@ import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../type
 import type { EditorBridge, JsonSchema } from '../../types/tools.js';
 import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type ToolSummary } from './tools.js';
 import { childLauncher, type ParentSession } from './children.js';
+import { SessionCheckpoints, type CheckpointInfo } from './checkpoints.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
@@ -64,6 +65,7 @@ import { observeSession, type SessionObservation } from '../observe/session.js';
 import type { Observer, Span } from '../observe/observer.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
+export type { CheckpointInfo } from './checkpoints.js';
 
 /** Where a person may add a rule: for this session, or in one of the configuration files. */
 export type EditableRuleScope = 'session' | 'local' | 'project' | 'user';
@@ -347,15 +349,6 @@ export interface Runtime {
 export interface SessionNote {
   text: string;
   ts: number;
-}
-
-/** A checkpoint as the session log records it, numbered from 1. */
-export interface CheckpointInfo extends Checkpoint {
-  n: number;
-  label: string;
-  ts: number;
-  /** Where the turn that made the change began, for forking the conversation back to it. */
-  turn?: number;
 }
 
 /** Where the `models` block came from, for the catalog's messages: its file when only one layer sets it. */
@@ -710,9 +703,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     'family tools',
     { internal: true }
   );
-  /** The working copy the last changing step left, as its checkpoint keyed it, and whether this turn changed it. */
-  let lastTree: string | undefined;
-  let changedThisTurn = false;
   let currentStep = 0;
   /** Records a gate row once the verification middleware is up; the language server's verdict is tier T0. */
   let verify: { record: (row: GateRow) => void } | undefined;
@@ -735,8 +725,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           const errors = diagnostics.filter((item) => (item.severity ?? 1) === 1);
           if (errors.length) reports.push(...errors.slice(0, 20).map((item) => redact(formatDiagnostic(path.relative(workRoot, path.resolve(workRoot, file)), item))));
         }
-        if (served.length && lastTree && verify) {
-          verify.record({ tier: 'T0', name: 'lsp', command: 'language server diagnostics', tree: lastTree, step: currentStep, status: reports.length ? 'failed' : 'passed', durationMs: 0, ts: Date.now() });
+        const tree = checkpoints.lastTree;
+        if (served.length && tree && verify) {
+          verify.record({ tier: 'T0', name: 'lsp', command: 'language server diagnostics', tree, step: currentStep, status: reports.length ? 'failed' : 'passed', durationMs: 0, ts: Date.now() });
         }
         return reports.length ? { context: [`The language server reports errors after this change:\n${reports.join('\n')}`] } : undefined;
       },
@@ -927,7 +918,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       ...(options.heard ? { heard: options.heard } : {}),
       turnNotes: () => turnNotes.splice(0),
       // A delegated run shares the working copy; the checkpoint before its task call covers it.
-      ...(options.surface === 'child' ? {} : { beforeChange: takeCheckpoint, afterChange: settleCheckpoint }),
+      ...(options.surface === 'child' ? {} : { beforeChange: (call: ToolCall) => checkpoints.take(call), afterChange: () => checkpoints.settle() }),
     });
   let agent = buildAgent();
   /** What the harness must tell the model with its next prompt, each in bracket form. */
@@ -979,46 +970,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     model: `${choice.provider}:${choice.model}`,
     onError: (error) => emitting?.({ type: 'notice', level: 'error', message: `The session log could not be written: ${error.message}` }),
   });
-  const checkpointStore = new CheckpointStore(workRoot, log.id);
-  let checkpointsFailed = false;
-  /** The step's checkpoint, taken before its first change and recorded once the step is done. */
-  let stepCheckpoint: { taken: Checkpoint; label: string } | undefined;
-  const checkpointsOff = (error: any) => {
-    checkpointsFailed = true;
-    stepCheckpoint = undefined;
-    emitting?.({ type: 'notice', level: 'warn', message: `Checkpoints are off for this session, so /undo cannot restore its changes: ${error?.message ?? error}` });
-  };
-  /** Before a step's first change: a checkpoint of the working copy. */
-  async function takeCheckpoint(call: ToolCall): Promise<void> {
-    if (checkpointsFailed) return;
-    const label = describeCall(call);
-    try {
-      const taken = await checkpointStore.take(label, filesOfCall(call, workRoot));
-      stepCheckpoint = taken ? { taken, label } : undefined;
-    } catch (error: any) {
-      checkpointsOff(error);
-    }
-  }
-  /** Once the step is done: what it changed, recorded in the log; a step that changed nothing leaves no checkpoint. */
-  async function settleCheckpoint(): Promise<void> {
-    const pending = stepCheckpoint;
-    stepCheckpoint = undefined;
-    if (!pending) return;
-    try {
-      const after = await checkpointStore.settle(pending.taken, pending.label);
-      if (pending.taken.kind === 'git' && !after) return;
-      const { taken, label } = pending;
-      lastTree = after ?? taken.ref;
-      changedThisTurn = true;
-      recorder.recordCheckpoint({ ref: taken.ref, ...(taken.files ? { files: taken.files } : {}), ...(after ? { after } : {}), label });
-    } catch (error: any) {
-      checkpointsOff(error);
-    }
-  }
+  const checkpoints = new SessionCheckpoints({
+    workRoot,
+    sessionId: log.id,
+    events: () => log.events(),
+    record: (checkpoint) => recorder.recordCheckpoint(checkpoint),
+    warn: (message) => emitting?.({ type: 'notice', level: 'warn', message }),
+    busy: () => running,
+  });
   hooks.on(
     'turn_start',
     () => {
-      changedThisTurn = false;
+      checkpoints.startTurn();
     },
     'verify turn tree',
     { internal: true }
@@ -1045,10 +1008,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   verify = registerVerifyMiddleware(hooks, {
     gates,
     ledger: gateLedger,
-    currentTree: () => lastTree,
-    changedThisTurn: () => changedThisTurn,
+    currentTree: () => checkpoints.lastTree,
+    changedThisTurn: () => checkpoints.changedThisTurn,
     step: () => currentStep,
-    run: (gate) => runGate(gate, { run: runGateCommand, tree: lastTree, step: currentStep }),
+    run: (gate) => runGate(gate, { run: runGateCommand, tree: checkpoints.lastTree, step: currentStep }),
     emit: (event) => emitting?.(event),
     todos: { read: () => readTodos({ projectRoot: workRoot }), stamp: async (stamp) => void (await stampTodos({ projectRoot: workRoot }, stamp)) },
     backpressure: options.surface !== 'child',
@@ -1063,7 +1026,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const verdict = permissions.decide(call);
       return verdict.decision === 'ask' && verdict.by === 'mode';
     },
-    currentTree: () => lastTree,
+    currentTree: () => checkpoints.lastTree,
     emit: (event) => emitting?.(event),
   });
   /** The handoff, rendered from the log. A reset the person asked for is not overwritten by the session's end. */
@@ -1101,20 +1064,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       notices.push(`The handoff session ${reset.session} left in .jamcli/handoff.md reaches the model with the first prompt.`);
     }
   }
-  const checkpointList = (): CheckpointInfo[] =>
-    log
-      .events()
-      .filter((event): event is Extract<typeof event, { type: 'checkpoint' }> => event.type === 'checkpoint')
-      .map((event, index) => ({
-        n: index + 1,
-        ref: event.ref,
-        kind: event.files ? 'files' : 'git',
-        ...(event.files ? { files: event.files } : {}),
-        ...(event.after ? { after: event.after } : {}),
-        label: event.label ?? 'a change',
-        ts: event.ts,
-        ...(event.turn !== undefined ? { turn: event.turn } : {}),
-      }));
   /** One request outside the conversation, counted and priced like the session's others. */
   async function completeOnce(prompt: string, request: { maxOutputTokens?: number; signal?: AbortSignal } = {}): Promise<string> {
     if (!provider) throw new Error(providerError ?? 'No model provider is configured for this session.');
@@ -1133,20 +1082,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     return result.content ?? '';
   }
 
-  /** A change the person asked for, between two checkpoints, recorded like a step's. */
-  async function withCheckpoint<T>(label: string, change: () => Promise<T>, files: string[] = []): Promise<T> {
-    if (running) throw new Error('A turn is running; wait for it to end.');
-    const before = await checkpointStore.take(label, files);
-    const result = await change();
-    const after = before ? await checkpointStore.settle(before, label) : undefined;
-    if (before && (before.kind === 'files' || after)) recorder.recordCheckpoint({ ref: before.ref, ...(before.files ? { files: before.files } : {}), ...(after ? { after } : {}), label });
-    return result;
-  }
-  const checkpointNumbered = (n: number): CheckpointInfo => {
-    const found = checkpointList().find((entry) => entry.n === n);
-    if (!found) throw new Error(`This session has no checkpoint ${n}.`);
-    return found;
-  };
 
   observation = observeSession(observer, {
     sessionId: log.id,
@@ -1499,19 +1434,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return SessionLog.fork(projectRoot, log.id, { atEvent, surface: options.surface }).id;
     },
 
-    checkpoints: checkpointList,
-
-    async previewCheckpoint(n) {
-      return checkpointStore.preview(checkpointNumbered(n));
-    },
-
-    async restoreCheckpoint(n) {
-      const target = checkpointNumbered(n);
-      // What the restore replaces is checkpointed like a step's change, so it can be undone too.
-      return withCheckpoint(`before restoring checkpoint ${n}`, () => checkpointStore.restore(target), target.files ?? []);
-    },
-
-    withCheckpoint,
+    checkpoints: () => checkpoints.list(),
+    previewCheckpoint: (n) => checkpoints.preview(n),
+    restoreCheckpoint: (n) => checkpoints.restore(n),
+    withCheckpoint: (label, change, files) => checkpoints.withCheckpoint(label, change, files),
 
     async draftCommitMessage(paths = [], signal) {
       const plan = planCommit(workRoot, paths);
