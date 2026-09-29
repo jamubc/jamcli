@@ -15,5 +15,5 @@
 ## 3. Gates and record
 
 - [x] 3.1 Run the four gates: `bun install`, `npx tsc --noEmit`, `bun test`, `bun run build`.
-- [ ] 3.2 Drive the interface on a real model through `jamcli mcp serve` in a throwaway fixture project and read the board and the prompt at 80x24 and 100x40. Deferred to the owner with the trial of `surface-background-work`: it needs a live model, and the fake provider covers every frame this unit changed.
+- [ ] 3.2 Drive the interface on a real model through `jamcli mcp serve` in a throwaway fixture project and read the board and the prompt at 80x24 and 100x40. Deferred to the owner with the trial of `surface-background-work`: it needs a live model, and the fake provider covers every frame this unit changed. Not run: the owner closed the unit on 2026-09-29 to open the review units in `openspec/ROADMAP.md`, which halt interface work, while the working tree held uncommitted interface edits a drive would have run with it.
 - [x] 3.3 Record the unit in `openspec/SEQUENCE.md` and `openspec/ROADMAP.md`.
