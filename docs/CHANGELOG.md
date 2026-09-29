@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- A reply shows its bracketed numbers as written. The markdown view took `[1]` for a
+  link and hid the brackets, and dropped the second of `[6][7]`, so a report's citations
+  read as stray digits; they are now set as inline code. Code, task boxes, and real links
+  are unchanged.
+- The status line reads `waiting` while the model asks you a question in a chooser, as it
+  does behind a permission prompt. The context share follows what each request of the
+  session carried through a long turn, where it had stayed at the size the turn began at.
+- Two exit keys that arrive together leave; before, both were read as the first.
+- A child whose result was collected stays on the board for its window, with how it
+  ended, and can still be opened; asking for its result or status again answers.
+- A handoff also names the request the session began with when the latest is another, so a
+  closing question does not read as the task. `/research` reads its report back for
+  citations without a source, and its closing message keeps the report's hedges.
+- The terminal tool reports a question in a chooser as `requires_action`, naming it, where
+  it had reported `running`.
 - A task may run for 16 turns by default, up from 8, since a child that reads several
   sources in full does not fit in 8; a call may still ask for fewer. A child refused
   because its siblings hold every slot is told to do the work itself, not to ask again.
