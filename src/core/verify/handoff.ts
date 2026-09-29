@@ -13,19 +13,25 @@ export const handoffFile = (projectRoot: string): string => path.join(projectRoo
 
 const REQUEST_HEADING = 'The request being worked on, verbatim:';
 
-/** The latest request the person made, read from the log as a summary would carry it. */
-function latestRequest(events: TranscriptEvent[]): string | undefined {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
+/** The requests the person made, oldest first, each as a summary would carry it. */
+function requestsOf(events: TranscriptEvent[]): string[] {
+  const found: string[] = [];
+  for (const event of events) {
     if (event.type !== 'message' || event.message.role !== 'user') continue;
     const text = event.message.content;
     if (text.startsWith('[')) continue;
-    if (!isSummary(event.message)) return text;
+    if (!isSummary(event.message)) {
+      found.push(text);
+      continue;
+    }
     const carried = text.indexOf(`${REQUEST_HEADING}\n`);
-    if (carried >= 0) return text.slice(carried + REQUEST_HEADING.length + 1).split('\n\n')[0];
+    if (carried >= 0) found.push(text.slice(carried + REQUEST_HEADING.length + 1).split('\n\n')[0]);
   }
-  return undefined;
+  return found;
 }
+
+/** How much of the first request the handoff repeats. */
+const FIRST_REQUEST_CHARS = 300;
 
 /** The files the session's checkpoints say it changed, in first-seen order. */
 function changedFiles(events: TranscriptEvent[]): string[] {
@@ -48,10 +54,15 @@ export function renderHandoff(events: TranscriptEvent[], todos: TodoItem[], meta
   const failing = ledger.all().filter((row) => row.status === 'failed').at(-1);
   const lastPassed = ledger.latest().find((row) => row.name === failing?.name && row.status === 'passed' && row.ts > (failing?.ts ?? 0));
   const open = failing && !lastPassed ? events.filter((event): event is Extract<TranscriptEvent, { type: 'gate' }> => event.type === 'gate').at(-1) : undefined;
+  const requests = requestsOf(events);
+  const first = requests[0];
+  const latest = requests.at(-1);
   const lines = [
     `# Handoff ${meta.sessionId} ${new Date(meta.now ?? Date.now()).toISOString()}${meta.reason === 'reset' ? ' (reset)' : ''}`,
     '',
-    `Request: ${latestRequest(events) ?? '(none recorded)'}`,
+    `Request: ${latest ?? '(none recorded)'}`,
+    // A last question that has nothing to do with the work would otherwise read as the task.
+    ...(first !== undefined && first !== latest ? [`Began with: ${first.length > FIRST_REQUEST_CHARS ? `${first.slice(0, FIRST_REQUEST_CHARS)}...` : first}`] : []),
     '',
     'Steps:',
     formatTodos(todos),

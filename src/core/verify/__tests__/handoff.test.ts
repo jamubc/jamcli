@@ -33,6 +33,16 @@ test('the handoff is rendered from the log: request, steps, gates, changed files
   expect(renderHandoff(events, [], { sessionId: 's1', reason: 'session_end', now: 1 })).toBe(renderHandoff(events, [], { sessionId: 's1', reason: 'session_end', now: 1 }));
 });
 
+test('a last request that is not the work does not stand in for it: the request the session began with is named too', () => {
+  const later: TranscriptEvent[] = [...events, { v: 2, type: 'message', ts: 7, message: { role: 'user', content: 'what colour would you pick?', timestamp: 7 } }];
+  const text = renderHandoff(later, [], { sessionId: 's1', reason: 'session_end' });
+  expect(text).toContain('Request: what colour would you pick?\nBegan with: add a retry to the fetch helper');
+  // With one request there is nothing to add, and a long first one is cut.
+  expect(renderHandoff(events, [], { sessionId: 's1', reason: 'session_end' })).not.toContain('Began with');
+  const long: TranscriptEvent[] = [{ v: 2, type: 'message', ts: 1, message: { role: 'user', content: 'x'.repeat(500), timestamp: 1 } }, later.at(-1)!];
+  expect(renderHandoff(long, [], { sessionId: 's1', reason: 'session_end' })).toContain(`Began with: ${'x'.repeat(300)}...`);
+});
+
 test('only a handoff written as a reset is read by the next session', () => {
   writeHandoff(root, renderHandoff(events, [], { sessionId: 's1', reason: 'session_end' }));
   expect(readResetHandoff(root)).toBeUndefined();
