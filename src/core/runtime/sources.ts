@@ -1,5 +1,4 @@
 import type { McpServerConfig } from '../../types/mcp.js';
-import type { ConfigService } from '../../services/ConfigService.js';
 import { loadSkills, type Skill } from '../ext/skills.js';
 import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { parseRule, type Rule } from '../permissions/rules.js';
@@ -75,7 +74,6 @@ export async function sessionMcp(options: {
   projectRoot: string;
   servers: McpServerConfig[];
   pluginServers: McpServerConfig[];
-  configService?: ConfigService;
   env: Record<string, string | undefined>;
   envFor: (passthrough?: string[], values?: Record<string, string>) => Record<string, string>;
   elicit: (request: ElicitationRequest) => Promise<ElicitationAnswer>;
@@ -83,17 +81,15 @@ export async function sessionMcp(options: {
   if (options.given === false) return undefined;
   if (options.given) return options.given;
   if (!options.servers.some((server) => server.enabled !== false) && !options.pluginServers.length) return undefined;
-  const [{ McpManager }, { ConfigService }, { StoredOAuthProvider }, { transportKind }, { detectStore }] = await Promise.all([
+  const [{ McpManager }, { StoredOAuthProvider }, { transportKind }, { detectStore }] = await Promise.all([
     import('../../services/McpManager.js'),
-    import('../../services/ConfigService.js'),
     import('../mcp/oauth.js'),
     import('../mcp/connect.js'),
     import('../config/credentials.js'),
   ]);
   let store: ReturnType<typeof detectStore> | undefined;
   return new McpManager({
-    // The legacy configuration service loads only when an MCP server needs it.
-    configService: options.configService ?? new ConfigService(options.projectRoot),
+    servers: options.servers,
     envFor: (server) => options.envFor(server.env_passthrough, server.env),
     // A signed-in HTTP server's tokens come from the credential store; signing in is `jamcli mcp login`.
     authFor: (server) => (transportKind(server) === 'http' ? new StoredOAuthProvider(server, (store ??= detectStore(options.env))) : undefined),

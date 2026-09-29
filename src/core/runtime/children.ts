@@ -5,7 +5,6 @@ import { downgradeReasoning } from '../routing/capabilities.js';
 import { resolveRoute } from '../routing/resolve.js';
 import { isChainReachable } from '../routing/reachable.js';
 import type { Delegate, DelegationOutcome, DelegationRequest } from '../delegation/types.js';
-import type { ConfigService } from '../../services/ConfigService.js';
 import type { McpSource } from './tools.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { WorkTable } from '../work.js';
@@ -33,7 +32,6 @@ export interface ChildLauncherOptions {
   config: Config;
   /** The session's agents, loaded once so routing agrees with what the model was shown. */
   agents: LoadedAgents;
-  configService?: ConfigService;
   parent: () => ParentSession;
   mcp?: McpSource;
   env?: Record<string, string | undefined>;
@@ -113,7 +111,6 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
         signal: request.signal,
         mcp: options.mcp ? borrowed(options.mcp) : false,
         env: options.env,
-        ...(options.configService ? { configService: options.configService } : {}),
         sandbox: options.sandbox,
         parent,
         ...(request.heard ? { heard: request.heard } : {}),

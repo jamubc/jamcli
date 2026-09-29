@@ -43,7 +43,7 @@ test('a named variable passes, and declared values are added last', () => {
 
 const fixture = path.join(import.meta.dir, '../../../testing/envMcpServer.ts');
 const namesFrom = async (server: McpServerConfig) => {
-  const manager = new McpManager({ configService: { listMcpServers: async () => [server] } as any });
+  const manager = new McpManager({ servers: [server] });
   try {
     const [tool] = await manager.listServerTools(server);
     return JSON.parse((await manager.callServerTool(tool, {})).output) as string[];

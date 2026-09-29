@@ -2,7 +2,6 @@ import type { AgentEvent, ApprovalPreview, JamSession, RunResult } from '../type
 import type { RestorePreview } from '../git/checkpoints.js';
 import type { ChatProvider } from '../providers/types.js';
 import type { HookCommand } from '../hooks/commands.js';
-import type { ConfigService } from '../../services/ConfigService.js';
 import type { EditorBridge } from '../../types/tools.js';
 import type { McpSource, ToolSummary } from './tools.js';
 import type { ParentSession } from './children.js';
@@ -68,7 +67,6 @@ export interface RuntimeOptions {
   mcp?: McpSource | false;
   /** The environment credentials are redacted from. Defaults to the process environment. */
   env?: Record<string, string | undefined>;
-  configService?: ConfigService;
   /** Set on a delegated run: the session that started it, whose policy it decides with. */
   parent?: ParentSession;
   /** Set on a delegated run the person can look in on: what they have said to it since it last asked. */

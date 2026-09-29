@@ -354,7 +354,7 @@ test('F23: MCP servers do not receive provider keys (3.5)', async () => {
   const previous = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = 'sk-audit-parent';
   const server = { id: 'envcheck', command: process.execPath, args: [path.join(import.meta.dir, '../../testing/envMcpServer.ts')] };
-  const manager = new McpManager({ configService: { listMcpServers: async () => [server] } as any });
+  const manager = new McpManager({ servers: [server] });
   try {
     const [tool] = await manager.listServerTools(server);
     expect(JSON.parse((await manager.callServerTool(tool, {})).output)).not.toContain('OPENAI_API_KEY');

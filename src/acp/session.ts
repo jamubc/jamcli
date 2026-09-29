@@ -1,12 +1,12 @@
 import type { AvailableCommand, SessionConfigOption, SessionModeState } from '@agentclientprotocol/sdk';
 import { createRuntime, type RunOptions, type RuntimeOptions } from '../core/runtime/index.js';
-import { ConfigService } from '../services/ConfigService.js';
 import { CommandHost, type HostEntry } from '../commands/host.js';
 import type { ChoiceItem } from '../commands/types.js';
 import { hostClipboard } from '../utils/clipboard.js';
 import { PERMISSION_MODES, type PermissionMode } from '../core/permissions/modes.js';
 import type { AgentEvent, ChatMessage, RunResult } from '../core/types.js';
 import type { EditorBridge } from '../types/tools.js';
+import { loadConfig } from '../core/config/load.js';
 
 /** What the ACP server needs from a session in order to drive a turn. */
 export interface AcpSessionController {
@@ -56,7 +56,6 @@ export interface CreateAcpSessionOptions {
   /** Continue a recorded session instead of starting one. */
   sessionId?: string;
   maxSteps?: number;
-  configService?: ConfigService;
   /** The editor's files and terminals, when it lends them. */
   editor?: EditorBridge;
   /** Assembly overrides, for tests. */
@@ -86,18 +85,16 @@ export const acpModes = (current: PermissionMode): SessionModeState => ({
  * and rendering events as session updates, which the server does.
  */
 export const createAcpSession = async (options: CreateAcpSessionOptions): Promise<AcpSessionController> => {
-  const configService = options.configService ?? new ConfigService(options.projectRoot);
   const runtime = await createRuntime({
     projectRoot: options.projectRoot,
     cwd: options.cwd,
     surface: 'acp',
     sessionId: options.sessionId,
     maxSteps: options.maxSteps,
-    configService,
     ...(options.editor ? { editor: options.editor } : {}),
     ...options.runtime,
   });
-  const config = await configService.getConfig();
+  const config = loadConfig({ projectRoot: options.projectRoot }).config;
   const modelOption = (): SessionConfigOption => {
     const current = `${runtime.model.provider}:${runtime.model.model}`;
     return { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: current, options: [{ value: current, name: current }] };

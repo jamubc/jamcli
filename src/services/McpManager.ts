@@ -1,4 +1,3 @@
-import { ConfigService } from './ConfigService.js';
 import type { McpServerConfig, McpToolDescriptor } from '../types/mcp.js';
 import { listVisibleTools } from '../core/tools/index.js';
 import { subprocessEnv } from '../core/sandbox/env.js';
@@ -6,7 +5,8 @@ import type { OAuthClientProvider, Transport } from '@modelcontextprotocol/clien
 import { connectMcp, contentText, createTransport, transportKind, type ElicitationAnswer, type ElicitationRequest, type McpConnection } from '../core/mcp/connect.js';
 
 type McpManagerOptions = {
-  configService?: ConfigService;
+  /** The configured servers, as the session's configuration read them. */
+  servers?: McpServerConfig[];
   /** The environment a stdio server starts with. Defaults to JamCLI's, without credentials. */
   envFor?: (server: McpServerConfig) => Record<string, string>;
   /** Answers a server's request for input; declined when absent. */
@@ -54,7 +54,6 @@ export const createClientTransport = (
 ): Transport => createTransport(server, { env, ...(overrides.fetch ? { fetch: overrides.fetch } : {}) });
 
 export class McpManager {
-  private configService: ConfigService;
   private connections: Map<string, McpConnection & { tools?: McpToolDescriptor[] }> = new Map();
   private connecting: Map<string, Promise<McpConnection>> = new Map();
   private toolIndex: Map<string, McpToolDescriptor> = new Map();
@@ -62,7 +61,6 @@ export class McpManager {
   private envFor: (server: McpServerConfig) => Record<string, string>;
 
   constructor(private readonly options: McpManagerOptions = {}) {
-    this.configService = options.configService || new ConfigService();
     this.envFor = options.envFor ?? serverEnv;
   }
 
@@ -72,30 +70,7 @@ export class McpManager {
   }
 
   async listServers(): Promise<McpServerConfig[]> {
-    return [...(await this.configService.listMcpServers()), ...(this.options.extraServers ?? [])];
-  }
-
-  async upsertServer(server: McpServerConfig): Promise<McpServerConfig[]> {
-    if (!server.id) {
-      throw new Error('MCP server requires at least an id.');
-    }
-    const kind = resolveTransportKind(server);
-    if (kind === 'http' && !server.url) {
-      throw new Error('An HTTP MCP server requires a url.');
-    }
-    if (kind === 'stdio' && !server.command) {
-      throw new Error('A stdio MCP server requires a command.');
-    }
-    return this.configService.upsertMcpServer({
-      enabled: true,
-      args: [],
-      ...server,
-      transport: kind === 'http' ? 'http' : 'stdio',
-    });
-  }
-
-  async removeServer(id: string): Promise<McpServerConfig[]> {
-    return this.configService.removeMcpServer(id);
+    return [...(this.options.servers ?? []), ...(this.options.extraServers ?? [])];
   }
 
   /**
