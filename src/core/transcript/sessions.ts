@@ -22,6 +22,8 @@ export const historyDirFor = (projectRoot: string) => path.join(projectRoot, '.j
 export const sessionFileFor = (projectRoot: string, id: string) => path.join(historyDirFor(projectRoot), `${id}.jsonl`);
 
 const indexFile = () => path.join(getStateDir(), 'sessions.jsonl');
+/** The index's line format. A line from a newer JamCLI is skipped rather than misread. */
+const INDEX_VERSION = 1;
 
 /** A short title from the first request, as session pickers have always shown it. */
 export function titleFrom(firstMessage: string): string {
@@ -36,26 +38,39 @@ export function titleFrom(firstMessage: string): string {
   return title || 'New conversation';
 }
 
-export function readSessionIndex(): SessionSummary[] {
-  const file = indexFile();
-  if (!fs.existsSync(file)) return [];
-  const entries: SessionSummary[] = [];
+/** The index as written: every line, and each session's last line, which is its summary. */
+function readIndexFile(file: string): { entries: SessionSummary[]; lines: number } {
+  if (!fs.existsSync(file)) return { entries: [], lines: 0 };
+  const latest = new Map<string, SessionSummary>();
+  // One session recorded under two spellings of its project, such as through a symlink, is one entry.
+  const roots = new Map<string, string>();
+  const rootOf = (root: string) => roots.get(root) ?? roots.set(root, canonical(root)).get(root)!;
+  let lines = 0;
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
+    lines += 1;
     try {
-      const entry = JSON.parse(line);
-      if (entry && typeof entry.id === 'string' && typeof entry.projectRoot === 'string') entries.push(entry);
+      const { v, ...entry } = JSON.parse(line);
+      if ((v ?? 1) > INDEX_VERSION || typeof entry.id !== 'string' || typeof entry.projectRoot !== 'string') continue;
+      latest.set(`${entry.id}\u0000${rootOf(entry.projectRoot)}`, entry as SessionSummary);
     } catch {
       // A damaged line costs one entry, not the index.
     }
   }
-  return entries;
+  return { entries: [...latest.values()], lines };
+}
+
+export function readSessionIndex(): SessionSummary[] {
+  return readIndexFile(indexFile()).entries;
 }
 
 /**
  * Write one session's summary into the index. The creation time comes from the session
  * file (its header, or the first version 1 turn), and a title the session already has is
- * kept. The index is rewritten through a temporary file so a reader never sees half of it.
+ * kept. The summary is appended as one line, so a session's update never overwrites
+ * another's, and costs a line, not the file; the last line for a session is its summary.
+ * When stale lines outnumber the sessions, the index is rewritten with the last lines only,
+ * through a temporary file so a reader never sees half of it.
  */
 export function recordSessionSummary(projectRoot: string, id: string, events: TranscriptEvent[]): void {
   const messages = events.flatMap((event) => (event.type === 'message' ? [event] : []));
@@ -64,7 +79,8 @@ export function recordSessionSummary(projectRoot: string, id: string, events: Tr
   const tokens = events.reduce((sum, event) => sum + (event.type === 'usage' && !event.delegated ? event.usage.total_tokens || 0 : 0), 0);
   const model = [...messages].reverse().find((event) => event.message.model)?.message.model;
   const started = events.find((event) => event.ts > 0)?.ts;
-  const existing = readSessionIndex();
+  const file = indexFile();
+  const { entries: existing, lines } = readIndexFile(file);
   const previous = existing.find((entry) => entry.id === id && samePath(entry.projectRoot, projectRoot));
   const summary: SessionSummary = {
     id,
@@ -78,11 +94,12 @@ export function recordSessionSummary(projectRoot: string, id: string, events: Tr
     firstUserMessage: firstUser.slice(0, 200),
     ...(model ? { model } : {}),
   };
-  const next = [...existing.filter((entry) => entry !== previous), summary];
-  const file = indexFile();
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.appendFileSync(file, `${JSON.stringify({ v: INDEX_VERSION, ...summary })}\n`, 'utf8');
+  if (lines + 1 <= 2 * (existing.length + 1) + 100) return;
+  const next = [...existing.filter((entry) => entry !== previous), summary];
   const temporary = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${next.map((entry) => JSON.stringify(entry)).join('\n')}\n`, 'utf8');
+  fs.writeFileSync(temporary, `${next.map((entry) => JSON.stringify({ v: INDEX_VERSION, ...entry })).join('\n')}\n`, 'utf8');
   fs.renameSync(temporary, file);
 }
 

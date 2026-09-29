@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { SessionLog, readTranscript, sessionFileFor, type TranscriptEvent } from '../index.js';
+import { SessionLog, readSessionIndex, readTranscript, recordSessionSummary, sessionFileFor, type TranscriptEvent } from '../index.js';
 
 let base: string;
 let root: string;
@@ -54,4 +54,30 @@ test("a session log parses only what was appended since its last read, and sees 
   expect(contents(log.events())).toEqual(['fresh']);
   fs.rmSync(file);
   expect(log.events()).toEqual([]);
+});
+
+test("the index is appended to, keeps each session's last summary, and is rewritten once stale lines outnumber sessions", () => {
+  const index = path.join(base, 'state', 'sessions.jsonl');
+  const events = (content: string): TranscriptEvent[] => [{ v: 2, ts: 1, type: 'message', message: { role: 'user', content, timestamp: 1 } }];
+  recordSessionSummary(root, 'a', events('first request of a'));
+  recordSessionSummary(root, 'b', events('first request of b'));
+  recordSessionSummary(root, 'a', events('first request of a'));
+  expect(fs.readFileSync(index, 'utf8').trim().split('\n')).toHaveLength(3);
+  expect(readSessionIndex().map((entry) => entry.id).sort()).toEqual(['a', 'b']);
+
+  // The same session recorded through a symlink to its project is still one entry.
+  const link = path.join(base, 'link');
+  fs.symlinkSync(root, link);
+  recordSessionSummary(link, 'a', events('first request of a'));
+  expect(readSessionIndex().map((entry) => entry.id).sort()).toEqual(['a', 'b']);
+
+  // A line a newer JamCLI wrote is skipped rather than misread.
+  fs.appendFileSync(index, `${JSON.stringify({ v: 2, id: 'c', projectRoot: root, shape: 'new' })}\n`);
+  expect(readSessionIndex().map((entry) => entry.id).sort()).toEqual(['a', 'b']);
+
+  for (let update = 0; update < 110; update += 1) recordSessionSummary(root, update % 2 ? 'a' : 'b', events('again'));
+  const lines = fs.readFileSync(index, 'utf8').trim().split('\n');
+  expect(lines.length).toBeLessThan(110);
+  expect(readSessionIndex().map((entry) => entry.id).sort()).toEqual(['a', 'b']);
+  expect(lines.every((entry) => JSON.parse(entry).v === 1)).toBe(true);
 });
