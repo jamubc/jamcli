@@ -41,7 +41,8 @@ test('with a real signal and enough decisions, the gate passes and certifies a t
   expect(model.authority).toBe('assist');
   expect(model.threshold).toBeGreaterThan(0);
   expect(formatEval(report)).toContain('PASSED');
-});
+  // Training and certifying 700 decisions twice took 5.5 s on the macOS runner, past the 5 s default.
+}, 30_000);
 
 test('the same signal in too few decisions cannot pass: the data does not bound the false-allow rate', () => {
   const data = build(8, 10, (i) => i % 10 === 3);
