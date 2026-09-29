@@ -3,6 +3,10 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # A dry run, on demand: everything a release does except the two steps that publish, the
+  # provenance attestation and the draft, with the binaries, checksums, and SBOM kept as the
+  # run's artifacts. A tag is the only way to publish.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -43,11 +47,23 @@ jobs:
           format: cyclonedx-json
           output-file: release/jamcli.cdx.json
           upload-artifact: false
+      - name: Keep the dry run's binaries, checksums, and SBOM
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-dry-run
+          path: |
+            release/jamcli-*
+            release/SHA256SUMS
+            release/jamcli.cdx.json
+          if-no-files-found: error
       - name: Attest build provenance
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: release/jamcli-*
       - name: Draft the release with the binaries, checksums, and SBOM
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           draft: true
