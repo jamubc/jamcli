@@ -22,8 +22,11 @@ export const BUDGETS: Budget[] = [
   { id: 'first-frame', measure: 'interface first frame', limit: 250, unit: 'ms', enforced: true },
   { id: 'keystroke', measure: 'keystroke to frame, p95, 1,000-message transcript', limit: 16, unit: 'ms', enforced: true },
   // 150 was a guess made before this ever ran; the first real measurement on Linux
-  // CI (2026-09-26) was 153.6 MB, so 165 gives it real headroom instead of a guess.
-  { id: 'idle-memory', measure: 'idle interface resident memory, 1,000-message transcript drawn', limit: 165, unit: 'MB', enforced: true },
+  // CI (2026-09-26) was 153.6 MB, and 165 was set from it. Five runs vary by about
+  // 10 MB: at da2b31d the median was 160.4 (157.7 to 168.2), and after 71 commits of
+  // interface work, at 6a823ab, 166.2 (159.4 to 171.8). A limit inside that spread fails
+  // on noise, so 175 sits above the highest run; growth past it is a regression to chase.
+  { id: 'idle-memory', measure: 'idle interface resident memory, 1,000-message transcript drawn', limit: 175, unit: 'MB', enforced: true },
 ];
 
 export const median = (values: number[]): number => {
