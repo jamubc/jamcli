@@ -291,7 +291,10 @@ test('a background task runs on, reports its status, and can be cancelled with i
   expect(work.drainEnded()).toMatchObject([{ id, outcome: 'ok' }]);
   expect(work.drainEnded()).toEqual([]);
   expect((await taskResultRunner({ id }, ctx)).output).toContain('finished');
-  expect(work.list()).toEqual([]);
+  // Collected, it stays listed for the person, with how it ended, and asking again gives the same answer rather than an error.
+  expect(work.list()).toMatchObject([{ id, outcome: 'ok' }]);
+  expect((await taskResultRunner({ id }, ctx)).output).toContain('finished');
+  expect((await taskStatusRunner({ id }, ctx)).status).not.toBe('error');
 
   const second = (await taskRunner({ agent: 'quick', prompt: 'p', background: true }, ctx)).metadata!.id as string;
   expect((await taskCancelRunner({ id: second }, ctx)).output).toBe(`Cancelled ${second}. Partial output:\npartial `);
@@ -399,7 +402,7 @@ test('task_result waits for a running child, holds no longer than the turn, and 
   await Bun.sleep(20);
   finish();
   expect((await waiting).output).toContain('the child finished');
-  expect(work.get(id)).toBeUndefined();
+  expect(work.get(id)?.told).toBe(true);
   // A cancelled turn ends the wait at once instead of holding the tool for its full time.
   const second = (await taskRunner({ agent: 'quick', prompt: 'q', background: true }, ctx)).metadata!.id as string;
   const held = taskResultRunner({ id: second, wait_seconds: 900 }, ctx);

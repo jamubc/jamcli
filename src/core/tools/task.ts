@@ -284,7 +284,7 @@ export async function taskResultRunner(args: Record<string, any>, ctx: ToolConte
         : `Task ${task.id} is still running. You are told when it ends; task_status has its state meanwhile, and task_result with wait_seconds holds until it ends.`,
     };
   }
-  ctx.work!.forget(task.id);
+  ctx.work!.collect(task.id);
   const line = delegationTranscriptLine({
     agent: task.agent,
     resolvedModel: task.resolvedModel ?? 'unresolved',

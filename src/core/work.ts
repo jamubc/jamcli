@@ -205,9 +205,17 @@ export class WorkTable {
     return this.entries.get(id) as WorkEntry<T> | undefined;
   }
 
-  /** Forget an entry the model has collected, such as a task whose result was read. */
-  forget(id: string): void {
-    if (this.entries.delete(id)) this.notify();
+  /**
+   * Mark an ended entry the model has collected, such as a task whose result was read, so it
+   * is not told of it again. It stays listed, for the person to see how it ended and to look
+   * in, until the board's window and the table's cap drop it; a running entry is unchanged.
+   */
+  collect(id: string): void {
+    const entry = this.entries.get(id);
+    if (!entry || entry.endedAt === undefined || entry.told) return;
+    entry.told = true;
+    this.prune();
+    this.notify();
   }
 
   list(): WorkItem[] {

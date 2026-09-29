@@ -24,11 +24,20 @@ test('what ends is told once, and a listener hears every change', () => {
     ['job_1', 'exited with code 0'],
     ['task_1', undefined],
   ]);
-  table.forget('task_1');
-  expect(changes).toEqual([1, 2, 1, 0]);
+  // Collecting a task still running changes nothing; once it has ended, it is not told again but stays listed.
+  table.collect('task_1');
+  expect(table.list().map((item) => item.id)).toEqual(['job_1', 'task_1']);
+  table.end('task_1', 'ok');
+  table.collect('task_1');
+  expect(table.drainEnded()).toEqual([]);
+  expect(table.list().map((item) => [item.id, item.outcome])).toEqual([
+    ['job_1', 'exited with code 0'],
+    ['task_1', 'ok'],
+  ]);
+  expect(changes).toEqual([1, 2, 1, 0, 0]);
   stop();
   entry(table, 'job_2');
-  expect(changes).toHaveLength(4);
+  expect(changes).toHaveLength(5);
 });
 
 test('stopping asks the entry, which ends when its tool reports so', () => {
