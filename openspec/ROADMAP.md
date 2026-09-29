@@ -185,7 +185,7 @@ Reverse the "will not do" in `docs/conformance.md:34` and `docs/feature-matrix.m
 records an agent's sandbox limitation, OpenAI's docs blocked from the build environment,
 as a product decision. The internal canonical is the OpenAI function-call shape.
 
-### R12. `run-release`
+### R12. `run-release` (archived 2026-09-29, the tag left to the owner)
 
 The release job with SBOM and provenance has never run (`docs/conformance.md`). It runs
 once, end to end. There is no auto-update and no package manager path; both stay the

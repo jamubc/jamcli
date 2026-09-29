@@ -57,11 +57,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`run-release`, R12 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
-`master`, where the owner has worked since merging the stack on 2026-09-27. The release job,
-which has never run, run end to end short of the two steps that publish: the tag and the
-provenance attestation stay the owner's. The review it comes from is kept verbatim in
-`openspec/reviews/2026-09-29-architecture-review.md`.
+None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
+verbatim in `openspec/reviews/2026-09-29-architecture-review.md`. What opens next is the
+owner's choice: the queued `add-findings-loop` (unit 4), or what the task corpus's scores and
+a second person's transcripts ask for, which the review names as this file's input from now
+on. The owner also decides whether `land-interface-rhythm` (B), `add-btw` (C), and the
+shelved `add-windows-support` are dropped, as the review would have them.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
 approve it before any task begins, and `git checkout 9d9f5c6 --
@@ -69,6 +70,25 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 26. `run-release`
+
+Archived as `2026-09-29-run-release`: no spec deltas. R12 of the review units. The release job
+runs only for a pushed `v` tag, and two of its steps publish when it does: the tag is public,
+and a public repository's provenance attestation is written to Sigstore's public log, which
+cannot be taken back. So the job now also runs on demand as a dry run, with the attestation
+and the draft release held to a tag (`36ce86d`).
+
+The dry run passed on its first run on GitHub: every platform's native library installed, the
+gates, the four compiles, the Linux binary's smoke test, and a CycloneDX 1.7 SBOM of 654
+components. Downloaded here, the four binaries matched `SHA256SUMS`, and the macOS arm64 binary
+(71 MiB) printed `2.0.0`. What it turned up was in the release's body: `docs/CHANGELOG.md`
+listed `/research` pipelines, the refusal of a repeated read, and the harness search, all
+removed before they shipped, and none of the review units. It now records them, with the trust
+gate's removal, since that did ship in 2.0.0 (`6ee90fa`, `c22e5d7`).
+
+Left to the owner: the version and the tag. Pushing `v<version>` runs the job for real, attests
+the binaries, and opens a draft release, which the owner then publishes.
 
 ### 25. `add-responses-api`
 
