@@ -48,6 +48,12 @@ interface Heredoc {
 }
 
 const isBlank = (char: string | undefined) => char === ' ' || char === '\t';
+/** Whether the character at `index` is escaped: preceded by an odd run of backslashes. */
+const escapedAt = (text: string, index: number): boolean => {
+  let count = 0;
+  for (let j = index - 1; j >= 0 && text[j] === '\\'; j -= 1) count += 1;
+  return count % 2 === 1;
+};
 const endsWord = (char: string | undefined) => char === undefined || /[\s;&|<>()]/.test(char);
 
 /** Read one shell word starting at `start`, returning its unquoted text and where it ends. */
@@ -155,6 +161,8 @@ const cleanPart = (raw: string): { part: string; hidden?: string } | undefined =
   while (words.length && LEADING_KEYWORDS.has(words[0])) words = words.slice(1);
   if (words.length && words[words.length - 1] === '}') words = words.slice(0, -1);
   let hidden: string | undefined;
+  /** A wrapper with nothing after it, which then is the program that runs: `env` prints the environment. */
+  let bare: string[] | undefined;
   for (;;) {
     while (words.length && isAssignment(words[0])) {
       const name = words[0].split('=')[0];
@@ -162,10 +170,13 @@ const cleanPart = (raw: string): { part: string; hidden?: string } | undefined =
       words = words.slice(1);
     }
     if (!words.length || !WRAPPERS.has(words[0].replace(/^.*\//, ''))) break;
+    const wrapper = words;
     words = words.slice(1);
     // The wrapper's own flags and counts, such as `timeout -k 5 30`, are not the program.
     while (words.length && (words[0].startsWith('-') || /^\d+[smhd]?$/.test(words[0]))) words = words.slice(1);
+    if (!words.length) bare = wrapper;
   }
+  if (!words.length && bare) return { part: bare.join(' '), ...(hidden ? { hidden } : {}) };
   if (!words.length) return hidden ? { part: '', hidden } : undefined;
   if (words.length === 1 && CLOSING_WORDS.has(words[0])) return undefined;
   return { part: words.join(' '), ...(hidden ? { hidden } : {}) };
@@ -214,7 +225,9 @@ export function analyzeCommand(command: string): CommandAnalysis {
       i += 1;
       continue;
     }
-    if (char === '#' && (current === '' || isBlank(current[current.length - 1]) || current.endsWith('\n'))) {
+    // A # starts a comment only at the start of a word: after an escaped blank it is part of the word.
+    const before = current.length - 1;
+    if (char === '#' && (current === '' || ((isBlank(current[before]) || current[before] === '\n') && !escapedAt(current, before)))) {
       const newline = command.indexOf('\n', i);
       i = newline === -1 ? command.length : newline;
       continue;
@@ -275,12 +288,21 @@ export function analyzeCommand(command: string): CommandAnalysis {
         op += command[j];
         j += 1;
       }
-      if (command[j] === '&') {
-        // Duplicating a descriptor, such as 2>&1, names no file.
+      if (command[j] === '&' && !op.includes('&')) {
         j += 1;
-        while (/[0-9-]/.test(command[j] ?? '')) j += 1;
+        while (isBlank(command[j])) j += 1;
+        const word = readWord(command, j);
+        // Duplicating or closing a descriptor, such as 2>&1 or >&-, names no file. Any other
+        // word after >& is a file that both output streams go to, as after &>.
+        if (/^(\d+|-)$/.test(word.text)) {
+          current += ' ';
+          i = word.end;
+          continue;
+        }
+        if (runsCode(command.slice(j, word.end))) hidden.push('command substitution in a redirection');
+        redirects.push({ op: `${op}&`, target: word.text, dynamic: word.dynamic || !word.text });
         current += ' ';
-        i = j;
+        i = word.end;
         continue;
       }
       while (isBlank(command[j])) j += 1;

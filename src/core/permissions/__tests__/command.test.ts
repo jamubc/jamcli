@@ -85,7 +85,8 @@ test('wrappers and assignments are stripped, so a rule names the program that ru
   expect(analyzeCommand('timeout -k 5 30 npm test').parts).toEqual(['npm test']);
   expect(analyzeCommand('nice -n 5 exec npm test').parts).toEqual(['npm test']);
   expect(analyzeCommand('command -v npm').parts).toEqual(['npm']);
-  expect(analyzeCommand('env').parts).toEqual([]);
+  // Alone, a wrapper is what runs: `env` prints the environment.
+  expect(analyzeCommand('env').parts).toEqual(['env']);
 });
 
 test('redirections are collected and kept out of the parts', () => {
@@ -110,4 +111,30 @@ test('here-document bodies are data, unless an unquoted one substitutes', () => 
   expect(unquoted.hidden).toContain('command substitution in a here-document');
   const stripped = analyzeCommand('cat <<-END\n\tbody\n\tEND\nls');
   expect(stripped.parts).toEqual(['cat', 'ls']);
+});
+
+test('a wrapper with nothing after it is the program that runs, not nothing', () => {
+  // The shell still runs `env` here, which prints the environment.
+  expect(analyzeCommand('ls | env').parts).toEqual(['ls', 'env']);
+  expect(analyzeCommand('nice').parts).toEqual(['nice']);
+  expect(analyzeCommand('FOO=1 env -i').parts).toEqual(['env -i']);
+  // With a command after it, the command is still what a rule is about.
+  expect(analyzeCommand('env FOO=1 timeout 5 ls').parts).toEqual(['ls']);
+});
+
+test('a # starts a comment only at the start of a word, as the shell reads it', () => {
+  // After an escaped space, # is part of the word, and what follows it runs.
+  expect(analyzeCommand('tree \; \\ #$(rm) log').hidden).toContain('command substitution $(...)');
+  expect(analyzeCommand('ls a\\ #b').parts).toEqual(['ls a\\ #b']);
+  expect(analyzeCommand('ls #b; rm x').parts).toEqual(['ls']);
+  expect(analyzeCommand('ls;#b').parts).toEqual(['ls']);
+});
+
+test('>& before a word that is not a descriptor writes to a file of that name', () => {
+  const targets = (line: string) => analyzeCommand(line).redirects.map((redirect) => [redirect.op, redirect.target]);
+  expect(targets('file 2 >&1-bin=sh')).toEqual([['>&', '1-bin=sh']]);
+  expect(targets('ls >& out.txt')).toEqual([['>&', 'out.txt']]);
+  expect(targets('ls >&2x')).toEqual([['>&', '2x']]);
+  // Duplicating or closing a descriptor names no file.
+  expect(targets('ls 2>&1 >&2 <&0 >&-')).toEqual([]);
 });
