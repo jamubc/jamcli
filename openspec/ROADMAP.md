@@ -94,7 +94,7 @@ at each, and the spec's requirements for removed behavior removed at archive.
 - **Frozen, not deleted.** Workflows (`src/core/workflows/`) and plugins
   (`src/core/plugins/`): no new work on either.
 
-### R4. `correct-docs`
+### R4. `correct-docs` (archived 2026-09-29)
 
 Fix the README table and the architecture claim about children.
 

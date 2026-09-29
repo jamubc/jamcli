@@ -57,10 +57,10 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`correct-docs`, R4 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
-`master`, where the owner has worked since merging the stack on 2026-09-27. It fixes the
-README's table of pages marked "not yet written" and the architecture page's claim that
-children are `jamcli -p` processes, and decides which of the documentation's mass stays.
+`add-task-corpus`, R5 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
+`master`, where the owner has worked since merging the stack on 2026-09-27. Twenty tasks
+with deterministic checks, run on a real open model, their scores committed, and a nightly
+job that runs them. The scores become the roadmap's input in place of the feature matrix.
 The review it comes from is kept verbatim in
 `openspec/reviews/2026-09-29-architecture-review.md`.
 
@@ -70,6 +70,22 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 18. `correct-docs`
+
+Archived as `2026-09-29-correct-docs`, with no spec deltas: R4 of the review units. The
+README's table links every page in `docs/`, where twelve rows had read "not yet written" for
+pages that existed, and it no longer sends readers to `openspec/DEFERRED.md`, which does not
+exist. `docs/architecture.md` says children run in-process with an engine derived from the
+parent's, not as `jamcli -p` processes. `docs/feature-matrix.md` says it is a comparison,
+not the roadmap's input. `scripts/__tests__/docs.test.ts` now fails when the README or a
+page under `docs/` names a file, by path or by link, that does not exist; it found five such
+references before the fix. The changelog and the harness specification are exempt, as
+records of the past.
+
+**The documentation's mass.** Every page stays. The pages a reader of the product needs are
+the ones the README lists; the harness specification and the interface brief are marked as
+engineering records. `docs/` and the README are 3,057 lines, beside a 2,243-line spec.
 
 ### 17. `delete-accidental-systems`
 
