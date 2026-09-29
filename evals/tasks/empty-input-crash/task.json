@@ -1,0 +1,9 @@
+{
+  "prompt": "logs/error.log shows a crash when the input has no words. Fix src/parse.ts so firstWord returns an empty string for such input.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/parse.check.ts",
+  "protected": [
+    "src/parse.check.ts"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "prompt": "average([]) in src/stats.ts returns NaN. Make it return 0, and keep its other behavior. Do not change src/stats.check.ts.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/stats.check.ts",
+  "protected": [
+    "src/stats.check.ts"
+  ]
+}

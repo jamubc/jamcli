@@ -1,0 +1,9 @@
+{
+  "prompt": "Convert readConfig in src/files.ts from a callback to an async function that returns the parsed value and rejects on an error, using fs.promises. The tests in src/files.check.ts already expect that.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/files.check.ts && ! grep -q 'function (error' src/files.ts",
+  "protected": [
+    "src/files.check.ts"
+  ]
+}

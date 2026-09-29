@@ -1,0 +1,6 @@
+{
+  "prompt": "In config/settings.json, set retries to 5 and timeout_ms to 2000. Keep every other setting as it is.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "sh \"$TASK_DIR/check.sh\""
+}

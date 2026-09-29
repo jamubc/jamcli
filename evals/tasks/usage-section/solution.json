@@ -1,0 +1,5 @@
+{
+  "files": {
+    "docs/guide.txt": "Sync guide\n\nThis tool syncs the local folder with the remote one.\n\nUsage\n\n  bun src/cli.ts [--verbose] [--quiet]\n\n  --verbose  also print the details of what was checked\n  --quiet    print nothing while syncing\n"
+  }
+}

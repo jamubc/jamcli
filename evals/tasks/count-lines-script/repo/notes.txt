@@ -1,0 +1,2 @@
+Not counted: this is not a .ts file.
+Second line.

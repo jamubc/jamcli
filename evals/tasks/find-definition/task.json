@@ -1,0 +1,8 @@
+{
+  "prompt": "In which file is the function parseInvoice defined? Answer with its path relative to the project.",
+  "kind": "answer",
+  "mode": "auto",
+  "answer": [
+    "src/billing/invoice.ts"
+  ]
+}

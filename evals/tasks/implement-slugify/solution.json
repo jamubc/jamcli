@@ -1,0 +1,5 @@
+{
+  "files": {
+    "src/slug.ts": "/** A lowercase, dash-separated form of `text` for use in a URL. */\nexport function slugify(text: string): string {\n  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\n}\n"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "files": {
+    "scripts/count-lines.ts": "import fs from 'fs';\nimport path from 'path';\n\nconst walk = (dir: string): string[] =>\n  fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? walk(path.join(dir, entry.name)) : entry.name.endsWith('.ts') ? [path.join(dir, entry.name)] : []));\n\nconst total = walk('src').reduce((sum, file) => sum + (fs.readFileSync(file, 'utf8').match(/\\n/g)?.length ?? 0), 0);\nconsole.log(total);\n"
+  }
+}

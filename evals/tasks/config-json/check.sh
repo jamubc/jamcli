@@ -1,0 +1,1 @@
+bun -e 'const s = JSON.parse(require("fs").readFileSync("config/settings.json", "utf8")); const ok = s.retries === 5 && s.timeout_ms === 2000 && s.name === "sync" && JSON.stringify(s.endpoints) === JSON.stringify(["a", "b"]) && Object.keys(s).length === 4; process.exit(ok ? 0 : 1);'

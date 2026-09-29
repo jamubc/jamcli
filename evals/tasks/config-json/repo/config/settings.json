@@ -1,0 +1,9 @@
+{
+  "name": "sync",
+  "retries": 3,
+  "timeout_ms": 1000,
+  "endpoints": [
+    "a",
+    "b"
+  ]
+}

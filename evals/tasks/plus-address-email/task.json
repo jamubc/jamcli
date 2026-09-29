@@ -1,0 +1,9 @@
+{
+  "prompt": "isValidEmail in src/email.ts rejects addresses with a plus, such as a+b@x.io. Make it accept them, without accepting anything it rejects now. Do not change src/email.check.ts.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/email.check.ts",
+  "protected": [
+    "src/email.check.ts"
+  ]
+}

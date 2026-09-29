@@ -1,0 +1,5 @@
+{
+  "files": {
+    "src/parse.ts": "/** The first word of a line, lowercased, or an empty string when it has none. */\nexport function firstWord(line: string): string {\n  return line.match(/\\w+/)?.[0].toLowerCase() ?? '';\n}\n"
+  }
+}

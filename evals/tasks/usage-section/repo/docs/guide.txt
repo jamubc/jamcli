@@ -1,0 +1,3 @@
+Sync guide
+
+This tool syncs the local folder with the remote one.

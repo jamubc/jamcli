@@ -1,0 +1,9 @@
+{
+  "prompt": "Implement slugify in src/slug.ts so the tests in src/slug.check.ts pass. Do not change the tests. Run them with: bun test ./src/slug.check.ts",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/slug.check.ts",
+  "protected": [
+    "src/slug.check.ts"
+  ]
+}

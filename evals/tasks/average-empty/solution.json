@@ -1,0 +1,5 @@
+{
+  "files": {
+    "src/stats.ts": "export const average = (xs: number[]): number => (xs.length ? xs.reduce((sum, x) => sum + x, 0) / xs.length : 0);\n"
+  }
+}

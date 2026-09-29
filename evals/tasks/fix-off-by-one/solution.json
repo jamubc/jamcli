@@ -1,0 +1,5 @@
+{
+  "files": {
+    "src/range.ts": "/** The numbers from 0 up to, but not including, n. */\nexport function range(n: number): number[] {\n  const out: number[] = [];\n  for (let i = 0; i < n; i += 1) out.push(i);\n  return out;\n}\n"
+  }
+}

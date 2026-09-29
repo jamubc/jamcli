@@ -1,0 +1,6 @@
+{
+  "prompt": "Add a --version flag to src/cli.ts that prints the version from package.json and nothing else. Keep --help working.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "test \"$(bun src/cli.ts --version)\" = \"1.4.0\" && bun src/cli.ts --help | grep -q usage"
+}

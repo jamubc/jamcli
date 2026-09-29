@@ -1,0 +1,5 @@
+{
+  "files": {
+    "src/cli.ts": "import pkg from '../package.json';\n\nconst args = process.argv.slice(2);\n\nif (args.includes('--version')) {\n  console.log(pkg.version);\n} else if (args.includes('--help')) {\n  console.log('usage: tool [--help] [--version]');\n} else {\n  console.log('tool: nothing to do');\n}\n"
+  }
+}

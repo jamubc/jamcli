@@ -1,0 +1,6 @@
+{
+  "prompt": "Write scripts/count-lines.ts, runnable with bun, that prints the total number of lines in all .ts files under src, counted as wc -l counts them, as a single number.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "test \"$(bun scripts/count-lines.ts | tr -d '[:space:]')\" = \"12\""
+}

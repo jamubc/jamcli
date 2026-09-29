@@ -1,0 +1,7 @@
+{
+  "files": {
+    "src/api.ts": "export async function loadUser(id: number): Promise<{ id: number; name: string }> {\n  return { id, name: `user${id}` };\n}\n",
+    "src/app.ts": "import { loadUser } from './api';\n\nexport async function greet(id: number): Promise<string> {\n  const user = await loadUser(id);\n  return `Hello, ${user.name}`;\n}\n",
+    "src/cli.ts": "import { loadUser } from './api';\n\nexport async function show(id: number): Promise<string> {\n  return JSON.stringify(await loadUser(id));\n}\n"
+  }
+}

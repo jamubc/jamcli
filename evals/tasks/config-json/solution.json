@@ -1,0 +1,5 @@
+{
+  "files": {
+    "config/settings.json": "{\n  \"name\": \"sync\",\n  \"retries\": 5,\n  \"timeout_ms\": 2000,\n  \"endpoints\": [\n    \"a\",\n    \"b\"\n  ]\n}\n"
+  }
+}

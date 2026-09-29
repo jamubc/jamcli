@@ -1,0 +1,9 @@
+{
+  "prompt": "The tests in src/range.check.ts fail. Fix the bug in src/range.ts without changing the tests. Run them with: bun test ./src/range.check.ts",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/range.check.ts",
+  "protected": [
+    "src/range.check.ts"
+  ]
+}

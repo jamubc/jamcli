@@ -1,0 +1,5 @@
+{
+  "files": {
+    "src/clamp.test.ts": "import { expect, test } from 'bun:test';\nimport { clamp } from './clamp';\n\ntest('below the range', () => expect(clamp(-5, 0, 10)).toBe(0));\ntest('inside the range', () => expect(clamp(5, 0, 10)).toBe(5));\ntest('above the range', () => expect(clamp(15, 0, 10)).toBe(10));\n"
+  }
+}

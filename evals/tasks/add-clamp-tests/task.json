@@ -1,0 +1,6 @@
+{
+  "prompt": "Add tests for clamp in src/clamp.test.ts using bun:test: one for a value below the range, one inside it, and one above it.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "sh \"$TASK_DIR/check.sh\""
+}

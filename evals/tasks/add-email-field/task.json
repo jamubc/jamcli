@@ -1,0 +1,9 @@
+{
+  "prompt": "Users need an email. Add an email field to User in src/types.ts, and a second parameter to createUser in src/users.ts that sets it. The tests in src/users.check.ts already expect that.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/users.check.ts && grep -q email src/types.ts",
+  "protected": [
+    "src/users.check.ts"
+  ]
+}

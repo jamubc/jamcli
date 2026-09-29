@@ -1,0 +1,5 @@
+{
+  "files": {
+    "src/files.ts": "import fs from 'fs';\n\nexport async function readConfig(path: string): Promise<unknown> {\n  return JSON.parse(await fs.promises.readFile(path, 'utf8'));\n}\n"
+  }
+}

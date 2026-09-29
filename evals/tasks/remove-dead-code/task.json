@@ -1,0 +1,9 @@
+{
+  "prompt": "Remove the functions in src/utils.ts that nothing in the project uses. Keep everything that is used.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "! grep -q legacyFormat src/utils.ts && grep -q formatDate src/utils.ts && grep -q slugKey src/utils.ts && bun test ./src/report.check.ts",
+  "protected": [
+    "src/report.check.ts"
+  ]
+}

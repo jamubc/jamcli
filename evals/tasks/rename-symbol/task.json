@@ -1,0 +1,9 @@
+{
+  "prompt": "Rename the function fetchUser to loadUser everywhere in this project, including every place that calls it.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/app.check.ts && ! grep -rn fetchUser src",
+  "protected": [
+    "src/app.check.ts"
+  ]
+}

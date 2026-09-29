@@ -1,0 +1,6 @@
+{
+  "prompt": "Add a Usage section to docs/guide.txt that describes the --verbose and --quiet flags src/cli.ts accepts.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "grep -qi 'usage' docs/guide.txt && grep -q -- '--verbose' docs/guide.txt && grep -q -- '--quiet' docs/guide.txt && grep -q 'syncs the local folder' docs/guide.txt"
+}

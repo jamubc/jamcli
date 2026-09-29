@@ -1,0 +1,9 @@
+{
+  "prompt": "logLevel in src/config.ts should default to 'info' when LOG_LEVEL is unset or empty. Do not change src/config.check.ts.",
+  "kind": "change",
+  "mode": "auto",
+  "check": "bun test ./src/config.check.ts",
+  "protected": [
+    "src/config.check.ts"
+  ]
+}

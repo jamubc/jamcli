@@ -1,0 +1,6 @@
+{
+  "files": {
+    "src/types.ts": "export interface User {\n  id: number;\n  name: string;\n  email: string;\n}\n",
+    "src/users.ts": "import type { User } from './types';\n\nlet next = 1;\n\nexport function createUser(name: string, email: string): User {\n  return { id: next++, name, email };\n}\n"
+  }
+}
