@@ -13,6 +13,9 @@ Every tool call is decided before it runs, deny first:
 - A rule's subject is the thing it reaches: a path for file tools, a command for
   `run_command`, a domain for `web_fetch`. `jamcli audit` reports tool access, isolation,
   and guardrail findings, and `/permissions` shows and changes the rules in effect.
+- Each decision is logged with who made it, the rule, and the file and key that rule came
+  from. `jamcli audit ledger` lists, across the project's sessions, every call that changed
+  something or was refused, with that record and the files it changed.
 - A workflow's agent step may lower its mode, never raise it above the session's.
 - A mode that allows changes inside the project still asks before a change under the
   project's `.git/` or `.jamcli/`: a hook, an fsmonitor, or a permission rule there decides

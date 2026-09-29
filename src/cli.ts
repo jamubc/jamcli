@@ -51,7 +51,8 @@ export interface ParsedArgs {
   configCommand?: { action?: ConfigAction; args: string[] };
   /** `jamcli auth`, likewise. */
   authCommand?: { action?: AuthAction; args: string[] };
-  audit: boolean;
+  /** `jamcli audit` and what follows it: nothing for the configuration report, `ledger …` for the decisions. */
+  audit?: string[];
   /** `jamcli skill` and `jamcli hooks`, with their own arguments. */
   skillCommand?: string[];
   hooksCommand?: string[];
@@ -79,7 +80,6 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     verbosity: 0,
     help: false,
     version: false,
-    audit: false,
     acp: false,
     unknown: [],
   };
@@ -190,8 +190,8 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       continue;
     }
     if (token === 'audit') {
-      parsed.audit = true;
-      continue;
+      parsed.audit = argv.slice(i + 1);
+      return parsed;
     }
     if (token === 'doctor') {
       parsed.doctor = argv.slice(i + 1);
@@ -281,6 +281,8 @@ export const USAGE = `Usage: jamcli [options]
 
   jamcli sessions list|search <query>|show <id>|export <id>|fork <id>|score <id>
   jamcli audit                 Report tool access, isolation, and guardrail findings
+  jamcli audit ledger          What each session changed, under which rule, from which source
+                               [--session <id>] [--since <yyyy-mm-dd>] [--refused] [--json]
   jamcli doctor [--json] [--no-mcp]   Check providers, models, tools, the sandbox, and configuration
   jamcli config list|get|set|unset|migrate   Read and change configuration, layer by layer
   jamcli auth set|get|remove|list|login   Store provider keys in the keychain, or sign in to OpenRouter
@@ -354,7 +356,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
   const projectRoot = resolveJamcliProjectRoot();
 
   if (parsed.audit) {
-    return runAuditCli();
+    return runAuditCli(parsed.audit, projectRoot);
   }
 
   if (parsed.skillCommand) {
