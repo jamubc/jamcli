@@ -51,11 +51,8 @@ export function spendOf(runtime: Runtime): Pick<StatusData, 'costUsd' | 'unprice
   };
 }
 
-/** How full the next request is, 0 to 100, when a model is chosen and its window is known. */
-export function contextPercentOf(runtime: Runtime): number | undefined {
-  const usage = runtime.contextUsage();
-  return runtime.model.model && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined;
-}
+/** How full a request of `used` tokens is, 0 to 100, when the window is known. */
+const shareOf = (used: number, budget: number): number | undefined => (budget > 0 ? Math.min(100, (used / budget) * 100) : undefined);
 
 export function statusOf(runtime: Runtime): Partial<StatusData> {
   const usage = runtime.contextUsage();
@@ -66,7 +63,7 @@ export function statusOf(runtime: Runtime): Partial<StatusData> {
     // The effort shows beside the model once it is anything but the model's own default.
     model: chosen ? `${runtime.model.provider}:${runtime.model.model}${choiceOf(runtime.thinking) === 'auto' ? '' : ` (${choiceOf(runtime.thinking)})`}` : '',
     sandbox: runtime.sandbox.kind,
-    contextPercent: chosen && usage.budget > 0 ? Math.min(100, (usage.used / usage.budget) * 100) : undefined,
+    contextPercent: chosen ? shareOf(usage.used, usage.budget) : undefined,
     ...spendOf(runtime),
     mcpServers: new Set(runtime.tools.filter((tool) => tool.source === 'mcp').map((tool) => tool.server)).size,
     lspServers: runtime.lspServers.length,
@@ -125,6 +122,8 @@ export class SessionController {
     this.dispatch({ type: 'submit', text: display ?? text });
     // Errors already shown as a `notice` during the turn are not repeated as the final result's error.
     const shownErrors = new Set<string>();
+    const sessionModel = `${this.runtime.model.provider}:${this.runtime.model.model}`;
+    const budget = this.runtime.contextUsage().budget;
     try {
       const result = await this.runtime.run(
         text,
@@ -147,8 +146,11 @@ export class SessionController {
           }
           if (event.type === 'notice' && event.level === 'error') shownErrors.add(event.message);
           this.dispatch({ type: 'event', event });
-          // A long turn grows the context with every request, so the share is read again with each one of this session's own.
-          if (event.type === 'usage' && !event.delegatedSession) this.dispatch({ type: 'status', patch: { contextPercent: contextPercentOf(this.runtime) } });
+          // A long turn grows the context with every request, and the runtime keeps the conversation only when the turn ends, so meanwhile the share is what this session's last request carried, plus the reply it drew.
+          if (event.type === 'usage' && !event.delegatedSession && !event.unreported && (!event.model || event.model === sessionModel)) {
+            const share = shareOf(event.usage.prompt_tokens + event.usage.completion_tokens, budget);
+            if (share !== undefined) this.dispatch({ type: 'status', patch: { contextPercent: share } });
+          }
         },
         turn
       );

@@ -67,29 +67,28 @@ describe('SessionController work watching', () => {
 });
 
 describe('SessionController context share', () => {
-  test('the context share is read again with each request of the session, not at the end of a long turn, and not for a child', async () => {
-    let used = 100;
-    const usage = { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 };
+  test('the share follows what each request of the session carried, since the runtime keeps the conversation only at the end of the turn', async () => {
+    // The runtime's own count holds still through the turn, as the real one does.
+    const request = (prompt: number, completion: number, extra = {}): AgentEvent => ({ type: 'usage', usage: { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion }, model: 'p:m', ...extra });
     const runtime = {
       ...fakeRuntime([], { status: 'ok' } as RunResult),
       run: async (_text: string, onEvent: (event: AgentEvent) => void) => {
-        used = 400;
-        onEvent({ type: 'usage', usage });
-        used = 900;
-        onEvent({ type: 'usage', usage });
-        used = 5_000;
-        onEvent({ type: 'usage', usage, delegatedSession: 'child-1' });
+        onEvent(request(400, 0));
+        onEvent(request(850, 50));
+        // Neither a child's request, nor another model's, nor one with no counts is the session's own.
+        onEvent(request(5_000, 0, { delegatedSession: 'child-1' }));
+        onEvent(request(700, 0, { model: 'trust:judge' }));
+        onEvent(request(0, 0, { unreported: true }));
         return { status: 'ok' } as RunResult;
       },
-      contextUsage: () => ({ used, budget: 1_000 }),
+      contextUsage: () => ({ used: 100, budget: 1_000 }),
       model: { provider: 'p', model: 'm' },
       thinking: {},
     } as any;
     const actions: ViewAction[] = [];
     await new SessionController(runtime, (action) => actions.push(action)).submit('go');
     const shares = actions.filter((action: any) => action.type === 'status' && action.patch.contextPercent !== undefined).map((action: any) => action.patch.contextPercent);
-    // Two of the session's own requests, then the end of the turn reads it once more; the child's request adds none.
-    expect(shares.slice(0, 2)).toEqual([40, 90]);
-    expect(shares).toHaveLength(3);
+    // Two of the session's own requests, then the end of the turn reads the runtime once more.
+    expect(shares).toEqual([40, 90, 10]);
   });
 });
