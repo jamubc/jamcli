@@ -1,7 +1,6 @@
 import { delegateToAgent, loadAgentConfigs } from '../../services/AcpClient.js';
 import type { AcpAgentConfig } from '../../services/AcpClient.js';
 import type { JsonSchema, RegisteredTool, ToolContext, ToolRunPayload } from '../../types/tools.js';
-import { resolveToolPolicy } from '../policy/index.js';
 
 interface RunningDelegation {
   id: string;
@@ -48,15 +47,10 @@ const findAgent = async (projectRoot: string, id: string): Promise<AcpAgentConfi
 };
 
 /**
- * The local policy governs this tool exactly as it governs any other: when the
- * decision is not allow, the run is refused before an external process starts.
+ * The permission engine decides a call to this tool as it decides any other, before the
+ * runner starts, so an external process starts only for a call it allowed.
  */
 export async function delegateToAcpRunner(args: Record<string, any>, ctx: ToolContext): Promise<ToolRunPayload> {
-  const decision = resolveToolPolicy('delegate', {});
-  if (decision.decision === 'deny') {
-    return { output: `Refused: ${decision.reason}` };
-  }
-
   const agentId = String(args.agent ?? '');
   const prompt = String(args.prompt ?? '');
   const config = await findAgent(ctx.projectRoot, agentId);
