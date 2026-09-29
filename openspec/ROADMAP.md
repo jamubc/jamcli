@@ -60,7 +60,7 @@ held to the child's skill for the rest of its turn.
 3. The split, in refactor commits kept apart from behavior, each piece testable without
    the whole assembly. The suite's time and size are measured before and after.
 
-### R3. `delete-accidental-systems`
+### R3. `delete-accidental-systems` (archived 2026-09-29)
 
 Delete the legacy config and policy systems, `classifier/`, `HarnessOverrides`, and the
 research pipelines. Freeze workflows and plugins. One deletion per commit, the four gates

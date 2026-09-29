@@ -57,12 +57,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`delete-accidental-systems`, R3 of the review units at the top of `ROADMAP.md`, opened
-2026-09-29 on `master`, where the owner has worked since merging the stack on 2026-09-27.
-It deletes what duplicates or sits beside the product: the legacy configuration and policy
-systems, `classifier/`, the harness search, the research pipelines, the trust gate, and the
-repeated-read refusal, and freezes workflows and plugins. The review it comes from is kept
-verbatim in `openspec/reviews/2026-09-29-architecture-review.md`.
+`correct-docs`, R4 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
+`master`, where the owner has worked since merging the stack on 2026-09-27. It fixes the
+README's table of pages marked "not yet written" and the architecture page's claim that
+children are `jamcli -p` processes, and decides which of the documentation's mass stays.
+The review it comes from is kept verbatim in
+`openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
 approve it before any task begins, and `git checkout 9d9f5c6 --
@@ -70,6 +70,45 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 17. `delete-accidental-systems`
+
+Archived as `2026-09-29-delete-accidental-systems`: 2 requirements modified (Session Runtime
+Assembly, Delegation Audit), 1 removed (Tool Output Trust Gate). R3 of the review units.
+The deletions, each a commit through the four gates, took out 4,858 lines across 82 files: the
+harness search and the overrides it threaded through the runtime (`28070e9`); M3, the
+repeated-read refusal, with a test that failed while it existed: the person edits the file
+between two reads, and the second must see it (`4945499`); `/research`, its pipelines, and
+the research agent (`bfc095b`); `classifier/` (`93119d9`); the legacy policy table, once
+`jamcli audit` reported from the engine (`62aaae7`, `8fd5e1d`); the legacy configuration
+service (`1155c16`); the hand-written configuration types, now derived from the schema
+(`803c2c3`); and the trust gate (`be5da36`). Workflows and plugins are frozen: no new work
+on either. `git checkout bfc095b -- classifier` restores the classifier's code; its data and
+models stay where they were, now ignored by the root `.gitignore`, since the file that
+ignored them left with the code.
+
+**What closing it found.**
+
+- The old audit was wrong in both directions. On a project whose `config.json` allowed
+  `run_command` outright it said the tool "asks for approval, which is the expected
+  default", because it read only the legacy `mcp.json` block and never the mode or any other
+  rule. And it called `run_command: true` in that block critical, "never asks", where the
+  engine reads `true` as enabled with the tool's own default, which is to ask. It also said
+  an MCP server inherits the full environment; a server gets JamCLI's environment less its
+  credentials, and the real finding is that it runs outside the sandbox.
+- Deriving `Config` from the schema turned up two drifts the cast had hidden: the status
+  style names were typed as known ids while the schema accepts any string (an unknown one
+  falls back to the default, now said at the one place it is cast), and a `delegation` block
+  that set only some limits reached the tools with the rest undefined, bounded only because
+  `bounds.ts` merged the defaults again; they are merged where the context is built.
+- Removing the trust gate took a line out of the system prompt every request carries in
+  every mode, so the base request is smaller.
+- The site's receipt check, run for the auto mode page, found two receipts gone stale: the
+  skill tool, moved to `runtime/sources.ts` by R2, and `PLAN_NOTE`, gone from `modes.ts` since
+  `478237e` and quoted on the prompt page in a wording the product no longer sends (`4036cd7`).
+  The site builds: 88 receipts resolve and 15 proofs hold.
+- Left: the `toolDescriptions` runtime option, a trial knob like the harness overrides, which
+  a test still uses; and `typesafe` credentials, still accepted and stored, read by nothing.
 
 ### 16. `scope-child-runtime`
 

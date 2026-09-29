@@ -902,68 +902,6 @@ and end SHALL be visible to the person.
 - **THEN** delegation depth is bounded by configuration
 - **AND** exceeding it returns an error instead of spawning another level
 
-### Requirement: Tool Output Trust Gate
-JamCLI SHALL, in auto mode, screen tool results for prompt injection before they enter
-model context on every surface, with the classifier the user names, and SHALL bound and
-delimit the output it sends to the classifier.
-
-#### Scenario: Screen in auto mode only
-- **WHEN** the permission mode is not auto
-- **THEN** tool results enter context unscreened
-- **AND** the gate reports nothing
-
-#### Scenario: Choose the classifier
-- **WHEN** `trust.model` names a model on any configured provider, a model on Ollama, or TypeSafe's Jev
-- **THEN** that model classifies the results in auto mode
-- **AND** no other model, such as an agent's, is used in its place
-
-#### Scenario: No classifier in auto mode
-- **WHEN** auto mode runs with no classifier configured
-- **THEN** results pass through unscreened
-- **AND** JamCLI says that the gate is off and how to set `trust.model`, once rather than on every turn
-
-#### Scenario: Classify tool results
-- **WHEN** tool results are about to be appended to context
-- **THEN** JamCLI submits them in one batched classification request scoring each result for relevance and injection
-
-#### Scenario: Delimit untrusted output
-- **WHEN** tool output is placed in the classification request
-- **THEN** it is escaped so it cannot close or forge the result delimiters
-- **AND** it is truncated to the configured bound
-
-#### Scenario: Drop an injection first
-- **WHEN** a result is classified as an injection
-- **THEN** it is removed before relevance filtering is applied
-- **AND** the transcript records that a result was removed and why
-
-#### Scenario: Fail open
-- **WHEN** the classification request fails, times out, or returns an unusable response
-- **THEN** the unmodified results are kept
-- **AND** the failure is reported without blocking the turn
-
-#### Scenario: Never fall back to an injection
-- **WHEN** filtering leaves no results
-- **THEN** JamCLI returns an empty result set
-- **AND** does not reintroduce a result that was classified as an injection
-
-#### Scenario: Deduplicate before classifying
-- **WHEN** tool results are prepared for screening
-- **THEN** locally duplicated content is sent to the classifier once
-- **AND** each duplicate takes the verdict of the result it repeats, and is never withheld for being a duplicate
-
-#### Scenario: Leave the session's own state alone
-- **WHEN** a result comes from a tool that reports only the session's own state, such as the todo list
-- **THEN** it is not screened and enters context unmodified
-
-#### Scenario: Disable the gate
-- **WHEN** the trust gate is disabled by configuration
-- **THEN** tool results pass through unmodified
-- **AND** the disabled state is visible in configuration
-
-#### Scenario: Report the gate accurately
-- **WHEN** the user inspects configuration or runs `jamcli doctor`
-- **THEN** the reported gate state is the state that applies to the session's turns
-
 ### Requirement: Project Rules Hierarchy
 JamCLI SHALL load project instruction files from the project root down to the working
 directory and inject them into the system prompt.
@@ -1034,6 +972,11 @@ hooks, plugins, tool permissions, and stored credentials for unsafe combinations
 #### Scenario: Flag stored secrets and broad rules
 - **WHEN** a provider key is stored in a project file or a rule allows every command
 - **THEN** the audit reports it
+
+#### Scenario: Report what the engine decides
+- **WHEN** the audit reports what each tool may do
+- **THEN** each verdict is the one the session's permission engine gives in the configured mode, from the same rules, with the rule and the file that decided it
+- **AND** a tool whose calls the engine judges by their arguments, such as a command, is reported as depending on them rather than as one verdict
 
 #### Scenario: Machine-readable output
 - **WHEN** the user runs `jamcli audit --format sarif`
@@ -1209,8 +1152,8 @@ to other agents instead of reimplementing them.
 
 ### Requirement: Session Runtime Assembly
 JamCLI SHALL assemble every session through one runtime factory that builds the provider,
-tool registry, permission engine, sandbox, rules, hooks, context management, trust gate,
-and transcript, and every surface SHALL obtain its session from that factory.
+tool registry, permission engine, sandbox, rules, hooks, context management, and
+transcript, and every surface SHALL obtain its session from that factory.
 
 #### Scenario: Identical tools across surfaces
 - **WHEN** the interface, a headless run, and an ACP session are started in the same project with the same configuration
