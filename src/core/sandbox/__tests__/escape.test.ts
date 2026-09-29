@@ -2,20 +2,21 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { bwrapSandbox, detectSandbox, subprocessEnv } from '../index.js';
+import { bwrapSandbox, detectSandbox, seatbeltSandbox, subprocessEnv } from '../index.js';
 import { createBuiltinRegistry } from '../../tools/registry.js';
 
 /**
  * A hostile command tries every escape the sandbox exists to stop: reading credentials,
  * writing outside the project, reaching the network, reading a provider key, and
- * reaching an agent through a Unix socket. Each attempt must fail under bubblewrap.
+ * reaching an agent through a Unix socket. Each attempt must fail under the platform's
+ * sandbox: bubblewrap on Linux, Seatbelt on macOS.
  */
 
 const detected = detectSandbox({ projectRoot: os.tmpdir(), platform: process.platform });
 const executable = detected.kind === 'bwrap' ? detected.reason.replace('bubblewrap at ', '') : '';
 
-if (detected.kind !== 'bwrap') {
-  test.skip(`sandbox escape tests need bubblewrap, and here ${detected.reason}`, () => {});
+if (detected.kind === 'none') {
+  test.skip(`sandbox escape tests need a sandbox, and here ${detected.reason}`, () => {});
 } else {
   const SECRET = `planted-secret-${process.pid}`;
   let base: string;
@@ -26,11 +27,12 @@ if (detected.kind !== 'bwrap') {
   const sockets: { stop(): void }[] = [];
 
   beforeAll(() => {
-    base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-escape-')));
+    // In /var/tmp, which neither sandbox makes writable: bubblewrap replaces /tmp, and Seatbelt
+    // lets commands write the temporary directory, so a home there would prove nothing.
+    base = fs.realpathSync(fs.mkdtempSync(path.join('/var/tmp', 'jamcli-escape-')));
     home = path.join(base, 'home');
     project = path.join(base, 'project');
-    // Outside /tmp, which the sandbox replaces, so these paths are the real ones.
-    outside = fs.mkdtempSync(path.join('/var/tmp', 'jamcli-escape-'));
+    outside = fs.realpathSync(fs.mkdtempSync(path.join('/var/tmp', 'jamcli-escape-')));
     fs.mkdirSync(path.join(home, '.ssh'), { recursive: true });
     fs.mkdirSync(path.join(home, '.aws'), { recursive: true });
     fs.writeFileSync(path.join(home, '.ssh', 'id_rsa'), SECRET);
@@ -53,7 +55,9 @@ if (detected.kind !== 'bwrap') {
   });
 
   const run = async (command: string, extra: Record<string, string | undefined> = {}) => {
-    const sandbox = bwrapSandbox({ projectRoot: project, executable, home, hidden: [path.join(outside, 'daemon.sock')] });
+    const hidden = [path.join(outside, 'daemon.sock')];
+    const sandbox =
+      detected.kind === 'bwrap' ? bwrapSandbox({ projectRoot: project, executable, home, hidden }) : seatbeltSandbox({ projectRoot: project, home, hidden, tmpdir: process.env.TMPDIR });
     const env = subprocessEnv({ ...process.env, HOME: home, ...extra });
     const result = await createBuiltinRegistry().execute('run_command', { command }, { projectRoot: project, env, wrapCommand: sandbox.wrap });
     return result.output;
