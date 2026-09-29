@@ -1,0 +1,40 @@
+name: Local path
+
+# The local-first path is a hard rule: a turn on a small model served by Ollama, held to an
+# 8,192-token window, must work. This runs one on every push, with the model cached.
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+env:
+  MODEL: qwen2.5:1.5b
+
+jobs:
+  ollama:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          # The installer starts a service on the port; the job serves from the cached models instead.
+          sudo systemctl stop ollama || true
+      - name: Keep the model between runs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.ollama/models
+          key: ollama-${{ env.MODEL }}
+      - name: Serve and pull the model
+        run: |
+          OLLAMA_MODELS="$HOME/.ollama/models" nohup ollama serve > ollama.log 2>&1 &
+          for attempt in $(seq 1 30); do curl -fs http://localhost:11434/api/version && break; sleep 1; done
+          OLLAMA_MODELS="$HOME/.ollama/models" ollama pull "$MODEL"
+      - name: A turn at the 8,192-token window
+        run: bun scripts/local-path.ts --model "ollama:$MODEL" --window 8192 | tee -a "$GITHUB_STEP_SUMMARY"
