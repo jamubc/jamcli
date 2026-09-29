@@ -584,7 +584,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   let permissions: PermissionEngine;
   if (options.parent) {
-    permissions = options.parent.permissions;
+    permissions = options.parent.permissions.derive();
   } else {
     const assembled = sessionPermissions({
       projectRoot,
@@ -1430,9 +1430,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         if (result.session) session = result.session;
         return result;
       } finally {
-        // What a command or a skill narrowed lasts the turn. A delegated run shares its
-        // parent's engine, so only the session that owns it lets go.
-        if (!options.parent && permissions.narrowed) {
+        // What a command or a skill narrowed lasts the turn. A delegated run's engine is
+        // derived from its parent's, so what it narrowed is its own to let go.
+        if (permissions.narrowed) {
           permissions.narrow(undefined);
           reassemble();
         }

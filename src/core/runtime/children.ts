@@ -20,7 +20,7 @@ export type UsageEvent = Extract<AgentEvent, { type: 'usage' }>;
 export interface ParentSession {
   sessionId: string;
   depth: number;
-  /** The parent's permission engine, which the child decides with. */
+  /** The parent's permission engine, which the child's own is derived from. */
   permissions: PermissionEngine;
   /** The parent's work table, so what a child starts is the person's to see and stop too. */
   work: WorkTable;
@@ -57,8 +57,8 @@ const STATUS: Record<string, DelegationOutcome['status']> = { ok: 'ok', cancelle
 
 /**
  * Children run in this process as runtimes of their own, with their own session. A child
- * decides with its parent's permission engine, so nothing it is configured with can widen
- * what the parent allows. What the parent would ask about, the child asks the parent's
+ * decides with an engine derived from its parent's, so nothing it is configured with can
+ * widen what the parent allows, and what it narrows stays its own. What the parent would ask about, the child asks the parent's
  * surface, in the background too; where nobody can answer, the call is not made.
  */
 export function childLauncher(options: ChildLauncherOptions): Delegate {

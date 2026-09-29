@@ -106,6 +106,34 @@ test('a child cannot widen the policy it inherits', async () => {
   expect(asked).toEqual(['edit']);
 });
 
+test("a child's skill narrows the child only, and the parent's narrowing still holds the child", async () => {
+  const dir = path.join(root, '.agents', 'skills', 'read-only');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), '---\nname: read-only\ndescription: Look without touching.\nallowed-tools: read_file\n---\nOnly read.\n');
+  const parent = await start({ allowTools: ['task', 'edit', 'skill'] });
+  server.enqueue(
+    { toolCalls: [delegateCall('look around')] },
+    { toolCalls: [{ id: 's1', name: 'skill', arguments: { name: 'read-only' } }] },
+    { text: 'child looked' },
+    { toolCalls: [editCall] },
+    { text: 'parent edited' }
+  );
+  const results: { tool: string; status?: string; output: string }[] = [];
+  await parent.run('delegate, then edit', (event) => event.type === 'tool_result' && results.push(event.result));
+  expect(results.find((result) => result.tool === 'edit')).toMatchObject({ status: 'ok' });
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('new\n');
+
+  // What a command narrowed for the parent's turn reaches the child it starts.
+  fs.writeFileSync(path.join(root, 'a.txt'), 'old\n');
+  server.enqueue({ toolCalls: [delegateCall('change a.txt')] }, { toolCalls: [editCall] }, { text: 'child refused' }, { text: 'parent done' });
+  const childResults: { tool: string; status?: string; output: string }[] = [];
+  await parent.run('delegate the edit', (event) => event.type === 'tool_result' && childResults.push(event.result), { allowedTools: ['task', 'read_file'], label: '/look' });
+  expect(fs.readFileSync(path.join(root, 'a.txt'), 'utf8')).toBe('old\n');
+  const childLog = SessionLog.open(root, (childResults.find((result) => result.tool === 'task')!.output.match(/child session (\S+)/) ?? [])[1]!);
+  expect(childLog.events().find((event) => event.type === 'approval')).toMatchObject({ allow: false, reason: '/look allows only task, read_file' });
+  await parent.close();
+});
+
 test('an unreachable ollama refuses the delegation cleanly instead of failing the child raw', async () => {
   // The parent runs on openai here, since the point is the *child's* ollama chain being
   // unreachable, not the parent's own model.

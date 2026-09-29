@@ -77,31 +77,42 @@ const WHAT_TOOLS_DO: Record<string, string> = {
  * Every verdict names the rule, scope, and source that produced it.
  */
 export class PermissionEngine {
-  private rules: Rule[];
-  private currentMode: PermissionMode;
+  /** The rules and the mode, one object shared with every engine derived from this one. */
+  private readonly shared: { rules: Rule[]; mode: PermissionMode };
   readonly sandboxed: boolean;
   /** While a command or skill with `allowed-tools` is active: only what these rules name may run. */
   private narrowing: { rules: Rule[]; label: string } | undefined;
 
-  constructor(private readonly options: PermissionEngineOptions) {
-    this.rules = [...(options.rules ?? [])];
-    this.currentMode = options.mode ?? 'default';
+  constructor(
+    private readonly options: PermissionEngineOptions,
+    private readonly parent?: PermissionEngine
+  ) {
+    this.shared = parent ? parent.shared : { rules: [...(options.rules ?? [])], mode: options.mode ?? 'default' };
     this.sandboxed = Boolean(options.sandboxed);
   }
 
+  /**
+   * The engine a delegated run decides with. It shares this engine's rules, grants, and
+   * mode, and is held by this engine's narrowing, so nothing a child does widens what the
+   * parent allows. What the child narrows is its own, and ends with the child's turn.
+   */
+  derive(): PermissionEngine {
+    return new PermissionEngine(this.options, this);
+  }
+
   get mode(): PermissionMode {
-    return this.currentMode;
+    return this.shared.mode;
   }
 
   /** Switch modes. Returns why not, and changes nothing, when the mode's precondition fails. */
   setMode(mode: PermissionMode, options: { bypassConfirmed?: boolean } = {}): string | undefined {
     const refusal = modeRefusal(mode, { sandboxed: this.sandboxed, bypassConfirmed: options.bypassConfirmed });
-    if (!refusal) this.currentMode = mode;
+    if (!refusal) this.shared.mode = mode;
     return refusal;
   }
 
   list(): Rule[] {
-    return [...this.rules];
+    return [...this.shared.rules];
   }
 
   /**
@@ -138,20 +149,25 @@ export class PermissionEngine {
     return targets.every((subject) => patternMatches(parsed.rule, subject));
   }
 
-  /** What narrows the tools now, if anything. */
+  /** What this engine narrowed, if anything; an engine it was derived from may narrow too. */
   get narrowed(): { rules: Rule[]; label: string } | undefined {
     return this.narrowing;
   }
 
+  /** Every narrowing that holds this engine: its own, then each engine's it was derived from. */
+  private narrowings(): { rules: Rule[]; label: string }[] {
+    return [...(this.narrowing ? [this.narrowing] : []), ...(this.parent?.narrowings() ?? [])];
+  }
+
   /** Add a rule for the rest of the session, such as a grant made at an approval prompt. */
   add(rule: Rule): void {
-    this.rules.push(rule);
+    this.shared.rules.push(rule);
   }
 
   /** Take out the rules that match, and return them. */
   remove(match: (rule: Rule) => boolean): Rule[] {
-    const removed = this.rules.filter(match);
-    this.rules = this.rules.filter((rule) => !match(rule));
+    const removed = this.shared.rules.filter(match);
+    this.shared.rules = this.shared.rules.filter((rule) => !match(rule));
     return removed;
   }
 
@@ -168,27 +184,26 @@ export class PermissionEngine {
 
   /** Rules that name no tool this session has, for reporting. */
   unmatched(toolNames: string[]): Rule[] {
-    return this.rules.filter((rule) => rule.scope !== 'builtin' && !toolNames.some((name) => toolMatches(rule, this.options.namesOf(name))));
+    return this.shared.rules.filter((rule) => rule.scope !== 'builtin' && !toolNames.some((name) => toolMatches(rule, this.options.namesOf(name))));
   }
 
   /** Whether a tool is offered at all: not when a rule or the mode denies it outright. */
   offers(tool: string): boolean {
     const names = this.options.namesOf(tool);
-    if (this.narrowing && !this.narrowing.rules.some((rule) => toolMatches(rule, names))) return false;
-    if (this.rules.some((rule) => rule.decision === 'deny' && !rule.pattern && toolMatches(rule, names))) return false;
-    return MODE_DEFAULTS[this.currentMode][this.options.classOf(tool)] !== 'deny';
+    if (this.narrowings().some((narrowing) => !narrowing.rules.some((rule) => toolMatches(rule, names)))) return false;
+    if (this.shared.rules.some((rule) => rule.decision === 'deny' && !rule.pattern && toolMatches(rule, names))) return false;
+    return MODE_DEFAULTS[this.shared.mode][this.options.classOf(tool)] !== 'deny';
   }
 
   decide(call: ToolCall): Verdict {
     const names = this.options.namesOf(call.name);
     const toolClass = this.options.classOf(call.name);
-    const applicable = this.rules.filter((rule) => toolMatches(rule, names));
+    const applicable = this.shared.rules.filter((rule) => toolMatches(rule, names));
     const { subjects, command } = subjectsOf(call, names[0], this.options.projectRoot, { webSearchHost: this.options.webSearchHost });
     const targets: (Subject | undefined)[] = subjects.length ? subjects : [undefined];
     const decided = targets.map((subject) => strongest(applicable.filter((rule) => patternMatches(rule, subject))));
 
-    if (this.narrowing) {
-      const narrowing = this.narrowing;
+    for (const narrowing of this.narrowings()) {
       const covered = targets.every((subject) => narrowing.rules.some((rule) => toolMatches(rule, names) && patternMatches(rule, subject)));
       if (!covered) {
         const named = narrowing.rules.map((rule) => rule.text).join(', ') || 'no tools';
@@ -199,15 +214,15 @@ export class PermissionEngine {
     const denied = decided.find((rule) => rule?.decision === 'deny');
     if (denied) return fromRule(denied, `${denied.text} denies it (${denied.source})`);
 
-    const byMode = MODE_DEFAULTS[this.currentMode][toolClass];
-    if (this.currentMode === 'plan' && byMode === 'deny') {
+    const byMode = MODE_DEFAULTS[this.shared.mode][toolClass];
+    if (this.shared.mode === 'plan' && byMode === 'deny') {
       return { decision: 'deny', by: 'mode', reason: 'plan mode is on, so this session only reads and plans' };
     }
     if (this.options.alwaysAsks?.(names[0])) {
-      if (this.currentMode === 'bypass' && this.options.bypassAllowsAlwaysAsked) return { decision: 'allow', by: 'mode', reason: 'bypass mode allows it, as git.allow_commit_in_bypass says' };
+      if (this.shared.mode === 'bypass' && this.options.bypassAllowsAlwaysAsked) return { decision: 'allow', by: 'mode', reason: 'bypass mode allows it, as git.allow_commit_in_bypass says' };
       return { decision: 'ask', by: 'policy', reason: `${names[0]} is always asked for; no rule or mode allows it ahead` };
     }
-    if (this.currentMode === 'bypass') return { decision: 'allow', by: 'mode', reason: 'bypass mode allows everything no rule denies' };
+    if (this.shared.mode === 'bypass') return { decision: 'allow', by: 'mode', reason: 'bypass mode allows everything no rule denies' };
 
     if (command?.hidden.length) {
       return { decision: 'ask', by: 'policy', reason: `${command.hidden[0]} can run code no rule can see, so it always asks` };
@@ -231,7 +246,7 @@ export class PermissionEngine {
   }
 
   private modeDefault(byMode: ModeDefault, toolClass: string, subjects: Subject[]): Verdict {
-    const mode = this.currentMode;
+    const mode = this.shared.mode;
     const what = WHAT_TOOLS_DO[toolClass] ?? WHAT_TOOLS_DO.unknown;
     switch (byMode) {
       case 'allow':

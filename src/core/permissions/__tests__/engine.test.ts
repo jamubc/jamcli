@@ -191,3 +191,34 @@ test('a tool that always asks is named as the one asked for, whatever the rules 
   const always = new PermissionEngine({ projectRoot: root, rules: [...builtin, rule('propose_lesson', 'allow', 'flag')], mode: 'accept-edits', sandboxed: false, classOf, namesOf, alwaysAsks: (name) => name === 'propose_lesson' });
   expect(always.decide(call('propose_lesson'))).toMatchObject({ decision: 'ask', by: 'policy', reason: 'propose_lesson is always asked for; no rule or mode allows it ahead' });
 });
+
+test("a derived engine shares the rules, grants, and mode, and narrows on its own", () => {
+  const parent = engine([rule('edit', 'allow', 'flag')]);
+  const child = parent.derive();
+  const edit = call('edit', { path: 'a.txt' });
+
+  // A grant at a child's prompt, and a mode switch, reach both.
+  expect(child.grant('run_command(ls)')).toBeUndefined();
+  expect(parent.decide(run('ls'))).toMatchObject({ decision: 'allow', by: 'user', rule: 'run_command(ls)' });
+  parent.setMode('plan');
+  expect(child.mode).toBe('plan');
+  parent.setMode('default');
+
+  // What the child narrows holds the child only, while it runs and after the parent lets go.
+  child.narrow([rule('read_file', 'allow', 'session')], 'the skill look');
+  expect(child.decide(edit)).toMatchObject({ decision: 'deny', reason: 'the skill look allows only read_file' });
+  expect(child.offers('edit')).toBe(false);
+  expect(parent.decide(edit)).toMatchObject({ decision: 'allow' });
+  expect(parent.offers('edit')).toBe(true);
+  parent.narrow(undefined);
+  expect(child.decide(edit)).toMatchObject({ decision: 'deny' });
+  child.narrow(undefined);
+  expect(child.decide(edit)).toMatchObject({ decision: 'allow' });
+
+  // What the parent narrows holds the child too, and the child cannot lift it.
+  parent.narrow([rule('task', 'allow', 'session'), rule('read_file', 'allow', 'session')], '/look');
+  child.narrow(undefined);
+  expect(child.decide(edit)).toMatchObject({ decision: 'deny', reason: '/look allows only task, read_file' });
+  expect(child.offers('edit')).toBe(false);
+  expect(child.derive().decide(edit)).toMatchObject({ decision: 'deny', reason: '/look allows only task, read_file' });
+});
