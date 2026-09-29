@@ -290,7 +290,8 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
     await frameWith(setup, (frame) => frame.includes('ollama:fake-model') && frame.includes('config.json'));
     const before = current();
     await send(setup, '/config set agent_loop.max_steps 7 --scope local');
-    await frameWith(setup, (frame) => frame.includes('Applied to this session.'));
+    // /agents said the same thing above, so the wait is for the session this change reopened.
+    await frameWith(setup, (frame) => frame.includes('Applied to this session.') && current() !== before);
     expect(readJson(path.join(context.root, '.jamcli', 'config.local.json')).agent_loop.max_steps).toBe(7);
     expect(current()).not.toBe(before);
     expect(current().sessionId).toBe(before.sessionId);
