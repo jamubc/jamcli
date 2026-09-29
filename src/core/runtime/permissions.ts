@@ -2,8 +2,18 @@ import type { ToolPermissionValue } from '../../types/config.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import { PermissionEngine } from '../permissions/engine.js';
 import { loadPermissions, type PermissionFlags, type PermissionLayer } from '../permissions/config.js';
+import { LOCAL_CONFIG, editRuleList, grantedRules, writeProjectGrant } from '../permissions/grants.js';
 import { modeRefusal, type PermissionMode } from '../permissions/modes.js';
+import { parseRule, type Decision, type Rule, type RuleScope } from '../permissions/rules.js';
+import { displayPath, localConfigFile, projectConfigFile, userConfigFile } from '../config/load.js';
+import { ensureProjectStateDir } from '../transcript/index.js';
 import { toolNaming } from './tools.js';
+
+/** Where a person may add a rule: for this session, or in one of the configuration files. */
+export type EditableRuleScope = 'session' | 'local' | 'project' | 'user';
+const EDITABLE: RuleScope[] = ['session', 'local', 'project', 'user'];
+/** The per-tool block of the legacy MCP file, whose rules are edited in that file. */
+const LEGACY_TOOLS_FILE = '.jamcli/mcp.json';
 
 export interface SessionPermissionOptions {
   projectRoot: string;
@@ -61,4 +71,78 @@ export function sessionPermissions(options: SessionPermissionOptions): { engine:
     notices.push(`The rule ${rule.text} (${rule.source}) names no tool, so it has no effect.`);
   }
   return { engine, notices };
+}
+
+/**
+ * The rules a person edits while a session runs: added for the session or saved in a
+ * configuration file, removed from wherever a person can edit them, and granted for the
+ * project at a prompt. Each change applies to the engine at once, so the next call sees it.
+ */
+export class RuleEditor {
+  constructor(
+    private readonly engine: PermissionEngine,
+    private readonly projectRoot: string
+  ) {}
+
+  /** Add a rule, saving it in the scope's file. Returns why not, changing nothing, when it does not parse or cannot be written. */
+  add(decision: Decision, text: string, scope: EditableRuleScope): string | undefined {
+    const target = scope === 'session' ? undefined : this.file(scope);
+    const parsed = parseRule(text, decision, scope, target ? `${target.label} permissions.${decision}` : 'added in this session');
+    if ('error' in parsed) return parsed.error;
+    if (target) {
+      try {
+        if (scope !== 'user') ensureProjectStateDir(this.projectRoot);
+        editRuleList(target.file, target.label, decision, [parsed.rule.text], 'add');
+      } catch (error: any) {
+        return error?.message ?? String(error);
+      }
+    }
+    this.engine.add(parsed.rule);
+    return undefined;
+  }
+
+  /**
+   * Remove every rule written as `text` from the scopes a person edits. Built-in rules, the
+   * run's flags, and the legacy `.jamcli/mcp.json` block are kept, and returned as such.
+   */
+  remove(text: string): { removed: Rule[]; kept: Rule[]; error?: string } {
+    const wanted = text.trim();
+    const editable = (rule: Rule) => EDITABLE.includes(rule.scope) && !rule.source.startsWith(LEGACY_TOOLS_FILE);
+    const matching = this.engine.list().filter((rule) => rule.text === wanted);
+    const kept = matching.filter((rule) => !editable(rule));
+    try {
+      for (const rule of matching.filter(editable)) {
+        if (rule.scope === 'session') continue;
+        const target = this.file(rule.scope as Exclude<EditableRuleScope, 'session'>);
+        editRuleList(target.file, target.label, rule.decision, [rule.text], 'remove');
+      }
+    } catch (error: any) {
+      return { removed: [], kept, error: error?.message ?? String(error) };
+    }
+    return { removed: this.engine.remove((rule) => rule.text === wanted && editable(rule)), kept };
+  }
+
+  /**
+   * A grant for the project, made at a prompt: it applies at once and is written for later
+   * sessions. Returns what went wrong: a grant that does not parse is not made, and one that
+   * cannot be written holds for this session only.
+   */
+  grantProject(text: string): string | undefined {
+    const { rules, errors } = grantedRules(text, 'local', `${LOCAL_CONFIG} permissions.allow (granted at a prompt)`);
+    if (errors.length) return `The grant was not saved: ${errors.join(' ')}`;
+    try {
+      writeProjectGrant(this.projectRoot, rules.map((rule) => rule.text));
+      for (const rule of rules) this.engine.add(rule);
+      return undefined;
+    } catch (error: any) {
+      for (const rule of rules) this.engine.add({ ...rule, scope: 'session' });
+      return error?.message ?? String(error);
+    }
+  }
+
+  /** The file a rule of a scope is saved in, and how messages name it. */
+  private file(scope: Exclude<EditableRuleScope, 'session'>): { file: string; label: string } {
+    const file = scope === 'user' ? userConfigFile() : scope === 'project' ? projectConfigFile(this.projectRoot) : localConfigFile(this.projectRoot);
+    return { file, label: displayPath(file, this.projectRoot) };
+  }
 }

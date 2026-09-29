@@ -11,7 +11,7 @@ import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
 import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
 import type { HookCommand } from '../hooks/commands.js';
 import { createRedactor } from '../redact.js';
-import { SessionLog, TranscriptRecorder, ensureProjectStateDir, newSessionId } from '../transcript/index.js';
+import { SessionLog, TranscriptRecorder, newSessionId } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
 import type { ConfigService } from '../../services/ConfigService.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
@@ -28,13 +28,12 @@ import { executeBatch } from '../tools/dispatch.js';
 import { HeadTailBuffer, MAX_COMMAND_TIMEOUT_MS } from '../tools/command.js';
 import { Ledger, detectGates, readResetHandoff, registerVerifyMiddleware, renderHandoff, runGate, writeHandoff, type Gate, type GateRow, type HandoffReason } from '../verify/index.js';
 import { effortFor, thinkingFor, type EffortLevel, type ReasoningLevel } from '../routing/capabilities.js';
-import { sessionPermissions } from './permissions.js';
+import { RuleEditor, sessionPermissions, type EditableRuleScope } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { PermissionMode } from '../permissions/modes.js';
-import { LOCAL_CONFIG, editRuleList, grantedRules, writeProjectGrant } from '../permissions/grants.js';
 import { WorkTable, workNews, type WorkItem } from '../work.js';
-import { parseRule, type Decision, type Rule, type RuleScope } from '../permissions/rules.js';
+import { parseRule, type Decision, type Rule } from '../permissions/rules.js';
 import { detectSandbox, subprocessEnv, type Sandbox, type SandboxKind, type SandboxSettings } from '../sandbox/index.js';
 import { buildRuntimePrompt } from './prompt.js';
 import { registerSteerMiddleware } from './steer.js';
@@ -57,7 +56,7 @@ import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { answerOutputTokens, ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
-import { displayPath, loadConfig, localConfigFile, permissionLayers, projectConfigFile, userConfigFile, type LoadedConfig } from '../config/load.js';
+import { loadConfig, permissionLayers, type LoadedConfig } from '../config/load.js';
 import { revealedKeys } from '../config/credentials.js';
 import { observerFor, type ObserveSettings } from '../observe/setup.js';
 import { instrumentProvider } from '../observe/instrument.js';
@@ -67,14 +66,10 @@ import type { Observer, Span } from '../observe/observer.js';
 
 export type { ToolSummary, McpSource } from './tools.js';
 export type { CheckpointInfo } from './checkpoints.js';
+export type { EditableRuleScope } from './permissions.js';
 
-/** Where a person may add a rule: for this session, or in one of the configuration files. */
-export type EditableRuleScope = 'session' | 'local' | 'project' | 'user';
-const EDITABLE: RuleScope[] = ['session', 'local', 'project', 'user'];
 /** How long a provider has to list its models. */
 const LIST_TIMEOUT_MS = 5_000;
-/** The per-tool block of the legacy MCP file, whose rules are edited in that file. */
-const LEGACY_TOOLS_FILE = '.jamcli/mcp.json';
 /** Characters a handoff may take of the first prompt: about 600 tokens. */
 const HANDOFF_NOTE_CHARS = 2_400;
 
@@ -623,20 +618,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     const preview = previewCall(call, workRoot);
     dryRunReport.push({ callId: call.id, tool: call.name, summary: describeCall(call), ...(preview ? { preview } : {}) });
   };
+  const ruleEditor = new RuleEditor(permissions, projectRoot);
   /** A project grant applies at once and is written for later sessions. */
   const grantProject = (text: string) => {
-    const { rules, errors } = grantedRules(text, 'local', `${LOCAL_CONFIG} permissions.allow (granted at a prompt)`);
-    if (errors.length) {
-      emitting?.({ type: 'notice', level: 'warn', message: `The grant was not saved: ${errors.join(' ')}` });
-      return;
-    }
-    try {
-      writeProjectGrant(projectRoot, rules.map((rule) => rule.text));
-      for (const rule of rules) permissions.add(rule);
-    } catch (error: any) {
-      emitting?.({ type: 'notice', level: 'warn', message: error?.message ?? String(error) });
-      for (const rule of rules) permissions.add({ ...rule, scope: 'session' });
-    }
+    const problem = ruleEditor.grantProject(text);
+    if (problem) emitting?.({ type: 'notice', level: 'warn', message: problem });
   };
   const buildTools = (): ToolSet => {
     const anySearchable = registry.visible().some((tool) => permissions.offers(tool.name) && searchable(tool.name));
@@ -919,11 +905,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     }
     reasoningSince = prefixSetNow();
     agent = buildAgent();
-  };
-  /** The file a rule of a scope is saved in, and how messages name it. */
-  const ruleFile = (scope: Exclude<EditableRuleScope, 'session'>) => {
-    const file = scope === 'user' ? userConfigFile() : scope === 'project' ? projectConfigFile(projectRoot) : localConfigFile(projectRoot);
-    return { file, label: displayPath(file, projectRoot) };
   };
 
   const log = options.sessionId
@@ -1237,40 +1218,16 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     addPermissionRule(decision, text, scope) {
       if (running) return 'A turn is running; change rules when it ends.';
-      const target = scope === 'session' ? undefined : ruleFile(scope);
-      const parsed = parseRule(text, decision, scope, target ? `${target.label} permissions.${decision}` : 'added in this session');
-      if ('error' in parsed) return parsed.error;
-      if (target) {
-        try {
-          if (scope !== 'user') ensureProjectStateDir(projectRoot);
-          editRuleList(target.file, target.label, decision, [parsed.rule.text], 'add');
-        } catch (error: any) {
-          return error?.message ?? String(error);
-        }
-      }
-      permissions.add(parsed.rule);
-      reassemble();
-      return undefined;
+      const problem = ruleEditor.add(decision, text, scope);
+      if (!problem) reassemble();
+      return problem;
     },
 
     removePermissionRule(text) {
       if (running) return { removed: [], kept: [], error: 'A turn is running; change rules when it ends.' };
-      const wanted = text.trim();
-      const editable = (rule: Rule) => EDITABLE.includes(rule.scope) && !rule.source.startsWith(LEGACY_TOOLS_FILE);
-      const matching = permissions.list().filter((rule) => rule.text === wanted);
-      const kept = matching.filter((rule) => !editable(rule));
-      try {
-        for (const rule of matching.filter(editable)) {
-          if (rule.scope === 'session') continue;
-          const target = ruleFile(rule.scope as Exclude<EditableRuleScope, 'session'>);
-          editRuleList(target.file, target.label, rule.decision, [rule.text], 'remove');
-        }
-      } catch (error: any) {
-        return { removed: [], kept, error: error?.message ?? String(error) };
-      }
-      const removed = permissions.remove((rule) => rule.text === wanted && editable(rule));
-      if (removed.length) reassemble();
-      return { removed, kept };
+      const result = ruleEditor.remove(text);
+      if (result.removed.length) reassemble();
+      return result;
     },
 
     async run(input, onEvent, turn = {}) {
