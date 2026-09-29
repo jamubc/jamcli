@@ -163,17 +163,17 @@ test('Ctrl+O shows the conversation with every block open in place of the compos
 test('Escape and Ctrl+C close the detailed transcript first, before they answer a prompt, stop a turn, or leave', async () => {
   const { setup, close } = await open();
   try {
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] }, { text: 'Ran it.' });
-    await setup.mockInput.typeText('echo hi');
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hi' } }] }, { text: 'Ran it.' });
+    await setup.mockInput.typeText('printf hi');
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => frame.includes('Allow run_command echo hi?'));
+    await frameWith(setup, (frame) => frame.includes('Allow run_command printf hi?'));
     for (const press of [() => setup.mockInput.pressEscape(), () => setup.mockInput.pressKey('c', { ctrl: true })]) {
       setup.mockInput.pressKey('o', { ctrl: true });
       await frameWith(setup, (frame) => frame.includes('Showing detailed transcript'));
       press();
       const back = await frameWith(setup, (frame) => !frame.includes('Showing detailed transcript'));
       // The prompt still waits, unanswered, and nothing was stopped or armed to exit.
-      expect(back).toContain('Allow run_command echo hi?');
+      expect(back).toContain('Allow run_command printf hi?');
       expect(back).not.toContain('again to exit');
       expect(back).not.toContain('Ran it.');
     }

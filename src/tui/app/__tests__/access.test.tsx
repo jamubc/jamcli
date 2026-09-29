@@ -27,12 +27,12 @@ test('screen reader mode draws labeled lines, with no boxes and no marks', async
     const replied = await frameWith(setup, (frame) => frame.includes('JamCLI: **Hello** there.'));
     expect(replied).toContain('You: hi');
 
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] });
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hi' } }] });
     await send(setup, 'run it');
-    const asked = await frameWith(setup, (frame) => frame.includes('Permission needed: Allow run_command echo hi?'));
-    expect(asked).toContain('Tool run_command echo hi, asking');
+    const asked = await frameWith(setup, (frame) => frame.includes('Permission needed: Allow run_command printf hi?'));
+    expect(asked).toContain('Tool run_command printf hi, asking');
     setup.mockInput.pressEscape();
-    const denied = await frameWith(setup, (frame) => /Tool run_command echo hi, \d+ ms, denied, denied by you/.test(frame));
+    const denied = await frameWith(setup, (frame) => /Tool run_command printf hi, \d+ ms, denied, denied by you/.test(frame));
     expect(denied).toContain('Warning: Stopped because a tool call was denied.');
     await send(setup, '/cost');
     const listed = await frameWith(setup, (frame) => frame.includes('Result: '));

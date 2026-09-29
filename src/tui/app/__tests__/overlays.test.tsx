@@ -189,15 +189,15 @@ test('/theme changes the colors at once and saves the choice for every project',
 test('the monochrome theme draws every state in the terminal\'s own color', async () => {
   const { setup, close } = await open({}, { size: tall, theme: THEMES.monochrome });
   try {
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] });
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hi' } }] });
     await send(setup, 'run it');
-    await frameWith(setup, (frame) => frame.includes('Allow run_command echo hi?'));
-    const plain = colorOf(setup, 'Allow run_command echo hi?');
+    await frameWith(setup, (frame) => frame.includes('Allow run_command printf hi?'));
+    const plain = colorOf(setup, 'Allow run_command printf hi?');
     expect(colorOf(setup, 'waiting')).toBe(plain);
-    expect(colorOf(setup, 'run_command echo hi')).toBe(plain);
+    expect(colorOf(setup, 'run_command printf hi')).toBe(plain);
     expect(plain).not.toBe(THEMES.dark.warn);
     setup.mockInput.pressEscape();
-    await frameWith(setup, (frame) => frame.includes('⊘ run_command echo hi'));
+    await frameWith(setup, (frame) => frame.includes('⊘ run_command printf hi'));
   } finally {
     await close();
   }

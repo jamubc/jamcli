@@ -36,7 +36,7 @@ test('suggestions are rules the engine matches, one per part of a compound comma
     'run_command(npm *)',
   ]);
   expect(suggestPatterns(command('ls'))).toEqual(['run_command(ls)', 'run_command(ls *)']);
-  expect(suggestPatterns(command('echo $(id)'))).toEqual([]);
+  expect(suggestPatterns(command('printf $(id)'))).toEqual([]);
   const patch = '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-a\n+b\n';
   expect(suggestPatterns({ id: 'p', name: 'apply_patch', arguments: { patch } })).toEqual(['apply_patch(src/a.ts)', 'apply_patch(src/**)', 'apply_patch']);
   expect(suggestPatterns({ id: 'e', name: 'edit', arguments: { path: 'src/a.ts' } })).toEqual(['edit(src/a.ts)', 'edit(src/**)', 'edit']);
@@ -67,7 +67,7 @@ test('every suggestion, once granted, allows the call it was made for', () => {
 test('a project grant is written to config.local.json and holds in the next session', async () => {
   fs.writeFileSync(path.join(root, '.jamcli', 'config.local.json'), JSON.stringify({ theme: 'dark', permissions: { allow: ['grep'] } }));
   const first = await createRuntime({ projectRoot: root, surface: 'tui', mcp: false });
-  server.enqueue({ toolCalls: [command('echo granted')] }, { toolCalls: [command('echo more', 'c3')] }, { text: 'ok' });
+  server.enqueue({ toolCalls: [command('printf granted')] }, { toolCalls: [command('printf more', 'c3')] }, { text: 'ok' });
   const prompted: string[] = [];
   await first.run('run it', (event: AgentEvent) => {
     if (event.type !== 'approval_request') return;
@@ -76,10 +76,10 @@ test('a project grant is written to config.local.json and holds in the next sess
   });
   expect(prompted).toEqual(['c1']);
   const saved = JSON.parse(fs.readFileSync(path.join(root, '.jamcli', 'config.local.json'), 'utf8'));
-  expect(saved).toEqual({ theme: 'dark', permissions: { allow: ['grep', 'run_command(echo *)'] } });
+  expect(saved).toEqual({ theme: 'dark', permissions: { allow: ['grep', 'run_command(printf *)'] } });
 
   const second = await createRuntime({ projectRoot: root, surface: 'tui', mcp: false });
-  server.enqueue({ toolCalls: [command('echo again', 'c2')] }, { text: 'ok' });
+  server.enqueue({ toolCalls: [command('printf again', 'c2')] }, { text: 'ok' });
   const asked: string[] = [];
   await second.run('run it again', (event) => {
     if (event.type === 'approval_request') asked.push(event.call.id);
@@ -90,11 +90,11 @@ test('a project grant is written to config.local.json and holds in the next sess
 test('a grant that cannot be saved still holds for the session, and says so', async () => {
   fs.writeFileSync(path.join(root, '.jamcli', 'config.local.json'), '{ not json');
   const runtime = await createRuntime({ projectRoot: root, surface: 'tui', mcp: false });
-  server.enqueue({ toolCalls: [command('echo one')] }, { toolCalls: [command('echo two', 'c2')] }, { text: 'ok' });
+  server.enqueue({ toolCalls: [command('printf one')] }, { toolCalls: [command('printf two', 'c2')] }, { text: 'ok' });
   const events: AgentEvent[] = [];
   await runtime.run('run twice', (event) => {
     events.push(event);
-    if (event.type === 'approval_request') event.decide({ allow: true, scope: 'project', pattern: 'run_command(echo *)' });
+    if (event.type === 'approval_request') event.decide({ allow: true, scope: 'project', pattern: 'run_command(printf *)' });
   });
   expect(events.filter((event) => event.type === 'approval_request')).toHaveLength(1);
   expect(events.some((event) => event.type === 'notice' && event.message.includes('config.local.json is not valid JSON'))).toBe(true);

@@ -68,12 +68,12 @@ test('a session through every command, as a person meets it', async () => {
   await jam.waitFor('Hello there.');
 
   // One approval: the prompt, then 1 runs the command.
-  server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo approved-output' } }] }, { text: 'Ran it.' });
+  server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf approved-output' } }] }, { text: 'Ran it.' });
   send('run it');
-  await jam.waitFor('Allow run_command echo approved-output?');
+  await jam.waitFor('Allow run_command printf approved-output?');
   jam.type('1');
   const approved = await jam.waitFor('Ran it.');
-  expect(approved).toContain('✓ run_command echo approved-output');
+  expect(approved).toContain('✓ run_command printf approved-output');
 
   // One rejection: Escape denies, and the turn says so.
   server.enqueue({ toolCalls: [{ id: 'c2', name: 'run_command', arguments: { command: 'rm -rf build' } }] });

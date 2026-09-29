@@ -70,18 +70,18 @@ test('a selection dragged above the transcript keeps scrolling it, so a long rep
 test('clicking a permission choice answers it, and clicking a tool line opens and closes its output', async () => {
   const { setup, close } = await open();
   try {
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo clicked-output' } }] }, { text: 'Done.' });
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf clicked-output' } }] }, { text: 'Done.' });
     await send(setup, 'run it');
     await frameWith(setup, (frame) => frame.includes('1  Allow once'));
     const allow = where(setup, '1  Allow once');
     await setup.mockMouse.click(allow.x + 2, allow.y);
     await frameWith(setup, (frame) => frame.includes('Done.'));
-    const line = where(setup, 'run_command echo clicked-output');
+    const line = where(setup, 'run_command printf clicked-output');
     const shownBefore = setup.captureCharFrame().split('\n').filter((row) => row.trim() === '│ clicked-output').length;
     await setup.mockMouse.click(line.x + 2, line.y);
     const toggled = await frameWith(setup, (frame) => frame.split('\n').filter((row) => row.trim() === '│ clicked-output').length !== shownBefore);
     await Bun.sleep(600);
-    await setup.mockMouse.click(where(setup, 'run_command echo clicked-output').x + 2, where(setup, 'run_command echo clicked-output').y);
+    await setup.mockMouse.click(where(setup, 'run_command printf clicked-output').x + 2, where(setup, 'run_command printf clicked-output').y);
     await frameWith(setup, (frame) => frame.split('\n').filter((row) => row.trim() === '│ clicked-output').length === shownBefore);
     expect(toggled).toBeTruthy();
   } finally {
@@ -156,7 +156,7 @@ const sameColor = (color: RGBA, hex: string): boolean => color.equals(RGBA.fromH
 test('pointing at a permission choice draws it as a bar, so what a click would answer is plain before the click', async () => {
   const { setup, close } = await open();
   try {
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo pointed' } }] }, { text: 'Done.' });
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf pointed' } }] }, { text: 'Done.' });
     await send(setup, 'run it');
     await frameWith(setup, (frame) => frame.includes('1  Allow once'));
     const once = where(setup, '1  Allow once');
@@ -184,12 +184,12 @@ test('over a tool line the pointer is a hand and the line is a bar; off it, both
     const pointers: string[] = [];
     const set = setup.renderer.setMousePointer.bind(setup.renderer);
     setup.renderer.setMousePointer = (style) => (pointers.push(style), set(style));
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hovered' } }] }, { text: 'Done.' });
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hovered' } }] }, { text: 'Done.' });
     await send(setup, 'run it');
     await frameWith(setup, (frame) => frame.includes('1  Allow once'));
     await setup.mockMouse.click(where(setup, '1  Allow once').x + 2, where(setup, '1  Allow once').y);
     await frameWith(setup, (frame) => frame.includes('Done.'));
-    const line = where(setup, 'run_command echo hovered');
+    const line = where(setup, 'run_command printf hovered');
     const chosen = THEMES.dark.chosen as string;
     expect(sameColor(cellAt(setup, line.x + 2, line.y).bg, chosen)).toBe(false);
     await setup.mockMouse.moveTo(line.x + 2, line.y);

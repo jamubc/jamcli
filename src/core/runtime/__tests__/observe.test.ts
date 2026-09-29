@@ -116,7 +116,7 @@ test('at the default level a failed call says why, and a turn stopped behind an 
   const runtime = await start({ observe: { level: 'warn', logFile } });
   server.enqueue(
     { toolCalls: [{ id: 'm1', name: 'read_file', arguments: { path: 'missing.txt' } }] },
-    { toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hi' } }] }
+    { toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hi' } }] }
   );
   // Nobody answers the prompt; the person stops the turn, as one who cannot reach it does.
   const result = await runtime.run('go', (event) => {

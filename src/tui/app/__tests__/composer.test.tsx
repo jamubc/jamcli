@@ -37,9 +37,9 @@ test('a line that starts with ! runs as a command, asks first, and the model is 
   const { setup, close } = await open({}, { size: { width: 110, height: 40 } });
   try {
     const before = context.server.completions().length;
-    await setup.mockInput.typeText('!echo from-the-composer');
+    await setup.mockInput.typeText('!printf from-the-composer');
     setup.mockInput.pressEnter();
-    await frameWith(setup, (frame) => /allow/i.test(frame) && frame.includes('echo from-the-composer'), 5_000);
+    await frameWith(setup, (frame) => /allow/i.test(frame) && frame.includes('printf from-the-composer'), 5_000);
     await setup.mockInput.typeText('y');
     await frameWith(setup, (frame) => frame.split('from-the-composer').length > 2, 5_000);
     expect(context.server.completions().length).toBe(before);

@@ -69,10 +69,10 @@ test('the rules are listed with their scope and source, lowest scope first', asy
 test('a session rule applies to the next call and is written nowhere', async () => {
   const runtime = await open();
   try {
-    expect(await outcome(runtime, command('echo one'))).toBe('asked');
-    expect(runtime.addPermissionRule('allow', 'run_command(echo *)', 'session')).toBeUndefined();
-    expect(await outcome(runtime, command('echo two', 'c2'))).toBe('ok');
-    expect(runtime.permissionRules().at(-1)).toMatchObject({ decision: 'allow', text: 'run_command(echo *)', scope: 'session', source: 'added in this session' });
+    expect(await outcome(runtime, command('printf one'))).toBe('asked');
+    expect(runtime.addPermissionRule('allow', 'run_command(printf *)', 'session')).toBeUndefined();
+    expect(await outcome(runtime, command('printf two', 'c2'))).toBe('ok');
+    expect(runtime.permissionRules().at(-1)).toMatchObject({ decision: 'allow', text: 'run_command(printf *)', scope: 'session', source: 'added in this session' });
     expect(fs.existsSync(local())).toBe(false);
   } finally {
     await runtime.close();
@@ -118,16 +118,16 @@ test('a rule that does not parse, or a file that is not JSON, changes nothing an
 });
 
 test('removing a rule takes it out of the session and every file, and keeps what a person cannot edit', async () => {
-  fs.writeFileSync(local(), JSON.stringify({ permissions: { allow: ['run_command(echo *)'], deny: ['run_command(echo *)'] } }));
+  fs.writeFileSync(local(), JSON.stringify({ permissions: { allow: ['run_command(printf *)'], deny: ['run_command(printf *)'] } }));
   const runtime = await open();
   try {
-    runtime.addPermissionRule('allow', 'run_command(echo *)', 'session');
-    expect(await outcome(runtime, command('echo hi'))).toBe('denied');
-    const { removed, kept } = runtime.removePermissionRule('run_command(echo *)');
+    runtime.addPermissionRule('allow', 'run_command(printf *)', 'session');
+    expect(await outcome(runtime, command('printf hi'))).toBe('denied');
+    const { removed, kept } = runtime.removePermissionRule('run_command(printf *)');
     expect(removed.map((rule) => `${rule.scope} ${rule.decision}`).sort()).toEqual(['local allow', 'local deny', 'session allow']);
     expect(kept).toEqual([]);
     expect(readJson(local())).toEqual({ permissions: { allow: [], deny: [] } });
-    expect(await outcome(runtime, command('echo again', 'c2'))).toBe('asked');
+    expect(await outcome(runtime, command('printf again', 'c2'))).toBe('asked');
 
     // A built-in rule stays, and says so, and a file that does not hold the rule is not rewritten.
     const builtin = runtime.removePermissionRule('run_command(cd *)');

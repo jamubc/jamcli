@@ -6,7 +6,7 @@ import type { CommandAnalysis } from '../permissions/command.js';
  * short on purpose: a program that can be told to write, such as `tee` or `sed -i`, is
  * not on it, and the ones that are have their writing flags refused below.
  */
-export const READ_ONLY_COMMANDS = new Set(['cd', 'ls', 'cat', 'head', 'tail', 'wc', 'file', 'stat', 'rg', 'grep', 'find', 'git', 'tree', 'pwd', 'true']);
+export const READ_ONLY_COMMANDS = new Set(['cd', 'ls', 'cat', 'head', 'tail', 'wc', 'file', 'stat', 'rg', 'grep', 'find', 'git', 'tree', 'pwd', 'true', 'echo']);
 
 const GIT_READ_SUBCOMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch', 'rev-parse', 'ls-files']);
 /** `git branch` flags that change branches. */

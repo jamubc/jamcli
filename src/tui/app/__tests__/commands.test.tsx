@@ -107,19 +107,19 @@ test('/permissions lists the rules, adds one for the session or a file, and remo
     await send(setup, '/permissions');
     const listed = await frameWith(setup, (frame) => frame.includes('Mode: default.'));
     expect(listed).toContain('- run_command(cd *)  (built in: built-in)');
-    await send(setup, '/permissions allow run_command(echo *) session');
-    await frameWith(setup, (frame) => frame.includes('Added: allow run_command(echo *), for this session only. It applies to the next call.'));
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo fine' } }] }, { text: 'Ran it.' });
+    await send(setup, '/permissions allow run_command(printf *) session');
+    await frameWith(setup, (frame) => frame.includes('Added: allow run_command(printf *), for this session only. It applies to the next call.'));
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf fine' } }] }, { text: 'Ran it.' });
     await send(setup, 'run echo');
     const ran = await frameWith(setup, (frame) => frame.includes('Ran it.'));
-    expect(ran).toContain('✓ run_command echo fine');
+    expect(ran).toContain('✓ run_command printf fine');
     expect(ran).not.toContain('Allow run_command');
 
     await send(setup, '/permissions deny grep');
     await frameWith(setup, (frame) => frame.includes('Added: deny grep, saved in .jamcli/config.local.json.'));
     expect(readJson(path.join(context.root, '.jamcli', 'config.local.json')).permissions.deny).toEqual(['grep']);
-    await send(setup, '/permissions remove run_command(echo *)');
-    await frameWith(setup, (frame) => frame.includes('Removed allow run_command(echo *) (added in this session).'));
+    await send(setup, '/permissions remove run_command(printf *)');
+    await frameWith(setup, (frame) => frame.includes('Removed allow run_command(printf *) (added in this session).'));
     await send(setup, '/permissions remove run_command(cd *)');
     await frameWith(setup, (frame) => frame.includes('Kept allow run_command(cd *): it is built in.'));
     await send(setup, '/permissions maybe grep');

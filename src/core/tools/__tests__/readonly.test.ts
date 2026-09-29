@@ -24,6 +24,8 @@ test('commands that only read inside the project are read-only', () => {
     'tree -L 2 src',
     'cd src && ls',
     'ls 2>&1',
+    'echo ---',
+    'ls src; echo ---; ls tests',
   ]) {
     expect({ line, reason: reason(line) }).toEqual({ line, reason: undefined });
   }
@@ -32,6 +34,9 @@ test('commands that only read inside the project are read-only', () => {
 test('anything that could write, run code, or leave the project is not', () => {
   const cases: [string, RegExp][] = [
     ['ls > out.txt', /redirects/],
+    ['echo secret > notes.txt', /redirects/],
+    ['echo $(cat .env)', /substitution/],
+    ['echo $HOME', /cannot be checked/],
     ['cat a.txt | tee b.txt', /tee/],
     ['rm -rf src', /rm is not/],
     ['sed -i s/a/b/ src/a.ts', /sed is not/],

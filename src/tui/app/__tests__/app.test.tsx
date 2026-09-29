@@ -33,16 +33,16 @@ test('a message typed and sent runs a turn, and the reply and status line are sh
 test('a call that asks shows the permission prompt, and Escape denies it', async () => {
   const { runtime, setup, close } = await open();
   try {
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hello' } }] });
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hello' } }] });
     await setup.mockInput.typeText('say hello');
     setup.mockInput.pressEnter();
-    const prompt = await frameWith(setup, (value) => value.includes('Allow run_command echo hello?'));
+    const prompt = await frameWith(setup, (value) => value.includes('Allow run_command printf hello?'));
     expect(prompt).toContain('1  Allow once');
     expect(prompt).toContain('Default mode asks before tools that run commands.');
     setup.mockInput.pressEscape();
     // A person's no, without feedback, ends the turn, and the interface says so.
     const after = await frameWith(setup, (value) => value.includes('Stopped because a tool call was denied.'));
-    expect(after).toContain('⊘ run_command echo hello');
+    expect(after).toContain('⊘ run_command printf hello');
     expect(after).toContain('denied by you');
     expect(after).not.toContain('Allow run_command');
   } finally {
@@ -54,13 +54,13 @@ test('1 allows a call once; Shift+Tab changes the mode; Ctrl+C twice asks to lea
   let exited = 0;
   const { runtime, setup, close } = await open({}, { onExit: () => void (exited += 1) });
   try {
-    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo allowed-output' } }] }, { text: 'It printed.' });
+    context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf allowed-output' } }] }, { text: 'It printed.' });
     await setup.mockInput.typeText('run it');
     setup.mockInput.pressEnter();
     await frameWith(setup, (value) => value.includes('Allow run_command'));
     setup.mockInput.pressKey('1');
     const after = await frameWith(setup, (value) => value.includes('It printed.'));
-    expect(after).toMatch(/✓ run_command echo allowed-output · \d+ ms · allowed by you/);
+    expect(after).toMatch(/✓ run_command printf allowed-output · \d+ ms · allowed by you/);
 
     setup.mockInput.pressTab({ shift: true });
     expect(await frameWith(setup, (value) => value.includes('accept-edits mode'))).toContain('accept-edits mode');

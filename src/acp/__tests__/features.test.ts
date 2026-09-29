@@ -348,7 +348,7 @@ test("an editor that lends a terminal runs the command in it, shown under the ca
     const client = connect();
     await client.request('initialize', { protocolVersion: 1, clientCapabilities: { terminal: true } });
     const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
-    server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo hello' } }] }, { text: 'It said hello.' });
+    server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hello' } }] }, { text: 'It said hello.' });
     const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'say hello' }] });
     client.answer((await client.asked('session/request_permission')).id, 'allow-once');
     const created = await client.asked('terminal/create');
@@ -356,7 +356,7 @@ test("an editor that lends a terminal runs the command in it, shown under the ca
     // env -i replaces the terminal's environment with the one jamcli gives every command.
     expect(command).toBe('/usr/bin/env');
     expect(args[0]).toBe('-i');
-    expect(args.slice(-3)).toEqual(['/bin/sh', '-c', 'echo hello']);
+    expect(args.slice(-3)).toEqual(['/bin/sh', '-c', 'printf hello']);
     expect(args.some((arg: string) => arg.startsWith('PATH='))).toBe(true);
     expect(args.join(' ')).not.toContain('must-not-reach-the-terminal');
     expect(cwd).toBe(root);
@@ -405,7 +405,7 @@ test('an editor that cannot start the terminal leaves the command to run here', 
   const client = connect();
   await client.request('initialize', { protocolVersion: 1, clientCapabilities: { terminal: true } });
   const sessionId = (await client.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
-  server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'echo ran-here' } }] }, { text: 'Ran.' });
+  server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf ran-here' } }] }, { text: 'Ran.' });
   const pending = client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'run' }] });
   client.answer((await client.asked('session/request_permission')).id, 'allow-once');
   client.answerError((await client.asked('terminal/create')).id, 'no terminals here');
