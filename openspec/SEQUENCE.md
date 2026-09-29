@@ -57,11 +57,11 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-contributor-gates`, R10 of the review units at the top of `ROADMAP.md`, opened
-2026-09-29 on `master`, where the owner has worked since merging the stack on 2026-09-27. The
-hard rules that live in prose held by a tool, the compiler's unused-code checks turned on, and
-`CODEOWNERS`. The review it comes from is kept verbatim in
-`openspec/reviews/2026-09-29-architecture-review.md`.
+`add-responses-api`, R11 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
+`master`, where the owner has worked since merging the stack on 2026-09-27. The "will not do"
+on OpenAI's Responses API reversed: the client that already falls back to it checked against
+OpenAI's own definitions, told to store nothing, and given its reasoning back. The review it
+comes from is kept verbatim in `openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
 approve it before any task begins, and `git checkout 9d9f5c6 --
@@ -69,6 +69,37 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 24. `add-contributor-gates`
+
+Archived as `2026-09-29-add-contributor-gates`: no spec deltas, since this is tooling. R10 of
+the review units.
+
+- `scripts/check-rules.ts` holds the hard rules a tool can hold, and a `rules` job runs it on
+  every push: no em dash in any tracked text file, and every commit a push or pull request adds
+  conventional, lowercase, and without AI attribution. The history from before the rules is not
+  checked; seven of its subjects would fail, the first commit among them (`b4b8cad`).
+- The compiler refuses unused locals and parameters, so the type gate that already runs on both
+  platforms holds dead code at zero. Turning it on found 23: fourteen imports, two destructured
+  locals, the OpenAI client's stored `dialect`, and parameters a seam needs, now prefixed with an
+  underscore (`d2cec49`, `3fee273`).
+- `.github/CODEOWNERS` names the owner for every path (`f320fd8`).
+
+**Measured, not added: a linter and a formatter.** Both would come from Biome (2.5.14), a new
+dependency, and adding it was refused at the permission prompt, so it waits for the owner.
+
+| Measure | Result |
+|---|---|
+| Biome's recommended lint rules | 1,666 findings |
+| of which three rules against idioms this code uses on purpose: `node:` imports, `any`, non-null assertions | 1,533 |
+| left after turning off those and seven more idiom rules (comma sequences, `escape` names, `${}` placeholders, and others) | 52, none in the files the owner has open |
+| formatter set to the code's style, best case (line width 200 to 240, ES5 commas) | 305 of 544 files rewritten |
+
+A formatter is one reformat of most files, including every file the owner has in flight, so
+when to do it is the owner's call, after that work is committed.
+
+Left: "one unit in flight, on its branch" is still a one-person rule, and the history is still
+linear on `master`; nothing here changes how units land.
 
 ### 23. `scale-the-log`
 

@@ -173,7 +173,7 @@ code as it stands.
   ten times the code: custom grep and glob in `src/core/tools/search.ts` (548 lines) with
   ripgrep optional, and a git checkpoint on every changing step.
 
-### R10. `add-contributor-gates`
+### R10. `add-contributor-gates` (archived 2026-09-29)
 
 A linter, a formatter, and `CODEOWNERS`, so rules that live in prose today are held by a
 tool. "One unit in flight" is a one-person rule, and the history is linear with zero
