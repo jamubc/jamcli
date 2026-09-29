@@ -41,7 +41,7 @@ function generate(next: () => number): string {
 
 let base: string;
 let bin: string;
-let log: string;
+let logs: string;
 const project = () => path.join(base, 'project');
 
 /** Every file under a directory with its contents, to tell whether a run changed anything. */
@@ -61,7 +61,7 @@ function snapshot(dir: string): Record<string, string> {
 beforeAll(() => {
   base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-fuzz-')));
   bin = path.join(base, 'bin');
-  log = path.join(base, 'ran.log');
+  logs = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-fuzz-logs-'));
   fs.mkdirSync(bin);
   // Each stub records the name it was run by, and does nothing else.
   for (const name of new Set([...EXTERNAL_READERS, ...DANGEROUS])) {
@@ -72,7 +72,10 @@ beforeAll(() => {
   fs.writeFileSync(path.join(project(), 'src', 'b.ts'), 'export const b = 1;\n');
   fs.writeFileSync(path.join(base, 'out'), 'outside the project\n');
 });
-afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
+afterAll(() => {
+  fs.rmSync(base, { recursive: true, force: true });
+  fs.rmSync(logs, { recursive: true, force: true });
+});
 
 test('every line the analyzer calls read-only runs only read-only programs and writes nothing', () => {
   // FUZZ_SEED tries other lines; the suite always runs the same ones.
@@ -84,10 +87,12 @@ test('every line the analyzer calls read-only runs only read-only programs and w
     if (readOnlyReason(analyzeCommand(line), project()) !== undefined) continue;
     claimed += 1;
     const before = snapshot(base);
+    const log = path.join(logs, `${index}.log`);
     fs.writeFileSync(log, '');
-    spawnSync('/bin/sh', ['-c', line], { cwd: project(), env: { PATH: bin, RAN_LOG: log, HOME: project() }, stdio: 'ignore', timeout: 2_000 });
+    // `eval` reads the line as `sh -c` would, and `wait` holds the run until any job it put in
+    // the background is done, so that job records into this run's log, not a later one's.
+    spawnSync('/bin/sh', ['-c', 'eval "$1"; wait', 'sh', line], { cwd: project(), env: { PATH: bin, RAN_LOG: log, HOME: project() }, stdio: 'ignore', timeout: 2_000 });
     const ran = fs.readFileSync(log, 'utf8').split('\n').filter(Boolean);
-    fs.rmSync(log);
     const after = snapshot(base);
     const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((file) => before[file] !== after[file]);
     const strays = ran.filter((name) => !READ_ONLY_COMMANDS.has(name));
