@@ -16,7 +16,6 @@ coverage/
 !openspec/**
 !docs/**
 !site/**/*.md
-!classifier/**/*.md
 # Production
 build/
 dist/
@@ -60,3 +59,7 @@ release/
 
 # The site's reference data, written from the definitions at every build
 site/src/generated/
+
+# The approval-classifier research left the repository on 2026-09-29; the data and models it
+# kept here stay where they are, and stay ignored.
+/classifier/
