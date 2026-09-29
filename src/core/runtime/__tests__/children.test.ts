@@ -13,6 +13,7 @@ import { parseRule, type Rule } from '../../permissions/rules.js';
 import { createBuiltinRegistry } from '../../tools/registry.js';
 import { toolNaming } from '../tools.js';
 import { WorkTable } from '../../work.js';
+import { describeCall } from '../../approval.js';
 
 let server: FakeProviderServer;
 let root: string;
@@ -312,7 +313,7 @@ test('a background task runs on, reports its status, and can be cancelled with i
   const id = started.metadata!.id as string;
   expect((await taskStatusRunner({ id }, ctx)).output).toContain(`${id}: running`);
   // The person sees it listed while it runs, and the model is told once when it ends.
-  expect(work.list()).toMatchObject([{ id, kind: 'task', label: 'quick: p' }]);
+  expect(work.list()).toMatchObject([{ id, kind: 'task', label: 'p', agent: 'quick' }]);
   expect(work.drainEnded()).toEqual([]);
   release();
   await Bun.sleep(5);
@@ -375,12 +376,16 @@ test('a task reports its agent, model, session, and activity to the work table a
     const [item] = work.list();
     expect(item).toMatchObject({ agent: 'quick', model: 'ollama:qwen', sessionId: 'child-1', tokens: 60, cost: 0.001 });
     expect(item.detail).toContain('grep');
-    expect(item.label).toBe('quick: look');
+    expect(item.label).toBe('Count the todos');
     return { status: 'ok' as const, response: 'done', agent: 'quick', childSessionId: 'child-1' };
   };
-  const result = await taskRunner({ prompt: 'look' }, { projectRoot: root, delegate, work });
+  const result = await taskRunner({ title: 'Count the todos', prompt: 'look' }, { projectRoot: root, delegate, work });
   expect(result.output).toContain('done');
   expect(work.events(work.list()[0].id).map((event) => event.type)).toEqual(['tool_call', 'usage']);
+  expect(describeCall({ id: 't1', name: 'task', arguments: { title: 'Count the todos', prompt: 'look', background: true } })).toBe('task Count the todos · background');
+  // A caller that gives no title still gets a label: the start of the prompt.
+  await taskRunner({ prompt: 'look  for\nthe todos' }, { projectRoot: root, delegate: async () => ({ status: 'ok' as const, response: '', agent: 'quick' }), work });
+  expect(work.list()[1].label).toBe('look for the todos');
 });
 
 test("a background child's prompt reaches whoever answers the parent's calls, and its answered call's result is shown", async () => {

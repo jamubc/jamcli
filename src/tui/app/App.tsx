@@ -218,7 +218,7 @@ function TodoPanel({
             <text {...sel} wrapMode="none" truncate {...chosenRow(colors, chosen)}>
               <span fg={state.color}>{`${state.mark} `}</span>
               <span fg={colors.accent}>{kindOf(item)}</span>
-              <span fg={colors.text}>{` ${item.kind === 'job' ? item.label : item.label.replace(/^[^:]*:\s*/, '')}`}</span>
+              <span fg={colors.text}>{` ${item.label}`}</span>
               <span fg={colors.dim}>{` · ${facts.join(' · ')}${item.endedAt !== undefined ? ` · ${item.outcome ?? 'ended'}` : item.kind === 'job' ? ` · /jobs stop ${item.id}` : ''}${chosen ? ' · Enter looks in' : ''}`}</span>
             </text>
             {item.kind === 'task' ? (
@@ -329,7 +329,7 @@ function AgentViewer({ runtime, item, syntax, thinking, focus }: { runtime: Runt
       <text {...sel} wrapMode="none" truncate flexShrink={0}>
         <span fg={state.color}>{`${state.mark} `}</span>
         <span fg={theme.accent}>{item.agent ?? 'agent'}</span>
-        <span fg={theme.text}>{` ${item.label.replace(/^[^:]*:\s*/, '')}`}</span>
+        <span fg={theme.text}>{` ${item.label}`}</span>
         <span fg={theme.dim}>{` · ${[...facts, item.model, item.endedAt !== undefined ? (item.outcome ?? 'ended') : undefined].filter(Boolean).join(' · ')}`}</span>
       </text>
       <text {...sel} fg={theme.dim} flexShrink={0}>{keys}</text>

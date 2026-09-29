@@ -29,8 +29,9 @@ interface BackgroundTask {
 
 const taskId = () => `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
-/** A child as the person sees it listed: its agent and the start of its task. */
-const labelFor = (agent: string | undefined, prompt: string) => `${agent ?? 'default agent'}: ${prompt.replace(/\s+/g, ' ').trim().slice(0, 60)}`;
+/** A child as the person sees it listed: the title it was given, or else the start of its task. */
+export const labelFor = (title: unknown, prompt: string) =>
+  (typeof title === 'string' && title.replace(/\s+/g, ' ').trim()) || prompt.replace(/\s+/g, ' ').trim().slice(0, 60);
 
 const taskOf = (ctx: ToolContext, id: unknown): BackgroundTask | undefined => ctx.work?.get<BackgroundTask>(String(id ?? ''))?.record;
 
@@ -40,12 +41,12 @@ const taskOf = (ctx: ToolContext, id: unknown): BackgroundTask | undefined => ct
  * and what the person says to it, which it reads with its next step. Its prompts name the
  * agent that asks, so two children asking at once can be told apart.
  */
-const watched = (work: WorkTable, id: string, prompt: string, ask: ToolContext['requestApproval']): Pick<DelegationRequest, 'onStart' | 'onEvent' | 'heard' | 'requestApproval'> => {
+const watched = (work: WorkTable, id: string, ask: ToolContext['requestApproval']): Pick<DelegationRequest, 'onStart' | 'onEvent' | 'heard' | 'requestApproval'> => {
   let agent = 'a child agent';
   return {
     onStart: (child) => {
       agent = `agent ${child.agent}`;
-      work.update(id, { ...child, label: labelFor(child.agent, prompt) });
+      work.update(id, child);
     },
     onEvent: (event) => work.record(id, event),
     heard: () => work.drainSaid(id),
@@ -56,6 +57,10 @@ const watched = (work: WorkTable, id: string, prompt: string, ask: ToolContext['
 const taskSchema: JsonSchema = {
   type: 'object',
   properties: {
+    title: {
+      type: 'string',
+      description: 'Three to six words naming this child\'s work, such as "Survey the auth module". The person tells children apart by it, on the board and on the prompts they raise.',
+    },
     agent: { type: 'string', description: 'The agent to run the child on, from the list above. Omit it to use the default.' },
     prompt: { type: 'string', description: 'The task for the child agent.' },
     reasoning: {
@@ -79,6 +84,9 @@ const taskSchema: JsonSchema = {
   required: ['prompt'],
   additionalProperties: false,
 };
+
+/** The model is asked for a title; a call without one still starts its child, labeled by its prompt. */
+const taskWireSchema: JsonSchema = { ...taskSchema, required: ['title', 'prompt'] };
 
 const idSchema: JsonSchema = {
   type: 'object',
@@ -147,9 +155,10 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
   const prompt = String(args.prompt ?? '');
   const maxTurns = childTurns(config, typeof args.max_turns === 'number' ? args.max_turns : undefined);
   const isolation = args.isolation === 'worktree' ? ({ isolation: 'worktree' } as const) : {};
+  const label = labelFor(args.title, prompt);
 
   if (args.background) {
-    const task = startBackground(ctx, { ...(agent ? { agent } : {}), ...(reasoning ? { reasoning } : {}), ...(effort ? { effort } : {}), prompt, maxTurns, ...isolation });
+    const task = startBackground(ctx, label, { ...(agent ? { agent } : {}), ...(reasoning ? { reasoning } : {}), ...(effort ? { effort } : {}), prompt, maxTurns, ...isolation });
     return {
       output: [
         `Started background task ${task.id} on ${agent ? `agent "${agent}"` : 'the default agent'} (max ${maxTurns} turns).`,
@@ -162,7 +171,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
   // A foreground child is listed while it runs, so the person can see it and stop it; its result comes back here, so there is no news to tell.
   const controller = new AbortController();
   ctx.signal?.addEventListener('abort', () => controller.abort(), { once: true });
-  const entry = ctx.work?.add({ id: taskId(), kind: 'task', label: labelFor(agent, prompt), record: undefined, told: true, stop: () => controller.abort(), ...(agent ? { agent } : {}) });
+  const entry = ctx.work?.add({ id: taskId(), kind: 'task', label, record: undefined, told: true, stop: () => controller.abort(), ...(agent ? { agent } : {}) });
   let outcome: DelegationOutcome;
   try {
     outcome = await ctx.delegate({
@@ -176,7 +185,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
       signal: controller.signal,
       onText: ctx.onProgress,
       requestApproval: ctx.requestApproval,
-      ...(entry ? watched(ctx.work!, entry.id, prompt, ctx.requestApproval) : {}),
+      ...(entry ? watched(ctx.work!, entry.id, ctx.requestApproval) : {}),
       onResult: ctx.onNestedResult,
     });
   } catch (error) {
@@ -199,7 +208,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
   };
 }
 
-function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'background'>): BackgroundTask {
+function startBackground(ctx: ToolContext, label: string, options: Omit<DelegationRequest, 'background'>): BackgroundTask {
   if (!ctx.work) throw new Error('Background tasks are not available in this session.');
   const work = ctx.work;
   let settle!: () => void;
@@ -217,7 +226,7 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
   work.add<BackgroundTask>({
     id: task.id,
     kind: 'task',
-    label: labelFor(options.agent, options.prompt),
+    label,
     record: task,
     stop: () => {
       task.controller.abort();
@@ -233,7 +242,7 @@ function startBackground(ctx: ToolContext, options: Omit<DelegationRequest, 'bac
       onText: (delta) => {
         task.output += delta;
       },
-      ...watched(work, task.id, options.prompt, ctx.requestApproval),
+      ...watched(work, task.id, ctx.requestApproval),
       onResult: ctx.onNestedResult,
     })
     .then((outcome) => {
@@ -352,6 +361,7 @@ export const TASK_TOOLS: RegisteredTool[] = [
     description:
       'Delegate a self-contained piece of work to a child agent. Returns the child result, or an id when background is set.',
     inputSchema: taskSchema,
+    wireSchema: taskWireSchema,
     policy: 'delegate',
     runner: taskRunner,
   },

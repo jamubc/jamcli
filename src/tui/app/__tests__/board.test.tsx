@@ -98,7 +98,7 @@ test('a child that ended leaves the board once the person sends another message,
     await setup.mockInput.typeText('thanks');
     setup.mockInput.pressEnter();
     // The next message puts it behind the person: its row, the header, and the empty board all go.
-    const after = await frameWith(setup, (frame) => frame.includes('Glad you liked it.') && !frame.includes('judge the jokes ·'));
+    const after = await frameWith(setup, (frame) => frame.includes('Glad you liked it.') && !frame.includes('● quick judge the jokes'));
     expect(after).not.toContain('Agents');
     expect(after).not.toContain('No checklist yet');
   } finally {

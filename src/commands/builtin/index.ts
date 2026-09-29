@@ -162,7 +162,7 @@ const jobs: SlashCommand = {
     const now = Date.now();
     const lines = items.map((item) => {
       const state = item.endedAt === undefined ? `running ${seconds(now - item.startedAt)}` : `${item.outcome ?? 'ended'} after ${seconds(item.endedAt - item.startedAt)}`;
-      return `${item.id}  ${item.kind === 'job' ? 'command' : 'agent'}  ${state}  ${item.label}`;
+      return `${item.id}  ${item.kind === 'job' ? 'command' : `agent ${item.agent ?? ''}`.trim()}  ${state}  ${item.label}`;
     });
     ctx.show([...lines, '', 'Stop one with /jobs stop <id>.'].join('\n'));
   },

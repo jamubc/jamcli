@@ -2,12 +2,12 @@
 
 ## 1. The flood, before
 
-- [ ] 1.1 In a throwaway fixture project with its own `JAMCLI_STATE_DIR` and a copied `JAMCLI_CONFIG_DIR`, drive the interface built from this branch's base through `jamcli mcp serve`'s `terminal_*` tools on `opencode-go:deepseek-v4.1-flash`, in default mode. Ask for several background children that each run the same test command, allow the first ask for the session, and keep the recording. It is done when the recording shows the prompts that remain after the grant and the labels built from each prompt's first words.
+- [x] 1.1 In a throwaway fixture project with its own `JAMCLI_STATE_DIR` and a copied `JAMCLI_CONFIG_DIR`, drive the interface built from this branch's base through `jamcli mcp serve`'s `terminal_*` tools on `opencode-go:deepseek-v4.1-flash`, in default mode. Ask for several background children that each run the same test command, allow the first ask for the session, and keep the recording. It is done when the recording shows the prompts that remain after the grant and the labels built from each prompt's first words.
 
 ## 2. A child's title
 
-- [ ] 2.1 Add `title` to `task`: a `wireSchema` that requires it, an `inputSchema` that does not, and a label that is the title, or the prompt's first 60 characters when there is none, with no agent prefix. Name a `task` call by its title in `describeCall`, and drop the prefix-stripping from the board in `src/tui/app/App.tsx`. Verify with `src/core/runtime/__tests__/children.test.ts` (a titled child's work item and transcript line carry the title; an untitled one falls back to the prompt) and the board test in `src/tui/app/__tests__/board.test.tsx`.
-- [ ] 2.2 Say in the `task` description and in `docs/tools.md` what the title is for and how long it is, and verify with `bun test src/core/runtime/__tests__/prompt` and the docs check.
+- [x] 2.1 Add `title` to `task`: a `wireSchema` that requires it, an `inputSchema` that does not, and a label that is the title, or the prompt's first 60 characters when there is none, with no agent prefix. Name a `task` call by its title in `describeCall`, and drop the prefix-stripping from the board in `src/tui/app/App.tsx`. Verify with `src/core/runtime/__tests__/children.test.ts` (a titled child's work item and transcript line carry the title; an untitled one falls back to the prompt) and the board test in `src/tui/app/__tests__/board.test.tsx`.
+- [x] 2.2 Say in the `task` description and in `docs/tools.md` what the title is for and how long it is, and verify with `bun test src/core/runtime/__tests__/prompt` and the docs check.
 
 ## 3. Who asks, as data
 

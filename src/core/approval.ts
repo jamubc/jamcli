@@ -8,6 +8,7 @@ import { analyzeCommand, isInterpreter } from './permissions/command.js';
 import { draftLesson } from './reflection/lesson.js';
 import { patchPaths } from './permissions/subjects.js';
 import { planFile } from './tools/plan.js';
+import { labelFor } from './tools/task.js';
 
 /**
  * Builds what a surface shows when a tool call needs a decision: one line naming the
@@ -28,6 +29,7 @@ export function describeCall(call: ToolCall): string {
   const command = argString(call, 'command');
   const target = argString(call, 'path');
   if (call.name === 'run_command' && command) return `run_command ${clip(command.replace(/\s+/g, ' '), 160)}${call.arguments?.background === true ? ' · background' : ''}`;
+  if (call.name === 'task' && argString(call, 'prompt')) return `task ${labelFor(call.arguments?.title, argString(call, 'prompt')!)}${call.arguments?.background === true ? ' · background' : ''}`;
   if (call.name === 'apply_patch') {
     const files = [...(argString(call, 'patch') ?? '').matchAll(/^\+\+\+ (?:b\/)?(.+)$/gm)].map((m) => m[1].trim());
     const named = files.filter((file) => file !== '/dev/null');
