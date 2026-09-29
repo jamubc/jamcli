@@ -11,12 +11,18 @@ behavior live in `openspec/changes/`.
 ### Requirement: Terminal User Interface
 JamCLI SHALL provide an interactive terminal interface with a header, a scrollable
 transcript, a multi-line composer, and a status line, rendering the same runtime events
-every other surface receives.
+every other surface receives. Its labels SHALL read as labels: the thing first, no clause
+explaining why, and one word where one word carries the state.
 
 #### Scenario: Launch the interface
 - **WHEN** the user runs `jamcli` in a directory
 - **THEN** the terminal interface renders
 - **AND** input is focused in the composer
+
+#### Scenario: Invite a first message
+- **WHEN** the composer is empty
+- **THEN** its placeholder invites a message and names the two ways in, `/` for commands and `?` for help
+- **AND** it does not list the send and newline keys, which the help overlay and the keys reference carry
 
 #### Scenario: Render a streaming reply
 - **WHEN** a model response is streaming, with or without tool calls
@@ -26,7 +32,13 @@ every other surface receives.
 #### Scenario: Show tool activity
 - **WHEN** a tool call runs
 - **THEN** the transcript shows it as a block with the tool, a summary of its arguments, its status, and its duration
+- **AND** the line leads with the call, and carries its status as the leading mark rather than as a word in front of the call
 - **AND** a click on the block shows or hides an edit's diff or the end of a command's output
+
+#### Scenario: Name the state in a word where there is no mark
+- **WHEN** the interface draws without marks, as screen reader mode does
+- **THEN** every tool line still names its state as a word
+- **AND** the word follows the facts it belongs to rather than leading the line
 
 #### Scenario: Show thinking in a steady window
 - **WHEN** the model thinks before it answers
@@ -60,6 +72,11 @@ every other surface receives.
 #### Scenario: Show the session state
 - **WHEN** a session is active
 - **THEN** the status line shows the permission mode, the provider and model, the share of the context window in use, the session cost, the sandbox kind, and the connected server counts
+- **AND** each phase it reports is one word, except a retry, which carries its attempt and reason
+
+#### Scenario: Confirm a saved setting
+- **WHEN** a command saves a setting and reopens the session so it applies
+- **THEN** the notice says the change applied, without explaining the reopening that carried it
 
 #### Scenario: Handle a multi-line paste
 - **WHEN** pasted content arrives inside bracketed paste markers

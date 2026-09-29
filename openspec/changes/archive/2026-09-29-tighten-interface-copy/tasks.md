@@ -43,4 +43,4 @@
 
 - [ ] 5.1 Drive the interface on a real model through `jamcli mcp serve` in a throwaway
   fixture project and read the frames at 80x24 and 60x20. Deferred to the owner: it needs
-  a live model, and the fake provider covers every frame this unit changed.
+  a live model, and the fake provider covers every frame this unit changed. Not run: the owner closed the unit on 2026-09-29 to open the review units in `openspec/ROADMAP.md`, which halt interface work, while the working tree held uncommitted interface edits a drive would have run with it.
