@@ -9,7 +9,7 @@ import { createChatProvider, listConfiguredProviders } from '../providers/factor
 import { isListableProvider, prefixSetNow, type ChatProvider } from '../providers/types.js';
 import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
 import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
-import { HookTrust, hooksDigest, hooksFromLayers, needsTrust, subscribeHooks, type HookCommand } from '../hooks/commands.js';
+import type { HookCommand } from '../hooks/commands.js';
 import { createRedactor } from '../redact.js';
 import { SessionLog, TranscriptRecorder, ensureProjectStateDir, newSessionId } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
@@ -19,6 +19,7 @@ import type { EditorBridge, JsonSchema } from '../../types/tools.js';
 import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type ToolSummary } from './tools.js';
 import { childLauncher, type ParentSession } from './children.js';
 import { SessionCheckpoints, type CheckpointInfo } from './checkpoints.js';
+import { SessionHooks } from './hooks.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
@@ -749,42 +750,20 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       )
     );
   }
-  // The configuration's hooks subscribe to the bus. A project's run only once the person
-  // trusts them, since opening a repository must not run its code.
-  const hookCommands = hooksFromLayers(settings.layers);
-  const hookTrust = new HookTrust();
-  const hookDigest = hooksDigest(hookCommands);
-  const projectHooks = hookCommands.filter(needsTrust);
-  let projectHooksTrusted = !projectHooks.length || hookTrust.isTrusted(projectRoot, hookDigest);
-  const subscribe = (list: HookCommand[]) =>
-    subscribeHooks(hooks, {
-      hooks: list,
-      base: { projectRoot, cwd: workRoot, surface: options.surface },
-      matches: (matcher, call) => permissions.matches(matcher, call),
-      context: () => {
-        const hookEnv = { ...envFor(), JAMCLI_PROJECT_DIR: projectRoot, JAMCLI_SESSION_ID: log.id };
-        return { cwd: workRoot, env: hookEnv, ...(sandbox.kind === 'none' ? {} : { wrap: sandbox.wrap }) };
-      },
-    });
-  subscribe(hookCommands.filter((hook) => !needsTrust(hook) || projectHooksTrusted));
-  // A plugin's hooks were consented to at install, and run in the plugin's own sandbox.
-  for (const { plugin, sandbox: pluginSandbox, env: pluginEnv, hooks: pluginHookList } of plugins.processes) {
-    if (!pluginHookList.length) continue;
-    subscribeHooks(hooks, {
-      hooks: pluginHookList,
-      base: { projectRoot, cwd: workRoot, surface: options.surface },
-      matches: (matcher, call) => permissions.matches(matcher, call),
-      context: () => ({
-        cwd: workRoot,
-        env: { ...pluginEnv, JAMCLI_PROJECT_DIR: projectRoot, JAMCLI_SESSION_ID: log.id, JAMCLI_PLUGIN_DIR: plugin.dir },
-        ...(pluginSandbox.kind === 'none' ? {} : { wrap: pluginSandbox.wrap }),
-      }),
-    });
-  }
-  if (!projectHooksTrusted) {
-    const count = projectHooks.filter((hook) => hook.enabled !== false).length;
-    notices.push(`This project configures ${count} hook${count === 1 ? '' : 's'} not yet trusted, so ${count === 1 ? 'it does' : 'they do'} not run. Review them with /hooks, or trust them with jamcli hooks trust.`);
-  }
+  // The configuration's hooks and the plugins' on the bus; a project's only once the person trusts them.
+  const sessionHooks = new SessionHooks({
+    bus: hooks,
+    layers: settings.layers,
+    plugins: plugins.processes,
+    projectRoot,
+    workRoot,
+    surface: options.surface,
+    sessionId: () => log.id,
+    env: () => envFor(),
+    sandbox,
+    matches: (matcher, call) => permissions.matches(matcher, call),
+  });
+  if (sessionHooks.notice) notices.push(sessionHooks.notice);
   /** What session_start hooks add to the system prompt. */
   let hookContext: string[] = [];
   /** A provider whose requests are timed and logged under the current turn. */
@@ -1178,13 +1157,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const lists = await Promise.all((await enabledServers()).map((server) => mcp.listServerResources!(server).catch(() => [])));
       return lists.flat();
     },
-    hooks: () => ({ hooks: hookCommands, projectTrusted: projectHooksTrusted }),
-    trustProjectHooks() {
-      if (projectHooksTrusted) return;
-      hookTrust.trust(projectRoot, hookDigest);
-      projectHooksTrusted = true;
-      subscribe(projectHooks);
-    },
+    hooks: () => ({ hooks: sessionHooks.commands, projectTrusted: sessionHooks.projectTrusted }),
+    trustProjectHooks: () => sessionHooks.trust(),
     get sessionId() {
       return log.id;
     },
