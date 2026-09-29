@@ -1,8 +1,12 @@
-import { expect, test } from 'bun:test';
+import { expect, setDefaultTimeout, test } from 'bun:test';
 import { adjudicate } from '../decide.js';
 import { evaluate, formatEval, trainCertified } from '../evaluate.js';
 import type { Example } from '../types.js';
 import { make } from './model.test.js';
+
+// Each test trains and certifies hundreds of decisions: on CI runners they took 4.8 to 5.5 s,
+// around the 5 s default, so the file gets room once rather than test by test.
+setDefaultTimeout(30_000);
 
 const safe = ['ls', 'git status', 'bun test', 'cat notes.txt', 'npm run build', 'grep -rn foo src'];
 const risky = ['python3 tools/deploy_prod.py', 'node scripts/purge_cache.js', 'make deploy'];
@@ -41,8 +45,7 @@ test('with a real signal and enough decisions, the gate passes and certifies a t
   expect(model.authority).toBe('assist');
   expect(model.threshold).toBeGreaterThan(0);
   expect(formatEval(report)).toContain('PASSED');
-  // Training and certifying 700 decisions twice took 5.5 s on the macOS runner, past the 5 s default.
-}, 30_000);
+});
 
 test('the same signal in too few decisions cannot pass: the data does not bound the false-allow rate', () => {
   const data = build(8, 10, (i) => i % 10 === 3);
