@@ -58,6 +58,9 @@ test('the brief carries the steps, the filters, the depth, the report path, and 
   expect(brief).toContain('Start each child\'s prompt with a short title for its line');
   expect(brief).toContain('must not start tasks of its own, run shell commands, or write files');
   expect(brief).toContain('call task_result with wait_seconds 600 for every child');
+  // The report is read back for citations, and the closing message claims no more than it does.
+  expect(brief).toContain('fix every [n] that has no entry under Sources');
+  expect(brief).toContain('state nothing more firmly than the report does');
   expect(brief).toContain('Pass freshness "oneWeek" to every web_search.');
   expect(brief).toContain('site: terms, and prefer them as sources: docs.example.org.');
   expect(brief).toContain('Never cite these domains, and drop their results: spam.test.');
