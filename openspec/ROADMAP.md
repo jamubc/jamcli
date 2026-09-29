@@ -136,7 +136,7 @@ Run the Seatbelt escape suite on a Mac. Fuzz the command analyzer.
   seven test cases and no property or fuzz test. A fuzz test joins the suite, and it can
   fail.
 
-### R7. `prove-local-path`
+### R7. `prove-local-path` (archived 2026-09-29)
 
 Make Ollama on an 8k window a CI job with a real small model, or drop the claim.
 

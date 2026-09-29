@@ -57,10 +57,10 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`prove-local-path`, R7 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
-`master`, where the owner has worked since merging the stack on 2026-09-27. Ollama on the
-default 8,192-token window, as a CI job with a real small model, or the "local by default"
-claim dropped. The review it comes from is kept verbatim in
+`add-audit-ledger`, R8 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
+`master`, where the owner has worked since merging the stack on 2026-09-27. A command that
+answers what an agent changed, under which rule, from which source, across sessions, and the
+thesis moved onto it. The review it comes from is kept verbatim in
 `openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
@@ -69,6 +69,37 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 21. `prove-local-path`
+
+Archived as `2026-09-29-prove-local-path`: no spec deltas, since the job proves the
+local-first requirement and adds no behavior. R7 of the review units. The claim is kept,
+not dropped: `AGENTS.md` already makes the local-first path a hard rule, and now a push
+proves it. `.github/workflows/local.yml` serves `qwen2.5:1.5b` with Ollama 0.34 on the Linux
+runner and runs `scripts/local-path.ts`: one headless turn at an 8,192-token window, in a
+throwaway project whose file the model must read to answer.
+
+**What proving it found.** The local path was broken, and nothing had said so.
+
+- Every request asks for reasoning `auto`, and the Ollama provider turned it into `think`
+  for any model. Ollama refuses `think` with a 400 for a model whose capabilities do not
+  name `thinking`, so no turn on `qwen2.5:1.5b`, or any other model that cannot think,
+  could run. The model's `/api/show` is now asked once and feeds both the window and the
+  `think` field; a model whose capabilities are unknown still gets it, as servers from
+  before capabilities ignore it. The fake Ollama now refuses as the real one does, so every
+  test through it holds the provider to this (`38ab7bf`).
+- The job's first run printed FAIL and passed: the check was piped through `tee` under
+  `bash -e` without `pipefail`. The job now runs a named bash (`8cdc265`).
+
+**Measured on the runner** after the fix: 2 requests, the largest 1,904 prompt tokens, 11
+tools offered, `read_file` called, the answer right. The review's figure was a fixed cost of
+4,516 tokens against the 4,526-token compaction trigger; this turn's largest request is under
+a quarter of the window. How much of the difference is the model's tier and how much is what
+R3 removed from the prompt is not measured.
+
+Left: one turn on one model. Whether a small model can carry a multi-step change at this
+window is what the task corpus would answer if it ran on one, and it runs nightly on a
+hosted open model instead, since the runner has no GPU.
 
 ### 20. `prove-sandbox-and-analyzer`
 
