@@ -56,10 +56,9 @@ export function PermissionPrompt(props: {
   file?: string;
   selected: number;
   feedback: boolean;
-  /** Escape was pressed: the badge shows red while the answer lands. */
   escaping?: boolean;
   onFeedback: (text: string) => void;
-  /** A choice was clicked: 1 to 5, as its key would. */
+  /** A choice selection: 1 to 5 */
   onChoose?: (key: Choice) => void;
 }) {
   const { approval, queued, syntax, file, selected, feedback, escaping } = props;
@@ -74,15 +73,10 @@ export function PermissionPrompt(props: {
   const choice = (key: Choice) => clickable(() => props.onChoose?.(key), { over: () => setHovered(key), out: () => setHovered((now) => (now === key ? undefined : now)) });
 
   const diff = approval.preview?.kind === 'diff' ? approval.preview.text : undefined;
-  // The rows the diff is drawn in: its hunks, or in screen reader mode every line after a label.
   const diffHeight = diff ? (plain ? diff.split('\n').length + 1 : diffRows(diff)) : 0;
   const diffOverflow = diffHeight > previewRows;
-  // The heading names the call. When the preview carries the whole command, the heading
-  // does not repeat it past one line.
   const heading = `${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?`;
-  // A command is read whole before it is allowed: long lines wrap, and rows past the ones
-  // the transcript leaves scroll with the wheel, as a diff does. A command short enough to
-  // read whole in the heading is not printed twice; its facts, such as where it runs, are.
+
   const indent = plain ? 0 : 2;
   const commandOnce = !plain && approval.preview?.kind === 'command' ? omitRepeated(approval.preview.text, heading, room) : undefined;
   const text = commandOnce !== undefined ? commandOnce || undefined : approval.preview && approval.preview.kind !== 'diff' ? approval.preview.text : undefined;
@@ -112,7 +106,6 @@ export function PermissionPrompt(props: {
         </text>
       </box>
       {diff && diffOverflow ? (
-        // A diff taller than the rows the transcript leaves it scrolls with the wheel inside them.
         <scrollbox height={previewRows} flexShrink={0} verticalScrollbarOptions={{ visible: false }}>
           <DiffView diff={diff} file={file} syntax={syntax} />
         </scrollbox>

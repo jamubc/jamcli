@@ -73,19 +73,17 @@ export interface AppProps {
 }
 
 /** How long a short confirmation, such as a copy, stays on the status line. */
-const FLASH_MS = 2_500;
+const FLASH_MS = 2_200;
 
 /**
- * How many transcript rows are drawn at first. A long session resumes with its latest
- * rows, and Page Up at the top draws as many again, so memory and the time to resume
- * follow what the person reads, not the session's length.
+ * # of transcript rows
  */
 export const TRANSCRIPT_ROWS = 200;
 
 /** How long the view holds its place while earlier rows are laid out. */
 const ANCHOR_MS = 600;
 
-const WORKING = new Set(['thinking', 'streaming', 'tool', 'retrying', 'compacting']);
+const WORKING = new Set<Phase>(['thinking', 'streaming', 'tool', 'retrying', 'compacting']);
 
 /** A step's state as screen reader mode reads it, and as the styled board draws it. */
 const TODO_BOXES: Record<TodoView['status'], string> = { pending: '[ ]', in_progress: '[~]', completed: '[x]' };
@@ -105,8 +103,12 @@ const elapsed = (ms: number): string => {
 /** How long an ended child stays on the board, so its end is seen and it can still be opened. */
 const RECENT_WORK_MS = 90_000;
 
-/** The work the board lists: what runs, and what ended a moment ago. */
-export const shownWork = (work: WorkItem[], now: number): WorkItem[] => work.filter((item) => item.endedAt === undefined || now - item.endedAt < RECENT_WORK_MS);
+/**
+ * The work the board lists: what runs, and what ended a moment ago. A child that ended
+ * before the person's last message is behind them and leaves the board.
+ */
+export const shownWork = (work: WorkItem[], now: number, sentAt = 0): WorkItem[] =>
+  work.filter((item) => item.endedAt === undefined || (item.endedAt >= sentAt && now - item.endedAt < RECENT_WORK_MS));
 
 /** A child's facts in one dim run: how long, how many tokens, what it cost. */
 const workFacts = (item: WorkItem, now: number): string[] => [
@@ -142,6 +144,8 @@ function TodoPanel({
   plain,
   colors,
   focus,
+  sentAt,
+  pinned,
   onOpen,
 }: {
   todos: TodoView[] | undefined;
@@ -152,6 +156,10 @@ function TodoPanel({
   colors: Theme;
   /** The child the keys chose, by its id. */
   focus?: string;
+  /** When the person last sent a message: children that ended before it are gone. */
+  sentAt: number;
+  /** Opened with the todos key, so it stays up with nothing to list. */
+  pinned: boolean;
   onOpen: (id: string) => void;
 }) {
   const sel = selectable(colors);
@@ -160,8 +168,9 @@ function TodoPanel({
   const done = todos?.filter((todo) => todo.status === 'completed').length ?? 0;
   const running = todos?.find((todo) => todo.status === 'in_progress');
   const [now, setNow] = useState(Date.now());
-  const listed = shownWork(work, now);
+  const listed = shownWork(work, now, sentAt);
   const live = listed.filter((item) => item.endedAt === undefined);
+  const ended = listed.length - live.length;
   // The clock ticks only while something has a duration to show, and never in screen reader mode or with reduced motion.
   const ticking = !plain && !reduced && (running?.since !== undefined || listed.length > 0);
   useEffect(() => {
@@ -171,6 +180,8 @@ function TodoPanel({
   }, [ticking]);
   const words = phase === 'idle' ? '' : PHASE_WORDS[phase];
   const kindOf = (item: WorkItem) => (item.kind === 'job' ? 'command' : (item.agent ?? 'agent'));
+  // A board that came up on its own goes again once it has nothing left to show.
+  if (!pinned && !todos?.length && !listed.length) return null;
   if (plain) {
     return (
       <box flexDirection="column" flexShrink={0}>
@@ -180,18 +191,22 @@ function TodoPanel({
             {`${item.endedAt === undefined ? 'Running' : `Ended ${item.outcome ?? ''}`}: ${item.kind === 'job' ? 'command' : `agent ${item.agent ?? ''}`} ${item.label}, ${workFacts(item, now).join(', ')}${item.detail ? `, now: ${item.detail}` : ''}${item.endedAt === undefined ? `, stop it with /jobs stop ${item.id}` : ''}${item.id === focus ? ', chosen, Enter looks in on it' : ''}`}
           </text>
         ))}
-        {todos?.length ? todos.map((todo, index) => <text {...sel} key={index}>{todoLine(todo)}</text>) : live.length ? null : <text {...sel}>No checklist yet. The model writes one with todo_write as it works.</text>}
+        {todos?.length ? todos.map((todo, index) => <text {...sel} key={index}>{todoLine(todo)}</text>) : listed.length ? null : <text {...sel}>No checklist yet. The model writes one with todo_write as it works.</text>}
       </box>
     );
   }
   return (
     <box flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1} paddingTop={1}>
       <text {...sel} fg={colors.accent} wrapMode="none" truncate>
-        {todos?.length ? 'Plan ' : live.length ? 'Agents ' : 'Plan'}
+        {todos?.length ? 'Plan ' : listed.length ? 'Agents ' : 'Plan'}
         {todos?.map((todo, index) => (
           <span key={index} fg={todoColor(todo.status, colors)}>{`${TODO_MARKS[todo.status]} `}</span>
         ))}
-        {todos?.length ? <span fg={colors.text}>{`${done} of ${todos.length}`}</span> : live.length ? <span fg={colors.text}>{`${live.length} running`}</span> : null}
+        {todos?.length ? (
+          <span fg={colors.text}>{`${done} of ${todos.length}`}</span>
+        ) : listed.length ? (
+          <span fg={colors.text}>{[live.length ? `${live.length} running` : '', ended ? `${ended} done` : ''].filter(Boolean).join(', ')}</span>
+        ) : null}
         <span fg={colors.dim}>{`${words && todos?.length ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}${live.some((item) => item.kind === 'task') && !focus ? ' · ↑↓ choose an agent, Enter looks in' : ''}`}</span>
       </text>
       {listed.map((item) => {
@@ -237,7 +252,7 @@ function TodoPanel({
             );
           })}
         </box>
-      ) : live.length ? null : (
+      ) : listed.length ? null : (
         <text {...sel} fg={colors.dim}>No checklist yet. The model writes one with todo_write as it works.</text>
       )}
     </box>
@@ -357,7 +372,10 @@ export function App(props: AppProps) {
   const thinking = useMemo(() => thinkingSize(props.thinking, Math.max(1, size.width - 2)), [props.thinking, size.width]);
   const keys = useMemo(() => props.keys ?? loadKeybindings(), [props.keys]);
   const bound = (action: KeyAction, key: KeyLike) => matchesAction(keys.bindings, action, key);
-  const [showTodos, setShowTodos] = useState(false);
+  // Hidden, up on its own because a checklist or a child appeared, or pinned with the todos key.
+  const [board, setBoard] = useState<'hidden' | 'auto' | 'pinned'>('hidden');
+  /** When the person last sent a message, which retires the children that ended before it. */
+  const [sentAt, setSentAt] = useState(0);
   const renderer = useRenderer();
   // A session opened with messages already in it shows them from the first frame.
   const [state, dispatch] = useReducer(reduceView, undefined, (): ViewState =>
@@ -368,7 +386,7 @@ export function App(props: AppProps) {
   const hasTodos = Boolean(state.todos?.length);
   const liveAgents = state.work.filter((item) => item.endedAt === undefined && item.kind === 'task').length;
   useEffect(() => {
-    if (hasTodos || liveAgents) setShowTodos(true);
+    if (hasTodos || liveAgents) setBoard((shown) => (shown === 'hidden' ? 'auto' : shown));
   }, [hasTodos, liveAgents > 0]);
   const [runtime, setRuntime] = useState(first);
   const controller = useMemo(() => new SessionController(runtime, dispatch, props.observer?.event), [runtime]);
@@ -692,7 +710,10 @@ export function App(props: AppProps) {
     show: (text, diff) => dispatch({ type: 'output', text, ...(diff ? { diff } : {}) }),
     notice: say,
     event: (event) => dispatch({ type: 'event', event }),
-    working: (phase) => dispatch({ type: 'status', patch: { phase } }),
+    working: (phase) => {
+      controller.hold(phase !== 'idle');
+      dispatch({ type: 'status', patch: { phase } });
+    },
     refresh: () => controller.refresh(),
     openSession: switchSession,
     opensSessions: true,
@@ -850,8 +871,19 @@ export function App(props: AppProps) {
     setPalette({ draft: '', index: 0 });
     if (line.startsWith('/')) return void runCommand(line);
     // `!` runs what follows as a shell command, under the same permissions as the model's.
+    // A message puts the children that already ended behind the person, and lets go of the one chosen.
+    setSentAt(Date.now());
+    setAgentFocus(undefined);
     if (text.startsWith('!') && text.slice(1).trim()) return void controller.submit(text.slice(1).trim(), { shell: true, display: text });
     void controller.submit(text);
+  };
+
+  /** Stop the turn; what was queued behind it comes back to the composer, ahead of any draft. */
+  const stopTurn = () => {
+    const back = controller.cancel();
+    if (!back) return;
+    const draft = composer.current?.plainText ?? '';
+    composer.current?.setText(draft ? `${back}\n${draft}` : back);
   };
 
   /** A page of the transcript, and at its top, earlier rows. */
@@ -874,10 +906,7 @@ export function App(props: AppProps) {
       return closeViewer();
     }
     if (bound('exit', key)) {
-      if (controller.running) {
-        controller.cancel();
-        return;
-      }
+      if (controller.running) return stopTurn();
       if (exitArmed.current) return onExit();
       exitArmed.current = true;
       dispatch({ type: 'notice', level: 'info', text: `Press ${keysFor(keys.bindings, 'exit')} again to exit.` });
@@ -964,9 +993,16 @@ export function App(props: AppProps) {
       return;
     }
     const draft = composer.current?.plainText ?? '';
+    // Down on an empty composer takes the last queued message back to edit, unsent.
+    if (key.name === 'down' && draft === '' && state.queued.length && !approval && !agentFocusRef.current) {
+      key.preventDefault();
+      const back = controller.takeQueued();
+      if (back) composer.current?.setText(back);
+      return;
+    }
     // On an empty composer, Up and Down walk the children on the board and Enter looks in on the chosen one.
     // Escape lets go of the choice between turns; while a turn runs it still stops the turn.
-    const walkable = shownWork(state.work, Date.now()).filter((item) => item.kind === 'task');
+    const walkable = shownWork(state.work, Date.now(), sentAt).filter((item) => item.kind === 'task');
     const focused = agentFocusRef.current;
     const walking = key.name === 'up' || key.name === 'down' || (focused && (key.name === 'return' || (key.name === 'escape' && !controller.running)));
     if (draft === '' && walkable.length && !approval && walking) {
@@ -978,7 +1014,7 @@ export function App(props: AppProps) {
       const running = walkable.findIndex((item) => item.endedAt === undefined);
       const first = running >= 0 ? running : key.name === 'up' ? walkable.length - 1 : 0;
       const next = at < 0 ? first : Math.min(Math.max(0, at + (key.name === 'up' ? -1 : 1)), walkable.length - 1);
-      setShowTodos(true);
+      setBoard((shown) => (shown === 'hidden' ? 'auto' : shown));
       return setAgentFocus(walkable[next].id);
     }
     // Text a list put in the composer to finish: Escape takes it back out, unsent, and returns.
@@ -1040,10 +1076,7 @@ export function App(props: AppProps) {
       key.preventDefault();
       return page(up);
     }
-    if (bound('interrupt', key) && controller.running) {
-      controller.cancel();
-      return;
-    }
+    if (bound('interrupt', key) && controller.running) return stopTurn();
     if (bound('cycle_mode', key)) {
       key.preventDefault();
       controller.cycleMode();
@@ -1059,7 +1092,9 @@ export function App(props: AppProps) {
     }
     if (bound('todos', key)) {
       key.preventDefault();
-      return setShowTodos((shown) => !shown);
+      // The key hides a board that shows something, and pins one that is hidden or has gone empty.
+      const showing = board === 'pinned' || (board === 'auto' && (hasTodos || shownWork(state.work, Date.now(), sentAt).length > 0));
+      return setBoard(showing ? 'hidden' : 'pinned');
     }
     if (bound('redraw', key)) renderer.requestRender();
   });
@@ -1069,8 +1104,8 @@ export function App(props: AppProps) {
 
   const plain = screenReader;
   const status = statusParts(state.status);
-  // The indicator moves while JamCLI works, not while it waits for the person. Screen
-  // reader mode implies reduced motion, so it never draws there.
+  // The indicator moves during work
+  // Not drawn while Screen reader mode = true
   const moving = !reducedMotion && WORKING.has(state.status.phase);
   // What the status line's words have left of the width, beside the flash and the indicator (its spinner, a space, the words, and a separator).
   const statusRoom = Math.max(1, size.width - (flash ? flash.length + 3 : 0) - (moving ? status.at(-1)!.length + 5 : 0) - (plain ? 'Status: '.length : 0));
@@ -1105,7 +1140,19 @@ export function App(props: AppProps) {
                 <RowView key={row.id} row={row} syntax={syntax} thinking={thinking} {...(viewer ? { open: !viewer.has(row.id), onToggle: toggleInViewer } : { onToggle: (id: number) => dispatch({ type: 'toggle', id }) })} />
               ))}
             </scrollbox>
-            {showTodos && !viewer ? <TodoPanel todos={state.todos} plan={state.plan} work={state.work} phase={state.status.phase} plain={plain} colors={theme} focus={agentFocus} onOpen={openAgent} /> : null}
+            {board !== 'hidden' && !viewer ? (
+              <TodoPanel todos={state.todos} plan={state.plan} work={state.work} phase={state.status.phase} plain={plain} colors={theme} focus={agentFocus} sentAt={sentAt} pinned={board === 'pinned'} onOpen={openAgent} />
+            ) : null}
+            {state.queued.length && !viewer ? (
+              <box flexDirection="column" flexShrink={0} paddingLeft={plain ? 0 : 2}>
+                {state.queued.map((text, index) => (
+                  <text {...sel} key={index} fg={theme.dim} wrapMode="none" truncate>
+                    {plain ? `Queued: ${text}` : `↳ ${text.replace(/\s+/g, ' ')}`}
+                    {index === state.queued.length - 1 ? (plain ? ', Down takes it back to edit' : ' · queued, ↓ edit') : ''}
+                  </text>
+                ))}
+              </box>
+            ) : null}
             {approval ? (
               <PermissionPrompt
                 approval={approval}

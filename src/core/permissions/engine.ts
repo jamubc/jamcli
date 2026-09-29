@@ -233,7 +233,7 @@ export class PermissionEngine {
     if (this.shared.mode === 'bypass') return { decision: 'allow', by: 'mode', reason: 'bypass mode allows everything no rule denies' };
 
     if (command?.hidden.length) {
-      return { decision: 'ask', by: 'policy', reason: `${command.hidden[0]} can run code no rule can see, so it always asks` };
+      return { decision: 'ask', by: 'policy', reason: `${command.hidden[0]} is arbitrary code` };
     }
     const outside = command?.redirects.find((redirect) => redirect.dynamic || !this.insideProject(redirect.target, call));
     if (outside) {

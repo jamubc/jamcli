@@ -109,6 +109,8 @@ export interface ViewState {
   notes: SessionNote[];
   /** What runs beside the turn, and what ended lately, as the runtime lists it. */
   work: WorkItem[];
+  /** Messages sent while a turn ran, waiting for it to end, as they were typed. */
+  queued: string[];
 }
 
 export type ViewAction =
@@ -129,7 +131,9 @@ export type ViewAction =
   /** Hide the notes here; the session log keeps them. */
   | { type: 'clear_notes' }
   /** The runtime's work changed: what runs beside the turn, whether or not one runs. */
-  | { type: 'work'; items: WorkItem[] };
+  | { type: 'work'; items: WorkItem[] }
+  /** The messages waiting for the turn to end changed. */
+  | { type: 'queued'; items: string[] };
 
 /** Characters of a tool's output a block keeps, from the end. */
 export const OUTPUT_TAIL_CHARS = 4_000;
@@ -159,6 +163,7 @@ export function initialView(status: Partial<StatusData> = {}): ViewState {
     nextId: 1,
     notes: [],
     work: [],
+    queued: [],
     status: { mode: 'default', model: '', sandbox: 'none', costUsd: null, unpriced: 0, inputTokens: 0, outputTokens: 0, mcpServers: 0, lspServers: 0, phase: 'idle', ...status },
   };
 }
@@ -442,6 +447,8 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
       const work = { jobs: running.filter((item) => item.kind === 'job').length, agents: running.filter((item) => item.kind === 'task').length };
       return { ...state, work: action.items, status: { ...state.status, work } };
     }
+    case 'queued':
+      return { ...state, queued: action.items };
     default:
       return state;
   }

@@ -80,3 +80,28 @@ test('Down lands on the running child past the ended ones, and two Downs arrivin
     await close();
   }
 }, 30_000);
+
+test('a child that ended leaves the board once the person sends another message, and the board goes with it', async () => {
+  const { setup, close } = await open({ allowTools: ['task'] }, { size });
+  try {
+    context.server.enqueue(
+      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'judge the jokes' } }] },
+      { text: 'The SQL one wins.' },
+      { text: 'The child picked the SQL joke.' },
+      { text: 'Glad you liked it.' }
+    );
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    // Ended in this turn, the child stays on the board with how it ended.
+    const ended = await frameWith(setup, (frame) => frame.includes('The child picked the SQL joke.') && frame.includes('● quick judge the jokes'));
+    expect(ended).toContain('Agents 1 done');
+    await setup.mockInput.typeText('thanks');
+    setup.mockInput.pressEnter();
+    // The next message puts it behind the person: its row, the header, and the empty board all go.
+    const after = await frameWith(setup, (frame) => frame.includes('Glad you liked it.') && !frame.includes('judge the jokes ·'));
+    expect(after).not.toContain('Agents');
+    expect(after).not.toContain('No checklist yet');
+  } finally {
+    await close();
+  }
+}, 30_000);

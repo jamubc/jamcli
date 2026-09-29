@@ -23,21 +23,31 @@ function colorOf(setup: Setup, text: string): number[] | undefined {
   return span ? [...span.fg.buffer.slice(0, 3)] : undefined;
 }
 
+/** The spinner's marks seen beside `word` while it shows, until both have turned up. */
+async function spins(setup: Setup, word: string): Promise<string[]> {
+  const frames = new Set<string>();
+  const pattern = new RegExp(`([<>]) ${word} · default mode`);
+  const deadline = Date.now() + 3_000;
+  while (frames.size < 2 && Date.now() < deadline) {
+    frames.add((await frameWith(setup, (value) => pattern.test(value))).match(pattern)![1]);
+    // Let the spinner's timer run between looks.
+    await Bun.sleep(25);
+  }
+  return [...frames].sort();
+}
+
 test('while a turn works, the status line leads with the spinner and the phase in the style colors, and stops after', async () => {
-  const { setup, close } = await open({}, { statusStyle: arrows });
+  const { setup, close } = await open({ allowTools: ['run_command'] }, { statusStyle: arrows });
   try {
-    context.server.enqueue({ text: 'Done.', delayMs: 600 });
+    context.server.enqueue(
+      { delayMs: 600, toolCalls: [{ id: 'r1', name: 'run_command', arguments: { command: 'sleep 1' } }] },
+      { text: 'Done.' }
+    );
     await send(setup, 'go');
-    const frames = new Set<string>();
-    const deadline = Date.now() + 3_000;
-    while (frames.size < 2 && Date.now() < deadline) {
-      const frame = await frameWith(setup, (value) => /[<>] thinking · default mode/.test(value));
-      frames.add(frame.match(/([<>]) thinking/)![1]);
-      // Let the spinner's timer run between looks.
-      await Bun.sleep(25);
-    }
-    expect([...frames].sort()).toEqual(['<', '>']);
+    expect(await spins(setup, 'thinking')).toEqual(['<', '>']);
     expect(colorOf(setup, 'thinking')).toEqual([255, 0, 0]);
+    // A tool's run is work too: the spinner keeps moving through it.
+    expect(await spins(setup, 'running')).toEqual(['<', '>']);
     const done = await frameWith(setup, (value) => value.includes('Done.') && value.includes('· ready'));
     expect(done.trim().split('\n').at(-1)).toStartWith('default mode');
   } finally {

@@ -87,6 +87,37 @@ export class SessionController {
     return this.busy;
   }
   private busy = false;
+  /** Messages sent while a turn ran, oldest first, each sent in turn once the one before it ends. */
+  private queue: { text: string; options: RunOptions & { display?: string } }[] = [];
+
+  private showQueue(): void {
+    this.dispatch({ type: 'queued', items: this.queue.map((entry) => entry.options.display ?? entry.text) });
+  }
+
+  /** Set while the session works outside a turn, as a compaction does: messages wait for it too. */
+  private held = false;
+
+  /** Hold messages while the session works outside a turn, and send what waited once it is done. */
+  hold(on: boolean): void {
+    this.held = on;
+    if (!on) void this.sendNext();
+  }
+
+  /** Send the oldest queued message, when nothing holds it back. */
+  private async sendNext(): Promise<void> {
+    if (this.busy || this.held) return;
+    const next = this.queue.shift();
+    if (!next) return;
+    this.showQueue();
+    await this.submit(next.text, next.options);
+  }
+
+  /** Take back the last queued message, unsent, as it was typed. */
+  takeQueued(): string | undefined {
+    const entry = this.queue.pop();
+    this.showQueue();
+    return entry && (entry.options.display ?? entry.text);
+  }
 
   /** The status line's facts that come from the runtime rather than from events. */
   status(): Partial<StatusData> {
@@ -113,8 +144,10 @@ export class SessionController {
    * shows what was typed, `display`, and sends its prompt with its model and tools.
    */
   async submit(text: string, options: RunOptions & { display?: string } = {}): Promise<void> {
-    if (this.busy) {
-      this.dispatch({ type: 'notice', level: 'warn', text: 'A turn is running; wait for it, or press Escape to stop it.' });
+    // A message sent while a turn runs, or while the session compacts, waits for it to end, and can be taken back until then.
+    if (this.busy || this.held) {
+      this.queue.push({ text, options });
+      this.showQueue();
       return;
     }
     this.busy = true;
@@ -165,6 +198,9 @@ export class SessionController {
       this.dispatch({ type: 'event', event: { type: 'turn_end', status: 'ok' } });
       this.refresh();
     }
+    // The next queued message is sent once this turn ends. Stopping the turn has already
+    // handed the queue back to the composer, so what is here was sent after that.
+    await this.sendNext();
   }
 
   /** Answer the prompt for one call. */
@@ -180,10 +216,17 @@ export class SessionController {
     );
   }
 
-  /** Stop the running turn. Pending prompts are answered no. */
-  cancel(): void {
+  /**
+   * Stop the running turn. Pending prompts are answered no. What was queued behind it is
+   * returned, unsent, as it was typed, one message to a line, for the composer to hold.
+   */
+  cancel(): string | undefined {
+    const queued = this.queue.map((entry) => entry.options.display ?? entry.text);
+    this.queue = [];
+    if (queued.length) this.showQueue();
     for (const callId of [...this.decisions.keys()]) this.answer(callId, { allow: false, feedback: 'the person stopped the turn' });
     this.runtime.cancel();
+    return queued.length ? queued.join('\n') : undefined;
   }
 
   /**

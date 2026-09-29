@@ -46,7 +46,7 @@ export function modeRefusal(mode: PermissionMode, options: { sandboxed: boolean;
     return 'auto mode runs commands without asking only inside a sandbox, and no sandbox is available here.';
   }
   if (mode === 'bypass' && !options.bypassConfirmed) {
-    return 'bypass mode needs --dangerously-bypass-permissions or a confirmation in the interface.';
+    return 'bypass mode: --dangerously-bypass-permissions';
   }
   return undefined;
 }
