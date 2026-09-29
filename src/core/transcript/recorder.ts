@@ -99,6 +99,7 @@ export class TranscriptRecorder {
           by: event.by,
           surface: this.options.surface,
           ...(event.rule ? { rule: event.rule } : {}),
+          ...(event.source ? { source: event.source } : {}),
           ...(event.feedback ? { feedback: event.feedback } : {}),
           ...(event.reason ? { reason: event.reason } : {}),
         });

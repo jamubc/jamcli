@@ -44,6 +44,8 @@ export type TranscriptEvent =
       by: string;
       surface: string;
       rule?: string;
+      /** Where the deciding rule came from; absent in logs written before 2026-09-29. */
+      source?: string;
       feedback?: string;
       reason?: string;
     }

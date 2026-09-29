@@ -174,7 +174,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
         options.dryRun(call);
         return { decision: 'deny', by: 'mode', reason: 'this is a dry run, so nothing that changes the project is made; the call is in the report' };
       }
-      return { decision: verdict.decision, by: verdict.by, ...(verdict.rule ? { rule: verdict.rule } : {}), reason: verdict.reason };
+      return { decision: verdict.decision, by: verdict.by, ...(verdict.rule ? { rule: verdict.rule } : {}), ...(verdict.source ? { source: verdict.source } : {}), reason: verdict.reason };
     },
     grant: (call, scope, pattern) => {
       const text = pattern ?? suggestPatterns(call)[0];

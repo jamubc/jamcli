@@ -60,6 +60,8 @@ export interface DispatchVerdict {
   decision: 'allow' | 'ask' | 'deny';
   by?: ApprovalBy;
   rule?: string;
+  /** Where the deciding rule came from, such as the file and key that hold it. */
+  source?: string;
   reason?: string;
 }
 
@@ -292,6 +294,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         scope: 'once',
         by: verdict.by ?? 'policy',
         ...(verdict.rule ? { rule: verdict.rule } : {}),
+        ...(verdict.source ? { source: verdict.source } : {}),
         ...(verdict.reason ? { reason: verdict.reason } : {}),
       });
       const result = resultFor(call, 'denied', `Not run: ${verdict.reason ?? 'the permission policy denies it'}.`);
@@ -334,6 +337,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         scope: 'once',
         by: verdict.by,
         ...(verdict.rule ? { rule: verdict.rule } : {}),
+        ...(verdict.source ? { source: verdict.source } : {}),
         ...(verdict.reason ? { reason: verdict.reason } : {}),
       });
     }

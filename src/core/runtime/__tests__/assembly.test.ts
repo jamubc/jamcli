@@ -97,13 +97,14 @@ test('settings and flags for an old tool name apply to the tool that replaced it
   expect(names).toContain('read_file');
 });
 
-test('every decision says who made it and why', () => {
+test('every decision says who made it, the rule, where the rule came from, and why', () => {
   const registry = createBuiltinRegistry();
   const set = createToolSet({ registry, permissions: engineFor(registry, { allowTools: ['edit'] }), context: () => ({ projectRoot: os.tmpdir() }) });
   expect(set.dispatcher.decide!({ id: 'a', name: 'edit', arguments: { path: 'a.ts' } })).toEqual({
     decision: 'allow',
     by: 'flag',
     rule: 'edit',
+    source: '--allow-tool edit',
     reason: 'edit allows it (--allow-tool edit)',
   });
   expect(set.dispatcher.decide!({ id: 'b', name: 'read_file', arguments: { path: 'a.ts' } })).toMatchObject({ decision: 'allow', by: 'mode' });

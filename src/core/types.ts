@@ -208,6 +208,8 @@ export type AgentEvent =
       feedback?: string;
       by: ApprovalBy;
       rule?: string;
+      /** Where that rule came from, such as the file and key that hold it. */
+      source?: string;
       /** Why, in words, when a rule or the mode decided. */
       reason?: string;
     };
