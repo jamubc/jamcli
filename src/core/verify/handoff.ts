@@ -4,6 +4,7 @@ import type { TranscriptEvent } from '../transcript/events.js';
 import { isSummary } from '../context/compact.js';
 import { ensureProjectStateDir } from '../transcript/log.js';
 import { formatTodos, type TodoItem } from '../tools/todo.js';
+import { HeadTailBuffer } from '../tools/command.js';
 import { Ledger } from './ledger.js';
 
 export type HandoffReason = 'session_end' | 'reset' | 'drop';
@@ -95,4 +96,28 @@ export function readResetHandoff(projectRoot: string): { session: string; text: 
   const header = text.split('\n')[0] ?? '';
   const match = /^# Handoff (\S+) \S+ \(reset\)$/.exec(header);
   return match ? { session: match[1], text } : undefined;
+}
+
+/**
+ * Whether a handoff for `reason` is due now. A session with no messages leaves none, and a
+ * session's end does not overwrite a reset the person asked for when nothing was said since.
+ */
+export function handoffDue(events: TranscriptEvent[], reason: HandoffReason): boolean {
+  if (!events.some((event) => event.type === 'message')) return false;
+  if (reason !== 'session_end') return true;
+  const last = events.map((event, index) => ({ event, index })).filter(({ event }) => event.type === 'handoff').at(-1);
+  if (!last || (last.event as { reason?: string }).reason !== 'reset') return true;
+  return events.slice(last.index + 1).some((event) => event.type === 'message');
+}
+
+/** Characters a handoff may take of the first prompt: about 600 tokens. */
+const HANDOFF_NOTE_CHARS = 2_400;
+
+/** The reset handoff an earlier session left, as the note the next session's first prompt carries, within a fixed budget. */
+export function handoffNote(projectRoot: string, sessionId: string): { session: string; note: string } | undefined {
+  const reset = readResetHandoff(projectRoot);
+  if (!reset || reset.session === sessionId) return undefined;
+  const buffer = new HeadTailBuffer(HANDOFF_NOTE_CHARS);
+  buffer.push(reset.text);
+  return { session: reset.session, note: `[Handoff from the previous session ${reset.session}:\n${buffer.toString()}]` };
 }

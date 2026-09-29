@@ -25,8 +25,8 @@ import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
 import { readTodos, stampTodos } from '../tools/todo.js';
 import { executeBatch } from '../tools/dispatch.js';
-import { HeadTailBuffer, MAX_COMMAND_TIMEOUT_MS } from '../tools/command.js';
-import { Ledger, detectGates, readResetHandoff, registerVerifyMiddleware, renderHandoff, runGate, writeHandoff, type Gate, type GateRow, type HandoffReason } from '../verify/index.js';
+import { MAX_COMMAND_TIMEOUT_MS } from '../tools/command.js';
+import { Ledger, detectGates, handoffDue, handoffNote, registerVerifyMiddleware, renderHandoff, runGate, writeHandoff, type Gate, type GateRow, type HandoffReason } from '../verify/index.js';
 import { effortFor, thinkingFor, type EffortLevel, type ReasoningLevel } from '../routing/capabilities.js';
 import { RuleEditor, sessionPermissions, type EditableRuleScope } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
@@ -70,8 +70,6 @@ export type { EditableRuleScope } from './permissions.js';
 
 /** How long a provider has to list its models. */
 const LIST_TIMEOUT_MS = 5_000;
-/** Characters a handoff may take of the first prompt: about 600 tokens. */
-const HANDOFF_NOTE_CHARS = 2_400;
 
 /** The surface a runtime serves. It is recorded with every decision in the session log. */
 export type Surface = 'tui' | 'headless' | 'acp' | 'workflow' | 'child';
@@ -993,11 +991,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const writeHandoffNow = async (reason: HandoffReason): Promise<{ path: string; bytes: number } | undefined> => {
     if (options.parent) return undefined;
     const events = log.events();
-    if (!events.some((event) => event.type === 'message')) return undefined;
-    if (reason === 'session_end') {
-      const lastHandoff = events.map((event, index) => ({ event, index })).filter(({ event }) => event.type === 'handoff').at(-1);
-      if (lastHandoff && (lastHandoff.event as { reason?: string }).reason === 'reset' && !events.slice(lastHandoff.index + 1).some((event) => event.type === 'message')) return undefined;
-    }
+    if (!handoffDue(events, reason)) return undefined;
     const todos = await readTodos({ projectRoot: workRoot });
     const written = writeHandoff(workRoot, renderHandoff(events, todos, { sessionId: log.id, reason }));
     recorder.handle({ type: 'handoff', ...written, reason });
@@ -1006,23 +1000,19 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   hooks.on('compaction', ({ strategy }) => (strategy === 'drop' ? writeHandoffNow('drop').then(() => undefined) : undefined), 'handoff on drop', { internal: true });
   hooks.on('pre_compact', () => ({ context: ['The todo list and the gate results are pinned after the summary; do not restate them.'] }), 'M6 pinned note', { internal: true });
   // A handoff the last session left for this one reaches the model with the first prompt, within a fixed budget.
-  if (!options.sessionId && !options.parent) {
-    const reset = readResetHandoff(workRoot);
-    if (reset && reset.session !== log.id) {
-      const buffer = new HeadTailBuffer(HANDOFF_NOTE_CHARS);
-      buffer.push(reset.text);
-      turnNotes.push(`[Handoff from the previous session ${reset.session}:\n${buffer.toString()}]`);
-      const off = hooks.on(
-        'turn_start',
-        () => {
-          emitting?.({ type: 'steer', handler: 'M1', detail: `handoff from session ${reset.session} read with the first prompt` });
-          off();
-        },
-        'handoff read',
-        { internal: true }
-      );
-      notices.push(`The handoff session ${reset.session} left in .jamcli/handoff.md reaches the model with the first prompt.`);
-    }
+  const handoff = !options.sessionId && !options.parent ? handoffNote(workRoot, log.id) : undefined;
+  if (handoff) {
+    turnNotes.push(handoff.note);
+    const off = hooks.on(
+      'turn_start',
+      () => {
+        emitting?.({ type: 'steer', handler: 'M1', detail: `handoff from session ${handoff.session} read with the first prompt` });
+        off();
+      },
+      'handoff read',
+      { internal: true }
+    );
+    notices.push(`The handoff session ${handoff.session} left in .jamcli/handoff.md reaches the model with the first prompt.`);
   }
   /** One request outside the conversation, counted and priced like the session's others. */
   async function completeOnce(prompt: string, request: { maxOutputTokens?: number; signal?: AbortSignal } = {}): Promise<string> {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { readResetHandoff, renderHandoff, writeHandoff } from '../handoff.js';
+import { handoffDue, handoffNote, readResetHandoff, renderHandoff, writeHandoff } from '../handoff.js';
 import type { TranscriptEvent } from '../../transcript/events.js';
 
 let root: string;
@@ -50,4 +50,26 @@ test('only a handoff written as a reset is read by the next session', () => {
   expect(written.path).toBe(path.join('.jamcli', 'handoff.md'));
   expect(readResetHandoff(root)?.session).toBe('s1');
   expect(fs.existsSync(path.join(root, '.jamcli', '.gitignore'))).toBe(true);
+});
+
+test('a handoff is due once the session has spoken, and its end keeps a reset nobody has spoken past', () => {
+  const header = events[0]!;
+  const said = { v: 2, type: 'message', ts: 9, message: { role: 'user', content: 'go on', timestamp: 9 } } as TranscriptEvent;
+  const reset = { v: 2, type: 'handoff', ts: 8, path: '.jamcli/handoff.md', bytes: 10, reason: 'reset' } as TranscriptEvent;
+  expect(handoffDue([header], 'reset')).toBe(false);
+  expect(handoffDue(events, 'session_end')).toBe(true);
+  expect(handoffDue([...events, reset], 'session_end')).toBe(false);
+  expect(handoffDue([...events, reset], 'drop')).toBe(true);
+  expect(handoffDue([...events, reset, said], 'session_end')).toBe(true);
+});
+
+test("an earlier session's reset handoff is the next session's note, within its budget, and never its own", () => {
+  expect(handoffNote(root, 's2')).toBeUndefined();
+  writeHandoff(root, `# Handoff s1 2026-09-28T00:00:00.000Z (reset)\n${'x'.repeat(5_000)}\nlast line`);
+  const note = handoffNote(root, 's2')!;
+  expect(note.session).toBe('s1');
+  expect(note.note).toStartWith('[Handoff from the previous session s1:\n# Handoff s1');
+  expect(note.note).toEndWith('last line]');
+  expect(note.note.length).toBeLessThan(2_700);
+  expect(handoffNote(root, 's1')).toBeUndefined();
 });
