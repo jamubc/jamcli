@@ -1,4 +1,4 @@
-import { createBuiltinRegistry, type ToolRegistry } from '../tools/registry.js';
+import type { ToolRegistry } from '../tools/registry.js';
 import type { JsonSchema, RegisteredTool, ToolContext } from '../../types/tools.js';
 import type { McpServerConfig, McpToolDescriptor } from '../../types/mcp.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';

@@ -1,9 +1,6 @@
-import fs from 'fs';
 import { pathExists, readJson } from '../utils/fsx.js';
-import path from 'path';
 import {
   StatusIndicatorCustomDefinition,
-  StatusIndicatorStyleId,
   StatusIndicatorStyleRef,
   StatusSpinnerStyleId,
   StatusTextStyleId,

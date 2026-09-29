@@ -1,6 +1,6 @@
 import path from 'path';
 import { loadConfig } from '../core/config/load.js';
-import { loadCommands, type LoadedCommands } from '../core/ext/commands.js';
+import type { LoadedCommands } from '../core/ext/commands.js';
 import { loadSkills, skillDirs, type LoadedSkills } from '../core/ext/skills.js';
 import { HookTrust, hooksDigest, hooksFromLayers, needsTrust, type HookCommand } from '../core/hooks/commands.js';
 

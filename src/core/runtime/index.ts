@@ -44,7 +44,7 @@ import { formatDiagnostic, LspManager } from '../lsp/manager.js';
 import { lspTool } from '../tools/lsp.js';
 import { webSearchTool } from '../tools/web/index.js';
 import { SearchProviders } from '../tools/web/providers.js';
-import { ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
+import { ModelCatalog, requestedOutputTokens } from '../catalog/index.js';
 import { CostLedger } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
 import { loadConfig, permissionLayers, type LoadedConfig } from '../config/load.js';

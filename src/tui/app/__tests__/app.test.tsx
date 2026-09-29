@@ -31,7 +31,7 @@ test('a message typed and sent runs a turn, and the reply and status line are sh
 }, 20_000);
 
 test('a call that asks shows the permission prompt, and Escape denies it', async () => {
-  const { runtime, setup, close } = await open();
+  const { setup, close } = await open();
   try {
     context.server.enqueue({ toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf hello' } }] });
     await setup.mockInput.typeText('say hello');
@@ -79,7 +79,7 @@ test('1 allows a call once; Shift+Tab changes the mode; Ctrl+C twice asks to lea
 
 test('replies render as Markdown, and an edit shows its diff in the prompt and in its block', async () => {
   fs.writeFileSync(path.join(context.root, 'a.txt'), 'one\ntwo\nthree\n');
-  const { runtime, setup, close } = await open();
+  const { setup, close } = await open();
   try {
     context.server.enqueue({ text: '**Bold words** and a list:\n\n- first item\n- second item\n\n```ts\nconst answer = 42\n```' });
     await setup.mockInput.typeText('format something');

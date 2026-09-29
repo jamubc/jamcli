@@ -4,7 +4,6 @@ import { CoreAgent } from '../agent.js';
 import { createSession } from '../state.js';
 import { createHookBus } from '../hooks/index.js';
 import { createScriptedProvider } from '../../testing/scriptedProvider.js';
-import type { ChatProvider, CompletionResult } from '../providers/types.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
 import type { AgentEvent, ToolResult } from '../types.js';
 

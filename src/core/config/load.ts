@@ -119,7 +119,7 @@ export function mergeLayer(target: Record<string, any>, source: Record<string, a
     }
     if (Array.isArray(value) && CONCATENATED.has(name)) {
       const existing: unknown[] = Array.isArray(target[key]) ? target[key] : [];
-      value.forEach((item, index) => origins.set(formatPath([...here, existing.length + index]), label));
+      value.forEach((_item, index) => origins.set(formatPath([...here, existing.length + index]), label));
       target[key] = [...existing, ...structuredClone(value)];
       continue;
     }

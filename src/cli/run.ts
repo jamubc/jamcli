@@ -1,4 +1,4 @@
-import { createRuntime, type DryRunEntry, type RunOptions, type Runtime, type RuntimeOptions } from '../core/runtime/index.js';
+import { createRuntime, type DryRunEntry, type RuntimeOptions } from '../core/runtime/index.js';
 import { CommandHost, entryText } from '../commands/host.js';
 import { hostClipboard } from '../utils/clipboard.js';
 import type { AgentEvent, RunResult } from '../core/types.js';

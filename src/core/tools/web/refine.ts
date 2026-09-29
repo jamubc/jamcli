@@ -10,9 +10,9 @@ import type { SearchResult } from './providers.js';
  * deferred to a later unit; it fails open, and it needs TYPESAFE_API_KEY when it lands.
  */
 export async function refineSearch(
-  query: string,
+  _query: string,
   results: SearchResult[],
-  ctx: ToolContext
+  _ctx: ToolContext
 ): Promise<SearchResult[]> {
   return results;
 }
@@ -64,10 +64,10 @@ const paragraphsOf = (text: string): string[] =>
  * fill; this needs no key and no model, so it holds on the local path too.
  */
 export async function refineFetch(
-  url: string,
+  _url: string,
   text: string,
   prompt: string | undefined,
-  ctx: ToolContext
+  _ctx: ToolContext
 ): Promise<string> {
   const wanted = prompt ? keywordsOf(prompt) : [];
   if (!wanted.length || text.length <= FILTER_ABOVE_CHARS) return text;

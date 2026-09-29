@@ -1,4 +1,4 @@
-import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage, ToolCall, ToolResult } from './types.js';
+import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage, ToolCall } from './types.js';
 import { addModelUsage, addUsage, appendMessages } from './state.js';
 import { clockPast, prefixSetNow, type ChatProvider, type ProviderRequestOptions, type StreamChunk, type ToolDefinition } from './providers/types.js';
 import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';

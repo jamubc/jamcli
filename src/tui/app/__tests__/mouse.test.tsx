@@ -222,7 +222,7 @@ test("a selection is drawn in the theme's selection colors, and stays on its wor
     // The wheel moves the transcript; the highlight moves with its words, as in a document.
     await setup.mockMouse.scroll(from.x, from.y, 'up');
     await setup.mockMouse.scroll(from.x, from.y, 'up');
-    const moved = await frameWith(setup, (frame) => where(setup, 'row 55').y !== from.y);
+    const moved = await frameWith(setup, () => where(setup, 'row 55').y !== from.y);
     expect(moved).toContain('row 55');
     const now = where(setup, 'row 55');
     expect(sameColor(cellAt(setup, now.x, now.y).bg, selection)).toBe(true);

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { subjectsOf } from '../../../permissions/subjects.js';
 import { createBuiltinRegistry } from '../../registry.js';
 import { htmlToText } from '../extract.js';
-import { WEB_FETCH_TOOL, webFetchWith, ResponseCache, clearFetchCache } from '../index.js';
+import { webFetchWith, ResponseCache, clearFetchCache } from '../index.js';
 
 let server: ReturnType<typeof Bun.serve>;
 let other: ReturnType<typeof Bun.serve>;

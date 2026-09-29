@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { pathExists, readJson, writeJson } from '../utils/fsx.js';
 import path from 'path';
 import { McpTestService } from '../services/McpTestService.js';

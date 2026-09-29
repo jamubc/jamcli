@@ -50,7 +50,6 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
   private readonly apiKey?: string;
   private readonly baseUrl: string;
   private readonly extraHeaders: Record<string, string>;
-  private readonly dialect: ProviderDialect;
   private readonly reasoningParam?: string;
   private readonly effortStyle: 'reasoning_effort' | 'openrouter';
   private readonly name: string;
@@ -70,7 +69,6 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
     this.extraHeaders = { ...(options.headers || {}) };
-    this.dialect = options.dialect || 'openai';
     this.reasoningParam = options.reasoningParam;
     this.effortStyle = options.effortStyle ?? 'reasoning_effort';
     this.name = options.name || 'openai';
