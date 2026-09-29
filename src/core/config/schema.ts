@@ -197,7 +197,7 @@ export const ConfigFileSchema = z
       .strictObject({
         max_depth: positiveInt().describe('How deep tasks may nest: a task started by a task counts one deeper. Defaults to 2.'),
         max_concurrent: positiveInt().describe('Tasks one session may run at once. Defaults to 5.'),
-        max_turns_per_child: positiveInt().describe('Turns a task may take; a task call may ask for fewer, never more. Defaults to 8.'),
+        max_turns_per_child: positiveInt().describe('Turns a task may take; a task call may ask for fewer, never more. Defaults to 16.'),
         default_agent: z.string().min(1).describe('The agent a task call that names none runs on.'),
       })
       .partial(),

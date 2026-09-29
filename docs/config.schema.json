@@ -545,7 +545,7 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
-          "description": "Turns a task may take; a task call may ask for fewer, never more. Defaults to 8."
+          "description": "Turns a task may take; a task call may ask for fewer, never more. Defaults to 16."
         },
         "default_agent": {
           "type": "string",

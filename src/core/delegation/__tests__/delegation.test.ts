@@ -40,6 +40,11 @@ test('a child refused for slots its siblings hold is told to do the work, a pare
   expect(canDelegate({ depth: 0, ...full }).reason).not.toContain('yourself');
 });
 
+test('a task may run for sixteen turns unless it asks for fewer', () => {
+  expect(childTurns(undefined)).toBe(16);
+  expect(childTurns(undefined, 40)).toBe(16);
+});
+
 test('a delegation block that sets only some keys keeps the defaults for the rest', () => {
   const partial = { default_agent: 'quick' };
   expect(canDelegate({ depth: DEFAULT_DELEGATION_CONFIG.max_depth, running: 0, config: partial }).allowed).toBe(false);
