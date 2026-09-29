@@ -159,7 +159,7 @@ thesis in `openspec/project.md` and the README move onto the auditable harness h
 since "small enough to hold in your head" and "local by default" are contradicted by the
 code as it stands.
 
-### R9. `scale-the-log`
+### R9. `scale-the-log` (archived 2026-09-29)
 
 - `SessionLog.events()` re-reads and re-parses the whole file on every call
   (`src/core/transcript/log.ts:136`), from checkpoint listing, notes, handoff, the gate

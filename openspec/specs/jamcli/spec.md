@@ -1679,6 +1679,11 @@ manifest and a lockfile, and require consent to their declared permissions.
 - **WHEN** the user lists, enables, disables, updates, or removes a plugin
 - **THEN** the operation is applied and reflected in the lockfile
 
+#### Scenario: A lockfile from a newer JamCLI
+- **WHEN** a lockfile records a version newer than the one this JamCLI writes
+- **THEN** its plugins are off in the session and a notice says why
+- **AND** installing, updating, or removing a plugin in that scope is refused rather than overwriting the record
+
 ### Requirement: Plugin Isolation
 JamCLI SHALL run plugin code only as separate processes under the sandbox with the
 plugin's declared permissions, and SHALL NOT load plugin code into its own process.

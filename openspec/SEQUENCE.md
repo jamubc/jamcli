@@ -57,11 +57,10 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`scale-the-log`, R9 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
-`master`, where the owner has worked since merging the stack on 2026-09-27. The session log
-read without parsing it whole on every call, the session index appended to rather than
-rewritten, and version fields where a newer JamCLI's file could be misread by an older one.
-The review it comes from is kept verbatim in
+`add-contributor-gates`, R10 of the review units at the top of `ROADMAP.md`, opened
+2026-09-29 on `master`, where the owner has worked since merging the stack on 2026-09-27. The
+hard rules that live in prose held by a tool, the compiler's unused-code checks turned on, and
+`CODEOWNERS`. The review it comes from is kept verbatim in
 `openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
@@ -70,6 +69,34 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 23. `scale-the-log`
+
+Archived as `2026-09-29-scale-the-log`: 1 requirement modified (Plugin Packaging and
+Installation). R9 of the review units.
+
+- `SessionLog.events()` parses only what was appended since its last read, whoever appended
+  it; a line not yet finished waits, and a file that shrank or was replaced is read whole
+  again. Every caller now shares the parsed events, so they are frozen, and the full suite ran
+  with nothing changing one in place (`5217555`). On a 4.5 MB session of 5,000 events a call
+  went from 1.97 ms to 0.01 ms, and to 0.08 ms with an event appended between calls: a real
+  saving, small at that size, that grows with the session and with each caller per step.
+- The session index is appended to, one line per update, a session's last line its summary,
+  and one session recorded under two spellings of its project is one entry. It is rewritten
+  only once stale lines outnumber sessions (`5fec7f9`).
+- Index lines carry `v: 1`, and one from a newer JamCLI is skipped. A plugin lockfile a newer
+  JamCLI wrote is neither read nor written: its plugins are off with a notice, and an install
+  or removal in that scope is refused (`6ff7683`).
+
+**Measured at ten times the code**, a repository of 4,360 files made of ten copies of `src/`:
+a checkpoint after one edit takes a median of 94 ms; a grep takes 69 ms through ripgrep and
+294 ms through the built-in fallback, and a glob 14 and 46 ms. Next to a model call none of
+these matters, so search and checkpoints are unchanged.
+
+Left: configuration and checkpoint refs carry no version field; the first format change to
+either adds one. A rewrite of the index can still lose a line another process appends while
+it runs, where before any update could. Five in-process children still share one process and
+its memory.
 
 ### 22. `add-audit-ledger`
 
