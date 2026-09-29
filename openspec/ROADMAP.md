@@ -123,7 +123,7 @@ scripted fake-provider tests, which test the harness, not the model. Live runs u
 `opencode-go:deepseek-v4.1-flash` unless the owner names another model; its key is a CI
 secret, never a file.
 
-### R6. `prove-sandbox-and-analyzer`
+### R6. `prove-sandbox-and-analyzer` (archived 2026-09-29)
 
 Run the Seatbelt escape suite on a Mac. Fuzz the command analyzer.
 

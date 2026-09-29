@@ -57,10 +57,10 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`prove-sandbox-and-analyzer`, R6 of the review units at the top of `ROADMAP.md`, opened
-2026-09-29 on `master`, where the owner has worked since merging the stack on 2026-09-27.
-The escape suite runs under Seatbelt as it does under bubblewrap, and the command analyzer
-is fuzzed against a real shell. The review it comes from is kept verbatim in
+`prove-local-path`, R7 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
+`master`, where the owner has worked since merging the stack on 2026-09-27. Ollama on the
+default 8,192-token window, as a CI job with a real small model, or the "local by default"
+claim dropped. The review it comes from is kept verbatim in
 `openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
@@ -69,6 +69,43 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 20. `prove-sandbox-and-analyzer`
+
+Archived as `2026-09-29-prove-sandbox-and-analyzer`: 1 requirement modified (Permission
+Modes). R6 of the review units. The escape suite now runs under the platform's sandbox, so
+Seatbelt meets the same five attacks bubblewrap does, on this Mac and on the macOS runner:
+credentials hidden, nothing written outside the project, the network and the loopback
+unreachable, no provider key, no agent socket (`3e5e028`). Its fixture moved to `/var/tmp`,
+since Seatbelt lets a command write the temporary directory and a home there proved
+nothing; with the network allowed the same attack gets through, so the suite can fail.
+
+The command analyzer is tested against a real shell (`159fb4c`): 4,000 generated lines a
+run, each one it calls read-only run by `/bin/sh` with every program replaced by a stub
+that records it, must run only read-only programs and write nothing. The suite runs one
+seed; `FUZZ_SEED` tries others, and sixty pass after the fixes below.
+
+**What proving it found.** Five ways around the read-only allow list or the modes, each
+fixed with a test that failed before it:
+
+- `rg --hostname-bin=<program>` passed as read-only, and ripgrep runs that program; `file
+  -C`, git's `--ext-diff` and `--textconv` likewise ask a read to run or write (`1519022`).
+- In `accept-edits` an edit to `.git/config`, or a write under `.git/hooks/` or `.jamcli/`,
+  was allowed as a change inside the project, after which the read-only steering let `git
+  status` run without asking and git ran the `core.fsmonitor` just written: a command with
+  no prompt at all. Those paths now ask in every mode that allows edits (`959b049`).
+- The fuzz found three more in the analyzer (`ed6a33a`, `06c3b52`): a bare wrapper such as
+  `env`, or one followed only by assignments, was dropped, so `ls | env x=1` was judged as
+  `ls`; a `#` after an escaped space was taken for a comment, hiding a `$(rm)` the shell then
+  ran; and `>&` before a word that is not a descriptor was taken for duplication, where the
+  shell writes a file of that name.
+- The harness itself misfired once: a job an earlier line put in the background outlived its
+  shell and recorded into the next line's log. Each line now runs as `eval "$line"; wait`,
+  with a log of its own (`f1c34f3`).
+
+Left: a repository whose own `.git/config` already names a program runs it when git reads
+the repository, as it would for the person; JamCLI now stops a model from writing one, and
+does not vet one that was there before.
 
 ### 19. `add-task-corpus`
 
