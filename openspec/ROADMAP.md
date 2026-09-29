@@ -501,7 +501,7 @@ tool calls indented under a `●` assistant bullet, a `│` rail for detail, sta
 right-aligned at the margin, and noun-led labels. The owner decided: two units, copy
 first, and the brief is the floor rather than the ceiling.
 
-### A. `tighten-interface-copy` (open)
+### A. `tighten-interface-copy` (archived 2026-09-29)
 
 The words only, so its snapshot diff is purely wording. Tool lines lead with the call and
 carry state as the leading mark; phase words are one word each; the compaction line is a
