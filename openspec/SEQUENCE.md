@@ -57,10 +57,11 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-audit-ledger`, R8 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
-`master`, where the owner has worked since merging the stack on 2026-09-27. A command that
-answers what an agent changed, under which rule, from which source, across sessions, and the
-thesis moved onto it. The review it comes from is kept verbatim in
+`scale-the-log`, R9 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
+`master`, where the owner has worked since merging the stack on 2026-09-27. The session log
+read without parsing it whole on every call, the session index appended to rather than
+rewritten, and version fields where a newer JamCLI's file could be misread by an older one.
+The review it comes from is kept verbatim in
 `openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
@@ -69,6 +70,40 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 22. `add-audit-ledger`
+
+Archived as `2026-09-29-add-audit-ledger`: 1 requirement added (Decision Ledger). R8 of the
+review units. The engine's verdict already named the rule's source; the dispatcher dropped it
+before the approval event, so the log said which rule decided and not which file and key held
+it. It is now recorded with every decision (`d6ba4b7`).
+
+`jamcli audit ledger` lists, across the project's sessions, every decision the logs record:
+each allowed call of a tool that can change something, each refusal, and each answer a person
+gave, with who decided, the rule and its source, and the files the call changed. For a
+command, the files come from the checkpoint its step recorded. `--session`, `--since`,
+`--refused`, and `--json` narrow and shape it, and it writes nothing (`db6038d`). The thesis
+and the README now lead with the auditable harness, say that "small enough to hold in your
+head" is an aim not yet met, and name the task corpus, not parity, as what decides what comes
+next (`7d27f21`).
+
+**Driven live.** One headless turn on `opencode-go:deepseek-v4.1-flash` in a throwaway
+project with `permissions.allow: ["edit(src/**)"]` and `permissions.deny: ["run_command(rm
+*)"]`, asked to change a file and then run `rm -rf build`. The ledger read back:
+
+```
+allowed  edit src/a.ts  by policy: rule edit(src/**) from .jamcli/config.json permissions.allow[0]; changed src/a.ts
+allowed  run_command ls -la; ...  by hook: a pre_tool hook allowed it: it only reads inside the project
+refused  run_command rm -rf build; ...  by policy: rule run_command(rm *) from .jamcli/config.json permissions.deny[0]
+```
+
+A command is a tool that can change something even when it only reads, so a command a hook
+allowed is listed too.
+
+Left: logs written before this unit carry no source, so their decisions name the rule alone. A
+page on the site about the decision record would be a new article, which `site/AGENTS.md`
+leaves to the owner. The site's build at the unit's last commit passes: 14 pages, every
+receipt resolving.
 
 ### 21. `prove-local-path`
 

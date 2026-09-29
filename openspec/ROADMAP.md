@@ -146,7 +146,7 @@ unit 11), and every test fakes Ollama. The job runs on a CI runner, never on the
 machine. Keeping the claim or dropping it is the owner's decision, made when this unit
 opens.
 
-### R8. `add-audit-ledger`
+### R8. `add-audit-ledger` (archived 2026-09-29)
 
 A command that answers what this agent changed, under which rule, from which source,
 across sessions, shipped as the reason to use JamCLI.
