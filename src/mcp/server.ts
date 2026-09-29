@@ -258,7 +258,9 @@ const screenReply = (terminal: DrivenTerminal, screen: string, note?: string) =>
       : terminal.personWaits
         ? `waiting on the person to answer ${terminal.waitingOn!.tool}; they are asked, not you`
         : terminal.state === 'requires_action'
-          ? `waiting for an answer to ${terminal.waitingOn?.tool ?? 'a call'}: 1 allows once, Escape denies`
+          ? terminal.waitingOn?.question
+            ? `waiting for an answer to a question from ${terminal.waitingOn.tool}: Up and Down choose, Enter answers, Escape cancels`
+            : `waiting for an answer to ${terminal.waitingOn?.tool ?? 'a call'}: 1 allows once, Escape denies`
           : terminal.state;
   const state = { terminal: terminal.id, state: terminal.state, ...(terminal.waitingOn ? { waitingOn: terminal.waitingOn } : {}), recording: terminal.recording, size: terminal.terminal.size };
   return {

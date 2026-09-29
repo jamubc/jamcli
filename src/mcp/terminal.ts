@@ -18,8 +18,8 @@ const QUIET_MS = 400;
  */
 export class DrivenTerminal {
   state: InterfaceState = 'starting';
-  /** The tool a waiting call is for, and whether only the person answers it. */
-  waitingOn: { tool: string; alwaysAsks: boolean } | undefined;
+  /** The tool a waiting call is for, whether only the person answers it, and whether it is a question in a chooser rather than a call to allow. */
+  waitingOn: { tool: string; alwaysAsks: boolean; question?: boolean } | undefined;
   exitCode: number | undefined;
   private socket: net.Socket | undefined;
 

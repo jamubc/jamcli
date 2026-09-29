@@ -198,6 +198,24 @@ test('after a session is replaced the old watcher hears the replacement, then no
   }
 }, 20_000);
 
+test('a question put to the person is reported as waiting, and as running again once it is answered', async () => {
+  const client = await observe();
+  await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });
+  await client.request('session/load', { sessionId: runtime.sessionId, cwd: root, mcpServers: [] });
+  server.enqueue({ toolCalls: [{ id: 'q1', name: 'ask_user', arguments: { question: 'Which colour?', choices: ['red', 'blue'] } }] }, { text: 'Noted.' });
+  await runtime.run('ask me', (event: AgentEvent) => {
+    hub.event(event);
+    if (event.type === 'elicitation_request') event.respond({ action: 'cancel' });
+  });
+  const states = () => client.updates().filter((update) => update.sessionUpdate === 'state_update');
+  await waitFor(() => states().at(-1)?.state === 'idle' && states().length > 1, 1000);
+  const seen = states().map((update) => update.state);
+  // The session's own idle when it is loaded, the turn, the question, its answer, and the end.
+  expect(seen.filter((state, at) => state !== seen[at - 1])).toEqual(['idle', 'running', 'requires_action', 'running', 'idle']);
+  expect(states().find((update) => update.state === 'requires_action')._meta).toEqual({ jamcli: { tool: 'ask_user', alwaysAsks: false, question: true } });
+  client.socket.destroy();
+});
+
 test('a call to a tool that always asks is reported as the person\'s to answer', async () => {
   const client = await observe();
   await client.request('initialize', { protocolVersion: 1, clientCapabilities: {} });

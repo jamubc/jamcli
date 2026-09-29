@@ -46,6 +46,8 @@ interface Watcher {
 export async function startObserver(socketPath: string, first: Runtime): Promise<ObserverHub> {
   let runtime = first;
   let state: State = 'idle';
+  /** A question is put to the person, and its answer has not yet come back as a tool's result. */
+  let asking = false;
   const watchers = new Set<Watcher>();
   const sockets = new Set<net.Socket>();
 
@@ -159,14 +161,26 @@ export async function startObserver(socketPath: string, first: Runtime): Promise
   return {
     path: socketPath,
     event(event) {
-      if (!watchers.size && event.type !== 'turn_start' && event.type !== 'turn_end' && event.type !== 'approval_request' && event.type !== 'approval_decision') return;
+      if (!watchers.size && event.type !== 'turn_start' && event.type !== 'turn_end' && event.type !== 'approval_request' && event.type !== 'approval_decision' && event.type !== 'elicitation_request' && !(asking && event.type === 'tool_result')) return;
       try {
         if (event.type === 'turn_start') setState('running');
         for (const watcher of watchers) for (const update of watcher.mapper.map(event)) watcher.send(update);
         // Whose answer it waits for: a tool that always asks is the person's, whatever else watches.
         if (event.type === 'approval_request') setState('requires_action', { _meta: { jamcli: { tool: event.call.name, alwaysAsks: Boolean(event.request?.alwaysAsks) } } });
         if (event.type === 'approval_decision' && state === 'requires_action') setState('running');
-        if (event.type === 'turn_end') setState('idle', { stopReason: stopReasonFor(event.status) });
+        // A question to the person, by ask_user or by an MCP server, waits as a prompt does; the tool's result says it was answered.
+        if (event.type === 'elicitation_request') {
+          asking = true;
+          setState('requires_action', { _meta: { jamcli: { tool: event.request.server === 'JamCLI' ? 'ask_user' : `${event.request.server} question`, alwaysAsks: false, question: true } } });
+        }
+        if (asking && event.type === 'tool_result') {
+          asking = false;
+          setState('running');
+        }
+        if (event.type === 'turn_end') {
+          asking = false;
+          setState('idle', { stopReason: stopReasonFor(event.status) });
+        }
       } catch {
         // An observer never disturbs the session.
       }

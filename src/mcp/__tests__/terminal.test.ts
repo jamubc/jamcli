@@ -34,6 +34,18 @@ test('an agent uses the interface itself: it types, reads the reply on screen, a
   expect(lines.filter((event) => event[1] === 'i').map((event) => event[2]).join('')).toContain('change a.txt');
 }, 90_000);
 
+test('a question the model puts to the person shows as waiting for an answer, named as a question', async () => {
+  const { call } = await serve();
+  await call('terminal_start', { cwd: context.project, cols: 100, rows: 30 });
+  context.provider.enqueue({ toolCalls: [{ id: 'q1', name: 'ask_user', arguments: { question: 'Which colour?', choices: ['red', 'blue'] } }] }, { text: 'Noted.' });
+  const asking = await call('terminal_type', { terminal: 't1', text: 'ask me' });
+  expect(asking.report).toMatchObject({ state: 'requires_action', waitingOn: { tool: 'ask_user', alwaysAsks: false, question: true } });
+  expect(asking.text).toContain('a question from ask_user');
+  expect(screenOf(asking)).toContain('Which colour?');
+  const cancelled = await call('terminal_keys', { terminal: 't1', keys: ['escape'] });
+  expect(screenOf(cancelled)).toContain('Noted.');
+}, 90_000);
+
 test("keys meant for a call only the person answers are not sent: the person is asked, and their answer is typed", async () => {
   const asked: ElicitationRequest[] = [];
   const { call } = await serve(async (request) => {
