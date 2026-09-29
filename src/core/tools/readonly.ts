@@ -13,6 +13,10 @@ const GIT_READ_SUBCOMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch',
 const GIT_BRANCH_WRITES = new Set(['-d', '-D', '-m', '-M', '-c', '-C', '-f', '-u', '--delete', '--move', '--copy', '--force', '--set-upstream-to', '--unset-upstream', '--edit-description', '--track', '--no-track']);
 /** `find` actions that run something or write. The analyzer already refuses -exec and its kin. */
 const FIND_WRITES = new Set(['-delete', '-fprint', '-fprint0', '-fprintf', '-fls', '-exec', '-execdir', '-ok', '-okdir']);
+/** Flags that tell a searching program to run another: a preprocessor, or the program that names the host. */
+const SEARCH_RUNS = ['--pre', '--hostname-bin'];
+/** `git` flags that run a program named in configuration: an external diff, or a text conversion. */
+const GIT_RUNS = new Set(['--ext-diff', '--textconv']);
 
 const program = (word: string) => word.replace(/^.*\//, '');
 
@@ -44,11 +48,17 @@ export function readOnlyReason(analysis: CommandAnalysis, projectRoot: string): 
       if (!sub || !GIT_READ_SUBCOMMANDS.has(sub)) return `git ${sub ?? ''} is not a read-only subcommand`.trim();
       const args = rest.slice(own + 1);
       if (args.some((word) => word.startsWith('--output') || word === '-o')) return 'git --output writes a file';
+      const runs = args.find((word) => GIT_RUNS.has(word.split('=')[0]!));
+      if (runs) return `git ${runs.split('=')[0]} runs a configured program`;
       if (sub === 'branch' && args.some((word) => !word.startsWith('-') || GIT_BRANCH_WRITES.has(word.split('=')[0]))) return 'git branch with that argument changes branches';
     }
     if (name === 'find' && rest.some((word) => FIND_WRITES.has(word))) return `find ${rest.find((word) => FIND_WRITES.has(word))} writes or runs something`;
     if (name === 'tree' && rest.some((word) => word === '-o')) return 'tree -o writes a file';
-    if ((name === 'rg' || name === 'grep') && rest.some((word) => word.startsWith('--pre'))) return `${name} --pre runs a command`;
+    const runs = rest.find((word) => SEARCH_RUNS.some((flag) => word.startsWith(flag)));
+    if ((name === 'rg' || name === 'grep') && runs) return `${name} ${SEARCH_RUNS.find((flag) => runs.startsWith(flag))} runs a command`;
+    // `file -C` compiles a magic file and writes it; the flag may ride with others, as in `-bC`.
+    const compiles = rest.find((word) => word === '--compile' || /^-[a-zA-Z]*C/.test(word));
+    if (name === 'file' && compiles) return `file ${compiles === '--compile' ? '--compile' : '-C'} writes a compiled magic file`;
     for (const word of rest) {
       const value = word.startsWith('-') ? (word.includes('=') ? word.slice(word.indexOf('=') + 1) : undefined) : word;
       if (value === undefined || value === '' || value === '.') continue;

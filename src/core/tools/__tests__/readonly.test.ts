@@ -57,6 +57,14 @@ test('anything that could write, run code, or leave the project is not', () => {
     ['', /runs nothing/],
     ['sudo ls', /raises privileges/],
     ['bash -c ls', /bash -c/],
+    // A read that is told to run a program is not a read.
+    ['rg --hostname-bin=sh x', /--hostname-bin runs a command/],
+    ['rg --hyperlink-format=default --hostname-bin reboot x', /--hostname-bin runs a command/],
+    ['file -C -m magic', /file -C writes/],
+    ['file --compile -m magic', /file --compile writes/],
+    ['git diff --ext-diff', /--ext-diff runs a configured program/],
+    ['git log -p --ext-diff', /--ext-diff runs a configured program/],
+    ['git show --textconv HEAD:a.ts', /--textconv runs a configured program/],
   ];
   for (const [line, expected] of cases) {
     const why = reason(line);
