@@ -13,9 +13,12 @@ carries no license file, and it is not published to npm.
 ## Product Thesis
 
 Every serious agent harness in 2026 is either closed, or open but owned by someone
-else's roadmap. JamCLI exists to be the third thing: a harness the owner can read in
-a sitting, extend without permission, and trust on a machine that holds real
-credentials.
+else's roadmap. JamCLI exists to be the third thing: a harness a person can audit, and
+so trust on a machine that holds real credentials. Every action is decided by a rule it
+can name, with the file that rule came from; every run can be reconstructed from one
+append-only log; every surface is assembled the same way and driven through the real
+program; and it runs on open models. `jamcli audit ledger` is where that shows: what an
+agent changed, under which rule, from which source, across sessions.
 
 Three promises define it. A feature that weakens one is rejected on those grounds.
 
@@ -29,10 +32,11 @@ Three promises define it. A feature that weakens one is rejected on those ground
    flag. Reading is free; writing, executing, and delegating are gated. A run that
    nobody watched must be explainable afterward from its transcript.
 
-The target is **small enough to hold in your head**. Complexity is a cost paid for a
-named capability, and the harness stays legible: no file so long that a change to it
-cannot be reviewed, no protocol with two implementations, no feature whose only
-evidence of working is its own status file.
+The aim is **small enough to hold in your head**, and it is not there yet: the 2026-09-29
+review found a 1,545-line assembly file and a 1,264-line interface component, and the units
+it staged are paying that down. Complexity is a cost paid for a named capability: no file
+so long that a change to it cannot be reviewed, no protocol with two implementations, no
+feature whose only evidence of working is its own status file.
 
 Anti-goal: JamCLI is not a re-implementation of Hermes, OpenCode, Claude Code, or
 Codex, and it is not a plugin that lives inside one of them. Where it needs what they
@@ -41,10 +45,10 @@ grow memory, learning, or self-improvement features. That experiment ran as
 `hermes-plasticity-plugin`: 26 cycles, roughly 138,000 tokens, zero committed
 memories, because every candidate it surfaced was already obvious.
 
-Parity with those tools is pursued where it serves the three promises, and tracked in
-`docs/feature-matrix.md`: every capability they ship is either matched, or recorded as a
-gap with its reason. A standard is claimed only when a test exercises it, as recorded in
-`docs/conformance.md`.
+What comes next is decided by the scores of the task corpus in `evals/`, run on an open
+model, and by the transcripts of people who use JamCLI, not by parity with those tools.
+`docs/feature-matrix.md` stays as a comparison. A standard is claimed only when a test
+exercises it, as recorded in `docs/conformance.md`.
 
 ## Tech Stack
 

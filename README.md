@@ -1,15 +1,21 @@
 # JamCLI
 
-A terminal-native AI coding agent. Local-first, provider-agnostic, human-in-the-loop.
+A terminal-native AI coding agent you can audit. Local-first, provider-agnostic,
+human-in-the-loop.
 
-JamCLI reads, edits, and runs code in your project with your approval. It works with a
-local model through Ollama and no account at all, and with OpenAI-compatible,
-Anthropic, and OpenRouter endpoints when you want them. The same agent loop drives the
-terminal interface, the headless command line, and editors over the Agent Client
-Protocol.
+Every action JamCLI takes is decided by a rule it can name, and every run can be
+reconstructed from one log: `jamcli audit ledger` answers what an agent changed, under which
+rule, from which source, across sessions. JamCLI reads, edits, and runs code in your project
+with your approval. It works with a local model through Ollama and no account at all, and
+with OpenAI-compatible, Anthropic, and OpenRouter endpoints when you want them. The same
+agent loop drives the terminal interface, the headless command line, and editors over the
+Agent Client Protocol.
 
 ## What it does
 
+- **Answers for what it did**: `jamcli audit ledger` lists every change and refusal across
+  the project's sessions, with who decided, the rule, the file that rule came from, and the
+  files the change touched.
 - **Reads, edits, and runs commands** through one permission engine on every surface:
   five modes, pattern rules with scopes, and the rule behind each decision shown.
 - **Sandboxes commands** with bubblewrap on Linux and Seatbelt on macOS, with your
