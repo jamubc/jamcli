@@ -139,6 +139,20 @@ reports `passed` with no spec files present, and `langsearch`'s handoff notes cl
 work is uncommitted when `git log` shows otherwise. Status files and prose are not
 evidence; a fresh run is.
 
+Tests are evidence, not volume, and three rules keep the suite from growing past its
+worth:
+
+1. The full suite runs in under 150 seconds on the owner's machine. A test that pushes
+   it over is made faster or moved behind a tag that runs before merge, not at every
+   checkpoint. The budget was set on 2026-09-28 at the suite's measured 128 seconds
+   plus headroom; it is lowered, never raised, when a unit makes the suite faster.
+2. A new test must exercise behavior no existing test reaches. Before adding one, name
+   the existing test that would be deleted if the new one stayed. If the answer is
+   none and the behavior is already covered, the new test is not added.
+3. One test that drives a surface end to end outranks several module tests that walk
+   the same path. Module tests cover branches the surface test cannot reach cheaply,
+   not the path it already proves.
+
 ### Git Workflow
 
 Remote `jamubc/jamcli`. Each unit lives on its own branch; `master` is where units
