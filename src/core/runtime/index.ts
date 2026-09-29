@@ -20,6 +20,7 @@ import { createToolSet, registerMcpTools, type McpSource, type ToolSet, type Too
 import { childLauncher, type ParentSession } from './children.js';
 import { SessionCheckpoints, type CheckpointInfo } from './checkpoints.js';
 import { SessionHooks } from './hooks.js';
+import { Elicitations } from './elicit.js';
 import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
@@ -52,7 +53,6 @@ import type { PluginParts } from '../plugins/runtime.js';
 import { lspTool } from '../tools/lsp.js';
 import { webSearchTool } from '../tools/web/index.js';
 import { SearchProviders } from '../tools/web/providers.js';
-import type { ElicitationAnswer, ElicitationRequest } from '../mcp/connect.js';
 import { answerOutputTokens, ModelCatalog, requestedOutputTokens, type ModelInfo } from '../catalog/index.js';
 import { CostLedger, requestCost, type SpendSummary } from '../catalog/cost.js';
 import { TokenCounter, contextBudget } from '../context/index.js';
@@ -415,30 +415,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     });
 
   const registry = createBuiltinRegistry();
-  /**
-   * A server's request for input goes to the person through the interface, while a turn
-   * runs there. Other surfaces, and requests outside a turn, are declined with a notice.
-   */
-  let elicitations = 0;
-  /** Requests still waiting on the person, answered "cancel" when the turn is stopped. */
-  const waitingElicitations = new Set<(answer: ElicitationAnswer) => void>();
-  const elicitFromSurface = (request: ElicitationRequest): Promise<ElicitationAnswer> =>
-    new Promise((resolve) => {
-      const emit = emitting;
-      if (!emit || options.surface !== 'tui') {
-        emit?.({ type: 'notice', level: 'warn', message: `MCP server ${request.server} asked for input ("${request.message}"), which this surface cannot give, so it was declined.` });
-        return resolve({ action: 'decline' });
-      }
-      let answered = false;
-      const respond = (answer: ElicitationAnswer) => {
-        if (answered) return;
-        answered = true;
-        waitingElicitations.delete(respond);
-        resolve(answer);
-      };
-      waitingElicitations.add(respond);
-      emit({ type: 'elicitation_request', id: `elicit-${++elicitations}`, request, respond });
-    });
+  // Only the interface can put a question to the person, and only while a turn runs there.
+  const elicitations = new Elicitations({ canAsk: options.surface === 'tui', emit: () => emitting });
   // Skills are listed by name and description; the skill tool loads one when asked.
   const skillSet = loadSkills(projectRoot);
   notices.push(...skillSet.problems.map((problem) => `A skill was not loaded: ${problem}`));
@@ -511,7 +489,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
                 envFor: (server) => envFor(server.env_passthrough, server.env),
                 // A signed-in HTTP server's tokens come from the credential store; signing in is `jamcli mcp login`.
                 authFor: (server) => (transportKind(server) === 'http' ? new StoredOAuthProvider(server, (store ??= detectStore(env))) : undefined),
-                elicit: (request) => elicitFromSurface(request),
+                elicit: elicitations.ask,
                 extraServers: plugins.servers,
               });
             })()
@@ -650,7 +628,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         delegationConfig: config.delegation ?? DEFAULT_DELEGATION_CONFIG,
         ...(options.editor ? { editor: options.editor } : {}),
         // Only the interface can put a question to the person; elsewhere ask_user says so.
-        ...(options.surface === 'tui' ? { elicit: elicitFromSurface } : {}),
+        ...(options.surface === 'tui' ? { elicit: elicitations.ask } : {}),
         exitPlanMode: () => {
           if (permissions.mode !== 'plan') return { refusal: 'the session is not in plan mode' };
           const target = modeBeforePlan ?? 'default';
@@ -1305,7 +1283,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
 
     cancel() {
-      for (const respond of [...waitingElicitations]) respond({ action: 'cancel' });
+      elicitations.cancelAll();
       gateController?.abort();
       (turnAgent ?? agent).cancel(session.id);
     },
