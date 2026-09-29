@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- `jamcli audit ledger` lists every decision the project's sessions recorded: each call that
+  changed something or was refused, who decided, the rule and the file and key it came from,
+  and the files it changed. `--session`, `--since`, `--refused`, and `--json` narrow and shape
+  it. Each decision in the session log now records where its rule came from.
+- `jamcli audit` reports what the permission engine decides, from the rules a session uses.
+  It had read an older per-tool table that could disagree with what ran.
+- The trust gate is removed, so nothing screens tool output; auto mode rests on the mode
+  table and the sandbox. The `trust.*` settings are read by nothing, and a configuration that
+  sets `trust.model` gets a notice saying so.
+- A turn on an Ollama model that cannot think runs. Every request asked for thinking, and
+  Ollama refuses that with a 400 for such a model, so no turn on one, such as `qwen2.5:1.5b`,
+  could run. A turn on a small model at an 8,192-token window now runs in CI on every push.
+- A child agent that loads a skill limited to some tools keeps that limit to itself. Before,
+  the parent's turn stayed limited to the child's skill after the child returned.
+- Reads that would run a program ask: `rg --hostname-bin`, `file -C`, and git's `--ext-diff`
+  and `--textconv`. The command analyzer reads a bare wrapper such as `env`, a `#` after an
+  escaped space, and `>&` before a file name as the shell does. In every mode that allows
+  edits, a change under the project's `.git/` or `.jamcli/` asks.
+- A request that falls back to OpenAI's Responses API tells it to store nothing; it had kept
+  each response for at least 30 days. With an effort set, the model's encrypted reasoning is
+  sent back on the next call.
+- A plugin lockfile written by a newer JamCLI leaves its plugins off, with a notice, and is not
+  overwritten.
 - A reply shows its bracketed numbers as written. The markdown view took `[1]` for a
   link and hid the brackets, and dropped the second of `[6][7]`, so a report's citations
   read as stray digits; they are now set as inline code. Code, task boxes, and real links
@@ -13,8 +36,7 @@
 - A child whose result was collected stays on the board for its window, with how it
   ended, and can still be opened; asking for its result or status again answers.
 - A handoff also names the request the session began with when the latest is another, so a
-  closing question does not read as the task. `/research` reads its report back for
-  citations without a source, and its closing message keeps the report's hedges.
+  closing question does not read as the task.
 - The terminal tool reports a question in a chooser as `requires_action`, naming it, where
   it had reported `running`.
 - A task may run for 16 turns by default, up from 8, since a child that reads several
@@ -46,19 +68,13 @@
 - `/note` plants a tester's flag: shown with a yellow flag and the time, kept in the
   session log as a `note` event, marked **HUMAN TESTER** by `/export` and `/copy debug`,
   and never sent to the model. Before, notes lived only on the screen.
-- `/research <question>` runs a research pipeline: the model plans lines of inquiry, fans
-  them out to the new `research` agent in the background, cross-checks, and writes a
-  report in which every claim cites its source. Pipelines are Markdown files under
-  `.jamcli/research/pipelines/` with `angles`, `depth`, `freshness`, `include`,
-  `exclude`, `agent`, and `output`; `/research pipelines` lists them.
 - A session may run five children at once, up from three, and the `task` tool's guidance
   prefers the background for a fan-out, so each child shows on the board.
 - A background child asks through the parent's surface like a foreground one, and its
   prompt stays up after the parent's turn ends. Before, every call a background child
   made that needed approval was refused, so in default mode it could do no real work.
 - The harness steers and verifies. A command that only reads inside the project no
-  longer asks in default mode, and a read repeated on the same tree is refused with the
-  earlier result's first line. The project's own gates (typecheck, lint, tests) are
+  longer asks in default mode. The project's own gates (typecheck, lint, tests) are
   detected and run after a changing step and before a turn ends with changes; a failure
   sends the model back to it, and a completed todo is stamped with the gate that vouched
   for it. `/handoff` writes `.jamcli/handoff.md` from the log, as session end and a
@@ -71,9 +87,7 @@
   `find_string` is not found names the nearest lines, and a failed command leads with its
   first error line. `/cost` says how much of the prompt the provider cached.
 - `jamcli sessions score <id>` scores a session from its log, with the same signals
-  `/reflect` reads; `scripts/harness-search` searches prompt parts, middleware constants,
-  and wire schemas against task specs and accepts a change only when a held-out split
-  confirms it. `docs/harness-spec.md` specifies the harness surface.
+  `/reflect` reads.
 
 ## 2.0.0
 
