@@ -913,3 +913,15 @@ because the anchor guidance it keeps is what closed F7. The `overflow_retry` con
 subtype is not detected: the log does not distinguish that path from a planned
 compaction. R1 to R10 in section 8 remain to be run; nothing here has been measured on
 the target model yet.
+
+Driven live, 2026-09-29, through the interface's own terminal tools on
+`opencode-go:deepseek-v4.1-flash` in a throwaway project, and read back from the session
+log: M2 let `ls` and `cat` run without a prompt; M3 refused a second identical
+`read_file` in one turn, with the earlier result's first line; a wrong edit made the
+project's gate fail, M5 denied the stop twice with the shaped failure, and the third
+stop ended the turn with the warning; a passing gate stamped the completed todo
+(`verified: test, tree ...`); `/cost` reported the cached share; a mode change reached the
+model as a note; `/handoff` wrote the file and the next session read it with its first
+prompt. Not driven: the extended tier held behind `search_tools` on a small window, elision
+at its planned point, and any step of the search loop. The run checks that the mechanisms
+work as described; it does not measure what they save.
