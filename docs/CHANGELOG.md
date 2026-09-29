@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A task may run for 16 turns by default, up from 8, since a child that reads several
+  sources in full does not fit in 8; a call may still ask for fewer. A child refused
+  because its siblings hold every slot is told to do the work itself, not to ask again.
+- `echo` is a read-only command, so a compound command that separates its parts with
+  `echo ---` no longer asks; a redirect or a substitution still does.
 - Plan mode has its artifacts. `plan_write` keeps the plan at `.jamcli/plan.md`, where
   you can edit it and the model reads it back; `exit_plan_mode` hands it to you for approval,
   and approval returns the session to the mode it held before plan mode. The plan-mode
