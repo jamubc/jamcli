@@ -3,7 +3,6 @@ import { addModelUsage, addUsage, appendMessages } from './state.js';
 import { clockPast, prefixSetNow, type ChatProvider, type ProviderRequestOptions, type StreamChunk, type ToolDefinition } from './providers/types.js';
 import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';
 import { HeadTailBuffer } from './tools/command.js';
-import { screenToolResults, type Classifier, type ScreeningCandidate } from './trust/index.js';
 import { requestCost } from './catalog/cost.js';
 import type { ModelPrice } from './catalog/types.js';
 import { ELIDE_AT, KEEP_SHARE, chooseBoundary, compact, elide, estimateRequest, isContextOverflow, type ContextBudget, type TokenCounter } from './context/index.js';
@@ -33,17 +32,6 @@ export interface AgentOptions {
   truncationLimit?: number;
   systemPrompt?: string;
   loop?: AgentLoopConfig;
-  /** What screens tool output in auto mode: a chat model or a judgment model behind one seam. */
-  trustClassifier?: Classifier;
-  /** `provider:model` of the trust gate's classifier, which its usage is recorded under. */
-  trustUsageKey?: string;
-  /** What the classifier costs per million tokens, when known. */
-  trustPrice?: ModelPrice;
-  /** Relevance below which the trust gate removes a result. */
-  trustThreshold?: number;
-  /** Whether identical results are sent to the classifier once. On by default. */
-  trustDedupe?: boolean;
-  trustOffNote?: boolean;
   hooks?: HookBus;
   reasoning?: ProviderRequestOptions['reasoning'];
   effort?: ProviderRequestOptions['effort'];
@@ -128,7 +116,6 @@ export class CoreAgent implements Agent {
   private readonly maxToolCallsPerTurn: number;
   private readonly truncationLimit: number;
   private readonly redact: Redactor;
-  private trustNoted = false;
   private reasoningSince?: number;
   /** Whether this session has run elision at the planned crossing since its last compaction. */
   private elidedAhead = false;
@@ -282,7 +269,6 @@ export class CoreAgent implements Agent {
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
     const cap = this.maxToolCallsPerTurn > 0 ? this.maxToolCallsPerTurn : undefined;
-    const turnPrompt = prompt || [...working.messages].reverse().find((m) => m.role === 'user')?.content || '';
     let usedCalls = 0;
     let steps = 0;
     /** Whether a stop hook has already asked for more this turn, which the hook is told. */
@@ -442,11 +428,7 @@ export class CoreAgent implements Agent {
       });
       usedCalls += batch.ran;
 
-      const screened = await this.screen(turnPrompt, calls, batch.results, signal, emit);
-      if (screened.usage) {
-        working = this.account(working, screened.usage, this.options.trustUsageKey, this.options.trustPrice, emit);
-      }
-      const results = screened.results;
+      const results = batch.results;
       // Work that ended during this step is news the model reads with the step's last result.
       const endedNow = this.options.news?.() ?? [];
       // What the person watching said during this step reaches the model the same way.
@@ -695,50 +677,6 @@ export class CoreAgent implements Agent {
           }
         : {}),
     };
-  }
-
-  /**
-   * Screen results through the trust gate. A removed result is still answered, with a
-   * note saying why, so every call keeps its result and the reason is visible.
-   */
-  private async screen(
-    prompt: string,
-    calls: ToolCall[],
-    results: ToolResult[],
-    signal: AbortSignal,
-    emit: (e: AgentEvent) => void
-  ): Promise<{ results: ToolResult[]; usage?: TokenUsage }> {
-    const candidates: (ScreeningCandidate & { result: number })[] = [];
-    results.forEach((result, index) => {
-      // A tool that reports only the session's own state, such as the todo list, has nothing from outside to screen.
-      if (this.options.dispatcher?.policyClass?.(calls[index].name) === 'state') return;
-      if (result.status === 'ok' || result.status === 'error') candidates.push({ tool: calls[index].name, output: result.output, result: index });
-    });
-    if (!candidates.length) return { results };
-    // Outside auto mode the person reads every result, so nothing is screened or reported.
-    if (!this.options.trustClassifier && !this.options.trustOffNote) return { results };
-    const screening = await screenToolResults({
-      prompt,
-      classifier: this.options.trustClassifier,
-      threshold: this.options.trustThreshold,
-      dedupe: this.options.trustDedupe,
-      signal,
-      candidates,
-    });
-    if (screening.exchange) {
-      emit({ type: 'screening', ...(this.options.trustUsageKey ? { model: this.options.trustUsageKey } : {}), exchange: screening.exchange, results: screening.results ?? [] });
-    }
-    if (this.options.trustOffNote && !this.trustNoted) {
-      this.trustNoted = true;
-      for (const note of screening.notes) emit({ type: 'notice', level: 'info', message: note });
-    }
-    const out = [...results];
-    for (const removal of screening.dropped) {
-      const candidate = candidates[removal.index];
-      emit({ type: 'notice', level: 'warn', code: 'trust_gate', message: `Removed ${candidate.tool} result: ${removal.reason}`, detail: candidate.output });
-      out[candidate.result] = { ...out[candidate.result], output: `[This result was withheld by the trust gate: ${removal.reason}.]` };
-    }
-    return { results: out, ...(screening.usage ? { usage: screening.usage } : {}) };
   }
 }
 

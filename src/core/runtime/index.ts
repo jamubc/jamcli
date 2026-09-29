@@ -35,7 +35,7 @@ import { detectSandbox, subprocessEnv, type SandboxSettings } from '../sandbox/i
 import { buildRuntimePrompt } from './prompt.js';
 import { registerSteerMiddleware } from './steer.js';
 import { describeGates } from '../verify/index.js';
-import { SessionModel, configuredSecrets, keyVariables, listModels, trustClassifier } from './model.js';
+import { SessionModel, configuredSecrets, keyVariables, listModels } from './model.js';
 import { expandReferences } from './references.js';
 import { skillInstructions, skillsPromptText } from '../ext/skills.js';
 import { lessonFor, reflectionTools } from '../reflection/index.js';
@@ -72,7 +72,7 @@ function modelsLabel(settings: LoadedConfig): string {
 
 /**
  * The one place a session is assembled. Every surface gets the same provider, tools,
- * policy, rules, hooks, trust gate, redaction, and session log from here, and differs
+ * policy, rules, hooks, redaction, and session log from here, and differs
  * only in how it renders events and answers approval requests.
  */
 export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
@@ -370,10 +370,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   /** A provider whose requests are timed and logged under the current turn. */
   const observed = (target: ChatProvider, name: string, purpose?: string) =>
     instrumentProvider(target, { observer, providerName: name, parent: () => observation?.current(), purpose, includeContent });
-  // The trust gate screens tool output only in auto mode, where no one reads it first.
-  const trust = trustClassifier(config, (target, name) => observed(target, name, 'trust'));
-  if (trust.note && permissions.mode === 'auto') notices.push(trust.note);
-  const gated = () => permissions.mode === 'auto';
+  // The trust gate was removed on 2026-09-29; a configuration that still names its classifier is told once.
+  if (config.trust?.model && !options.parent) {
+    notices.push(`${settings.origins.get('trust.model') ?? 'The configuration'} sets trust.model, but the trust gate was removed, so nothing screens tool output. The sandbox and the network rules are what hold auto mode.`);
+  }
   // An agent's rules come before the project's, so a project's AGENTS.md has the last word.
   const agentRulesText = options.agentRules
     ? `Rules for the ${options.agentRules.agent} agent, from ${options.agentRules.source}:\n${options.agentRules.text}`
@@ -414,8 +414,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let systemPrompt = buildPrompt();
   /** Whether the extended tier fits the model's window, decided once the window is known; true when that changed. */
   const decideTiers = (): boolean => offer.decideTiers(systemPrompt, budgetFor(), windowKnown());
-  const trustKey = trust.choice ? `${trust.choice.provider}:${trust.choice.model}` : undefined;
-  let trustInfo: ModelInfo | undefined = trust.choice ? catalog.lookup(trust.choice.provider, trust.choice.model, trust.provider?.family) : undefined;
 
   const loop = config.agent_loop;
   /** Learns how the provider counts this session's requests, across model switches. */
@@ -459,14 +457,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       truncationLimit: loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars,
       systemPrompt,
       hooks,
-      ...(gated() ? { trustClassifier: trust.classifier, trustUsageKey: trustKey, trustPrice: trustInfo?.price } : {}),
       price: sessionModel.info.price,
       thinkingStyle: sessionModel.info.thinking,
       alwaysThinks: sessionModel.info.alwaysThinks,
       reasoningSince,
-      trustThreshold: config.trust?.threshold,
-      trustDedupe: config.trust?.dedupe,
-      trustOffNote: gated(),
       redact,
       signal: options.signal,
       pinned: pinnedWithGates,
@@ -669,16 +663,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     }
   };
   let modelReady = resolveModelInfo();
-  // The classifier is fixed for the session, so it is asked about once.
-  const trustReady = trust.choice && trust.provider
-    ? catalog.resolve(trust.choice.provider, trust.choice.model, trust.provider).then(
-        (info) => {
-          trustInfo = info;
-          agent = buildAgent();
-        },
-        () => undefined
-      )
-    : Promise.resolve();
 
   /** Switch the provider and model for later turns. Throws if the provider is not configured. */
   const switchModel = (ref: string) => {
@@ -753,7 +737,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       };
       emitting = emit;
       try {
-        await Promise.all([modelReady, trustReady]);
+        await modelReady;
         turnAgent = agent;
         const result = await turnAgent.compact(session, emit, { focus });
         session = result.session;
@@ -842,7 +826,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           permissions.narrow(parsed.flatMap((item) => ('rule' in item ? [item.rule] : [])), label);
           reassemble();
         }
-        await Promise.all([modelReady, trustReady]);
+        await modelReady;
         for (const message of pending.splice(0)) emit({ type: 'notice', level: 'warn', message });
         // A command typed after `!` needs no model, and its text is not a prompt to expand.
         if (!sessionModel.provider && !turn.shell && !turn.tool) {

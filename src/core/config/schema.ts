@@ -65,7 +65,7 @@ export const ApiRegistrySchema = z
     typesafe: z
       .strictObject(keyed)
       .partial()
-      .describe('TypeSafe, whose Jev judgment model can screen tool output as trust.model "typesafe:jev-latest". Not a chat provider.'),
+      .describe('TypeSafe, whose Jev model the trust gate used. Read by nothing since the gate was removed on 2026-09-29; still accepted so existing files load.'),
     openrouter: z
       .strictObject({
         ...keyed,
@@ -203,13 +203,13 @@ export const ConfigFileSchema = z
       .partial(),
     trust: z
       .strictObject({
-        enabled: z.boolean().describe('false turns the trust gate off in every mode. It screens only in auto mode, and only once trust.model names a classifier.'),
-        model: z.string().describe('The classifier, as provider:model on any configured provider, or typesafe:jev-latest. Nothing is chosen for you.'),
-        threshold: z.number().min(0).max(1).describe('Relevance below which a result is withheld as not relevant; 0 keeps every result that is not an injection. Defaults to 0.3.'),
-        dedupe: z.boolean().describe('Send identical results to the classifier once, each duplicate taking its twin\'s verdict. On by default.'),
+        enabled: z.boolean().describe('Read by nothing since the trust gate was removed on 2026-09-29.'),
+        model: z.string().describe('Read by nothing since the trust gate was removed on 2026-09-29; a session that finds it set says so once.'),
+        threshold: z.number().min(0).max(1).describe('Read by nothing since the trust gate was removed on 2026-09-29.'),
+        dedupe: z.boolean().describe('Read by nothing since the trust gate was removed on 2026-09-29.'),
       })
       .partial()
-      .describe('The classifier that screens tool output before the model reads it, in auto mode.'),
+      .describe('The trust gate\'s settings, still accepted so existing files load. The gate was removed on 2026-09-29: the sandbox and the network rules hold auto mode.'),
     telemetry: z.boolean().describe('The legacy interface\'s telemetry switch. Traces are sent only when otel.enabled is true.'),
     otel: z
       .strictObject({

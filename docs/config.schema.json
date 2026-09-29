@@ -106,7 +106,7 @@
             }
           },
           "additionalProperties": false,
-          "description": "TypeSafe, whose Jev judgment model can screen tool output as trust.model \"typesafe:jev-latest\". Not a chat provider."
+          "description": "TypeSafe, whose Jev model the trust gate used. Read by nothing since the gate was removed on 2026-09-29; still accepted so existing files load."
         },
         "openrouter": {
           "type": "object",
@@ -560,25 +560,25 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "false turns the trust gate off in every mode. It screens only in auto mode, and only once trust.model names a classifier."
+          "description": "Read by nothing since the trust gate was removed on 2026-09-29."
         },
         "model": {
           "type": "string",
-          "description": "The classifier, as provider:model on any configured provider, or typesafe:jev-latest. Nothing is chosen for you."
+          "description": "Read by nothing since the trust gate was removed on 2026-09-29; a session that finds it set says so once."
         },
         "threshold": {
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Relevance below which a result is withheld as not relevant; 0 keeps every result that is not an injection. Defaults to 0.3."
+          "description": "Read by nothing since the trust gate was removed on 2026-09-29."
         },
         "dedupe": {
           "type": "boolean",
-          "description": "Send identical results to the classifier once, each duplicate taking its twin's verdict. On by default."
+          "description": "Read by nothing since the trust gate was removed on 2026-09-29."
         }
       },
       "additionalProperties": false,
-      "description": "The classifier that screens tool output before the model reads it, in auto mode."
+      "description": "The trust gate's settings, still accepted so existing files load. The gate was removed on 2026-09-29: the sandbox and the network rules hold auto mode."
     },
     "telemetry": {
       "type": "boolean",

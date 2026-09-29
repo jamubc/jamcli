@@ -123,32 +123,6 @@ test('local models cost nothing, an unknown price is counted apart, and each mod
   expect(spend.unpriced).toBe(1);
 });
 
-test("the trust gate's requests are counted under its own model", async () => {
-  configure({ trust: { model: 'ollama:fake-model' }, permissions: { mode: 'auto' } });
-  const runtime = await start({ sandbox: { kind: 'bwrap' as const, reason: 'a test sandbox', wrap: (command: string) => ({ file: '/bin/sh', args: ['-c', command] }) } });
-  server.enqueue(
-    { toolCalls: [{ id: 'c1', name: 'read_file', arguments: { path: 'a.txt' } }], usage: { prompt: 1_000, completion: 20 } },
-    // The classifier's verdict.
-    { text: '{"index":0,"relevance":1,"injection":false}', usage: { prompt: 300, completion: 5 } },
-    { text: 'It says hello.', usage: { prompt: 1_100, completion: 10 } }
-  );
-  const result = await runtime.run('what does a.txt say?');
-  expect(result.response).toBe('It says hello.');
-  const spend = runtime.spend();
-  expect(spend.models.map((model) => [model.model, model.requests])).toEqual([
-    ['anthropic:claude-x', 2],
-    ['ollama:fake-model', 1],
-  ]);
-  expect(spend.models[1]).toMatchObject({ cost: 0, unpriced: 0, usage: { prompt_tokens: 300 } });
-  expect(result.usage.prompt_tokens).toBe(2_400);
-  // The log attributes each request the same way, so a continued session agrees.
-  const resumed = await start({ sessionId: runtime.sessionId });
-  expect(resumed.spend().models.map((model) => [model.model, model.requests])).toEqual([
-    ['anthropic:claude-x', 2],
-    ['ollama:fake-model', 1],
-  ]);
-});
-
 const delegate = (id: string, prompt: string, background = false) => ({
   id,
   name: 'task',

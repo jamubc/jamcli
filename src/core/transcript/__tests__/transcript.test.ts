@@ -260,14 +260,15 @@ test('the recorded version matches package.json', () => {
   expect(JAMCLI_VERSION).toBe(pkg.version);
 });
 
-test('a trust-gate request is recorded as it went, and /copy debug shows it', () => {
+test('a trust-gate request in a log written before the gate was removed still reads, and /copy debug shows it', () => {
   const log = SessionLog.create(root, { surface: 'cli' });
   const recorder = new TranscriptRecorder(log, { surface: 'cli', model: 'm' });
   recorder.handle({ type: 'message', message: { role: 'user', content: 'fix it', timestamp: 1 } });
-  recorder.handle({
+  log.append({
     type: 'screening',
     model: 'typesafe:jev-latest',
-    exchange: { sent: '{"state":{"task":"fix it"}}', answered: '{"answers":{}}' },
+    sent: '{"state":{"task":"fix it"}}',
+    answered: '{"answers":{}}',
     results: [
       { tool: 'read_file', verdict: { relevance: 0.9, injection: false }, withheld: false },
       { tool: 'grep', verdict: { relevance: 0.1, injection: false, reason: 'off topic' }, withheld: true },

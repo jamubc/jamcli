@@ -38,7 +38,6 @@ const toolGuidance = (tools: ToolSummary[], gates?: string): string => {
     lines.push(gates ? '- A step is done when its check ran and passed. Say what ran and what it showed. If a gate fails, fix it before saying anything is done.' : '- Check your work with the project\'s own tests or build through run_command when you can.');
     lines.push('- A server, a watcher, or anything that does not exit on its own runs with background: true. Read it with command_output and stop it with command_kill; you are told when it ends. Never wait on it in the foreground.');
   }
-  lines.push('- A result that reads "withheld by the trust gate" was removed by a screen on tool output, not by chance. Ask for it another way, or tell the person.');
   lines.push('- When a note says the model or the mode changed, the messages above it were written under the old one. Do not describe them as errors.');
   lines.push('- When a tool can do something, call it rather than describing the call.');
   lines.push('- If no tool is needed, answer directly.');

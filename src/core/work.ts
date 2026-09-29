@@ -119,7 +119,7 @@ export class WorkTable {
   record(id: string, event: AgentEvent): void {
     const entry = this.entries.get(id);
     if (!entry) return;
-    if (event.type !== 'request' && event.type !== 'screening' && event.type !== 'message') {
+    if (event.type !== 'request' && event.type !== 'message') {
       entry.events.push(event);
       if (entry.events.length > KEEP_EVENTS) entry.events.splice(0, entry.events.length - KEEP_EVENTS);
     }

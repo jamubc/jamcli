@@ -3,7 +3,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { BUILTIN_AGENTS, describeSource, loadAgents, routableAgents } from '../agents.js';
-import { trustModelRef } from '../../runtime/model.js';
 import type { Config } from '../../../types/config.js';
 
 let base: string;
@@ -126,17 +125,6 @@ test('only agents with a model on a configured provider are routable, with no ne
   expect(names).not.toContain('cloud');
   expect(names).toContain('quick');
   expect(routableAgents(agents, { openrouter: { api_key: 'sk-or-test' } }).map((agent) => agent.name)).toContain('cloud');
-});
-
-test('the trust gate runs only on the classifier the user names, never on an agent', () => {
-  expect(trustModelRef({} as Config)).toBeUndefined();
-  // A quick agent with its own model does not become the classifier by accident.
-  projectAgent('quick', '---\ndescription: mine\nmodels: ollama:tiny\n---\n');
-  expect(trustModelRef({} as Config)).toBeUndefined();
-  expect(trustModelRef({ trust: { model: 'openai:judge' } } as Config)).toBe('openai:judge');
-  expect(trustModelRef({ trust: { model: 'openrouter:meta-llama/llama-guard-4-12b' } } as Config)).toBe('openrouter:meta-llama/llama-guard-4-12b');
-  expect(trustModelRef({ trust: { model: '  ' } } as Config)).toBeUndefined();
-  expect(trustModelRef({ trust: { enabled: false, model: 'openai:judge' } } as Config)).toBeUndefined();
 });
 
 test('a source is described as a path, the categories configuration, or built-in', () => {

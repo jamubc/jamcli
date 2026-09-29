@@ -1,6 +1,5 @@
 import type { ElicitationAnswer, ElicitationRequest } from './mcp/connect.js';
 import type { ToolDefinition } from './providers/types.js';
-import type { ClassifierExchange, ScreenedResult } from './trust/index.js';
 export interface TokenUsage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -163,9 +162,7 @@ export type AgentEvent =
     }
   /** A request is about to go to the model: the system prompt and tool definitions it carries, as sent. */
   | { type: 'request'; system?: string; tools?: ToolDefinition[] }
-  /** The trust gate asked its classifier about this step's results: what it sent and was answered, and each result's fate. */
-  | { type: 'screening'; model?: string; exchange: ClassifierExchange; results: ScreenedResult[] }
-  /** `detail` is for the record only, such as what the trust gate withheld; no surface shows it to the model. */
+  /** `detail` is for the record only; no surface shows it to the model. */
   | { type: 'notice'; message: string; level?: 'info' | 'warn' | 'error'; code?: string; detail?: string }
   | {
       type: 'approval_request';

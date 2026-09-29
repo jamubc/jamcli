@@ -20,18 +20,6 @@ export interface DelegationConfig {
   default_agent?: string;
 }
 
-export interface TrustConfig {
-  enabled?: boolean;
-  model?: string;
-  threshold?: number;
-  dedupe?: boolean;
-}
-
-export const DEFAULT_TRUST_CONFIG: TrustConfig = {
-  threshold: 0.3,
-  dedupe: true,
-};
-
 export const DEFAULT_DELEGATION_CONFIG: DelegationConfig = {
   max_depth: 2,
   max_concurrent: 5,

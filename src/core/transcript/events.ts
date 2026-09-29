@@ -1,5 +1,4 @@
 import type { ToolDefinition } from '../providers/types.js';
-import type { ScreenedResult } from '../trust/index.js';
 import type { ApprovalScope, ChatMessage, RunStatus, TokenUsage } from '../types.js';
 
 /**
@@ -7,6 +6,15 @@ import type { ApprovalScope, ChatMessage, RunStatus, TokenUsage } from '../types
  * `"v":2`. Provider requests, resumes, forks, exports, and ACP replays are projections
  * of the log, so the log is the only record that has to be right.
  */
+/** What the trust gate made of one result, as logs written before its removal record it. */
+export interface ScreenedResult {
+  tool: string;
+  verdict?: { relevance: number; injection: boolean; reason?: string };
+  withheld: boolean;
+  /** For a duplicate that was not sent: the index of the result whose verdict it took. */
+  duplicateOf?: number;
+}
+
 export type TranscriptEvent =
   | {
       v: 2;
@@ -62,7 +70,7 @@ export type TranscriptEvent =
    * request after it until the next one.
    */
   | { v: 2; type: 'context'; ts: number; system?: string; tools?: ToolDefinition[] }
-  /** One trust-gate request: what the classifier was sent, what it answered or why it failed, and each result's fate. */
+  /** One trust-gate request, in logs written before the gate was removed on 2026-09-29: what the classifier was sent, what it answered or why it failed, and each result's fate. */
   | { v: 2; type: 'screening'; ts: number; model?: string; sent?: string; answered?: string; error?: string; results: ScreenedResult[] }
   | { v: 2; type: 'model'; ts: number; from?: string; to: string }
   | { v: 2; type: 'permission_mode'; ts: number; from: string; to: string }
