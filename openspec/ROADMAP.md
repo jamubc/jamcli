@@ -106,15 +106,20 @@ The docs are diverging at one week old: 5,096 lines of docs, a 2,141-line spec, 
 927-line harness spec beside `SEQUENCE.md` and this file. The review counts that mass as
 accidental; which of it stays is decided in this unit.
 
-### R5. `add-task-corpus`
+### R5. `add-task-corpus` (archived 2026-09-29)
 
 Check in twenty tasks with deterministic checks, run them nightly on a real open model,
 and commit the scores. The scores become this file's input in place of
 `docs/feature-matrix.md`.
 
-Today no task corpus is checked in, the trials tooling lives in the owner's gitignored
-skills, and `src/core/eval/score.ts` runs in CI nowhere. Regressions are caught by scripted
-fake-provider tests, which test the harness, not the model. Live runs use
+Done: `evals/` holds the corpus and its runner, `evals/scores/` the scores, and
+`.github/workflows/evals.yml` runs it nightly once the `OPENCODE_API_KEY` secret is set. The
+first scores are 20 of 20 on `opencode-go:deepseek-v4.1-flash`, so the corpus has no headroom
+yet: the next units add tasks that fail today before they are used to rank a change.
+
+Before it, no task corpus was checked in, the trials tooling lived in the owner's gitignored
+skills, and `src/core/eval/score.ts` ran in CI nowhere. Regressions were caught only by
+scripted fake-provider tests, which test the harness, not the model. Live runs use
 `opencode-go:deepseek-v4.1-flash` unless the owner names another model; its key is a CI
 secret, never a file.
 

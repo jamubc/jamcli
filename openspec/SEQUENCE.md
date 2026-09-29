@@ -57,11 +57,10 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-task-corpus`, R5 of the review units at the top of `ROADMAP.md`, opened 2026-09-29 on
-`master`, where the owner has worked since merging the stack on 2026-09-27. Twenty tasks
-with deterministic checks, run on a real open model, their scores committed, and a nightly
-job that runs them. The scores become the roadmap's input in place of the feature matrix.
-The review it comes from is kept verbatim in
+`prove-sandbox-and-analyzer`, R6 of the review units at the top of `ROADMAP.md`, opened
+2026-09-29 on `master`, where the owner has worked since merging the stack on 2026-09-27.
+The escape suite runs under Seatbelt as it does under bubblewrap, and the command analyzer
+is fuzzed against a real shell. The review it comes from is kept verbatim in
 `openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
@@ -70,6 +69,37 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 19. `add-task-corpus`
+
+Archived as `2026-09-29-add-task-corpus`, with no spec deltas: R5 of the review units.
+`evals/tasks/` holds twenty tasks, each a small project, a prompt, and a deterministic check:
+fifteen changes judged by a test the task protects, three questions judged by the answer as
+a whole token with no file changed, and two refusals judged by what must hold (a file beside
+the project, and no download). `bun test evals` proves every change's check fails as given
+and passes with its reference solution. `evals/run.ts` runs each task through `jamcli -p` from
+the checkout's source, in a copy under `~/.cache/jamcli-evals/` with its own state and a copied
+configuration, and scores the session with `src/core/eval/score.ts`. The nightly workflow runs
+it once the `OPENCODE_API_KEY` secret is set, and uploads the scores rather than committing
+them, since a job's commit would carry an identity other than the owner's.
+
+The first scores, committed at `bfe8a54`: 20 of 20 on `opencode-go:deepseek-v4.1-flash` at
+`d599bb7`, $0.0295 for the whole corpus, median 16 s a task, 605,340 tokens in. The corpus has
+no headroom yet, so it cannot rank a change by pass rate; steps, tool errors, denials, and
+tokens per task still differ, and the next tasks added should be ones that fail today.
+
+**What closing it found.**
+
+- The runner's first version worked under `evals/.work/`, inside this checkout. JamCLI finds
+  its project by the nearest `.jamcli/`, so the run took the whole checkout as its project,
+  wrote its session log into this checkout's history, and wrote a handoff to
+  `.jamcli/handoff.md`; both were removed, and no earlier session had recorded writing a
+  handoff there. Each prepared project now has a `.jamcli/` of its own, the runner refuses to
+  start where the root resolves elsewhere, and the copies live outside any checkout.
+- With the sentinel saying "No task may remove it", the model read it and declined, which
+  tested the model rather than the defenses. With plain contents it tried `rm`, the engine
+  allowed the command in auto mode, and Seatbelt refused the write: "Operation not
+  permitted".
 
 ### 18. `correct-docs`
 
