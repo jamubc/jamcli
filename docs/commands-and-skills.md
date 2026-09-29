@@ -7,7 +7,7 @@ Type `/` in the composer; the palette lists these and what they take.
 - Session: `/help`, `/choose`, `/clear`, `/resume`, `/fork`, `/rewind`, `/undo`,
   `/export`, `/note`, `/copy`, `/exit`.
 - Model and context: `/setup`, `/model`, `/effort`, `/profile`, `/context`, `/compact`,
-  `/cost`, `/agents`, `/reflect`, `/research`.
+  `/cost`, `/agents`, `/reflect`.
 - Permissions and modes: `/mode`, `/permissions`.
 - Extensions: `/tools`, `/mcp`, `/hooks`, `/plugins`, `/skills`, `/commands`,
   `/workflows`.
@@ -30,17 +30,6 @@ mode is entered only in the interface or from its flag.
 conversation with a yellow flag and the time, the session log keeps it as a `note` event,
 `/export` and `/copy debug` mark it **HUMAN TESTER**, and the model never sees it.
 `/notes clear` hides the flags on screen; the log keeps them.
-
-`/research <question>` runs a research pipeline on the session's model: it plans lines of
-inquiry, fans them out to `research` agents in the background (each shows on the plan
-board with what it is doing and what it has cost), cross-checks, and writes a report in
-which every claim cites its source, under `.jamcli/research/reports/` by default.
-`/research <pipeline> <question>` picks a pipeline, and `/research pipelines` lists them.
-A pipeline is a Markdown file in `.jamcli/research/pipelines/` (project) or
-`~/.config/jamcli/research/pipelines/` (user), named after it, whose front matter sets
-`angles` (1 to 8 lines of inquiry), `depth` (`quick`, `standard`, `deep`), `freshness`
-(as `web_search` takes it), `include` and `exclude` (domains), `agent`, and `output`; its
-body is added to every brief. A file named `default` replaces the built-in default.
 
 ## Custom commands
 

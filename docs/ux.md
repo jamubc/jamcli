@@ -55,7 +55,7 @@ glyphs.
 | assistant | Markdown, with highlighted code |
 | tool block | icon, tool, argument summary, status, metrics |
 | detail | a diff for edits, the output tail for commands, match counts for searches |
-| notice | retries, compaction, trust gate removals, hook failures |
+| notice | retries, compaction, hook failures |
 
 Tool blocks collapse to one line when finished. Ctrl+O shows the detailed transcript, every block open.
 

@@ -63,8 +63,7 @@ neither OpenTUI nor React, and `src/core/` does not import it.
    - the call runs, in the sandbox if it executes anything.
 
    Consecutive read-only calls run together.
-8. Every call gets one result. Output is redacted, truncated head and tail, optionally
-   screened by the trust gate, and logged.
+8. Every call gets one result. Output is redacted, truncated head and tail, and logged.
 9. The engine loops until the model stops calling tools, the user takes control, a limit
    is reached, or the run is cancelled.
 

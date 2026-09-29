@@ -96,13 +96,12 @@ the terminal (OSC 52), which reaches the machine you sit at if the terminal supp
 session's log as Markdown: each message, tool call and result, approval, notice, model and
 mode change, and request with its cost, in order. It also shows what the requests carried
 besides the conversation, the system prompt and every tool definition as they were sent,
-recorded whenever they changed, and the text of any result the trust gate withheld from
-the model. In auto mode it shows each trust-gate request too: the classifier, what it was
-sent and what it answered, or why the request failed, and every result's verdict and
-whether it was kept. Every event carries its time in UTC, and each turn end how long the
-turn took. `/export` and `jamcli sessions export` write the same Markdown without what only
-debugging needs: the model's reasoning, the requests' system prompt and tools, and the
-trust gate's requests. The header counts the reasoning left out.
+recorded whenever they changed. A log written before the trust gate was removed on
+2026-09-29 still shows each of its requests: the classifier, what it was sent and what it
+answered, and every result's verdict. Every event carries its time in UTC, and each turn end
+how long the turn took. `/export` and `jamcli sessions export` write the same Markdown
+without what only debugging needs: the model's reasoning, the requests' system prompt and
+tools, and those trust-gate requests. The header counts the reasoning left out.
 
 ## Thinking
 

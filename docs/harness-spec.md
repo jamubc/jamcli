@@ -10,6 +10,13 @@ does today. **Add** marks what this document specifies. Every added rule, hook, 
 line cites a row of the failure register (F1 to F16) or a constraint carried from
 `AGENTS.md` and `openspec/project.md`.
 
+**Since 2026-09-29.** `delete-accidental-systems` removed three things this document
+specifies: M3, the repeated-read refusal, which was keyed on the tree the last changing step
+left and so refused a re-read after an edit made outside the turn; the harness search in
+`scripts/harness-search/` with the `HarnessOverrides` it threaded through the runtime; and
+the trust gate. Their sections below stay as the record of what was specified, and no longer
+describe the code.
+
 Constraints carried from the repository, not restated below:
 
 - The control loop in `src/core/agent.ts` (`CoreAgent.turn`) is fixed. It is not a search
