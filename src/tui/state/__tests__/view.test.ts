@@ -290,12 +290,12 @@ test("a background child's prompt outlives the turn that started it, and the sta
 });
 
 test('a command that sends a turn is shown once, as typed, and a message typed after it is its own row', () => {
-  const state = run([{ type: 'command', text: '/research pipes' }, { type: 'submit', text: '/research pipes' }]);
+  const state = run([{ type: 'command', text: '/review main' }, { type: 'submit', text: '/review main' }]);
   expect(kinds(state)).toEqual(['command']);
   expect(state.running).toBe(true);
   expect(kinds(run([{ type: 'submit', text: 'and then' }], state))).toEqual(['command', 'user']);
-  // A notice the command posted before it sent, as /research does, does not make the echo a second row.
-  expect(kinds(run([{ type: 'command', text: '/research pipes' }, { type: 'notice', level: 'info', text: 'Researching' }, { type: 'submit', text: '/research pipes' }]))).toEqual(['command', 'notice']);
+  // A notice the command posted before it sent does not make the echo a second row.
+  expect(kinds(run([{ type: 'command', text: '/review main' }, { type: 'notice', level: 'info', text: 'Reviewing the branch' }, { type: 'submit', text: '/review main' }]))).toEqual(['command', 'notice']);
   // A different display, as a custom command's, still gets its row.
   expect(kinds(run([{ type: 'command', text: '/x' }, { type: 'submit', text: 'the prompt' }]))).toEqual(['command', 'user']);
 });

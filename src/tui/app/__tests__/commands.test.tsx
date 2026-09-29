@@ -271,7 +271,7 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
     await frameWith(setup, (frame) => frame.includes('Applied to this session.'));
     expect(readJson(path.join(context.root, '.jamcli', 'config.json')).delegation.default_agent).toBe('writing');
     await send(setup, '/agents nobody');
-    await frameWith(setup, (frame) => frame.includes('No agent named nobody. The agents are explore, intelligent, quick, research, writing.'));
+    await frameWith(setup, (frame) => frame.includes('No agent named nobody. The agents are explore, intelligent, quick, writing.'));
 
     // /effort applies now, shows beside the model, and keeps the choice in the user's config.
     await send(setup, '/effort high');

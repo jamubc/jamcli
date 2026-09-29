@@ -10,7 +10,6 @@ test('the built-ins render one line each with the chain they run on, and the def
       '- explore: Investigation across the codebase: where something lives, how two parts connect, what calls what. Ask it to report, not to edit. (runs on the same model as you)',
       '- intelligent: Hard problems where getting it right matters more than speed: a subtle bug, a change that crosses several modules. (runs on the same model as you)',
       '- quick: Small, well-specified jobs with a short answer: a lookup, a single-file check, one piece of a fan-out. (runs on the same model as you)',
-      '- research: Web research on one line of inquiry: search, read the best sources in full with web_fetch, and report each finding with its URL, its date, and a quote where wording matters, then what sources disagree on. It reports; it never edits files. (runs on the same model as you)',
       '- writing: Prose: documentation, a commit message, a summary for the person. (runs on the same model as you)',
       'If you omit agent, quick is used.',
     ].join('\n')

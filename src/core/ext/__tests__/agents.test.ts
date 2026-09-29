@@ -43,7 +43,7 @@ const WRITING = [
 
 test('with nothing configured, the four built-ins are the agents and quick is the default', () => {
   const loaded = loadAgents(root, {});
-  expect(Object.keys(loaded.agents).sort()).toEqual(['explore', 'intelligent', 'quick', 'research', 'writing']);
+  expect(Object.keys(loaded.agents).sort()).toEqual(['explore', 'intelligent', 'quick', 'writing']);
   expect(loaded.defaultAgent).toBe('quick');
   expect(loaded.problems).toEqual([]);
   // They name no provider: each runs on whatever model the session uses.
@@ -89,7 +89,7 @@ test('delegation.default_agent names the default, and one that names no agent is
   expect(loadAgents(root, { delegation: { default_agent: 'writing' } as Config['delegation'] }).defaultAgent).toBe('writing');
   const wrong = loadAgents(root, { delegation: { default_agent: 'nobody' } as Config['delegation'] });
   expect(wrong.defaultAgent).toBeUndefined();
-  expect(wrong.problems).toEqual(['delegation.default_agent names nobody, which is not an agent. The agents are explore, intelligent, quick, research, writing.']);
+  expect(wrong.problems).toEqual(['delegation.default_agent names nobody, which is not an agent. The agents are explore, intelligent, quick, writing.']);
 });
 
 test('an unusable file is reported by path and reason and skipped, and the others load', () => {

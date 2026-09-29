@@ -404,7 +404,7 @@ export function reduceView(state: ViewState, action: ViewAction): ViewState {
       return applyEvent(state, action.event);
     case 'submit': {
       // A command that sends a turn shows the line it was typed as, so the turn's echo of it is not a second row.
-      // Notices the command posted before sending, such as what /research is about to do, sit between the two.
+      // Notices the command posted before sending sit between the two.
       let at = state.rows.length - 1;
       while (at >= 0 && state.rows[at].kind === 'notice') at -= 1;
       const typed = state.rows[at];
