@@ -402,7 +402,8 @@ export function App(props: AppProps) {
    * the row that was at the top stays there. The next page key lets go.
    */
   const anchor = useRef<{ fromBottom: number; until: number } | undefined>(undefined);
-  const [exitArmed, setExitArmed] = useState(false);
+  /** Set by the first exit key and read by the second, which may arrive before the screen is drawn again, so it is not state. */
+  const exitArmed = useRef(false);
   const branch = useMemo(() => gitBranch(runtime.workRoot), [runtime.workRoot]);
   const [theme, setTheme] = useState<Theme>(startTheme);
   const sel = selectable(theme);
@@ -877,10 +878,10 @@ export function App(props: AppProps) {
         controller.cancel();
         return;
       }
-      if (exitArmed) return onExit();
-      setExitArmed(true);
+      if (exitArmed.current) return onExit();
+      exitArmed.current = true;
       dispatch({ type: 'notice', level: 'info', text: `Press ${keysFor(keys.bindings, 'exit')} again to exit.` });
-      setTimeout(() => setExitArmed(false), 2_000);
+      setTimeout(() => (exitArmed.current = false), 2_000);
       return;
     }
     // Escape while looking in on a child closes that view before it can answer a prompt that came up meanwhile.

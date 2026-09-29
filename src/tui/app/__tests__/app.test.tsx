@@ -120,3 +120,17 @@ test('Escape stops a running turn, and the interface says it stopped', async () 
     await close();
   }
 }, 20_000);
+
+test('two exit keys that arrive together leave, as two spaced ones do', async () => {
+  let exited = 0;
+  const { setup, close } = await open({}, { onExit: () => void (exited += 1) });
+  try {
+    await frameWith(setup, (value) => value.includes('Message JamCLI'));
+    setup.mockInput.pressCtrlC();
+    setup.mockInput.pressCtrlC();
+    await setup.renderOnce();
+    expect(exited).toBe(1);
+  } finally {
+    await close();
+  }
+}, 20_000);
