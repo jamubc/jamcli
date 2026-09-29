@@ -10,6 +10,215 @@ Written 2026-09-26 from session `2026-09-26-de8c4d4a`, the Claude Code source at
 documentation, and Guardrails AI's validator model. Paths into this repository are cited
 so each claim can be checked.
 
+## Units from the 2026-09-29 review (these come first)
+
+Staged 2026-09-29 from a whole-tree review of `master` at `949f99c`, kept verbatim in
+`openspec/reviews/2026-09-29-architecture-review.md`. Its finding: the units further down
+this file are parity-driven, taken from `docs/feature-matrix.md`, and one person with
+agents chasing three funded teams on breadth produces a weaker copy by construction. The
+defensible wedge is already in the code and nowhere in the positioning: the auditable
+harness. Every action explained by a rule, every run reconstructible from one log, every
+surface identical and driven through the real program, on open models.
+
+R1 to R8 are the review's three months, in its order. R9 to R12 stage the rest of what it
+found. Each is one openspec change, opened only when the one before it is archived. Every
+unit recorded below this section waits behind them.
+
+**Before R1.** The working rule holds. `tighten-interface-copy`,
+`surface-background-work`, and `redraw-plan-board-and-prompt` are open, and the working
+tree carries an uncommitted interface and wording diff with 14 failing tests. They close,
+green and archived, before R1 opens. HEAD passes: 1,199 tests, 0 type errors.
+
+### R1. `gate-macos-in-ci`
+
+- Push `master`. 71 commits are not on `origin`, which is the only copy off this machine.
+  The owner pushes.
+- Remove `continue-on-error` for macOS (`.github/workflows/ci.yml:23`), so red on the
+  platform JamCLI is developed on is red, and fix what that turns up.
+
+Done when a macOS failure fails CI and `master` equals `origin/master`.
+
+### R2. `scope-child-runtime`
+
+Split `createRuntime` into owned pieces, and give a child its own engine derived from the
+parent's rather than the parent's object.
+
+`src/core/runtime/index.ts` is 1,545 lines: one closure with about 50 mutable bindings and
+60 imports, returning about 50 methods. Nothing can be tested short of the whole assembly,
+so the suite takes 159 s and 23,966 lines. Children take the parent's `PermissionEngine`
+and `WorkTable` by reference (`children.ts:24-26`, `index.ts:587`). A skill's
+`allowed-tools` narrows that shared engine (`index.ts:469`), and only a run with no parent
+lets go of it (`index.ts:1435`). Checked 2026-09-29, from the code: this reaches a
+foreground child as well as a background one, so once the child returns, the parent is
+held to the child's skill for the rest of its turn.
+
+1. A test that fails today: a child loads a skill with `allowed-tools`; the parent's next
+   call after the child returns is not refused; a background child's narrowing never
+   reaches the parent; the parent's turn ending does not lift the child's.
+2. The child's engine, derived from the parent's so nothing it is configured with widens
+   what the parent allows, holding its own narrowing. One behavior commit.
+3. The split, in refactor commits kept apart from behavior, each piece testable without
+   the whole assembly. The suite's time and size are measured before and after.
+
+### R3. `delete-accidental-systems`
+
+Delete the legacy config and policy systems, `classifier/`, `HarnessOverrides`, and the
+research pipelines. Freeze workflows and plugins. One deletion per commit, the four gates
+at each, and the spec's requirements for removed behavior removed at archive.
+
+- **Legacy config.** `src/services/ConfigService.ts`, still imported by the core runtime
+  (`index.ts:16`, `index.ts:513`) and by children (`children.ts:8`) beside
+  `src/core/config/load.ts`; the hand-written `Config` in `src/types/config.ts` beside the
+  Zod `ConfigFile` in `src/core/config/schema.ts`. One system, one shape.
+- **Legacy policy.** `src/core/policy/`, a per-tool table beside `src/core/permissions/`.
+  Checked 2026-09-29: `jamcli audit` (`src/cli/audit.ts:4`) reports each tool's decision
+  from that table (`src/core/policy/audit.ts:49`), not from the engine that decides, so
+  what it shows can differ from what runs. `audit` moves onto `PermissionEngine`, which R8
+  builds on.
+- **`classifier/`.** Research that reached AUC 0.51 on 252 decisions, imported by nothing
+  in `src/`. It moves out of the repository.
+- **`HarnessOverrides` and `scripts/harness-search`.** An LLM prompt-search loop threaded
+  through `RuntimeOptions` (`index.ts:82`, `index.ts:125`) into the prompt, verify, steer,
+  and tool paths, expecting dev and held-out task splits that are not in the repository.
+  Trials stay outside the product.
+- **Research pipelines.** `src/core/research/pipeline.ts` and `/research`
+  (`src/commands/builtin/research.ts`).
+- **The trust gate.** A relevance filter at threshold 0.3 (`src/core/trust/index.ts:86`)
+  doing duty as an injection defense, flagging the owner's own skill at 62%. It becomes a
+  classifier measured through R5, or it goes. The sandbox and the network-off default are
+  the real defenses.
+- **M3, the repeated-read refusal** (`src/core/runtime/steer.ts:53`). Keyed on `lastTree`,
+  which only a changing step moves (`index.ts:1011`), so an edit in the person's editor
+  between two reads does not move the key and a legitimate re-read is refused with a stale
+  first line. It goes, or is keyed on what was read.
+- **Frozen, not deleted.** Workflows (`src/core/workflows/`) and plugins
+  (`src/core/plugins/`): no new work on either.
+
+### R4. `correct-docs`
+
+Fix the README table and the architecture claim about children.
+
+- `README.md:73-84` marks twelve pages "not yet written"; every one is in `docs/`.
+- `docs/architecture.md:80` says delegated children are `jamcli -p` processes;
+  `src/core/runtime/children.ts` runs them in-process.
+
+The docs are diverging at one week old: 5,096 lines of docs, a 2,141-line spec, and a
+927-line harness spec beside `SEQUENCE.md` and this file. The review counts that mass as
+accidental; which of it stays is decided in this unit.
+
+### R5. `add-task-corpus`
+
+Check in twenty tasks with deterministic checks, run them nightly on a real open model,
+and commit the scores. The scores become this file's input in place of
+`docs/feature-matrix.md`.
+
+Today no task corpus is checked in, the trials tooling lives in the owner's gitignored
+skills, and `src/core/eval/score.ts` runs in CI nowhere. Regressions are caught by scripted
+fake-provider tests, which test the harness, not the model. Live runs use
+`opencode-go:deepseek-v4.1-flash` unless the owner names another model; its key is a CI
+secret, never a file.
+
+### R6. `prove-sandbox-and-analyzer`
+
+Run the Seatbelt escape suite on a Mac. Fuzz the command analyzer.
+
+- macOS is the least defended platform and the one JamCLI is developed on. The Seatbelt
+  profile (`src/core/sandbox/seatbelt.ts`) allows reading everywhere except the hidden
+  list, and the hostile-plugin write escape is accepted and documented
+  (`docs/security.md:63`). The suite's results are recorded against it.
+- The read-only allow list in `src/core/tools/readonly.ts` is the one place a parser miss
+  becomes unprompted execution. It is conservative and no hole was found, but it has
+  seven test cases and no property or fuzz test. A fuzz test joins the suite, and it can
+  fail.
+
+### R7. `prove-local-path`
+
+Make Ollama on an 8k window a CI job with a real small model, or drop the claim.
+
+"Local by default" is the least exercised path. The fixed cost of a request is 4,516
+tokens against the 4,526 compaction trigger of the default 8,192 window (`SEQUENCE.md`,
+unit 11), and every test fakes Ollama. The job runs on a CI runner, never on the owner's
+machine. Keeping the claim or dropping it is the owner's decision, made when this unit
+opens.
+
+### R8. `add-audit-ledger`
+
+A command that answers what this agent changed, under which rule, from which source,
+across sessions, shipped as the reason to use JamCLI.
+
+The parts exist: every verdict names who decided, the rule, its scope, and its source
+(`Verdict`, `src/core/permissions/engine.ts`), and the transcript records it (the approval
+event, `src/core/transcript/events.ts`). `jamcli audit` today is a configuration and
+secrets check. After R3 it reads the engine; this unit makes it the decision ledger. The
+thesis in `openspec/project.md` and the README move onto the auditable harness here,
+since "small enough to hold in your head" and "local by default" are contradicted by the
+code as it stands.
+
+### R9. `scale-the-log`
+
+- `SessionLog.events()` re-reads and re-parses the whole file on every call
+  (`src/core/transcript/log.ts:136`), from checkpoint listing, notes, handoff, the gate
+  ledger, fork, and close.
+- The global session index is one JSONL rewritten whole on every update
+  (`src/core/transcript/sessions.ts:85`).
+- Schema evolution inside v2 is ad hoc, with one migration shim from v1. Config, the
+  state index, the plugin lockfile, and checkpoint refs carry no version field.
+- At ten times the use, five in-process children at depth two share one process, one
+  engine, and one set of MCP connections, so one runaway child is the parent's memory. At
+  ten times the code: custom grep and glob in `src/core/tools/search.ts` (548 lines) with
+  ripgrep optional, and a git checkpoint on every changing step.
+
+### R10. `add-contributor-gates`
+
+A linter, a formatter, and `CODEOWNERS`, so rules that live in prose today are held by a
+tool. "One unit in flight" is a one-person rule, and the history is linear with zero
+merges, so "units on branches" is not what the history shows.
+
+### R11. `add-responses-api`
+
+Reverse the "will not do" in `docs/conformance.md:34` and `docs/feature-matrix.md:40`. It
+records an agent's sandbox limitation, OpenAI's docs blocked from the build environment,
+as a product decision. The internal canonical is the OpenAI function-call shape.
+
+### R12. `run-release`
+
+The release job with SBOM and provenance has never run (`docs/conformance.md`). It runs
+once, end to end. There is no auto-update and no package manager path; both stay the
+owner's decision.
+
+### Recorded from the review, with no unit
+
+- **Harness behavior as hook subscribers.** Steering, verification, LSP diagnostics,
+  family tools, and handoff are 14 internal `hooks.on` registrations across three files,
+  ordered by registration, on the bus user and plugin hooks share, so `agent.ts` no
+  longer says what happens on `post_tool`. The hardest decision to reverse; R2 and R3
+  shrink it.
+- **Bun only, OpenTUI 0.5.12 pinned, TypeScript 7.** 19 files import OpenTUI and about
+  4,000 lines of interface sit on a 0.5 API. The four frame snapshots are the flakiest
+  tests in the suite and will churn at every upgrade.
+- **`web_fetch` outside auto mode** hands web content to the model unscreened. What R3
+  decides for the trust gate decides this.
+- **Approval volume.** 58 prompts in four default-mode sessions, recorded as seed finding
+  1 under `add-findings-loop`.
+
+### What the review would not build
+
+A learned approval mode, since the data says no (AUC 0.51 on 252 decisions); more
+reflection or research features, since reflection's own exit task, 6.2, was never run;
+Windows; any new tool, since each costs the 8k path; and more interface polish, since the
+last 200 commits are interface work. Against the units below, that names
+`land-interface-rhythm` (B) and `add-btw` (C) as interface work and the shelved
+`add-windows-support` as Windows. The owner confirms whether they are dropped.
+
+### The question before the roadmap goes further
+
+Who is JamCLI for besides the owner, and what will they run it on? Every real decision in
+the record is one person, one project, 2.6 days, on cloud models. Until a second person
+runs it on an open model for a week and their transcripts are in hand, the roadmap is
+guessing. After R5, this file's input is the corpus's scores and those transcripts, not
+the feature matrix. The second question is what the process costs: the spec and sequence
+documents are half the size of the code.
+
 ## The thesis in one paragraph
 
 jamcli's harness is sound: layered configuration with origins, a credential store, a model
@@ -49,7 +258,7 @@ Recorded once here. A unit that needs to revisit one says so in its proposal.
 ## Units, in order
 
 Each unit is one openspec change. Its number is its order. A unit may start only when the
-one before it is archived.
+one before it is archived. Every unit from here on waits behind R1 to R12 above.
 
 ### 1. `add-agents` (archived 2026-09-27)
 

@@ -82,6 +82,11 @@ on a sticky scrollbox, a `settled` theme role, and Escape clearing a half-typed 
 Of seed finding 5, the resize garble did not reproduce in the test renderer and the
 finished tool line already shows its call since the copy unit, so both are left as seen.
 
+On 2026-09-29 the owner staged a whole-tree review of `master` at `949f99c` as units R1 to
+R12 at the top of `ROADMAP.md`, ahead of every unit recorded there before it; the review is
+kept verbatim in `openspec/reviews/2026-09-29-architecture-review.md`. When the three open
+changes above are archived, the next unit is R1, `gate-macos-in-ci`.
+
 Every unit up to `add-session-reflection` is archived, and the owner merged the whole
 stack to `master` on 2026-09-27, so work starts again from one branch.
 `add-windows-support` is shelved, not in the active changes
@@ -355,7 +360,8 @@ trustworthy, or does it add surface?
 - **A VS Code extension.** ACP already reaches Zed, JetBrains, Neovim, and Emacs.
 - **A vim editing mode in the composer.** Waits until the OpenTUI composer is stable.
 - **Image input.** Needs a local vision path to keep the local-first promise.
-- **An OpenAI Responses API adapter,** if stage 4's optional task does not land.
+- **An OpenAI Responses API adapter.** Now staged as R11, `add-responses-api`, in
+  `ROADMAP.md`.
 
 ### Rejected, with reasons
 
