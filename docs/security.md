@@ -14,6 +14,15 @@ Every tool call is decided before it runs, deny first:
   `run_command`, a domain for `web_fetch`. `jamcli audit` reports tool access, isolation,
   and guardrail findings, and `/permissions` shows and changes the rules in effect.
 - A workflow's agent step may lower its mode, never raise it above the session's.
+- A mode that allows changes inside the project still asks before a change under the
+  project's `.git/` or `.jamcli/`: a hook, an fsmonitor, or a permission rule there decides
+  what git and JamCLI run next.
+- In default and `accept-edits` modes a command that only reads inside the project runs
+  without asking. The analyzer that decides so is tested against a real shell: generated
+  command lines, each one it calls read-only run by `/bin/sh` with every program replaced by
+  a stub that records it, must run only read-only programs and write nothing
+  (`src/core/tools/__tests__/readonlyFuzz.test.ts`). A read told to run a program, such as
+  `rg --hostname-bin`, `git diff --ext-diff`, or `file -C`, is not read-only.
 
 ## Isolation
 
@@ -25,6 +34,11 @@ Every tool call is decided before it runs, deny first:
   subprocess unless its entry names it.
 - In the Seatbelt profile credentials are hidden after reads are allowed, since the last
   matching rule wins.
+- The escape suite (`src/core/sandbox/__tests__/escape.test.ts`) runs a hostile command
+  under the platform's sandbox, bubblewrap on Linux and Seatbelt on macOS, and CI runs it on
+  both: credentials read as empty, nothing outside the project is written, the network and
+  the host loopback are unreachable, a provider key does not reach the command, and neither
+  the SSH agent nor a hidden socket can be reached.
 
 ## Secrets and redaction
 
@@ -62,6 +76,10 @@ Every tool call is decided before it runs, deny first:
   as a whole.
 - On macOS the hostile-plugin write test shows a plugin hook can still write outside the
   plugin and the project under Seatbelt; network, secrets, and the environment are
-  confined. The Seatbelt escape suite is owed (3.7).
+  confined.
+- A repository whose own `.git/config` already names a program, such as `core.fsmonitor`,
+  runs it when git reads the repository, as it does for any git command a person runs
+  there. JamCLI stops a model from writing one without asking; it does not vet one that was
+  there before.
 - An installed git hook runs whatever the workflow file says at the time; recording the
   file's digest at install and refusing a changed one is owed.
