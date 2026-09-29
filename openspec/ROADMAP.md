@@ -29,7 +29,7 @@ unit recorded below this section waits behind them.
 tree carries an uncommitted interface and wording diff with 14 failing tests. They close,
 green and archived, before R1 opens. HEAD passes: 1,199 tests, 0 type errors.
 
-### R1. `gate-macos-in-ci`
+### R1. `gate-macos-in-ci` (archived 2026-09-29)
 
 - Push `master`. 71 commits are not on `origin`, which is the only copy off this machine.
   The owner pushes.

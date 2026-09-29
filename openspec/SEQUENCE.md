@@ -57,44 +57,65 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`tighten-interface-copy`, opened 2026-09-27 on the `add-plan-tools` branch, which also
-carries the archived `add-plan-tools` awaiting the owner's merge. The interface's words are
-written as explanations rather than as labels; this unit fixes the words only, moving no
-layout, so the frame snapshots diff as wording. `land-interface-rhythm` follows it and
-carries the spacing, the rail, the indentation and the tone layers. Both are recorded in
-`ROADMAP.md` under the inserted interface units, with `/btw` after them.
+`scope-child-runtime`, R2 of the review units at the top of `ROADMAP.md`, opened
+2026-09-29 on `master`, where the owner has worked since merging the stack on 2026-09-27.
+A child decides with an engine derived from its parent's, and `createRuntime` is split into
+pieces that own their state. The review it comes from is kept verbatim in
+`openspec/reviews/2026-09-29-architecture-review.md`.
 
-Later on 2026-09-28, after a review of the approval path and of sessions
-`2026-09-28-e9b87fc7` and `2026-09-28-040643ab`, the owner had two further units built on
-the same branch, each as its own change, both with every task checked except the live
-drive, which is deferred to the owner: `surface-background-work` (one work table per
-session, ends told to the model with the next message it reads, `/jobs`, the status line
-count, consecutive delegations run together) and `redraw-plan-board-and-prompt` (the board
-drawn by mark and color with its running work and clock, kept up beside a prompt; the
-prompt saying a command once). Three permission fixes from the same review landed as
-fixes outside a change: an interpreter is never offered whole and its inline code is
-hidden, an MCP tool asks whatever its server claims, and `command_kill` does not ask.
-
-On 2026-09-28 the owner had the `land-interface-rhythm` work started at once, outside a
-change, on the same branch: flex rows and a hand pointer on every clickable line, the
-picker's filter on an input, the composer gutter, the rail as a border, the thinking window
-on a sticky scrollbox, a `settled` theme role, and Escape clearing a half-typed command.
-Of seed finding 5, the resize garble did not reproduce in the test renderer and the
-finished tool line already shows its call since the copy unit, so both are left as seen.
-
-On 2026-09-29 the owner staged a whole-tree review of `master` at `949f99c` as units R1 to
-R12 at the top of `ROADMAP.md`, ahead of every unit recorded there before it; the review is
-kept verbatim in `openspec/reviews/2026-09-29-architecture-review.md`. When the three open
-changes above are archived, the next unit is R1, `gate-macos-in-ci`.
-
-Every unit up to `add-session-reflection` is archived, and the owner merged the whole
-stack to `master` on 2026-09-27, so work starts again from one branch.
-`add-windows-support` is shelved, not in the active changes
-tree: it waits for the owner to approve it before any task begins, and `git checkout 9d9f5c6
--- openspec/changes/add-windows-support` restores its proposal from the commit that recorded
-it.
+`add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
+approve it before any task begins, and `git checkout 9d9f5c6 --
+openspec/changes/add-windows-support` restores its proposal from the commit that recorded
+it. The review would not build it.
 
 ## Closed units
+
+### 15. `gate-macos-in-ci`
+
+Archived as `2026-09-29-gate-macos-in-ci`, with no spec deltas: R1 of the review units. The
+gates job no longer carries `continue-on-error` on macOS, and `master` was pushed: 71
+commits had never reached `origin`. The first run with macOS gating failed on macOS, and the
+next on Linux, each on a test in `classifier/src/__tests__/evaluate.test.ts` that trains and
+certifies hundreds of decisions in 4.8 to 5.5 s against Bun's 5 s default; the file now has
+30 s (`6a823ab`, `c7db0d5`). R3 moves `classifier/` out of the repository.
+
+**What the push found.** The performance job had not run on any of the 71 commits. Idle
+interface memory measured 166.2 MB against its 165 MB budget: five runs spread from 159.4 to
+171.8, against 157.7 to 168.2 at `da2b31d`, the last run before them, so the interface work
+added about 6 MB at the median and the budget sat inside the run-to-run spread. The budget
+is now 175, above the highest run, with the measurements beside it (`9451a86`). Headless
+overhead rose from 104 to 112 ms and the first frame from 170 to 181 ms, both within their
+budgets. A macOS reading of the same memory could not locate the growth: the process tree
+there holds language servers and Seatbelt that the Linux runner does not.
+
+### 14. `redraw-plan-board-and-prompt`
+
+Archived as `2026-09-29-redraw-plan-board-and-prompt`, closed without its live drive, task
+3.2. Built on 2026-09-28 after the owner's review of sessions `2026-09-28-e9b87fc7` and
+`2026-09-28-040643ab`: the board drawn by mark and color with its running work and clock,
+kept up beside a prompt; the prompt saying a command once. The owner closed it on
+2026-09-29 to open the review units, which halt interface work, while the working tree
+held uncommitted interface edits a drive would have run with it.
+
+### 13. `surface-background-work`
+
+Archived as `2026-09-29-surface-background-work`, closed without its live drive, task 5.2,
+for the same reason. From the same review: one work table per session, ends told to the
+model with the next message it reads, `/jobs`, the status line count, and consecutive
+delegations run together. Three permission fixes from that review landed outside a change:
+an interpreter is never offered whole and its inline code is hidden, an MCP tool asks
+whatever its server claims, and `command_kill` does not ask.
+
+### 12. `tighten-interface-copy`
+
+Archived as `2026-09-29-tighten-interface-copy`, closed without its live drive, task 5.1,
+for the same reason. The interface's words were written as explanations rather than as
+labels; the unit fixed the words only. On 2026-09-28 the owner had the
+`land-interface-rhythm` work started at once, outside a change: flex rows and a hand
+pointer on every clickable line, the picker's filter on an input, the composer gutter, the
+rail as a border, the thinking window on a sticky scrollbox, a `settled` theme role, and
+Escape clearing a half-typed command. Of seed finding 5, the resize garble did not reproduce
+in the test renderer, and the finished tool line already shows its call.
 
 ### 11. `add-plan-tools`
 
