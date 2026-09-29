@@ -209,6 +209,39 @@ test('a model the endpoint serves only through the Responses API is asked that w
   expect(requests.map((request) => request.path)).toEqual(['/v1/chat/completions', '/v1/responses', '/v1/responses']);
 });
 
+test('the Responses API is told to keep nothing, and reasoning comes back only as the encrypted item this family made', async () => {
+  const bodies: any[] = [];
+  globalThis.fetch = (async (url: any, init: any) => {
+    const body = JSON.parse(init.body);
+    if (new URL(String(url)).pathname.endsWith('/chat/completions')) return refusal('Model does not support this protocol.');
+    bodies.push(body);
+    return streamResponse([
+      'data: {"type":"response.completed","response":{"status":"completed","output":[{"type":"reasoning","id":"rs_1","summary":[],"encrypted_content":"ENC1"},{"type":"function_call","call_id":"call_1","name":"read_file","arguments":"{}"}]}}\n\n',
+    ]);
+  }) as unknown as typeof fetch;
+  const provider = new OpenAICompatProvider({ baseUrl: 'https://example.test/v1' });
+  const events = await collect(provider, [{ role: 'user', content: 'go', timestamp: 0 }], { model: 'luna', effort: 'high', reasoning: 'on' });
+  expect(bodies[0].store).toBe(false);
+  expect(bodies[0].include).toEqual(['reasoning.encrypted_content']);
+  expect(events.at(-1)!.reasoningBlocks).toEqual([{ type: 'encrypted', id: 'rs_1', data: 'ENC1' }]);
+
+  // Sent back ahead of its call when this family made it after the prefix last changed; not otherwise.
+  const call = { id: 'call_1', type: 'function', function: { name: 'read_file', arguments: {} } };
+  const turn = (providerFamily: string, timestamp: number) => ({ role: 'assistant', content: '', timestamp, providerFamily, reasoningBlocks: [{ type: 'encrypted', id: 'rs_1', data: 'ENC1' }], tool_calls: [call] });
+  const history = (assistant: object) => [{ role: 'user', content: 'go', timestamp: 0 }, assistant, { role: 'tool', content: 'x', timestamp: 20, tool_call_id: 'call_1' }];
+  await collect(provider, history(turn('openai', 10)), { model: 'luna', replayReasoningSince: 5 });
+  expect(bodies[1].input.slice(1, 3)).toEqual([
+    { type: 'reasoning', id: 'rs_1', encrypted_content: 'ENC1', summary: [] },
+    { type: 'function_call', call_id: 'call_1', name: 'read_file', arguments: '{}' },
+  ]);
+  expect(bodies[1].store).toBe(false);
+  expect(bodies[1].include).toBeUndefined();
+  await collect(provider, history(turn('anthropic', 10)), { model: 'luna' });
+  expect(bodies[2].input.some((item: any) => item.type === 'reasoning')).toBe(false);
+  await collect(provider, history(turn('openai', 10)), { model: 'luna', replayReasoningSince: 15 });
+  expect(bodies[3].input.some((item: any) => item.type === 'reasoning')).toBe(false);
+});
+
 test('an effort the endpoint rejects falls back to high, and stays there', async () => {
   const efforts: unknown[] = [];
   globalThis.fetch = (async (_url: any, init: any) => {

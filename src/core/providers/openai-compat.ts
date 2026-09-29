@@ -1,4 +1,4 @@
-import type { ChatMessage, ProviderToolCall, TokenUsage } from '../types.js';
+import type { ChatMessage, ProviderToolCall, ReasoningBlock, TokenUsage } from '../types.js';
 import type {
   ChatProvider,
   CompletionResult,
@@ -270,14 +270,18 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
   private buildResponsesBody(messages: ChatMessage[], options: ProviderRequestOptions, stream: boolean): Record<string, unknown> {
     const body: Record<string, unknown> = {
       model: requireModel(this.name, options.model),
-      input: messages.flatMap(toResponsesItems),
+      input: messages.flatMap((message) => toResponsesItems(message, options.replayReasoningSince)),
       stream,
+      // The API keeps every response for at least 30 days unless told not to; Chat Completions keeps none.
+      store: false,
       ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
       ...(options.maxOutputTokens ? { max_output_tokens: Math.max(16, options.maxOutputTokens) } : {}),
       ...(options.extraParams || {}),
     };
     if (options.effort && options.reasoning !== 'off') {
       body.reasoning = { effort: options.effort === 'max' ? 'xhigh' : options.effort, summary: 'auto' };
+      // With nothing stored, reasoning reaches the next call only as the encrypted item sent back.
+      body.include = ['reasoning.encrypted_content'];
     }
     if (options.tools?.length) {
       body.tools = options.tools.map((tool) => ({ type: 'function', name: tool.function.name, description: tool.function.description, parameters: tool.function.parameters }));
@@ -323,7 +327,7 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
       else if (event?.type === 'response.reasoning_summary_text.delta' && typeof event.delta === 'string') yield { content: '', reasoning: event.delta, done: false };
       else if (event?.type === 'response.completed' || event?.type === 'response.incomplete') {
         const result = parseResponsesResult(event.response);
-        yield { content: '', done: true, usage: result.usage, toolCalls: result.toolCalls, stopReason: result.stopReason };
+        yield { content: '', done: true, usage: result.usage, toolCalls: result.toolCalls, stopReason: result.stopReason, ...(result.reasoningBlocks ? { reasoningBlocks: result.reasoningBlocks } : {}) };
         return;
       }
     }
@@ -331,10 +335,19 @@ export class OpenAICompatProvider implements ChatProvider, ListableProvider {
   }
 }
 
-/** A chat message as the Responses API's input items: a tool result, a call the model made, or a turn of text. */
-function toResponsesItems(message: ChatMessage): Record<string, unknown>[] {
+/**
+ * A chat message as the Responses API's input items: a tool result, a call the model made, or
+ * a turn of text. An OpenAI reasoning item comes first, ahead of the calls it led to, when this
+ * family made it and it is not from before the prefix last changed.
+ */
+function toResponsesItems(message: ChatMessage, since?: number): Record<string, unknown>[] {
   if (message.role === 'tool') return [{ type: 'function_call_output', call_id: message.tool_call_id, output: message.content ?? '' }];
   const items: Record<string, unknown>[] = [];
+  if (message.providerFamily === 'openai' && (since === undefined || message.timestamp >= since)) {
+    for (const block of message.reasoningBlocks ?? []) {
+      if (block.type === 'encrypted') items.push({ type: 'reasoning', id: block.id, encrypted_content: block.data, summary: [] });
+    }
+  }
   if (message.content) items.push({ role: message.role, content: message.content });
   for (const call of message.tool_calls ?? []) {
     const args = call.function.arguments;
@@ -348,12 +361,16 @@ function parseResponsesResult(response: any): CompletionResult {
   const output: any[] = Array.isArray(response?.output) ? response.output : [];
   const content = output.filter((item) => item?.type === 'message').flatMap((item) => (Array.isArray(item.content) ? item.content : [])).filter((part) => part?.type === 'output_text').map((part) => part.text ?? '').join('');
   const reasoning = output.filter((item) => item?.type === 'reasoning').flatMap((item) => (Array.isArray(item.summary) ? item.summary : [])).map((part) => part?.text ?? '').join('\n');
+  const reasoningBlocks: ReasoningBlock[] = output
+    .filter((item) => item?.type === 'reasoning' && typeof item.id === 'string' && typeof item.encrypted_content === 'string')
+    .map((item) => ({ type: 'encrypted', id: item.id, data: item.encrypted_content }));
   const calls: ProviderToolCall[] = output.filter((item) => item?.type === 'function_call' && item.name).map((item) => ({ id: item.call_id ?? item.id, type: 'function', function: { name: item.name, arguments: normalizeArgs(item.arguments) } }));
   const usage = response?.usage;
   const cached = usage?.input_tokens_details?.cached_tokens;
   return {
     content,
     ...(reasoning ? { reasoning } : {}),
+    ...(reasoningBlocks.length ? { reasoningBlocks } : {}),
     ...(calls.length ? { toolCalls: calls } : {}),
     ...(usage ? { usage: { prompt_tokens: usage.input_tokens || 0, completion_tokens: usage.output_tokens || 0, total_tokens: usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0), ...(typeof cached === 'number' && cached > 0 ? { cached_tokens: cached } : {}) } } : {}),
     stopReason: calls.length ? 'tool_calls' : response?.status === 'incomplete' ? 'length' : 'stop',

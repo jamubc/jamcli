@@ -17,7 +17,9 @@ export interface TokenUsage {
  */
 export type ReasoningBlock =
   | { type: 'thinking'; text: string; signature?: string }
-  | { type: 'redacted'; data: string };
+  | { type: 'redacted'; data: string }
+  /** OpenAI's reasoning item, opaque and encrypted, which carries reasoning across calls without storing it. */
+  | { type: 'encrypted'; id: string; data: string };
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
