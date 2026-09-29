@@ -57,11 +57,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`scope-child-runtime`, R2 of the review units at the top of `ROADMAP.md`, opened
+`delete-accidental-systems`, R3 of the review units at the top of `ROADMAP.md`, opened
 2026-09-29 on `master`, where the owner has worked since merging the stack on 2026-09-27.
-A child decides with an engine derived from its parent's, and `createRuntime` is split into
-pieces that own their state. The review it comes from is kept verbatim in
-`openspec/reviews/2026-09-29-architecture-review.md`.
+It deletes what duplicates or sits beside the product: the legacy configuration and policy
+systems, `classifier/`, the harness search, the research pipelines, the trust gate, and the
+repeated-read refusal, and freezes workflows and plugins. The review it comes from is kept
+verbatim in `openspec/reviews/2026-09-29-architecture-review.md`.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
 approve it before any task begins, and `git checkout 9d9f5c6 --
@@ -69,6 +70,33 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 16. `scope-child-runtime`
+
+Archived as `2026-09-29-scope-child-runtime`: 1 requirement modified (Delegated Task
+Execution). R2 of the review units. A child now decides with `PermissionEngine.derive()`:
+the parent's rules, grants, and mode shared by reference, the parent's narrowing holding
+it, and a narrowing of its own that ends with its run (`7678ea1`). Before it, a foreground
+child that loaded a skill with `allowed-tools` left the parent narrowed for the rest of its
+turn, so the parent's next edit came back "Not run: the skill read-only allows only
+read_file." A test on the assembled runtime failed on that before the fix.
+
+`createRuntime` was then split in refactor commits, each with a test that reaches its piece
+without the assembly: the session's checkpoints, its hooks and their trust, permission rule
+editing, when a handoff is due and the note it leaves, elicitation, the tool offer, the tool
+sources, the session's model, and the runtime's types. `index.ts` went from 1,545 lines to
+956 and is the assembly alone; the closure from 1,173 lines to 878, and its mutable bindings
+from 39 to 24. The suite did not get faster: 122 s at `6a823ab` and 121 s after,
+since the tests of the assembled runtime stay as the evidence each surface still behaves;
+test lines went from 24,456 to 24,937 with the new unit tests.
+
+**What closing it found.** Moving the tool sources (`7b3baa5`) added two awaits to session
+assembly, and a TUI test began failing on it and on `fa634dd`: after `/config set` it waited
+for "Applied to this session.", which `/agents writing` had already put on screen, and
+checked the new runtime before the reopen finished. The race was the test's; it now waits
+for the reopened session (`6f47abd`). The first extraction also changed behavior once:
+`previewCheckpoint` threw for a missing checkpoint where it had rejected, which the
+assembled test caught before the commit.
 
 ### 15. `gate-macos-in-ci`
 

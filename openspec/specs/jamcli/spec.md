@@ -891,6 +891,12 @@ and end SHALL be visible to the person.
 - **THEN** it is governed by the policy configured for delegated runs
 - **AND** a child cannot grant itself broader permissions than the parent
 
+#### Scenario: A child's narrowing is its own
+- **WHEN** a child loads a skill or runs under a command whose `allowed-tools` narrow what may run
+- **THEN** only that child is narrowed, for the rest of its run
+- **AND** the parent's calls, during and after the child, are decided as if the child had not narrowed
+- **AND** what the parent's turn narrowed holds every child it starts, and no child can lift it
+
 #### Scenario: Prevent unbounded nesting
 - **WHEN** a child run would delegate further
 - **THEN** delegation depth is bounded by configuration

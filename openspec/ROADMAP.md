@@ -38,7 +38,7 @@ green and archived, before R1 opens. HEAD passes: 1,199 tests, 0 type errors.
 
 Done when a macOS failure fails CI and `master` equals `origin/master`.
 
-### R2. `scope-child-runtime`
+### R2. `scope-child-runtime` (archived 2026-09-29)
 
 Split `createRuntime` into owned pieces, and give a child its own engine derived from the
 parent's rather than the parent's object.
