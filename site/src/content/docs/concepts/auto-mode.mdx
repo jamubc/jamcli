@@ -1,6 +1,6 @@
 ---
 title: Auto mode
-description: What auto mode allows without asking, the sandbox it requires, the trust gate that screens tool output while it is on, and which parts are settings worth testing.
+description: What auto mode allows without asking, the sandbox it requires, what holds it now that nothing screens tool output, and which parts are settings worth testing.
 sidebar:
   order: 3
 ---
@@ -12,10 +12,9 @@ import Proof from '../../../components/Proof.astro';
 <Aside title="In short">
 Auto mode lets the model edit the project, run commands, and delegate without asking, and it
 still asks before the network. It can only be entered when a sandbox works on this machine, and
-every command runs inside that sandbox. Because no one reads tool output before the model does,
-auto mode is also the only mode in which the trust gate screens that output for prompt injection.
-Three things hold it up: the mode table, the sandbox, and the classifier. Each is a setting, and
-the classifier is one you choose: any chat model on any provider you use, or a judgment model.
+every command runs inside that sandbox. No one reads tool output before the model does, and
+nothing screens it: the trust gate that once did was removed. Two things hold auto mode up, the
+mode table and the sandbox, and each is a setting.
 </Aside>
 
 ## What auto mode decides
@@ -62,7 +61,7 @@ Source: <Receipt path="src/core/permissions/modes.ts" symbol="modeRefusal" />,
 <Receipt path="src/core/runtime/index.ts" symbol="setPermissionMode" />.
 
 Switching modes rebuilds the tool set, the system prompt, and the agent, so what the model is
-offered and what screens its tool output change on the next turn, not the next session.
+offered changes on the next turn, not the next session.
 
 ## The sandbox
 
@@ -99,133 +98,27 @@ Every one of these is a setting under `sandbox` in configuration:
 
 Source: <Receipt path="src/core/config/schema.ts" symbol="SandboxSettingsSchema" />.
 
-## The trust gate
+## Tool output
 
-In every other mode a person sees a tool's output in the transcript before the model acts on
-it. In auto mode the model acts first. So auto mode is the only mode in which the trust gate runs:
-after each batch of tool calls, and before the results enter context, a second model reads them
-and says which ones are prompt injection.
+In every other mode a person sees a tool's output in the transcript before the model acts on it.
+In auto mode the model acts first, and nothing screens what it reads. The trust gate that once
+screened tool output in auto mode was removed on 2026-09-29: it was a relevance filter standing in
+for an injection defense, and it was never measured as one. What an injection in a file or a page
+can make the model do is bounded by the mode table and the sandbox: commands run without network,
+writes stay in the project, and every tool that reaches the network still asks.
 
-What happens on each turn:
+The `trust` settings are still accepted, so an existing file loads, and read by nothing. A session
+whose configuration sets `trust.model` says once that the gate is gone.
 
-1. The session's own state, such as the todo list the model wrote, is left out: it is not from
-   outside, and nothing in it needs screening.
-2. Results with the same tool and the same normalised text are sent once. Each duplicate takes the
-   verdict of the first, so it is kept or withheld with it, never withheld for being a duplicate.
-3. The rest go to the classifier in one request. Each result is cut to 4,000 characters, keeping
-   the beginning and the end, and the task description the classifier sees is cut to 2,000.
-4. The classifier answers, per result, a relevance score from 0 to 1, an injection flag, and a
-   short reason. How it is asked depends on what kind of model it is; see below.
-5. A result flagged as an injection is withheld. A result scoring under the threshold is withheld
-   as not relevant. The model sees a one-line note in place of each, and the transcript records
-   which tool and why.
-6. A result the classifier did not mention is kept. If the request fails, times out, or returns
-   nothing usable, every result is kept and the failure is reported. The gate fails open.
-
-Every request is kept in the session log: what the classifier was sent and answered, or
-why the request failed, each result's verdict and fate, and the text of a withheld result.
-The model never sees any of it; `/copy debug` shows it.
-
-Source: <Receipt path="src/core/trust/index.ts" symbol="screenToolResults" />,
-<Receipt path="src/core/agent.ts" symbol="screen" />.
-
-### Which model classifies
-
-The classifier is `trust.model` in configuration, and choosing it is yours. Nothing picks one for
-you: the classifier reads every tool result in auto mode, so which model does that, where it runs,
-and what it costs are decisions JamCLI does not make on its own. Until it is set, the gate stays
-off and auto mode says so once per session. Outside auto mode nothing is screened and nothing is
-said.
-
-Source: <Receipt path="src/core/runtime/model.ts" symbol="trustModelRef" />,
-<Receipt path="src/core/runtime/model.ts" symbol="trustClassifier" />.
-
-The value is `provider:model` on any provider the session knows, or a bare model name, which
-means Ollama. Two kinds of model can sit behind it, and the gate treats them through one seam:
-
-| Kind | Example values | How it is asked |
-|---|---|---|
-| A chat model | `ollama:qwen3:1.7b`, `openrouter:meta-llama/llama-guard-4-12b`, `anthropic:claude-haiku-4-5-20251001`, `myproxy:small` for an entry in `api_registry.endpoints` | One prompt holding every result, escaped so a result cannot forge its own delimiter, with reasoning off. It answers one JSON object per result. |
-| A judgment model | `typesafe:jev-latest` | The turn is sent as state, with two yes-or-no questions per result: is it an injection, and is it relevant. It answers each with a probability. |
-
-Source: <Receipt path="src/core/trust/index.ts" symbol="Classifier" />,
-<Receipt path="src/core/trust/index.ts" symbol="chatClassifier" />,
-<Receipt path="src/core/trust/jev.ts" symbol="jevClassifier" />.
-
-A chat model needs whatever its provider already needs: a key stored with `jamcli auth set`, a
-`key_env_var`, or a local Ollama. For Ollama, `think: false` is sent explicitly, because its
-thinking models think unless told not to, and a thinking classifier turns a two second check into
-a minute.
-
-Jev is TypeSafe's System One model. It does not generate text; it returns typed answers and
-probabilities, which is exactly what the gate needs, and it answers in a few hundred
-milliseconds. It takes a key, from `jamcli auth set typesafe`, `TYPESAFE_API_KEY`, or
-`api_registry.typesafe.key_env_var`. A result is withheld as an injection at a probability of
-0.5 and above, and its relevance probability is compared with `trust.threshold` like any other
-score.
-
-Source: <Receipt path="src/core/trust/jev.ts" symbol="buildJevRequest" />,
-<Receipt path="src/core/trust/jev.ts" symbol="parseJevAnswers" />,
-<Receipt path="src/core/providers/factory.ts" symbol="resolveApiKey" />.
-
-The classifier's requests are counted under its own model in the session's spend, so what the
-gate costs is visible apart from what the conversation costs. `jamcli doctor` checks the
-classifier as a model in use, next to the session model. A chat model is asked to describe itself.
-Jev is asked one real judgment on a planted injection, and the check warns when it does not flag
-it.
-
-Source: <Receipt path="src/cli/doctor.ts" symbol="modelsInUse" />,
-<Receipt path="src/cli/doctor.ts" symbol="judgmentCheck" />.
-
-### Settings
-
-| Setting | Default | Effect |
-|---|---|---|
-| `trust.model` | none: auto mode says the gate is off | The classifier, as `provider:model` on any configured provider, or `typesafe:jev-latest`. |
-| `trust.threshold` | 0.3 | Relevance below which a result is withheld. `0` keeps every result that is not an injection. |
-| `trust.enabled` | on | `false` turns the gate off in every mode, and the off state shows in configuration. |
-| `trust.dedupe` | on | Identical results are sent once, each duplicate taking its twin's verdict. `false` sends every one. |
-
-Source: <Receipt path="src/core/config/schema.ts" symbol="trust" />,
-<Receipt path="src/core/trust/index.ts" symbol="DEFAULT_THRESHOLD" />.
+Source: <Receipt path="src/core/runtime/index.ts" symbol="createRuntime" />,
+<Receipt path="src/core/config/schema.ts" symbol="trust" />.
 
 ## What is worth testing
-
-The gate is only as good as the classifier, and a classifier is a model reading results it was
-never trained on. These are the questions the settings above leave open, and what was seen when
-they were first tried on a Mac, on one turn holding a relevant file read, a planted injection, an
-unrelated recipe, and a relevant grep hit.
-
-**Which model to trust with the job.** Local chat models under a billion parameters echoed the
-example object back and judged one result of three. `ollama:qwen3:1.7b` was the smallest that
-flagged the injection, in under two seconds, and `ollama:granite4.2:3b` the smallest that also
-scored relevance correctly. `typesafe:jev-latest` scored all four results correctly in half a
-second: 98% injection on the planted one, 93% to 95% relevance on the two that mattered, 3% on
-the recipe. A hosted chat model on OpenRouter or Anthropic is a middle path: capable, but a full
-model round trip on every tool turn. A purpose-built encoder detector such as Meta's Prompt Guard 2
-would need its own classifier kind, like Jev has.
-
-**Whether relevance filtering helps or hurts.** The small local models that catch an injection
-scored the relevant file read at 0, which the default threshold would withhold. Jev's relevance
-scores were well separated. Setting `trust.threshold` to `0` keeps injection screening and gives
-up relevance filtering, which is the right setting for a classifier whose relevance scores you
-have not checked on results you know are relevant.
-
-**What a real session withholds.** Every removal is a warning in the transcript naming the tool
-and the reason. A session with many removals and no real injections says the threshold is too
-high or the model too small. A session with none says nothing, which is why the planted injection
-test matters.
 
 **Sandbox gaps a project needs.** A build that writes outside the project, needs the network, or
 reads a credential the sandbox hides fails inside auto mode with a note that names the sandbox.
 `writable`, `network`, and `env_passthrough` open each gap on purpose, and the wider each is
 opened the less auto mode protects.
-
-A change to the chat prompt, the threshold, or the truncation bounds is a change to
-`src/core/trust/index.ts`; a change to the questions Jev is asked is in `src/core/trust/jev.ts`.
-A new kind of classifier is a new implementation of `Classifier` and a branch in
-`trustClassifier`. The tests under `src/core/trust/__tests__/` and
-`src/core/runtime/__tests__/runtime.test.ts` are where the contract is pinned.
 
 ## Proofs
 
@@ -234,18 +127,7 @@ All pass. `modes.test.ts` shows auto mode refused without a sandbox and entered 
 command running in it without an approval request.
 </Proof>
 
-<Proof run="bun test src/core/trust src/core/runtime/__tests__/runtime.test.ts">
-All pass. The runtime tests show a result withheld as an injection in auto mode, the threshold
-deciding relevance, and no classifier request and no notice outside auto mode.
-</Proof>
-
-<Proof run="bun test src/core/trust/__tests__/jev.test.ts">
-All pass, against a local stand-in for TypeSafe: the key is sent, probabilities become verdicts,
-the injection is withheld, the usage is counted, and a refused key fails open with its status.
-</Proof>
-
-<Proof run="jamcli doctor" reader>
-A `model (trust classifier)` line saying the configured classifier answers. With Jev it also says
-"and flags a planted injection". No such line means no classifier is configured and the gate will
-be off in auto mode.
+<Proof run="bun test src/core/runtime/__tests__/runtime.test.ts">
+All pass. With `trust.model` still set, an auto mode turn sends no classifier request, the file's
+text reaches the model unchanged, and the session says the gate is gone.
 </Proof>
