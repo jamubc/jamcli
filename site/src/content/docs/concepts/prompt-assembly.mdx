@@ -71,13 +71,13 @@ Source: <Receipt path="src/core/runtime/prompt.ts" symbol="toolGuidance" />.
 
 ### 4. Plan note
 
-Added only in plan mode, so the model knows why it can read but not act:
+Added only in plan mode, so the model knows why it can read but not act. It opens "Plan mode
+is on. Investigate, then present a plan for the person to approve. Do not implement.", says
+what the session can and cannot do, and names a tool only when the session offers it: it asks
+with `ask_user`, saves the plan with `plan_write`, and ends with `exit_plan_mode` where those
+are offered, and otherwise asks, presents, and stops in plain text.
 
-```text title="PLAN_NOTE"
-Plan mode is on: you can read and search, but not change files, run commands, or delegate. Investigate, then present a plan for the user to approve.
-```
-
-Source: <Receipt path="src/core/permissions/modes.ts" symbol="PLAN_NOTE" />.
+Source: <Receipt path="src/core/runtime/prompt.ts" symbol="planNote" />.
 
 ### 5. Environment
 

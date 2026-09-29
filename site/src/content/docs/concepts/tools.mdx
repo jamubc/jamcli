@@ -49,7 +49,7 @@ Each session builds one registry. This is what goes into it, and when:
 | Source | When it registers | Source |
 |---|---|---|
 | Built-in tools | Always. `read_file`, `glob`, `grep`, `edit`, `run_command`, `web_fetch` and the rest, plus hidden aliases. | <Receipt path="src/core/tools/builtins.ts" symbol="BUILTIN_TOOLS" /> |
-| `skill` | When at least one skill loads. | <Receipt path="src/core/runtime/index.ts" symbol="skillTool" /> |
+| `skill` | When at least one skill loads. | <Receipt path="src/core/runtime/sources.ts" symbol="registerSkills" /> |
 | MCP server tools | One entry per tool of each enabled server. A tool the server marks read-only gets `read`; any other gets `execute`. A server that fails is reported and skipped. | <Receipt path="src/core/runtime/tools.ts" symbol="registerMcpTools" /> |
 | `search_tools` | When MCP servers bring more tools than `tool_search.threshold` (40 by default). | <Receipt path="src/core/tools/toolSearch.ts" symbol="DEFAULT_TOOL_SEARCH_THRESHOLD" /> |
 | `lsp` | When a language server is available. Delegated runs have none. | <Receipt path="src/core/runtime/index.ts" symbol="lspTool" /> |
