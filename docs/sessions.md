@@ -11,6 +11,14 @@ decisions (who allowed or denied, by which rule), checkpoints taken before chang
 usage and cost per model, compactions, and the session's start and end. Tool output in
 the log is redacted like everything else.
 
+The interface also records what the person typed, as a `prompt` event, in one of two
+states: `sent`, or `cleared`, for a draft cleared away unsent. The text is as typed: a
+paste in full, a `/command` or `!command` as written, an `@file` reference unexpanded.
+The model never sees a `prompt` event and it is not a message, so a compaction that
+drops old messages leaves the prompts listed. Up in the composer and Ctrl+R search
+read them; a session written before they were recorded lists its earlier messages
+instead. The Markdown export counts them and shows each cleared draft.
+
 ## Resuming and branching
 
 - `jamcli -p --continue` continues the most recent session in the project; `--resume <id>`

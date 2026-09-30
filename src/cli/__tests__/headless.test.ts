@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { startFakeProvider, type FakeProviderServer } from '../../testing/fakeProvider.js';
-import { SessionLog } from '../../core/transcript/index.js';
+import { SessionLog, sessionFileFor } from '../../core/transcript/index.js';
 
 const ENTRY = path.join(import.meta.dir, '../../index.tsx');
 const MCP_FIXTURE = path.join(import.meta.dir, '../../testing/modernMcpServer.ts');
@@ -138,6 +138,24 @@ test('--resume and --continue carry the earlier tool calls into the next request
   const continued = await jam(['-p', 'sure?', '--continue', '--output-format', 'json']);
   expect(lastLine(continued.out).session_id).toBe(first.session_id);
   expect(server.completions().at(-1)!.body.messages).toHaveLength(8);
+});
+
+test('a session whose log holds prompt events resumes with the same conversation', async () => {
+  server.enqueue({ text: 'Found it.' });
+  const first = lastLine((await jam(['-p', 'where is it?', '--output-format', 'json'])).out);
+  // What the interface records beside the messages: what was typed, and a draft cleared unsent.
+  fs.appendFileSync(
+    sessionFileFor(root, first.session_id),
+    ['sent', 'cleared'].map((state) => JSON.stringify({ v: 2, type: 'prompt', ts: 1, text: `typed ${state}`, state })).join('\n') + '\n'
+  );
+
+  server.enqueue({ text: 'There.' });
+  const resumed = await jam(['-p', 'and now?', '--resume', first.session_id, '--output-format', 'json']);
+  expect(resumed.code).toBe(0);
+  expect(lastLine(resumed.out).session_id).toBe(first.session_id);
+  const messages = server.completions().at(-1)!.body.messages;
+  expect(messages.map((message: any) => message.role)).toEqual(['system', 'user', 'assistant', 'user']);
+  expect(JSON.stringify(messages)).not.toContain('typed cleared');
 });
 
 test('a provider error is reported with its message and exit code 1', async () => {

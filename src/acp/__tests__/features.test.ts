@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { PassThrough } from 'node:stream';
 import { AcpServer } from '../server.js';
+import { sessionFileFor } from '../../core/transcript/index.js';
 import { permissionInput, toolTitle } from '../updates.js';
 import { startFakeProvider, type FakeProviderServer } from '../../testing/fakeProvider.js';
 
@@ -190,6 +191,25 @@ test('a turn streams a plan, a diff for an edit, and a command runs as its promp
   expect(client.problems).toEqual([]);
   await client.close();
 }, 30_000);
+
+test('session/load replays a session whose log holds prompt events as its messages alone', async () => {
+  const first = connect();
+  const sessionId = (await first.request('session/new', { cwd: root, mcpServers: [] })).result.sessionId;
+  server.enqueue({ text: 'The answer is 4.' });
+  await first.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'what is 2+2?' }] });
+  await first.close();
+  fs.appendFileSync(sessionFileFor(root, sessionId), `${JSON.stringify({ v: 2, type: 'prompt', ts: 1, text: 'a draft cleared unsent', state: 'cleared' })}\n`);
+
+  const second = connect();
+  const loaded = await second.request('session/load', { sessionId, cwd: root, mcpServers: [] });
+  const replayed = second.messages.slice(0, second.messages.indexOf(loaded)).filter((message) => message.method === 'session/update').map((message) => [message.params.update.sessionUpdate, message.params.update.content?.text]);
+  expect(replayed).toEqual([
+    ['user_message_chunk', 'what is 2+2?'],
+    ['agent_message_chunk', 'The answer is 4.'],
+  ]);
+  expect(second.problems).toEqual([]);
+  await second.close();
+});
 
 test('session/load replays the recorded conversation before it answers', async () => {
   const first = connect();
