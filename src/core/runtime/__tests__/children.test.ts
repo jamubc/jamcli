@@ -420,6 +420,40 @@ test("a background child's prompt reaches whoever answers the parent's calls, an
   expect(result.output).toContain('decided {"allow":true,"scope":"once"}');
 });
 
+test("a grant settles every child's ask it now allows, unasked, and names the rule that did", async () => {
+  const parent = await start({ allowTools: ['task'] });
+  const task = (id: string, letter: string) => ({ id, name: 'task', arguments: { agent: 'quick', title: `Print ${letter}`, prompt: `print ${letter}` } });
+  const print = (id: string, letter: string) => ({ toolCalls: [{ id, name: 'run_command', arguments: { command: `printf ${letter}` } }] });
+  server.enqueue(
+    { toolCalls: [task('t1', 'a'), task('t2', 'b'), task('t3', 'c')] },
+    print('p1', 'a'),
+    print('p2', 'b'),
+    print('p3', 'c'),
+    { text: 'printed' },
+    { text: 'printed' },
+    { text: 'printed' },
+    { text: 'all printed' }
+  );
+  const asks: Extract<AgentEvent, { type: 'approval_request' }>[] = [];
+  const decisions: Extract<AgentEvent, { type: 'approval_decision' }>[] = [];
+  const running = parent.run('print three letters', (event) => {
+    if (event.type === 'approval_request') asks.push(event);
+    if (event.type === 'approval_decision') decisions.push(event);
+  });
+  const deadline = Date.now() + 5_000;
+  while (asks.length < 3 && Date.now() < deadline) await Bun.sleep(10);
+  expect(asks.map((ask) => ask.request?.summary).sort()).toEqual(['run_command printf a', 'run_command printf b', 'run_command printf c']);
+  // One answer for the session, with a pattern that covers all three.
+  asks[0].decide({ allow: true, scope: 'session', pattern: 'run_command(printf *)' });
+  const result = await Promise.race([running, Bun.sleep(5_000).then(() => undefined)]);
+  expect(result?.response).toBe('all printed');
+  // The others ran without being answered, each recorded with the rule that allowed it and where it came from.
+  const others = decisions.filter((decision) => decision.callId !== asks[0].call.id && decision.tool === 'run_command');
+  expect(others.map((decision) => decision.callId).sort()).toEqual(asks.slice(1).map((ask) => ask.call.id).sort());
+  for (const decision of others) expect(decision).toMatchObject({ allow: true, by: 'user', rule: 'run_command(printf *)', source: 'granted at an approval prompt' });
+  expect(asks.slice(1).every((ask) => ask.withdrawn?.aborted)).toBe(true);
+}, 20_000);
+
 test('task_result waits for a running child, holds no longer than the turn, and says when a wait ran out', async () => {
   let finish!: () => void;
   const delegate = async (request: DelegationRequest) => {

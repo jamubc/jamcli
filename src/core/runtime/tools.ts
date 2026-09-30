@@ -182,6 +182,7 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
       if (scope === 'project' && options.grantProject) options.grantProject(text);
       else permissions.grant(text);
     },
+    onGrant: (listener) => permissions.onAdded(listener),
     execute: async (call, context) => {
       if (!offeredNames.has(canonical(call.name))) {
         return {

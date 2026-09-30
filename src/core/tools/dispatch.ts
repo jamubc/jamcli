@@ -47,6 +47,8 @@ export interface ToolDispatcher {
   alwaysAsks?(name: string): boolean;
   /** Remember a grant the user chose at approval time. */
   grant?(call: ToolCall, scope: ApprovalScope, pattern?: string): void;
+  /** Hear each rule added from now on, a grant included, so an ask still waiting can be decided again. Returns how to stop. */
+  onGrant?(listener: () => void): () => void;
   /** For a state-changing call that runs without asking: who allowed it, and by which rule. */
   autoApproval?(call: ToolCall): { by: ApprovalBy; rule?: string } | undefined;
   /**
@@ -110,6 +112,24 @@ const answered = (call: ToolCall, read: ReturnType<typeof readDecision>): AgentE
   ...(read.pattern ? { rule: read.pattern } : {}),
 });
 
+/** A decision a rule, the mode, or a hook made, with what decided and why, as the surfaces and the transcript hear it. */
+const byVerdict = (call: ToolCall, allow: boolean, verdict: DispatchVerdict): AgentEvent => ({
+  type: 'approval_decision',
+  callId: call.id,
+  tool: call.name,
+  allow,
+  scope: 'once',
+  by: verdict.by ?? 'policy',
+  ...(verdict.rule ? { rule: verdict.rule } : {}),
+  ...(verdict.source ? { source: verdict.source } : {}),
+  ...(verdict.reason ? { reason: verdict.reason } : {}),
+});
+
+/** How a wait for a decision ended: its answer, the turn's end, or the verdict it was settled with, unasked. */
+type Answer = ApprovalDecision | 'cancelled' | { settled: DispatchVerdict };
+
+const isSettled = (answer: Answer): answer is { settled: DispatchVerdict } => typeof answer === 'object' && 'settled' in answer;
+
 export const resultFor = (call: ToolCall, status: ToolStatus, output: string, durationMs = 0): ToolResult => ({
   tool: call.name,
   callId: call.id,
@@ -168,12 +188,17 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       result = await ctx.dispatcher.execute(call, {
         signal: ctx.signal,
         onProgress: (chunk) => ctx.emit({ type: 'tool_progress', callId: call.id, tool: call.name, chunk: redact(chunk) }),
-        requestApproval: async ({ call: nested, request }) => {
+        requestApproval: async ({ call: nested, request, withdrawn }) => {
           // A nested call is shown under the call it came from, so its id cannot collide.
           const scoped: ToolCall = { ...nested, id: `${call.id}/${nested.id}` };
-          const decision = await waitForDecision(scoped, request && { ...request, id: scoped.id, call: scoped });
-          // The answer is announced as for the session's own calls, so the surface takes the prompt down.
-          if (decision !== 'cancelled') ctx.emit(answered(scoped, readDecision(decision)));
+          const decision = await waitForDecision(scoped, request && { ...request, id: scoped.id, call: scoped }, undefined, withdrawn ? { withdrawn } : {});
+          if (decision === 'cancelled') return decision;
+          // The answer, or the verdict the child settled it with, is announced as for the session's own calls, so the surface takes the prompt down.
+          if (isSettled(decision)) {
+            ctx.emit(byVerdict(scoped, true, decision.settled));
+            return { allow: true, by: decision.settled.by ?? 'policy' };
+          }
+          ctx.emit(answered(scoped, readDecision(decision)));
           return decision;
         },
         onNestedResult: (result) => ctx.emit({ type: 'tool_result', result: { ...result, callId: `${call.id}/${result.callId ?? result.tool}` } }),
@@ -240,11 +265,48 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
     return policyClass ? policyClass !== 'read' && policyClass !== 'state' : !ctx.dispatcher.isReadOnly?.(call.name);
   };
 
-  const waitForDecision = (call: ToolCall, prebuilt?: ApprovalRequest, reason?: string): Promise<ApprovalDecision | 'cancelled'> =>
+  /**
+   * Ask about a call and wait. The wait also ends when the turn does; when a grant made
+   * meanwhile lets `redecide` allow it; and when the run that asked, further down, withdraws
+   * it. A wait settled without an answer aborts its own event's `withdrawn`, so a prompt
+   * shown further up is taken down too.
+   */
+  const waitForDecision = (
+    call: ToolCall,
+    prebuilt?: ApprovalRequest,
+    reason?: string,
+    options: { redecide?: () => DispatchVerdict; withdrawn?: AbortSignal } = {}
+  ): Promise<Answer> =>
     new Promise((resolve) => {
       if (ctx.signal.aborted) return resolve('cancelled');
-      const onAbort = () => resolve('cancelled');
+      const { redecide, withdrawn } = options;
+      if (withdrawn?.aborted) return resolve({ settled: withdrawn.reason as DispatchVerdict });
+      const withdraw = new AbortController();
+      const stops: (() => void)[] = [];
+      let done = false;
+      const finish = (answer: Answer) => {
+        if (done) return;
+        done = true;
+        for (const stop of stops) stop();
+        if (isSettled(answer)) withdraw.abort(answer.settled);
+        resolve(answer);
+      };
+      const onAbort = () => finish('cancelled');
       ctx.signal.addEventListener('abort', onAbort, { once: true });
+      stops.push(() => ctx.signal.removeEventListener('abort', onAbort));
+      if (withdrawn) {
+        const onWithdrawn = () => finish({ settled: withdrawn.reason as DispatchVerdict });
+        withdrawn.addEventListener('abort', onWithdrawn, { once: true });
+        stops.push(() => withdrawn.removeEventListener('abort', onWithdrawn));
+      }
+      if (redecide && ctx.dispatcher.onGrant) {
+        stops.push(
+          ctx.dispatcher.onGrant(() => {
+            const verdict = redecide();
+            if (verdict.decision === 'allow') finish({ settled: verdict });
+          })
+        );
+      }
       const request =
         prebuilt ??
         buildApprovalRequest(call, {
@@ -253,15 +315,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
           reason: reason ?? ctx.dispatcher.approvalReason?.(call),
           alwaysAsks: ctx.dispatcher.alwaysAsks?.(call.name),
         });
-      ctx.emit({
-        type: 'approval_request',
-        call,
-        request,
-        decide: (decision) => {
-          ctx.signal.removeEventListener('abort', onAbort);
-          resolve(decision);
-        },
-      });
+      ctx.emit({ type: 'approval_request', call, request, withdrawn: withdraw.signal, decide: (decision) => finish(decision) });
     });
 
   const delegates = (index: number) => ctx.dispatcher.policyClass?.(calls[index].name) === 'delegate';
@@ -286,27 +340,22 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
     const verdict = decide(index);
     if (verdict.decision === 'deny') {
       // A rule or the mode said no. The model hears why, and the rest of the step goes on.
-      ctx.emit({
-        type: 'approval_decision',
-        callId: call.id,
-        tool: call.name,
-        allow: false,
-        scope: 'once',
-        by: verdict.by ?? 'policy',
-        ...(verdict.rule ? { rule: verdict.rule } : {}),
-        ...(verdict.source ? { source: verdict.source } : {}),
-        ...(verdict.reason ? { reason: verdict.reason } : {}),
-      });
+      ctx.emit(byVerdict(call, false, verdict));
       const result = resultFor(call, 'denied', `Not run: ${verdict.reason ?? 'the permission policy denies it'}.`);
       ctx.emit({ type: 'tool_result', result });
       settle(index, result);
       return 'settled';
     }
     if (verdict.decision === 'ask') {
-      const decision = await waitForDecision(current, undefined, verdict.reason);
+      const decision = await waitForDecision(current, undefined, verdict.reason, { redecide: () => decide(index) });
       if (decision === 'cancelled') {
         stopped = 'cancelled';
         return 'cancelled';
+      }
+      // A grant made while it waited allows it now: it runs, recorded with the rule that allowed it.
+      if (isSettled(decision)) {
+        ctx.emit(byVerdict(call, true, decision.settled));
+        return 'run';
       }
       const read = readDecision(decision);
       ctx.emit(answered(call, read));
@@ -329,17 +378,7 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
       }
       if (read.scope !== 'once') ctx.dispatcher.grant?.(current, read.scope, read.pattern);
     } else if (verdict.by && recorded(call)) {
-      ctx.emit({
-        type: 'approval_decision',
-        callId: call.id,
-        tool: call.name,
-        allow: true,
-        scope: 'once',
-        by: verdict.by,
-        ...(verdict.rule ? { rule: verdict.rule } : {}),
-        ...(verdict.source ? { source: verdict.source } : {}),
-        ...(verdict.reason ? { reason: verdict.reason } : {}),
-      });
+      ctx.emit(byVerdict(call, true, verdict));
     }
     return 'run';
   };

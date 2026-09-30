@@ -241,3 +241,20 @@ test("a mode that allows changes inside the project still asks before the projec
   expect(engine([], 'accept-edits').decide(edit('docs/.github/workflow.yml'))).toMatchObject({ decision: 'allow' });
   expect(engine([], 'accept-edits').decide(edit('.gitignore'))).toMatchObject({ decision: 'allow' });
 });
+
+test('a grant made through a parent reaches listeners on a derived engine, and one already held adds nothing', () => {
+  const parent = engine();
+  const child = parent.derive();
+  let heard = 0;
+  const stop = child.onAdded(() => (heard += 1));
+  expect(parent.grant('run_command(printf *)')).toBeUndefined();
+  expect(heard).toBe(1);
+  expect(child.decide(run('printf a'))).toMatchObject({ decision: 'allow', rule: 'run_command(printf *)' });
+  // The same grant again, as ten children answered alike would make it, is one rule and one notice.
+  parent.grant('run_command(printf *)');
+  expect(heard).toBe(1);
+  expect(parent.list().filter((held) => held.text === 'run_command(printf *)')).toHaveLength(1);
+  stop();
+  parent.grant('run_command(ls *)');
+  expect(heard).toBe(1);
+});

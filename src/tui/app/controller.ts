@@ -163,6 +163,8 @@ export class SessionController {
         (event: AgentEvent) => {
           this.tap?.(event);
           if (event.type === 'approval_request') this.decisions.set(event.call.id, event.decide);
+          // A call decided without this prompt's answer, as a grant made meanwhile can, has nothing left to answer.
+          if (event.type === 'approval_decision') this.decisions.delete(event.callId);
           if (event.type === 'elicitation_request') {
             // With nobody set to ask, the server hears no rather than waiting forever.
             if (!this.onElicitation) return event.respond({ action: 'decline' });

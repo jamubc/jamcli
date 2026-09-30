@@ -1,8 +1,11 @@
 import type { AgentEvent, ApprovalDecision, ApprovalRequest, ToolCall, ToolResult } from '../types.js';
 import type { EffortLevel, ReasoningLevel } from '../routing/capabilities.js';
 
-/** Ask whoever answers a call's approvals about a call nested inside it, such as a child run's. */
-export type NestedApproval = (nested: { call: ToolCall; request?: ApprovalRequest }) => Promise<ApprovalDecision | 'cancelled'>;
+/**
+ * Ask whoever answers a call's approvals about a call nested inside it, such as a child
+ * run's. `withdrawn` aborts when the run that asked settled it without an answer.
+ */
+export type NestedApproval = (nested: { call: ToolCall; request?: ApprovalRequest; withdrawn?: AbortSignal }) => Promise<ApprovalDecision | 'cancelled'>;
 
 export interface DelegationRequest {
   /** The agent to run on; the configured default when absent. */

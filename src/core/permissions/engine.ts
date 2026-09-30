@@ -85,8 +85,11 @@ const WHAT_TOOLS_DO: Record<string, string> = {
  * Every verdict names the rule, scope, and source that produced it.
  */
 export class PermissionEngine {
-  /** The rules and the mode, one object shared with every engine derived from this one. */
-  private readonly shared: { rules: Rule[]; mode: PermissionMode };
+  /**
+   * The rules, the mode, and who hears a rule added: one object shared with every engine
+   * derived from this one, so a grant made anywhere in the tree reaches every run in it.
+   */
+  private readonly shared: { rules: Rule[]; mode: PermissionMode; added: Set<() => void> };
   readonly sandboxed: boolean;
   /** While a command or skill with `allowed-tools` is active: only what these rules name may run. */
   private narrowing: { rules: Rule[]; label: string } | undefined;
@@ -95,7 +98,7 @@ export class PermissionEngine {
     private readonly options: PermissionEngineOptions,
     private readonly parent?: PermissionEngine
   ) {
-    this.shared = parent ? parent.shared : { rules: [...(options.rules ?? [])], mode: options.mode ?? 'default' };
+    this.shared = parent ? parent.shared : { rules: [...(options.rules ?? [])], mode: options.mode ?? 'default', added: new Set() };
     this.sandboxed = Boolean(options.sandboxed);
   }
 
@@ -167,9 +170,21 @@ export class PermissionEngine {
     return [...(this.narrowing ? [this.narrowing] : []), ...(this.parent?.narrowings() ?? [])];
   }
 
-  /** Add a rule for the rest of the session, such as a grant made at an approval prompt. */
+  /**
+   * Add a rule for the rest of the session, such as a grant made at an approval prompt, and
+   * tell whoever listens. A rule already held, with the same text, decision, and scope, is
+   * not added again.
+   */
   add(rule: Rule): void {
+    if (this.shared.rules.some((held) => held.text === rule.text && held.decision === rule.decision && held.scope === rule.scope)) return;
     this.shared.rules.push(rule);
+    for (const listener of [...this.shared.added]) listener();
+  }
+
+  /** Hear every rule added from now on, through this engine or any that shares its rules. Returns how to stop. */
+  onAdded(listener: () => void): () => void {
+    this.shared.added.add(listener);
+    return () => this.shared.added.delete(listener);
   }
 
   /** Take out the rules that match, and return them. */

@@ -46,7 +46,8 @@ export interface SessionReport {
  */
 export class DelegatedSession {
   private output: string[] = [];
-  private approval: { waiting: Extract<Waiting, { kind: 'approval' }>; decide: (decision: ApprovalDecision) => void } | undefined;
+  /** Calls waiting for approval, oldest first: children asking at once each wait their turn. */
+  private approvals: { waiting: Extract<Waiting, { kind: 'approval' }>; decide: (decision: ApprovalDecision) => void }[] = [];
   private turn: Promise<void> | undefined;
   private ended: RunStatus | undefined;
   private readonly changed = new Set<() => void>();
@@ -69,7 +70,7 @@ export class DelegatedSession {
 
   /** What the session waits on, when it does. */
   waiting(): Waiting | undefined {
-    if (this.approval) return this.approval.waiting;
+    if (this.approvals.length) return this.approvals[0].waiting;
     const choice = this.controller.waitingChoice?.();
     return choice ? { kind: 'choice', id: `choice:${choice.title}`, ...choice } : undefined;
   }
@@ -115,7 +116,7 @@ export class DelegatedSession {
    * interface's prompt offers them.
    */
   answerApproval(decision: 'allow_once' | 'allow_session' | 'deny', feedback?: string, pattern?: string): void {
-    const pending = this.approval;
+    const pending = this.approvals[0];
     if (!pending) throw new Error('No call is waiting for approval.');
     if (pending.waiting.personOnly) throw new Error(`${pending.waiting.tool} always asks the person, so only they answer it.`);
     const offered = pending.waiting.suggestions;
@@ -125,18 +126,17 @@ export class DelegatedSession {
     this.decide(decision === 'allow_session' ? { allow: true, scope: 'session', ...(pattern ? { pattern } : {}) } : { allow: true });
   }
 
-  /** Answer the person's own call, with what they said. */
+  /** Answer the oldest waiting call, the person's own included, with what they said. */
   decide(decision: ApprovalDecision): void {
-    const pending = this.approval;
+    const pending = this.approvals.shift();
     if (!pending) return;
-    this.approval = undefined;
     pending.decide(decision);
     this.notify();
   }
 
-  /** Stop the running turn; a waiting call is answered no. */
+  /** Stop the running turn; every waiting call is answered no. */
   cancel(): void {
-    this.decide({ allow: false, feedback: 'the session was stopped' });
+    for (const pending of this.approvals.splice(0)) pending.decide({ allow: false, feedback: 'the session was stopped' });
     this.controller.cancel();
   }
 
@@ -204,7 +204,7 @@ export class DelegatedSession {
 
   private onEvent(event: AgentEvent): void {
     if (event.type === 'approval_request') {
-      this.approval = {
+      this.approvals.push({
         waiting: {
           kind: 'approval',
           id: event.call.id,
@@ -217,10 +217,12 @@ export class DelegatedSession {
           ...(event.request?.from ? { from: event.request.from } : {}),
         },
         decide: event.decide,
-      };
+      });
       this.say(`? waiting: ${event.request?.summary ?? event.call.name}\n`);
       return;
     }
+    // A waiting call decided without an answer here, as a grant made meanwhile can, no longer waits.
+    if (event.type === 'approval_decision') this.approvals = this.approvals.filter((pending) => pending.waiting.id !== event.callId);
     // An MCP server's own question has nobody to reach here, so it is declined.
     if (event.type === 'elicitation_request') return event.respond({ action: 'decline' });
     for (const update of this.mapper.map(event)) this.say(describe(update, this.cwd));

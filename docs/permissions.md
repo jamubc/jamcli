@@ -67,6 +67,15 @@ rule or mode that asked. The choices are: allow once; allow a pattern for the se
 for the project (written to `.jamcli/config.local.json`); or deny, optionally with
 feedback the model reads. Escape denies without feedback.
 
+A grant settles what it now allows. When a pattern is allowed for the session or the
+project, or a rule is added with `/permissions allow`, every call still waiting, the
+session's own or a child's, is decided again by the run that asked, with that run's own
+narrowing. Each one the grant now covers runs without being answered, and is recorded with
+the rule that allowed it and where the rule came from; its prompt goes from every surface
+that showed it. Ten children asking `bun test` at once are answered by one "Allow this
+session". A waiting call a new deny would now refuse is not settled: it still waits for
+the person.
+
 ## The sandbox
 
 On Linux, commands run under bubblewrap; on macOS, under Seatbelt. On Windows there is

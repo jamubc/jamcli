@@ -214,6 +214,8 @@ export function createMcpServer(sessions = new Map<string, DelegatedSession>(), 
         } catch (error: any) {
           return failure(error?.message ?? String(error));
         }
+        // What the answer settles on its way, such as other waiting calls a grant now allows, lands before the session is reported.
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
       return attend(session, ctx as ToolContext, wait_ms ?? DEFAULT_WAIT_MS);
     }

@@ -272,6 +272,36 @@ test("a subagent's prompts name it, look in on it, can each be answered, and eac
   }
 }, 30_000);
 
+test("a grant settles the other children's prompts it now allows, and none is left to answer", async () => {
+  const { setup, close } = await open({ allowTools: ['task'] }, { size: { width: 110, height: 44 } });
+  try {
+    const task = (id: string, letter: string) => ({ id, name: 'task', arguments: { agent: 'quick', title: `Print ${letter}`, prompt: `print ${letter}` } });
+    context.server.enqueue(
+      { toolCalls: [task('t1', 'a'), task('t2', 'b'), task('t3', 'c')] },
+      command('p1', 'printf a'),
+      command('p2', 'printf b'),
+      command('p3', 'printf c'),
+      { text: 'printed' },
+      { text: 'printed' },
+      { text: 'printed' },
+      { text: 'All three printed.' }
+    );
+    await setup.mockInput.typeText('print three letters');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (value) => value.includes('1 of 3 waiting'));
+    // The widest pattern the prompt offers covers all three commands; one answer grants it for the session.
+    setup.mockInput.pressArrow('down');
+    setup.mockInput.pressArrow('down');
+    await frameWith(setup, (value) => value.includes('run_command(printf *)'));
+    setup.mockInput.pressKey('2');
+    const done = await frameWith(setup, (value) => value.includes('All three printed.'));
+    expect(done).not.toContain('Allow run_command');
+    expect(done.match(/✓ run_command printf [abc]/g)).toHaveLength(3);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('a long command wraps in the prompt, so all of it is read before it is allowed', async () => {
   const { setup, close } = await open({}, { size: { width: 100, height: 40 } });
   try {

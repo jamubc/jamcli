@@ -31,7 +31,8 @@ does. Add it once, for example `claude mcp add jamcli -- jamcli mcp serve`.
   `deny`) or a list a command offered. A waiting call lists the patterns a session grant
   may take, narrowest first, as the interface's prompt offers them, and `allow_session`
   takes one as `pattern`, the first when absent. A child's call names the child that asks
-  (`from`: its task id, title, and agent). `session_state` reports; `session_stop`
+  (`from`: its task id, title, and agent). Calls waiting at once are answered oldest first,
+  and one a grant settles meanwhile leaves the queue unanswered. `session_state` reports; `session_stop`
   ends one, which stays in history, and a later call on it says how to resume it with
   `session_start`. Each is the same session an
   editor opens over ACP, with the same runtime, commands, and permissions. A call returns

@@ -139,7 +139,8 @@ export function childLauncher(options: ChildLauncherOptions): Delegate {
           return;
         }
         asked.add(event.call.id);
-        void request.requestApproval({ call: event.call, request: event.request }).then((decision) =>
+        // One the child settles unasked, as a grant made meanwhile can, is withdrawn from the parent's surface too.
+        void request.requestApproval({ call: event.call, request: event.request, ...(event.withdrawn ? { withdrawn: event.withdrawn } : {}) }).then((decision) =>
           event.decide(decision === 'cancelled' ? { allow: false, by: 'mode', feedback: 'the parent turn was cancelled.' } : decision)
         );
       });

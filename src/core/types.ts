@@ -180,6 +180,11 @@ export type AgentEvent =
       call: ToolCall;
       decide: (decision: ApprovalDecision) => void;
       request?: ApprovalRequest;
+      /**
+       * Aborted when the ask was settled without `decide`, as when a grant now allows it.
+       * Its `reason` is the verdict that settled it, with the rule and where it came from.
+       */
+      withdrawn?: AbortSignal;
     }
   | { type: 'turn_end'; status: RunStatus }
   /**
