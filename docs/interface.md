@@ -38,7 +38,8 @@ count. Under it, each child agent running beside the turn, on one row: its state
 and its title at the left, and at the right what it is doing right now (the call it is
 making, in the warning color while it asks for a decision), how long it has run, and its
 tokens and cost. A title too long for the row ends in an ellipsis before those facts are
-cut. Then the steps, indented, the running one with how long it has run and its check.
+cut. Then the steps, indented, the running one with how long it has run and its check: its
+words wrap to as many as four rows, its check taking one, and every other step is one row.
 
 Down on an empty composer chooses an agent (Up is for earlier prompts, and lets go of the choice from the first agent); Enter, or a click on it, opens its run
 in place of the conversation: what it has done so far and each further event as it happens.

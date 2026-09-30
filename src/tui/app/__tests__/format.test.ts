@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { closeMarkers, diffRows, diffStat, fitStatus, keepCitations, statusParts, thinkingLine, thinkingSize, toolLine } from '../format.js';
+import { closeMarkers, diffRows, diffStat, fitStatus, keepCitations, statusParts, thinkingLine, thinkingSize, toolLine, wrapWithin } from '../format.js';
 import { initialView } from '../../state/view.js';
 
 const diff = 'Index: a.txt\n===\n--- a.txt\n+++ a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n';
@@ -121,4 +121,14 @@ test('bracketed numbers are set as code, so the markdown view does not take them
   expect(keepCitations('```js\nconst a = b[1];\n```\nthen [2]')).toBe('```js\nconst a = b[1];\n```\nthen `[2]`');
   // A fence still open, as while a reply streams, leaves the rest alone.
   expect(keepCitations('```\nb[1]')).toBe('```\nb[1]');
+});
+
+test('text wraps at spaces into at most the lines given, the last one ending in an ellipsis when there is more', () => {
+  expect(wrapWithin('one two three', 20, 4)).toEqual(['one two three']);
+  expect(wrapWithin('one two three four five six', 10, 4)).toEqual(['one two', 'three four', 'five six']);
+  expect(wrapWithin('one two three four five six', 10, 2)).toEqual(['one two', 'three fou…']);
+  // A word wider than the room is cut, and the line before the cut is not lost.
+  expect(wrapWithin('abcdefghijkl', 5, 4)).toEqual(['abcde', 'fghij', 'kl']);
+  expect(wrapWithin('a\nb', 10, 4)).toEqual(['a', 'b']);
+  expect(wrapWithin('', 10, 4)).toEqual(['']);
 });

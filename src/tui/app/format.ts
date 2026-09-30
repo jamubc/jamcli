@@ -187,6 +187,20 @@ function wrapLine(line: string, width: number): string[] {
   return out;
 }
 
+/**
+ * Text broken at spaces into lines no wider than `width`, and at most `lines` of them; when
+ * there is more, the last line ends in an ellipsis. Its own line breaks are kept.
+ */
+export function wrapWithin(text: string, width: number, lines: number): string[] {
+  const room = Math.max(1, width);
+  const all = text.split('\n').flatMap((line) => wrapLine(line, room));
+  if (all.length <= lines) return all;
+  const kept = all.slice(0, lines);
+  const last = kept[lines - 1];
+  kept[lines - 1] = `${last.length >= room ? last.slice(0, room - 1) : last}…`;
+  return kept;
+}
+
 /** The rail and its gutter, which the thinking is drawn behind. */
 const RAIL_WIDTH = 2;
 

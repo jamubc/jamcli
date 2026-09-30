@@ -344,6 +344,33 @@ test('a child that is asking keeps the warning color on what it says, on its one
   }
 }, 30_000);
 
+test('the running step wraps to at most four rows, and the other steps stay one row each', async () => {
+  const { setup, close } = await open({}, { size: { width: 80, height: 44 } });
+  try {
+    const long = 'Reading every module that touches the session log and the recorder so the change lands in the one place that owns the record of what was typed, not beside it, and then checking each caller once more. '.repeat(3);
+    const todos = [
+      { content: 'Read the parser and everything else that is very long indeed and more besides', status: 'completed' },
+      { content: 'Fix the bug', status: 'in_progress', active_form: long },
+      { content: 'Add a test', status: 'pending' },
+    ];
+    context.server.enqueue({ toolCalls: [{ id: 't1', name: 'todo_write', arguments: { todos } }] }, { text: 'Planned.' });
+    await setup.mockInput.typeText('plan it');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (value) => value.includes('◐ Reading every module'));
+    const rows = setup.captureCharFrame().split('\n');
+    const start = rows.findIndex((row) => row.includes('◐ Reading every module'));
+    // Four rows for the step, the last cut with an ellipsis; then the next step follows at once.
+    expect(rows[start + 3]).toMatch(/…|\.\.\./);
+    expect(rows[start + 4]).toContain('○ Add a test');
+    // The completed step is one row, cut where it runs out of room.
+    const done = rows.find((row) => row.includes('● Read the parser'))!;
+    expect(done.trimEnd().length).toBeLessThanOrEqual(80);
+    expect(rows[rows.indexOf(done) + 1]).toContain('◐ Reading every module');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('screen reader mode keeps one line of words for each agent', async () => {
   const { setup, runtime, close } = await open({ allowTools: ['task'] }, { size: { width: 200, height: 44 }, screenReader: true });
   try {

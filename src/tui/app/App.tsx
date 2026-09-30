@@ -10,7 +10,7 @@ import { decodePasteBytes, stripAnsiSequences, type PasteEvent, type ScrollBoxRe
 import type { Runtime } from '../../core/runtime/index.js';
 import { anchorsToTop, initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, statusOf, gitBranch } from './controller.js';
-import { PHASE_WORDS, fitStatus, phaseWord, statusParts, thinkingSize } from './format.js';
+import { PHASE_WORDS, fitStatus, phaseWord, statusParts, thinkingSize, wrapWithin } from './format.js';
 import { Indicator } from './Indicator.js';
 import { DEFAULT_STATUS_STYLE, type StatusStyleDefinition } from '../../styles/statusStyles.js';
 import { createSyntaxStyle } from './syntax.js';
@@ -73,6 +73,9 @@ export interface AppProps {
   /** Where copied text goes. Defaults to the system clipboard, then the terminal's. */
   copy?: Copier;
 }
+
+/** The most rows the running step takes on the board, its check included. */
+const STEP_LINES = 4;
 
 /** The most characters of what a child is doing now that its row shows. */
 const DOING_WIDTH = 28;
@@ -176,7 +179,9 @@ function TodoPanel({
   const sel = selectable(colors);
   const reduced = useReducedMotion();
   const clickable = useClickable();
+  // The room a step's words have: the board's padding, the step's indent, and its mark.
   const columns = useTerminalDimensions().width;
+  const stepWidth = Math.max(10, columns - 7);
   // An agent's row: the board's padding on both sides and the row's own indent.
   const rowWidth = Math.max(20, columns - 4);
   const done = todos?.filter((todo) => todo.status === 'completed').length ?? 0;
@@ -253,13 +258,19 @@ function TodoPanel({
           {todos.map((todo, index) => {
             const active = todo.status === 'in_progress';
             const color = todo.status === 'completed' ? colors.settled : active ? colors.text : colors.dim;
+            const label = active && todo.active_form ? todo.active_form : todo.content;
+            const clock = active && todo.since !== undefined ? ` · ${elapsed(now - todo.since)}` : '';
+            // The running step wraps to a few rows, its check taking one of them; every other step is a row cut where it runs out.
+            const lines = active ? wrapWithin(label, stepWidth - clock.length, todo.check ? STEP_LINES - 1 : STEP_LINES) : [label];
             return (
               <box key={index} flexDirection="column" flexShrink={0}>
-                <text {...sel} wrapMode="none" truncate>
-                  <span fg={todoColor(todo.status, colors)}>{`${TODO_MARKS[todo.status]} `}</span>
-                  <span fg={color}>{active && todo.active_form ? todo.active_form : todo.content}</span>
-                  {active && todo.since !== undefined ? <span fg={colors.dim}>{` · ${elapsed(now - todo.since)}`}</span> : null}
-                </text>
+                {lines.map((line, at) => (
+                  <text {...sel} key={at} wrapMode="none" truncate>
+                    <span fg={todoColor(todo.status, colors)}>{at === 0 ? `${TODO_MARKS[todo.status]} ` : '  '}</span>
+                    <span fg={color}>{line}</span>
+                    {at === lines.length - 1 && clock ? <span fg={colors.dim}>{clock}</span> : null}
+                  </text>
+                ))}
                 {active && todo.check ? (
                   <Rail>
                     <text {...sel} fg={colors.dim} wrapMode="none" truncate>{`check: ${todo.check}`}</text>

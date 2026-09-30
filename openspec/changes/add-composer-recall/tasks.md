@@ -67,7 +67,7 @@ only, never Ollama.
 - [x] 8.4 Move the board keys to Down per those tests and update the header hint; verify 8.3 passes and the existing navigation tests in `board.test.tsx` and `queue.test.tsx` pass
 - [x] 8.5 Write tests that each agent is exactly one row, its label cuts before its facts at 60 and 100 columns, an asking agent keeps the warning color, the active step wraps to four rows, and plain mode keeps one line of words per agent; verify they fail on the three-row board
 - [x] 8.6 Redraw the board's agent rows and the active step as designed; verify 8.5 passes and the frame of a board with two running children fits in the rows the old one took for one
-- [ ] 8.7 Update the board notes in `docs/interface.md` ("The plan board") for Down and the one-line rows; verify no line still says Up chooses an agent
+- [x] 8.7 Update the board notes in `docs/interface.md` ("The plan board") for Down and the one-line rows; verify no line still says Up chooses an agent
 
 ## 9. Close the unit
 
