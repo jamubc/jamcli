@@ -88,6 +88,10 @@ export interface StatusData {
   retry?: { attempt: number; delayMs: number; reason: string };
   /** What runs beside the turn: background commands and child agents. */
   work?: { jobs: number; agents: number };
+  /** The session's name, from /rename. */
+  name?: string;
+  /** The session's color, from /color. */
+  color?: string;
 }
 
 /** One item of the model's todo list, as its `todo_write` call left it. */

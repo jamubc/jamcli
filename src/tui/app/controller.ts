@@ -67,6 +67,9 @@ export function statusOf(runtime: Runtime): Partial<StatusData> {
     ...spendOf(runtime),
     mcpServers: new Set(runtime.tools.filter((tool) => tool.source === 'mcp').map((tool) => tool.server)).size,
     lspServers: runtime.lspServers.length,
+    // Absent is the theme's color and no name, so a /color default or a fresh session clears them.
+    name: runtime.name,
+    color: runtime.color,
   };
 }
 

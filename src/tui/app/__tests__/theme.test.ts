@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { TextAttributes } from '@opentui/core';
-import { TERMINAL, THEMES, chosenRow, framed, resolveTheme, selectable } from '../theme.js';
+import { TERMINAL, THEMES, chosenRow, framed, resolveTheme, selectable, sessionTint } from '../theme.js';
 import { THEME_NAMES, noColor } from '../../../styles/themeNames.js';
 
 test('NO_COLOR set to anything but empty means monochrome, whatever the configured theme', () => {
@@ -50,4 +50,10 @@ test('a frame is a border with padding, and in screen reader mode there is neith
   expect(framed(false, '#123456')).toEqual({ border: true, borderColor: '#123456', paddingLeft: 1, paddingRight: 1 });
   expect(framed(false, TERMINAL)).toEqual({ border: true, borderColor: TERMINAL, paddingLeft: 1, paddingRight: 1 });
   expect(framed(true, '#123456')).toEqual({ paddingLeft: 0, paddingRight: 0 });
+});
+
+test("a session's color draws the composer border in its hue and tints the status line toward it; monochrome keeps the terminal's", () => {
+  expect(sessionTint(THEMES.dark, 'blue')).toEqual({ border: '#61a0ef', status: '#6f8eb9' });
+  expect(sessionTint(THEMES.dark, undefined)).toEqual({ border: THEMES.dark.border, status: THEMES.dark.dim });
+  expect(sessionTint(THEMES.monochrome, 'blue')).toEqual({ border: THEMES.monochrome.border, status: THEMES.monochrome.dim });
 });

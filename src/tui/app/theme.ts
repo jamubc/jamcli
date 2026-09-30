@@ -160,6 +160,35 @@ export const THEMES: Record<ThemeName, Theme> = {
   },
 };
 
+/** How the interface draws the colors /color offers. */
+export const SESSION_HUES: Record<string, string> = {
+  red: '#e06c75',
+  orange: '#e5a050',
+  yellow: '#d7ba5b',
+  green: '#7fb86a',
+  cyan: '#56b6c2',
+  blue: '#61a0ef',
+  purple: '#b48ead',
+  pink: '#e38fc0',
+};
+
+const mix = (from: string, to: string, share: number): string => {
+  const channel = (hex: string, at: number) => parseInt(hex.slice(at, at + 2), 16);
+  const parts = [1, 3, 5].map((at) => Math.round(channel(from, at) * (1 - share) + channel(to, at) * share));
+  return `#${parts.map((part) => part.toString(16).padStart(2, '0')).join('')}`;
+};
+
+/**
+ * A session's color on a theme: the composer's border in its hue, and the status line's
+ * dim text tinted toward it, so it stays as quiet as before. Monochrome, and a session with
+ * no color, keep the theme's own.
+ */
+export function sessionTint(theme: Theme, color: string | undefined): { border: Color; status: Color } {
+  const hue = color ? SESSION_HUES[color] : undefined;
+  if (!hue || theme.name === 'monochrome' || typeof theme.dim !== 'string' || !/^#[0-9a-f]{6}$/i.test(theme.dim)) return { border: theme.border, status: theme.dim };
+  return { border: hue, status: mix(theme.dim, hue, 0.45) };
+}
+
 /** The theme to draw with: monochrome whenever NO_COLOR is set, otherwise the configured one, or dark. */
 export function resolveTheme(configured: ThemeName | undefined, env: Record<string, string | undefined>): Theme {
   if (noColor(env)) return THEMES.monochrome;

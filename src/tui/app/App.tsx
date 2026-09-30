@@ -24,20 +24,21 @@ import { Palette, ReferencePalette } from './Palette.js';
 import { completeReference, matchReferences, referenceCandidates, referenceToken, type ReferenceItem } from './references.js';
 import { noteCall, noteText } from './note.js';
 import { Picker, shownItems, PICKER_ROWS } from './Picker.js';
-import { MotionContext, PlainContext, THEMES, ThemeContext, chosenRow, framed, resolveTheme, selectable, useReducedMotion, useTheme, type Theme } from './theme.js';
+import { MotionContext, PlainContext, THEMES, ThemeContext, chosenRow, framed, resolveTheme, selectable, sessionTint, useReducedMotion, useTheme, type Theme } from './theme.js';
 import { KEY_ACTIONS, keysFor, keysHelp, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
 import { chipAt, chipLabel, expandChips, isLarge, nextChipId, normalizeNewlines, type Chips } from './paste.js';
 import { cursorLines, describeRecall, isRecalled, recallDown, recallEscape, recallUp, type Move, type Recall } from './recall.js';
 import type { Phase, TodoView } from '../state/view.js';
 import type { WorkItem } from '../../core/work.js';
-import type { SessionNote } from '../../core/runtime/index.js';
 import type { AgentEvent } from '../../core/types.js';
 import { formatTokens, formatUsd } from '../../core/catalog/cost.js';
 import { useClickable } from './mouse.js';
 import type { SyntaxStyle } from '@opentui/core';
 import type { ThinkingSize } from './format.js';
-import { Rail, RowView } from './Rows.js';
+import { Rail, RowView, SessionNamesContext } from './Rows.js';
+import { readSessionIndex } from '../../core/transcript/index.js';
+import { NotesPanel } from './Notes.js';
 import { BypassConfirm, PermissionPrompt } from './Prompt.js';
 import { systemCopier, type Copier } from './clipboard.js';
 import type { ObserverHub } from '../observer.js';
@@ -287,41 +288,6 @@ function TodoPanel({
   );
 }
 
-/** A note's time, as the clock on the wall read it. */
-const noteClock = (ts: number): string => {
-  const at = new Date(ts);
-  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
-};
-
-/**
- * The tester's flags, newest on top, shown while there are any. A flag is a person's
- * remark on this point of the session, for whoever reads it back; the model never sees
- * it, and the session log keeps it.
- */
-function NotesPanel({ notes, plain, colors }: { notes: SessionNote[]; plain: boolean; colors: Theme }) {
-  const sel = selectable(colors);
-  if (plain) {
-    return (
-      <box flexDirection="column" flexShrink={0}>
-        {notes.map((note, index) => (
-          <text {...sel} key={notes.length - index}>{`Tester note at ${noteClock(note.ts)}: ${note.text}`}</text>
-        ))}
-      </box>
-    );
-  }
-  return (
-    <box flexDirection="column" flexShrink={0} paddingLeft={1} paddingRight={1}>
-      {notes.map((note, index) => (
-        <text {...sel} key={notes.length - index} wrapMode="word">
-          <span fg={colors.warn}>{'⚑ '}</span>
-          <span fg={colors.dim}>{`${noteClock(note.ts)} `}</span>
-          <span fg={index === 0 ? colors.text : colors.dim}>{note.text}</span>
-        </text>
-      ))}
-    </box>
-  );
-}
-
 /**
  * A child agent's run as a transcript of its own, in place of the conversation: what it
  * has done so far, folded from its events, and each further event as it happens. Escape
@@ -432,6 +398,10 @@ export function App(props: AppProps) {
   useEffect(() => props.observer?.attach(runtime), [runtime]);
   // What runs beside the turn reaches the status line between turns too.
   useEffect(() => controller.watchWork(), [controller]);
+  // Read again when this session's name changes, which is when this interface adds one.
+  const sessionNames = useMemo(() => new Set(readSessionIndex().flatMap((entry) => (entry.name ? [entry.name.toLowerCase()] : []))), [state.status.name]);
+  // A wake that goes off is sent like a message, behind any turn that runs; its line tells the model why.
+  useEffect(() => runtime.onWake((wake) => void controller.submit(wake.text, { display: wake.display })), [runtime, controller]);
   // Custom commands are read again with each session, so a file added meanwhile is found.
   const custom = useMemo(() => customCommands(projectRoot, BUILTIN_COMMANDS), [projectRoot, runtime]);
   // MCP prompts arrive once the servers answer; the palette gains them then.
@@ -1378,6 +1348,8 @@ export function App(props: AppProps) {
   const draftLines = willSend.split('\n').length;
   const counted = draftLines >= 3 ? (plain ? `Draft: ${draftLines} lines, ${willSend.length.toLocaleString('en-US')} characters.` : `${draftLines} lines · ${willSend.length.toLocaleString('en-US')} chars`) : undefined;
   const status = statusParts(state.status);
+  // A session colored with /color draws its composer border and status line in it.
+  const tint = sessionTint(theme, state.status.color);
   // The indicator moves during work
   // Not drawn while Screen reader mode = true
   const moving = !reducedMotion && WORKING.has(state.status.phase);
@@ -1388,6 +1360,7 @@ export function App(props: AppProps) {
   const statusRoom = Math.max(1, size.width - (flash ? flash.length + 3 : 0) - (moving ? shown.length + 5 : 0) - (plain ? 'Status: '.length : 0));
   return (
     <ThemeContext.Provider value={theme}>
+      <SessionNamesContext.Provider value={sessionNames}>
       <PlainContext.Provider value={plain}>
         <MotionContext.Provider value={reducedMotion}>
           {micro ? (
@@ -1397,7 +1370,7 @@ export function App(props: AppProps) {
           ) : null}
           <box flexDirection="column" width="100%" height="100%" visible={!micro} onMouseDrag={dragPast} onMouseUp={endDrag} onMouseDragEnd={endDrag}>
             <box height={1} flexShrink={0}>
-              <text {...sel} fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${runtime.sessionId}`}</text>
+              <text {...sel} fg={theme.dim}>{`${plain ? 'JamCLI, project ' : 'jamcli · '}${path.basename(projectRoot)}${branch ? `${plain ? ', branch ' : ' · '}${branch}` : ''}${plain ? ', session ' : ' · session '}${state.status.name ? `${state.status.name} (${runtime.sessionId})` : runtime.sessionId}`}</text>
             </box>
             {state.notes.length ? <NotesPanel notes={state.notes} plain={plain} colors={theme} /> : null}
             {viewer ? (
@@ -1502,7 +1475,7 @@ export function App(props: AppProps) {
                   </text>
                 ) : null}
                 <box
-                  {...framed(plain, theme.border)}
+                  {...framed(plain, tint.border)}
                   flexShrink={0}
                   minHeight={plain ? 1 : 3}
                   maxHeight={plain ? COMPOSER_LINES : COMPOSER_LINES + 2}
@@ -1530,11 +1503,12 @@ export function App(props: AppProps) {
             <box height={1} flexShrink={0} flexDirection="row">
               {flash ? <text {...sel} fg={theme.accent}>{`${flash}${plain ? '. ' : ' · '}`}</text> : null}
               {moving ? <Indicator style={statusStyle} words={shown} /> : null}
-              <text {...sel} fg={state.status.mode === 'bypass' ? theme.error : theme.dim}>{`${plain ? 'Status: ' : ''}${fitStatus(state.status, statusRoom, { separator: plain ? ', ' : ' · ', withoutPhase: moving })}`}</text>
+              <text {...sel} fg={state.status.mode === 'bypass' ? theme.error : tint.status}>{`${plain ? 'Status: ' : ''}${fitStatus(state.status, statusRoom, { separator: plain ? ', ' : ' · ', withoutPhase: moving })}`}</text>
             </box>
           </box>
         </MotionContext.Provider>
       </PlainContext.Provider>
+      </SessionNamesContext.Provider>
     </ThemeContext.Provider>
   );
 }

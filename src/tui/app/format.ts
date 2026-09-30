@@ -324,3 +324,36 @@ export function keepCitations(text: string): string {
     })
     .join('\n');
 }
+
+/**
+ * A sent message cut into plain text and the words the interface highlights: a command it
+ * starts with, and each session it names, by id or by a name in `names` (compared without
+ * case). Joined back, the parts are the message.
+ */
+export function mentionParts(text: string, names: ReadonlySet<string>): { text: string; hot: boolean }[] {
+  const parts: { text: string; hot: boolean }[] = [];
+  const command = /^\/[\w:.-]+/.exec(text)?.[0];
+  let rest = text;
+  if (command) {
+    parts.push({ text: command, hot: true });
+    rest = text.slice(command.length);
+  }
+  const word = /\d{4}-\d{2}-\d{2}-[0-9a-f]{8}|[A-Za-z0-9._-]+/g;
+  let last = 0;
+  for (const match of rest.matchAll(word)) {
+    const token = match[0].replace(/\.+$/, '');
+    const hot = /^\d{4}-\d{2}-\d{2}-[0-9a-f]{8}$/.test(token) || names.has(token.toLowerCase());
+    if (!hot) continue;
+    if (match.index! > last) parts.push({ text: rest.slice(last, match.index), hot: false });
+    parts.push({ text: token, hot: true });
+    last = match.index! + token.length;
+  }
+  if (last < rest.length) parts.push({ text: rest.slice(last), hot: false });
+  // Neighbouring plain parts are one.
+  return parts.reduce<{ text: string; hot: boolean }[]>((joined, part) => {
+    const previous = joined.at(-1);
+    if (previous && !previous.hot && !part.hot) previous.text += part.text;
+    else joined.push({ ...part });
+    return joined;
+  }, []);
+}

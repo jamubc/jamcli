@@ -205,10 +205,19 @@ test('/note flags notes above the conversation, newest on top, keeps them in the
     expect(frame.indexOf('ask about retries')).toBeLessThan(frame.indexOf('check the migration'));
     // The log keeps them, in order, so a person reading the session back finds them where they were planted.
     expect(runtime.notes().map((note) => note.text)).toEqual(['check the migration', 'ask about retries']);
+    // Past three, they collapse into one row that holds the newest, so they never push the conversation off the screen.
+    await send(setup, '/note the board overlapped');
+    await send(setup, '/note cost did not update');
+    const collapsed = await frameWith(setup, (frame) => frame.includes('1/4') && frame.includes('wheel for more'));
+    expect(collapsed.split('⚑')).toHaveLength(2);
+    expect(collapsed).toMatch(/⚑ 1\/4 \d\d:\d\d cost did not update/);
+    // The header carries the session's name once it has one.
+    await send(setup, '/rename flaky-ui');
+    await frameWith(setup, (frame) => frame.includes(`session flaky-ui (${runtime.sessionId})`));
     await send(setup, '/notes clear');
     // The flags go; the commands that planted them stay in the transcript, as typed.
     await frameWith(setup, (frame) => frame.includes('Notes hidden here.') && !frame.includes('⚑'));
-    expect(runtime.notes()).toHaveLength(2);
+    expect(runtime.notes()).toHaveLength(4);
   } finally {
     await close();
   }

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { closeMarkers, diffRows, diffStat, fitStatus, keepCitations, statusParts, thinkingLine, thinkingSize, toolLine, wrapWithin } from '../format.js';
+import { closeMarkers, diffRows, diffStat, fitStatus, keepCitations, mentionParts, statusParts, thinkingLine, thinkingSize, toolLine, wrapWithin } from '../format.js';
 import { initialView } from '../../state/view.js';
 
 const diff = 'Index: a.txt\n===\n--- a.txt\n+++ a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n';
@@ -131,4 +131,12 @@ test('text wraps at spaces into at most the lines given, the last one ending in 
   expect(wrapWithin('abcdefghijkl', 5, 4)).toEqual(['abcde', 'fghij', 'kl']);
   expect(wrapWithin('a\nb', 10, 4)).toEqual(['a', 'b']);
   expect(wrapWithin('', 10, 4)).toEqual(['']);
+});
+
+test('a sent message highlights the command it starts with and each session it names, by id or known name', () => {
+  const hot = (text: string) => mentionParts(text, new Set(['builder'])).filter((part) => part.hot).map((part) => part.text);
+  expect(hot('/wake when builder and 2026-09-29-1a6a254d raise green: go')).toEqual(['/wake', 'builder', '2026-09-29-1a6a254d']);
+  expect(hot('ask Builder. then stop')).toEqual(['Builder']);
+  expect(hot('a path/to/wake and no names')).toEqual([]);
+  expect(mentionParts('read builder now', new Set(['builder'])).map((part) => part.text).join('')).toBe('read builder now');
 });

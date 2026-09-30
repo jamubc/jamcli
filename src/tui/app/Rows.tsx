@@ -1,12 +1,15 @@
 /** @jsxImportSource @opentui/react */
 import type { MarkdownRenderable, SyntaxStyle } from '@opentui/core';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Row } from '../state/view.js';
-import { closeMarkers, compactionLine, keepCitations, noticeLine, thinkingLine, thinkingSize, toolLine } from './format.js';
+import { closeMarkers, compactionLine, keepCitations, mentionParts, noticeLine, thinkingLine, thinkingSize, toolLine } from './format.js';
 import type { ThinkingSize } from './format.js';
 import { useClickable } from './mouse.js';
 import { filetypeOf } from './syntax.js';
 import { chosenRow, usePlain, useSelectable, useTheme, type Selectable } from './theme.js';
+
+/** The session names the index holds, lowercased, so a sent message that names one highlights it. */
+export const SessionNamesContext = createContext<ReadonlySet<string>>(new Set());
 
 /**
  * A unified diff, highlighted as the file it changes. In screen reader mode it is the
@@ -145,12 +148,16 @@ export function RowView({
   const [hot, setHot] = useState(false);
   const toggles = { ...clickable(() => onToggle?.(row.id), { over: () => setHot(true), out: () => setHot(false) }), ...chosenRow(theme, hot), width: '100%' as const };
   const open = shown ?? !('collapsed' in row && row.collapsed);
+  const names = useContext(SessionNamesContext);
   if (usePlain()) return <PlainRow row={row} onToggle={onToggle} open={open} />;
   switch (row.kind) {
     case 'user':
       return (
         <box marginTop={1}>
-          <text {...sel} fg={theme.user}>{`> ${row.text}`}</text>
+          <text {...sel} fg={theme.user}>
+            {'> '}
+            {mentionParts(row.text, names).map((part, index) => (part.hot ? <span key={index} fg={theme.accent}>{part.text}</span> : part.text))}
+          </text>
         </box>
       );
     case 'assistant': {
