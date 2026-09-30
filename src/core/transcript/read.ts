@@ -3,6 +3,17 @@ import type { ChatMessage } from '../types.js';
 import { parseTranscriptLine, type TranscriptEvent } from './events.js';
 import { summaryMessage } from '../context/compact.js';
 
+/** One thing the person typed in the composer, as `prompt` events record it. */
+export interface TypedPrompt {
+  text: string;
+  state: 'sent' | 'cleared';
+  ts: number;
+}
+
+/** What the person typed, oldest first. A log written before prompts were recorded has none. */
+export const typedPrompts = (events: TranscriptEvent[]): TypedPrompt[] =>
+  events.flatMap((event) => (event.type === 'prompt' ? [{ text: event.text, state: event.state, ts: event.ts }] : []));
+
 /** Read every event in a session file, in either format. A missing file has none. */
 export function readTranscript(file: string): TranscriptEvent[] {
   if (!fs.existsSync(file)) return [];

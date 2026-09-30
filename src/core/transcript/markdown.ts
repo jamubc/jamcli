@@ -1,6 +1,7 @@
 import path from 'path';
 import type { ChatMessage } from '../types.js';
 import type { TranscriptEvent } from './events.js';
+import { typedPrompts } from './read.js';
 import { CostLedger, describeSpend, formatUsd } from '../catalog/cost.js';
 
 /** A fence longer than any run of backticks in the text, so the text cannot close it. */
@@ -96,6 +97,8 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
     if (header.permissionMode) facts.push(`- Permission mode: ${header.permissionMode}`);
   }
   facts.push(`- Messages: ${messages}`, `- Tokens: ${tokens}`);
+  const typed = typedPrompts(events);
+  if (typed.length) facts.push(`- Typed prompts: ${typed.length}${typed.some((prompt) => prompt.state === 'cleared') ? `, ${typed.filter((prompt) => prompt.state === 'cleared').length} cleared` : ''}`);
   const notes = events.filter((event) => event.type === 'note').length;
   if (notes) facts.push(`- Tester notes: ${notes}, marked **HUMAN TESTER** below where they were planted`);
   const reasoning = events.filter((event) => event.type === 'message' && event.message.reasoning).length;
@@ -125,6 +128,10 @@ export function transcriptToMarkdown(events: TranscriptEvent[], options: { id?: 
       case 'note':
         // A tester's flag stands out from the run around it: it was planted by a person, at this point, and the model never saw it.
         out.push(`> ⚑ **HUMAN TESTER** (not sent to the model): ${event.text}`);
+        break;
+      case 'prompt':
+        // A draft the person cleared was never sent: the reader sees it, and the model never did.
+        if (event.state === 'cleared') out.push(`> **Cleared draft** (not sent to the model): ${event.text}`);
         break;
       case 'notice':
         out.push(`> **Notice** (${event.level}${event.code ? `, ${event.code}` : ''}): ${event.message}`);

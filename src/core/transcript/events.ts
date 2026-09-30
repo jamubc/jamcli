@@ -67,6 +67,12 @@ export type TranscriptEvent =
    */
   | { v: 2; type: 'note'; ts: number; text: string }
   /**
+   * What the person typed in the composer, as they typed it (a paste in full, a slash or
+   * shell line as written), and whether it was sent or cleared away unsent. It is the record
+   * that recall and history search read, and it is never sent to the model.
+   */
+  | { v: 2; type: 'prompt'; ts: number; text: string; state: 'sent' | 'cleared' }
+  /**
    * What requests carry besides the conversation, as sent: the system prompt and the tool
    * definitions. Written when they differ from the last recorded, so it holds for every
    * request after it until the next one.

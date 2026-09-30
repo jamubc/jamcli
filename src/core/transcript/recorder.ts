@@ -1,5 +1,6 @@
 import type { AgentEvent, TokenUsage } from '../types.js';
 import type { TranscriptEvent } from './events.js';
+import { typedPrompts } from './read.js';
 import type { NewTranscriptEvent, SessionLog } from './log.js';
 
 export interface TranscriptRecorderOptions {
@@ -81,6 +82,19 @@ export class TranscriptRecorder {
   recordNote(text: string): void {
     this.started = true;
     this.write({ type: 'note', text });
+  }
+
+  /**
+   * Record what the person typed. Like a note, it is worth a session file on its own, so a
+   * slash command sent before any message is kept. The text the log already ends on, in the
+   * same state, is not written a second time.
+   */
+  recordPrompt(text: string, state: 'sent' | 'cleared'): void {
+    if (!text.trim()) return;
+    const last = typedPrompts(this.log.events()).at(-1);
+    if (last && last.text === text && last.state === state) return;
+    this.started = true;
+    this.write({ type: 'prompt', text, state });
   }
 
   readonly handle = (event: AgentEvent): void => {

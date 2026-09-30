@@ -21,9 +21,9 @@ only, never Ollama.
 
 ## 3. Record what was typed
 
-- [ ] 3.1 Write failing tests in `src/core/transcript/__tests__` for a `prompt` event: recorded with `sent` and `cleared`, written once for a repeat, ignored by `projectMessages`, kept across a compaction event and a reopen, loaded from a log that has none; verify they fail for the missing event
-- [ ] 3.2 Add the `prompt` event to `src/core/transcript/events.ts`, `recordPrompt` to `src/core/transcript/recorder.ts`, and `prompt` and `prompts` to `src/core/runtime/index.ts` beside `note`; verify 3.1 passes and `npx tsc --noEmit` is at baseline
-- [ ] 3.3 Tally prompts in the debug Markdown of `src/core/transcript/markdown.ts` as it tallies notes, with a test on its output; verify the test passes
+- [x] 3.1 Write failing tests in `src/core/transcript/__tests__` for a `prompt` event: recorded with `sent` and `cleared`, written once for a repeat, ignored by `projectMessages`, kept across a compaction event and a reopen, loaded from a log that has none; verify they fail for the missing event
+- [x] 3.2 Add the `prompt` event to `src/core/transcript/events.ts`, `recordPrompt` to `src/core/transcript/recorder.ts`, and `prompt` and `prompts` to `src/core/runtime/index.ts` beside `note`; verify 3.1 passes and `npx tsc --noEmit` is at baseline
+- [x] 3.3 Tally prompts in the debug Markdown of `src/core/transcript/markdown.ts` as it tallies notes, with a test on its output; verify the test passes
 - [ ] 3.4 Record a prompt from every send path in `src/tui/app/App.tsx` `submit` (message, `!cmd`, `#note`, `/command`, queued message), with tests in `src/tui/app/__tests__/composer.test.tsx` that send each and read `runtime.prompts()`; verify each recorded text is the text as typed, with an `@` reference unexpanded
 - [ ] 3.5 Make `earlierMessages` in `src/tui/app/history.ts` read prompt events and fall back to messages for a session with none, with a test using both kinds; verify Ctrl+R lists a `/help` and a pre-compaction prompt and still lists an old session
 - [ ] 3.6 Add a headless and an ACP test that a log holding `prompt` events resumes and projects unchanged; verify both pass

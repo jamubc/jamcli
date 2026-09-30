@@ -12,6 +12,7 @@ import type { EditableRuleScope } from './permissions.js';
 import type { PermissionFlags } from '../permissions/config.js';
 import type { PermissionMode } from '../permissions/modes.js';
 import type { WorkItem } from '../work.js';
+import type { TypedPrompt } from '../transcript/read.js';
 import type { Decision, Rule } from '../permissions/rules.js';
 import type { Sandbox, SandboxKind } from '../sandbox/index.js';
 import type { ModelChoice } from './model.js';
@@ -259,6 +260,10 @@ export interface Runtime {
    * the session back; the model never sees them.
    */
   note(text: string): void;
+  /** Record what the person typed in the composer, sent or cleared away, for recall. It is never sent to the model. */
+  prompt(text: string, state: 'sent' | 'cleared'): void;
+  /** What the person typed in this session, oldest first, including before a compaction. */
+  prompts(): TypedPrompt[];
   /** The notes planted in this session, oldest first. */
   notes(): SessionNote[];
   close(): Promise<void>;

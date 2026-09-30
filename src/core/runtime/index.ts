@@ -8,7 +8,7 @@ import { prefixSetNow, type ChatProvider } from '../providers/types.js';
 import { applyRules, loadRules, rulesPromptText } from '../rules/index.js';
 import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
 import { createRedactor } from '../redact.js';
-import { SessionLog, TranscriptRecorder, newSessionId } from '../transcript/index.js';
+import { SessionLog, TranscriptRecorder, newSessionId, typedPrompts } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
 import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
 import { createToolSet, registerMcpTools, type ToolSet } from './tools.js';
@@ -918,6 +918,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     watchWorkEvents: (id, listener) => workTable.watchEvents(id, listener),
     sayToWork: (id, text) => workTable.say(id, text),
     note: (text) => recorder.recordNote(text),
+    prompt: (text, state) => recorder.recordPrompt(text, state),
+    prompts: () => typedPrompts(log.events()),
     notes: () => log.events().flatMap((event) => (event.type === 'note' ? [{ text: event.text, ts: event.ts }] : [])),
 
     async close() {
