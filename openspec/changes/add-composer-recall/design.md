@@ -59,8 +59,12 @@ sessions still list. This is the only change to Ctrl+R.
 stash }` where `stash` is the draft and its chips at the first Up. Functions take the state, the
 key, and the cursor facts and return the next state and what the composer should hold; `App.tsx`
 applies it. This keeps the walk, the top-line rule, and the restore testable without a renderer.
-Up is taken only when the cursor is on the first line and neither list is showing (the command
-and reference lists keep Up and Down). The first line is `visualCursor.visualRow === 0`, not the
+Up is taken when the composer holds a recalled entry unedited (from any line, so a multi-line entry
+does not have to be crawled through), or when the cursor is on the first line and neither list is
+showing. While a recalled entry is unedited the command and reference lists stay off, so a recalled
+`/help` does not steal Up and Down; otherwise they keep them. Leaving an edited recalled entry by Up,
+Down, or Escape records the edit as a `cleared` prompt, so an edit is never lost, and the walk goes
+on from where it was. The first line is `visualCursor.visualRow === 0`, not the
 logical row, so a wrapped first line moves the cursor before it recalls; if the native cursor
 cannot be trusted at row 0 the fallback is the logical row. Down is taken only while recalling,
 or at the empty composer per decision 8. Every recalled entry replaces the composer text with

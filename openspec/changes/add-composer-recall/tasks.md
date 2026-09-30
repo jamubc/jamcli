@@ -31,8 +31,8 @@ only, never Ollama.
 
 ## 4. Recall with Up and Down
 
-- [ ] 4.1 Write unit tests for `src/tui/app/recall.ts`: first Up stashes and loads the newest; Up walks older and stops at the oldest; Down walks newer; Down past the newest restores the stash with its chips; Escape restores; a send drops the stash; Up on a later line or a wrapped first line moves the cursor and does not recall; verify they fail for the missing module
-- [ ] 4.2 Implement `recall.ts`; verify 4.1 passes
+- [x] 4.1 Write unit tests for `src/tui/app/recall.ts`: first Up stashes and loads the newest; Up walks older and stops at the oldest; Down walks newer; Down past the newest restores the stash with its chips; Escape restores; a send drops the stash; Up on a later line or a wrapped first line moves the cursor and does not recall; verify they fail for the missing module
+- [x] 4.2 Implement `recall.ts`; verify 4.1 passes
 - [ ] 4.3 Wire it into `App.tsx`'s key handler ahead of the board keys, with the command and reference lists keeping Up and Down, and draw the one-row strip above the composer in styled and plain phrasing; add `composer.test.tsx` tests that press Up, Down, and Escape through `mockInput` and read the frame; verify a multi-line pasted prompt returns whole, and a draft typed before Up returns after Down
 - [ ] 4.4 Add a test that a cleared draft is recalled (after group 5) and that recall works after `/compact` and after `switchSession` to a resumed session; verify both pass
 - [ ] 4.5 Update the key tables in `docs/interface.md` (rows for Up, Down, Ctrl+R) and `docs/ux.md`; verify the rows match the specs' wording and no row still says Up chooses an agent

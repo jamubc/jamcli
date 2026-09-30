@@ -13,9 +13,13 @@ never lose the unsent draft while they do.
 - **AND** a row above the composer says which prompt of how many it is and how to go on
 
 #### Scenario: Up walks back and Down walks forward
-- **WHEN** the person presses Up again, or Down with the cursor on the composer's last line
+- **WHEN** the composer still holds a recalled prompt as it was recalled and the person presses Up or Down, wherever the cursor is in it
 - **THEN** the composer holds the next older or the next newer prompt
 - **AND** Up at the oldest prompt stays on it
+
+#### Scenario: A recalled slash line does not open the command list
+- **WHEN** the composer holds a recalled prompt, unedited, that begins with `/` or holds an `@` word
+- **THEN** no list of commands or references is shown, and Up and Down keep walking the history
 
 #### Scenario: The draft comes back
 - **WHEN** the person had text in the composer before pressing Up, and presses Down past the newest prompt, or Escape
@@ -28,7 +32,12 @@ never lose the unsent draft while they do.
 
 #### Scenario: Recalled text is edited or sent like any text
 - **WHEN** the person edits a recalled prompt, or adds to its end, or sends it
-- **THEN** the edit is an ordinary draft and the earlier draft is dropped only when something is sent
+- **THEN** the edit is an ordinary draft, walked out of by the first-line and last-line rules, and the earlier draft is dropped only when something is sent
+
+#### Scenario: An edited prompt is kept when the person walks away from it
+- **WHEN** the person has edited a recalled prompt and then presses Up or Down past it, or Escape
+- **THEN** the edited text is kept as a cleared prompt that Up recalls
+- **AND** the walk goes on from where it was
 
 #### Scenario: Slash and shell lines are recalled
 - **WHEN** the person sent `!ls` or `/help` earlier in the session
