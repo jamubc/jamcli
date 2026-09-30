@@ -39,18 +39,19 @@ const taskOf = (ctx: ToolContext, id: unknown): BackgroundTask | undefined => ct
  * What a child reports to the work table as it runs: the agent and model it resolved to,
  * its session, and each of its events, so the person can see what it is doing and look in,
  * and what the person says to it, which it reads with its next step. Its prompts name the
- * agent that asks, so two children asking at once can be told apart.
+ * child that asks, so two children asking at once can be told apart; a grandchild's keep
+ * naming the grandchild.
  */
-const watched = (work: WorkTable, id: string, ask: ToolContext['requestApproval']): Pick<DelegationRequest, 'onStart' | 'onEvent' | 'heard' | 'requestApproval'> => {
-  let agent = 'a child agent';
+const watched = (work: WorkTable, id: string, title: string, agent: string | undefined, ask: ToolContext['requestApproval']): Pick<DelegationRequest, 'onStart' | 'onEvent' | 'heard' | 'requestApproval'> => {
+  let resolved = agent ?? '';
   return {
     onStart: (child) => {
-      agent = `agent ${child.agent}`;
+      resolved = child.agent;
       work.update(id, child);
     },
     onEvent: (event) => work.record(id, event),
     heard: () => work.drainSaid(id),
-    ...(ask ? { requestApproval: ({ call, request }) => ask({ call, request: request && { ...request, reason: `${agent} (${id}) asks, and ${request.reason}` } }) } : {}),
+    ...(ask ? { requestApproval: ({ request, ...nested }) => ask({ ...nested, request: request && { ...request, from: request.from ?? { task: id, title, agent: resolved } } }) } : {}),
   };
 };
 
@@ -185,7 +186,7 @@ export async function taskRunner(args: Record<string, any>, ctx: ToolContext): P
       signal: controller.signal,
       onText: ctx.onProgress,
       requestApproval: ctx.requestApproval,
-      ...(entry ? watched(ctx.work!, entry.id, ctx.requestApproval) : {}),
+      ...(entry ? watched(ctx.work!, entry.id, label, agent, ctx.requestApproval) : {}),
       onResult: ctx.onNestedResult,
     });
   } catch (error) {
@@ -242,7 +243,7 @@ function startBackground(ctx: ToolContext, label: string, options: Omit<Delegati
       onText: (delta) => {
         task.output += delta;
       },
-      ...watched(work, task.id, ctx.requestApproval),
+      ...watched(work, task.id, label, options.agent, ctx.requestApproval),
       onResult: ctx.onNestedResult,
     })
     .then((outcome) => {

@@ -75,14 +75,17 @@ export function PermissionPrompt(props: {
   const diff = approval.preview?.kind === 'diff' ? approval.preview.text : undefined;
   const diffHeight = diff ? (plain ? diff.split('\n').length + 1 : diffRows(diff)) : 0;
   const diffOverflow = diffHeight > previewRows;
-  const heading = `${plain ? 'Permission needed: ' : ''}Allow ${approval.summary}?`;
+  const asker = approval.from;
+  const heading = plain
+    ? `Permission needed: ${asker ? `${asker.title}, agent ${asker.agent}, asks: ` : ''}Allow ${approval.summary}?`
+    : `${asker ? `${asker.title} · ${asker.agent} › ` : ''}Allow ${approval.summary}?`;
 
   const indent = plain ? 0 : 2;
   const commandOnce = !plain && approval.preview?.kind === 'command' ? omitRepeated(approval.preview.text, heading, room) : undefined;
   const text = commandOnce !== undefined ? commandOnce || undefined : approval.preview && approval.preview.kind !== 'diff' ? approval.preview.text : undefined;
   const textRows = text ? text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / Math.max(1, room - indent))), 0) : 0;
   const textOverflow = textRows > previewRows;
-  const waiting = queued > 1 ? `1 of ${queued} waiting · ` : '';
+  const waiting = `${asker ? (plain ? 'o looks in on it, ' : 'o look in · ') : ''}${queued > 1 ? `1 of ${queued} waiting · ` : ''}`;
   const badge = plain ? 'Escape denies and stops' : '[Esc]';
   const reason = approval.reason.charAt(0).toUpperCase() + approval.reason.slice(1);
 
@@ -98,9 +101,10 @@ export function PermissionPrompt(props: {
 
   return (
     <box {...framed(plain, frame)} flexDirection="column" flexShrink={0}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text {...sel} fg={theme.warn} {...(text ? { wrapMode: 'none' as const, truncate: true } : {})}>{heading}</text>
-        <text {...sel} flexShrink={0} marginLeft={1}>
+      {/* A screen reader reads the heading whole, then the keys, rather than the two interleaved across a wrap. */}
+      <box flexDirection={plain ? 'column' : 'row'} justifyContent={plain ? 'flex-start' : 'space-between'}>
+        <text {...sel} fg={theme.warn} {...(text && !plain ? { wrapMode: 'none' as const, truncate: true } : {})}>{heading}</text>
+        <text {...sel} flexShrink={0} marginLeft={plain ? 0 : 1}>
           {waiting ? <span fg={theme.dim}>{waiting}</span> : null}
           <span fg={escaping ? theme.error : theme.dim}>{plain ? `${badge}${escaping ? ' (denying)' : ''}` : `[${escaping ? '✕ Esc' : 'Esc'}]`}</span>
         </text>

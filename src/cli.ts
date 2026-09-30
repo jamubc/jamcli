@@ -547,6 +547,7 @@ const resultToJson = (outcome: HeadlessResult, durationMs: number): Record<strin
     call_id: denial.callId,
     arguments: denial.arguments,
     reason: denial.reason,
+    ...(denial.from ? { from: denial.from } : {}),
   })),
   notices: outcome.notices,
 });

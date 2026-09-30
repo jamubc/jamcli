@@ -940,6 +940,7 @@ export function App(props: AppProps) {
       else if (key.name === '5' || key.name === 'n') answerWith('5');
       else if (key.name === 'down') choose((from) => ({ selected: Math.min(from.selected + 1, Math.max(0, approval.suggestions.length - 1)) }));
       else if (key.name === 'up') choose((from) => ({ selected: Math.max(0, from.selected - 1) }));
+      else if (key.sequence === 'o' && !key.ctrl && !key.meta && approval.from) openAgent(approval.from.task);
       return;
     }
     const open = overlay.current;

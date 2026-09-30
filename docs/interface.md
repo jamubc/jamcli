@@ -20,7 +20,8 @@ the transcript, the composer, the palettes, and the status line.
 | Ctrl+C twice | Leaves |
 | `?` on an empty composer | Lists the commands and keys |
 
-Keys a prompt or a list uses (1 to 5, Up and Down, Tab, Escape) are fixed. The rest can
+Keys a prompt or a list uses (1 to 5, Up and Down, Tab, Escape, and `o` on a child's
+prompt) are fixed. The rest can
 be rebound in `~/.config/jamcli/keybindings.json`, which maps an action to a key or a
 list: `{ "cycle_mode": "ctrl+y", "history": ["ctrl+r", "ctrl+s"] }`. The actions are
 `send`, `newline`, `interrupt`, `cycle_mode`, `history`, `tool_detail`, `todos`,
@@ -42,8 +43,11 @@ While it runs, a line typed there is said to it, and it reads it with its next s
 can steer or question a child mid-task; `/stop` there stops it. Escape returns, and closes
 this view before it answers any prompt that came up meanwhile. Once the child has ended,
 `o` opens its session as the current one, to read it back or go on with it. An ended agent
-stays on the board for a minute and a half, so its end is seen. A child's permission prompt
-names the agent and task that ask, so two asking at once are told apart.
+stays on the board for a minute and a half, so its end is seen. A child is listed by the
+title the model gave it, three to six words, or by the start of its task when it has none. A
+child's permission prompt leads with that title and its agent, as in `Count the files · quick
+› Allow run_command wc -l *?`, so two asking at once are told apart, and `o` on the prompt
+opens that child's run with the prompt still below it to answer.
 
 ## The composer
 

@@ -166,8 +166,8 @@ Tool run_command rm notes.txt, asking
 
 
 
-
-Permission needed: Allow run_command rm notes.txt?       Escape denies and stops
+Permission needed: Allow run_command rm notes.txt?
+Escape denies and stops
 rm notes.txt
 Default mode asks before tools that run commands.
 

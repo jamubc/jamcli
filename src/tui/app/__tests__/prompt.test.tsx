@@ -234,12 +234,12 @@ test('an edit prompt shows a short diff whole, and holds a long one to its rows 
   }
 }, 20_000);
 
-test("a subagent's prompts can each be answered, and each goes once it is", async () => {
+test("a subagent's prompts name it, look in on it, can each be answered, and each goes once it is", async () => {
   const { runtime, setup, close } = await open({ allowTools: ['task'] }, { size: { width: 100, height: 40 } });
   try {
     // Command substitution always asks, so the child asks twice in a row, as in the session that found this.
     context.server.enqueue(
-      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'count the files' } }] },
+      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', title: 'Count the files', prompt: 'count the files' } }] },
       command('c1', 'printf $(printf one)'),
       command('c2', 'printf $(printf two)'),
       { text: 'Counted.' },
@@ -247,7 +247,15 @@ test("a subagent's prompts can each be answered, and each goes once it is", asyn
     );
     await setup.mockInput.typeText('delegate it');
     setup.mockInput.pressEnter();
-    await frameWith(setup, (value) => value.includes('Allow run_command printf $(printf one)?'));
+    // The heading names the child and its agent before the call, and the reason says only why it asks.
+    const first = await frameWith(setup, (value) => value.includes('Count the files · quick › Allow run_command printf $(printf one)?'));
+    expect(first).toContain('o look in');
+    expect(first).not.toContain('asks, and');
+    // o opens the child's view with the prompt still below it; Escape comes back to the same prompt.
+    setup.mockInput.pressKey('o');
+    await frameWith(setup, (value) => value.includes('type below to talk to it') && value.includes('1  Allow once'));
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (value) => !value.includes('type below to talk to it') && value.includes('Allow run_command printf $(printf one)?'));
     setup.mockInput.pressKey('1');
     // The answered prompt goes, and the child's next one can be reached and answered.
     await frameWith(setup, (value) => value.includes('Allow run_command printf $(printf two)?') && !value.includes('Allow run_command printf $(printf one)?'));

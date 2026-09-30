@@ -5,7 +5,7 @@ import { createAcpSession, type AcpSessionController, type CreateAcpSessionOptio
 import { UpdateMapper } from '../acp/updates.js';
 import { entryText } from '../commands/host.js';
 import type { ChoiceItem } from '../commands/types.js';
-import type { AgentEvent, ApprovalDecision, ApprovalPreview, RunStatus } from '../core/types.js';
+import type { AgentEvent, ApprovalAsker, ApprovalDecision, ApprovalPreview, RunStatus } from '../core/types.js';
 
 /** What a delegated session waits on: a call to approve, or a list a command offered. */
 export type Waiting =
@@ -20,6 +20,8 @@ export type Waiting =
       suggestions: string[];
       /** The tool asks every time: only the person answers it. */
       personOnly: boolean;
+      /** The child run that asks, when one does. */
+      from?: ApprovalAsker;
     }
   | { kind: 'choice'; id: string; title: string; items: ChoiceItem[]; personOnly: boolean };
 
@@ -212,6 +214,7 @@ export class DelegatedSession {
           ...(event.request?.preview ? { preview: event.request.preview } : {}),
           suggestions: event.request?.suggestions ?? [],
           personOnly: Boolean(event.request?.alwaysAsks),
+          ...(event.request?.from ? { from: event.request.from } : {}),
         },
         decide: event.decide,
       };

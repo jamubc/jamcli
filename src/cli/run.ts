@@ -1,7 +1,7 @@
 import { createRuntime, type DryRunEntry, type RuntimeOptions } from '../core/runtime/index.js';
 import { CommandHost, entryText } from '../commands/host.js';
 import { hostClipboard } from '../utils/clipboard.js';
-import type { AgentEvent, RunResult } from '../core/types.js';
+import type { AgentEvent, ApprovalAsker, RunResult } from '../core/types.js';
 import type { SpendSummary } from '../core/catalog/cost.js';
 
 export interface HeadlessOptions {
@@ -35,6 +35,8 @@ export interface PermissionDenial {
   callId: string;
   arguments: Record<string, unknown>;
   reason: string;
+  /** The child run that asked, when a delegated run did. */
+  from?: ApprovalAsker;
 }
 
 export interface HeadlessResult {
@@ -80,7 +82,7 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
   const onEvent = (event: AgentEvent) => {
     if (event.type === 'approval_request') {
       const reason = event.request?.reason ?? 'this tool asks before it runs';
-      permissionDenials.push({ tool: event.call.name, callId: event.call.id, arguments: event.call.arguments ?? {}, reason });
+      permissionDenials.push({ tool: event.call.name, callId: event.call.id, arguments: event.call.arguments ?? {}, reason, ...(event.request?.from ? { from: event.request.from } : {}) });
       // The narrowest rule the prompt would have offered, never the whole tool: a rule about
       // run_command as such would allow any command the model writes.
       const narrowest = event.request?.suggestions[0];

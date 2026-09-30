@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { createRuntime, type RuntimeOptions } from '../index.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
-import type { AgentEvent } from '../../types.js';
+import type { AgentEvent, ApprovalRequest } from '../../types.js';
 import { SessionLog } from '../../transcript/index.js';
 import { taskCancelRunner, taskResultRunner, taskRunner, taskStatusRunner } from '../../tools/task.js';
 import type { DelegationRequest } from '../../delegation/types.js';
@@ -390,14 +390,15 @@ test('a task reports its agent, model, session, and activity to the work table a
 
 test("a background child's prompt reaches whoever answers the parent's calls, and its answered call's result is shown", async () => {
   const work = new WorkTable();
-  const asked: string[] = [];
+  const asked: ApprovalRequest[] = [];
   const shown: string[] = [];
   const delegate = async (request: DelegationRequest) => {
     request.onStart?.({ agent: 'quick', model: 'ollama:qwen', sessionId: 'child-1' });
-    const decision = await request.requestApproval!({
-      call: { id: 'c1', name: 'run_command', arguments: { command: 'wc -l a.txt' } },
-      request: { id: 'c1', call: { id: 'c1', name: 'run_command', arguments: { command: 'wc -l a.txt' } }, policyClass: 'execute', summary: 'run_command wc -l a.txt', reason: 'this tool asks before it runs', suggestions: [] },
-    });
+    const call = { id: 'c1', name: 'run_command', arguments: { command: 'wc -l a.txt' } };
+    const decision = await request.requestApproval!({ call, request: { id: 'c1', call, policyClass: 'execute', summary: 'run_command wc -l a.txt', reason: 'this tool asks before it runs', suggestions: [] } });
+    // A grandchild's ask arrives already naming the grandchild, and keeps naming it.
+    const grandchild = { task: 'task-g', title: 'Read the lock file', agent: 'deep' };
+    await request.requestApproval!({ call, request: { id: 'c2', call, policyClass: 'execute', summary: 'run_command wc -l a.txt', reason: 'this tool asks before it runs', suggestions: [], from: grandchild } });
     request.onResult?.({ tool: 'run_command', callId: 'c1', success: true, output: '3 a.txt', durationMs: 1 });
     return { status: 'ok' as const, response: `decided ${JSON.stringify(decision)}`, agent: request.agent ?? 'quick' };
   };
@@ -405,14 +406,15 @@ test("a background child's prompt reaches whoever answers the parent's calls, an
     projectRoot: root,
     delegate,
     work,
-    requestApproval: async ({ call, request }: { call: { name: string }; request?: { reason?: string } }) => (asked.push(`${call.name}: ${request?.reason}`), { allow: true, scope: 'once' as const }),
+    requestApproval: async ({ request }: { request?: ApprovalRequest }) => (asked.push(request!), { allow: true, scope: 'once' as const }),
     onNestedResult: (result: { output?: string }) => shown.push(result.output ?? ''),
   };
-  const started = await taskRunner({ agent: 'quick', prompt: 'count', background: true }, ctx);
+  const started = await taskRunner({ agent: 'quick', title: 'Count the lines', prompt: 'count', background: true }, ctx);
   const id = started.metadata!.id as string;
   await Bun.sleep(10);
-  // The prompt names the child that asks, so two asking at once can be told apart.
-  expect(asked).toEqual([`run_command: agent quick (${id}) asks, and this tool asks before it runs`]);
+  // The prompt names the child that asks, as data, so two asking at once can be told apart, and says only why it asks.
+  expect(asked.map((request) => request.from)).toEqual([{ task: id, title: 'Count the lines', agent: 'quick' }, { task: 'task-g', title: 'Read the lock file', agent: 'deep' }]);
+  expect(asked[0].reason).toBe('this tool asks before it runs');
   expect(shown).toEqual(['3 a.txt']);
   const result = await taskResultRunner({ id }, ctx);
   expect(result.output).toContain('decided {"allow":true,"scope":"once"}');

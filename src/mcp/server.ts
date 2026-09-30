@@ -28,7 +28,7 @@ export function reportText(report: SessionReport): string {
   if (report.output.trim()) lines.push('', report.output.trim());
   const waiting = report.waiting;
   if (waiting?.kind === 'approval') {
-    lines.push('', `Waiting for approval: ${waiting.summary}. ${waiting.reason}.`);
+    lines.push('', `Waiting for approval: ${waiting.from ? `${waiting.from.title} (agent ${waiting.from.agent}) asks to ` : ''}${waiting.summary}. ${waiting.reason}.`);
     if (waiting.preview?.text) lines.push(waiting.preview.text);
     if (waiting.personOnly) lines.push('Only the person answers this; they are being asked.');
     else {

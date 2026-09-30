@@ -99,6 +99,15 @@ export interface ApprovalRequest {
   suggestions: string[];
   /** The tool asks every time, whatever the rules and mode: only the person answers it. */
   alwaysAsks?: boolean;
+  /** The child run that asks, when a delegated run raised it. */
+  from?: ApprovalAsker;
+}
+
+/** A child run as its prompts name it: its task id, the title it was given, and its agent. */
+export interface ApprovalAsker {
+  task: string;
+  title: string;
+  agent: string;
 }
 
 export type ApprovalScope = 'once' | 'session' | 'project';

@@ -107,6 +107,20 @@ test('a call that would ask is not made, the model is told why, and the run carr
   expect(approval).toMatchObject({ allow: false, by: 'mode', surface: 'headless' });
 });
 
+test("a child's call that would ask is denied too, and the denial names the child", async () => {
+  server.enqueue(
+    { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', title: 'Update the notes', prompt: 'update a.txt' } }] },
+    { toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] },
+    { text: 'The edit was refused.' },
+    { text: 'The child could not edit it.' }
+  );
+  const { out, code } = await jam(['-p', 'delegate it', '--output-format', 'json', '--allowed-tools', 'task']);
+  expect(code).toBe(0);
+  const [denial] = lastLine(out).permission_denials;
+  expect(denial).toMatchObject({ tool: 'edit', call_id: 't1/e1', from: { title: 'Update the notes', agent: 'quick' } });
+  expect(denial.from.task).toStartWith('task-');
+});
+
 test('--resume and --continue carry the earlier tool calls into the next request', async () => {
   server.enqueue({ toolCalls: [{ id: 'g1', name: 'glob', arguments: { pattern: '*.txt' } }] }, { text: 'Found a.txt.' });
   const first = lastLine((await jam(['-p', 'list text files', '--output-format', 'json'])).out);

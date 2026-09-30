@@ -15,7 +15,7 @@ import { entryText } from '../commands/host.js';
 import type { EditorBridge } from '../types/tools.js';
 import { editorBridge } from './editor.js';
 import { createAcpSession, type AcpSessionController, type CreateAcpSessionOptions } from './session.js';
-import { permissionInput, stopReasonFor, toolKind, toolLocations, toolTitle, UpdateMapper } from './updates.js';
+import { permissionInput, permissionTitle, stopReasonFor, toolKind, toolLocations, UpdateMapper } from './updates.js';
 import { JAMCLI_VERSION } from '../core/version.js';
 
 export interface AcpNewSessionRequest {
@@ -255,7 +255,7 @@ export class AcpServer {
         sessionId,
         toolCall: {
           toolCallId: event.call.id,
-          title: toolTitle(event.call),
+          title: permissionTitle(event),
           kind: toolKind(event.call.name),
           status: 'pending',
           rawInput: permissionInput(event),

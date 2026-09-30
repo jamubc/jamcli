@@ -46,7 +46,9 @@ with the flag that would allow it, and the run carries on. `--allow-tool` and
 `--deny-tool` allow or deny one tool for the run; `--allowed-tools` and
 `--disallowed-tools` take rule text; `--permission-mode` sets the mode and
 `--dangerously-bypass-permissions` bypasses asking (explicit denies still stop). Each
-denial is recorded with the mode as who decided, and appears in the result.
+denial is recorded with the mode as who decided, and appears in the result. A child's call
+is denied the same way, and its denial carries `from`: the child's task id, title, and
+agent.
 
 ## Dry runs
 

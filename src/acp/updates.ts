@@ -75,6 +75,12 @@ export function toolTitle(call: ToolCall): string {
   return call.name;
 }
 
+/** A permission request's title: the call, led by the child that asks when one does. */
+export function permissionTitle(event: Extract<AgentEvent, { type: 'approval_request' }>): string {
+  const from = event.request?.from;
+  return `${from ? `${from.title} · ${from.agent} › ` : ''}${toolTitle(event.call)}`;
+}
+
 /** The ACP stop reason for how a turn ended. */
 export const stopReasonFor = (status: RunStatus): StopReason => {
   switch (status) {

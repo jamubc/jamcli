@@ -1,4 +1,4 @@
-import type { AgentEvent, ApprovalPreview, ApprovalScope, ChatMessage, ToolCall, ToolStatus } from '../../core/types.js';
+import type { AgentEvent, ApprovalAsker, ApprovalPreview, ApprovalScope, ChatMessage, ToolCall, ToolStatus } from '../../core/types.js';
 import { describeCall } from '../../core/approval.js';
 import { isSummary } from '../../core/context/compact.js';
 import type { WorkItem } from '../../core/work.js';
@@ -57,6 +57,8 @@ export interface PendingApproval {
   preview?: ApprovalPreview;
   /** Patterns a grant could remember, most specific first. */
   suggestions: string[];
+  /** The child run that asks, when one does. */
+  from?: ApprovalAsker;
 }
 
 /** What the turn is doing now, for the status line. */
@@ -282,6 +284,7 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         reason: request?.reason ?? 'this tool asks before it runs',
         ...(request?.preview ? { preview: request.preview } : {}),
         suggestions: request?.suggestions ?? [],
+        ...(request?.from ? { from: request.from } : {}),
       };
       const known = state.rows.some(isTool(event.call.id));
       const proposed = approval.preview?.kind === 'diff' ? { diff: approval.preview.text } : {};

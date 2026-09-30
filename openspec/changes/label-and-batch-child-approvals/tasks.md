@@ -11,9 +11,9 @@
 
 ## 3. Who asks, as data
 
-- [ ] 3.1 Add `ApprovalRequest.from` (`task`, `title`, `agent`), set it in `watched()` when absent, and remove the reason prefix. Replace the prefix assertion at `src/core/runtime/__tests__/children.test.ts:410` with one on `from`, and verify that a grandchild's ask reaches the top naming the grandchild.
-- [ ] 3.2 Interface: the prompt heading names the child's title and agent before the call, in both styled and screen reader modes, and `o` on a child's prompt opens that child's view, with the prompt back when it closes. Verify with a test in `src/tui/app/__tests__/prompt.test.tsx` that drives a child's ask, and document the key and heading in `docs/interface.md`.
-- [ ] 3.3 Headless names the child in a denial (`PermissionDenial.from`), ACP puts the child's title and agent in the permission request's title, and the MCP session's waiting approval carries it. Verify with one assertion added to an existing headless child test and one to an existing ACP permission test, then document it in `docs/protocols.md` and `docs/headless.md`.
+- [x] 3.1 Add `ApprovalRequest.from` (`task`, `title`, `agent`), set it in `watched()` when absent, and remove the reason prefix. Replace the prefix assertion at `src/core/runtime/__tests__/children.test.ts:410` with one on `from`, and verify that a grandchild's ask reaches the top naming the grandchild.
+- [x] 3.2 Interface: the prompt heading names the child's title and agent before the call, in both styled and screen reader modes, and `o` on a child's prompt opens that child's view, with the prompt back when it closes. Verify with a test in `src/tui/app/__tests__/prompt.test.tsx` that drives a child's ask, and document the key and heading in `docs/interface.md`.
+- [x] 3.3 Headless names the child in a denial (`PermissionDenial.from`), ACP puts the child's title and agent in the permission request's title, and the MCP session's waiting approval carries it. Verify with one assertion added to an existing headless child test and one to an existing ACP permission test, then document it in `docs/protocols.md` and `docs/headless.md`.
 
 ## 4. A grant settles what it now allows
 

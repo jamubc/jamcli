@@ -17,7 +17,7 @@ const BOXES = /[┌┐└┘│─]/;
 const MARKS = /[✓✗⊘●○⏱■]/;
 
 test('screen reader mode draws labeled lines, with no boxes and no marks', async () => {
-  const { setup, close } = await open({}, { size: tall, screenReader: true });
+  const { setup, close } = await open({ allowTools: ['task'] }, { size: tall, screenReader: true });
   try {
     const first = await frameWith(setup, (frame) => frame.includes('Status: default mode, ollama:fake-model'));
     expect(first).toContain('JamCLI, project project');
@@ -37,7 +37,19 @@ test('screen reader mode draws labeled lines, with no boxes and no marks', async
     await send(setup, '/cost');
     const listed = await frameWith(setup, (frame) => frame.includes('Result: '));
     expect(listed).toContain('Command: /cost');
-    for (const frame of [first, replied, asked, denied, listed]) {
+
+    // A child's prompt names the child and its agent in words, and how to look in on it.
+    context.server.enqueue(
+      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', title: 'Say hello', prompt: 'say hello' } }] },
+      { toolCalls: [{ id: 'c2', name: 'run_command', arguments: { command: 'printf hello' } }] }
+    );
+    await send(setup, 'delegate it');
+    // The heading wraps rather than being cut, so it is read whole.
+    const child = await frameWith(setup, (frame) => frame.replace(/\s+/g, ' ').includes('Permission needed: Say hello, agent quick, asks: Allow run_command printf hello?'));
+    expect(child).toContain('o looks in on it');
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => frame.includes('Tool run_command printf hello') && frame.includes('denied'));
+    for (const frame of [first, replied, asked, denied, listed, child]) {
       expect(frame).not.toMatch(BOXES);
       expect(frame).not.toMatch(MARKS);
     }

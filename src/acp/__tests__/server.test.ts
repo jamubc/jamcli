@@ -20,6 +20,15 @@ const approvableController = (): AcpSessionController => ({
       onEvent({
         type: 'approval_request',
         call: { id: 'call-1', name: 'write_file', arguments: { path: 'a.txt' } },
+        request: {
+          id: 'call-1',
+          call: { id: 'call-1', name: 'write_file', arguments: { path: 'a.txt' } },
+          policyClass: 'write',
+          summary: 'write_file a.txt',
+          reason: 'default mode asks before tools that change files',
+          suggestions: [],
+          from: { task: 'task-1', title: 'Write the notes', agent: 'quick' },
+        },
         decide: (decision) => resolve(readDecision(decision).allow),
       })
     );
@@ -105,6 +114,8 @@ test('the ACP server initializes, opens a session, and streams a prompt with a p
   await waitFor(() => messages.some((message) => message.method === 'session/request_permission'));
   const permission = messages.find((message) => message.method === 'session/request_permission');
   expect(permission.params.toolCall.toolCallId).toBe('call-1');
+  // A child's request leads with the child that asks.
+  expect(permission.params.toolCall.title).toBe('Write the notes · quick › write_file a.txt');
   expect(permission.params.options).toHaveLength(4);
   send({ jsonrpc: '2.0', id: permission.id, result: { outcome: { outcome: 'selected', optionId: 'allow-once' } } });
 

@@ -30,7 +30,8 @@ does. Add it once, for example `claude mcp add jamcli -- jamcli mcp serve`.
   `session_answer` answers a call waiting for approval (`allow_once`, `allow_session`,
   `deny`) or a list a command offered. A waiting call lists the patterns a session grant
   may take, narrowest first, as the interface's prompt offers them, and `allow_session`
-  takes one as `pattern`, the first when absent. `session_state` reports; `session_stop`
+  takes one as `pattern`, the first when absent. A child's call names the child that asks
+  (`from`: its task id, title, and agent). `session_state` reports; `session_stop`
   ends one, which stays in history, and a later call on it says how to resume it with
   `session_start`. Each is the same session an
   editor opens over ACP, with the same runtime, commands, and permissions. A call returns
@@ -66,6 +67,8 @@ terminal manager.
 - `session/prompt` streams updates; every update is flushed before the prompt reply.
   A call that asks becomes `session/request_permission` with allow once, allow for the
   session, reject, and reject-with-a-reason. A rejection with no feedback stops the turn.
+  A child's call is titled by the child that asks, as in `Write the notes · quick ›
+  write_file a.txt`.
 - `available_commands_update` offers every built-in command, beside custom commands and
   MCP prompts. A prompt naming one runs it, as the interface would: what it shows arrives
   as message chunks, and a turn it sends is the prompt's turn. A list it offers is printed
