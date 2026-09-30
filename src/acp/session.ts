@@ -7,6 +7,7 @@ import { PERMISSION_MODES, type PermissionMode } from '../core/permissions/modes
 import type { AgentEvent, ChatMessage, RunResult } from '../core/types.js';
 import type { EditorBridge } from '../types/tools.js';
 import { loadConfig } from '../core/config/load.js';
+import type { FiredWake } from '../core/wake/index.js';
 
 /** What the ACP server needs from a session in order to drive a turn. */
 export interface AcpSessionController {
@@ -37,6 +38,8 @@ export interface AcpSessionController {
   setMode?(mode: string): string | undefined;
   /** Switch the model, as `provider:model`. Throws when it cannot. */
   setModel?(ref: string): void;
+  /** Hear each of the session's wakes as it goes off, to run it as a turn; returns how to stop. */
+  onWake?(listener: (wake: FiredWake) => void): () => void;
 }
 
 /** Where a command's effects go, for the prompt that ran it. */
@@ -164,6 +167,7 @@ export const createAcpSession = async (options: CreateAcpSessionOptions): Promis
     history: () => runtime.session.messages,
     setMode: (mode) => (PERMISSION_MODES.includes(mode as PermissionMode) && mode !== 'bypass' ? runtime.setPermissionMode(mode as PermissionMode) : `There is no mode ${mode} here.`),
     setModel: (ref) => runtime.setModel(ref),
+    onWake: (listener) => runtime.onWake(listener),
   };
   return controller;
 };

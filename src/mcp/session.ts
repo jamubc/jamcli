@@ -6,6 +6,7 @@ import { UpdateMapper } from '../acp/updates.js';
 import { entryText } from '../commands/host.js';
 import type { ChoiceItem } from '../commands/types.js';
 import type { AgentEvent, ApprovalAsker, ApprovalDecision, ApprovalPreview, RunStatus } from '../core/types.js';
+import type { FiredWake } from '../core/wake/index.js';
 
 /** What a delegated session waits on: a call to approve, or a list a command offered. */
 export type Waiting =
@@ -54,12 +55,20 @@ export class DelegatedSession {
   private ended: RunStatus | undefined;
   private readonly changed = new Set<() => void>();
   private readonly mapper: UpdateMapper;
+  /** Wakes that went off and wait for the turn before them to end. */
+  private readonly wakes: FiredWake[] = [];
+  private readonly stopWaking: (() => void) | undefined;
 
   private constructor(
     readonly controller: AcpSessionController,
     private readonly cwd: string
   ) {
     this.mapper = new UpdateMapper(cwd);
+    // A wake is a turn the session starts itself; the caller reads it in the next report.
+    this.stopWaking = controller.onWake?.((wake) => {
+      this.wakes.push(wake);
+      this.wakeNext();
+    });
   }
 
   static async open(options: CreateAcpSessionOptions): Promise<DelegatedSession> {
@@ -102,14 +111,28 @@ export class DelegatedSession {
         this.finish(await this.controller.run(text, (event) => this.onEvent(event)));
       }
     };
+    this.start(run);
+  }
+
+  private start(run: () => Promise<void>): void {
     this.turn = run()
       .catch((error: any) => this.say(`Error: ${error?.message ?? error}\n`))
       .finally(() => {
         this.turn = undefined;
         this.ended ??= 'ok';
         this.notify();
+        this.wakeNext();
       });
     this.notify();
+  }
+
+  /** Run the oldest wake that went off, once no turn runs and nothing waits on an answer. */
+  private wakeNext(): void {
+    if (this.turn || this.waiting() || !this.wakes.length) return;
+    const wake = this.wakes.shift()!;
+    this.ended = undefined;
+    this.say(`\n${wake.display}\n`);
+    this.start(async () => this.finish(await this.controller.run(wake.text, (event) => this.onEvent(event))));
   }
 
   /**
@@ -184,6 +207,8 @@ export class DelegatedSession {
   }
 
   async close(): Promise<void> {
+    this.stopWaking?.();
+    this.wakes.length = 0;
     this.cancel();
     await this.turn?.catch(() => undefined);
     await this.controller.close?.();

@@ -1,4 +1,5 @@
-import { createRuntime, type DryRunEntry, type RuntimeOptions } from '../core/runtime/index.js';
+import { createRuntime, type DryRunEntry, type Runtime, type RuntimeOptions } from '../core/runtime/index.js';
+import type { FiredWake } from '../core/wake/index.js';
 import { CommandHost, entryText } from '../commands/host.js';
 import { hostClipboard } from '../utils/clipboard.js';
 import type { AgentEvent, ApprovalAsker, RunResult } from '../core/types.js';
@@ -134,6 +135,9 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
     } else {
       result = await runtime.run(options.prompt, onEvent);
     }
+    // A wake the run set is part of the run: it waits for each, runs it, and ends once none is pending.
+    const woken = await runWakes(runtime, (text) => runtime.run(text, onEvent), options.signal);
+    if (woken.length) result = { ...woken.at(-1)!, response: [result.response, ...woken.map((turn) => turn.response)].filter(Boolean).join('\n\n') };
     return {
       result,
       sessionId: runtime.sessionId,
@@ -150,3 +154,42 @@ export const runHeadless = async (options: HeadlessOptions): Promise<HeadlessRes
     await runtime.close();
   }
 };
+
+/**
+ * Run each of the session's wakes as it goes off, in the order they go off, until none is
+ * pending or the run is stopped. The wait holds the process open, which a pending wake on
+ * its own does not.
+ */
+export async function runWakes(runtime: Runtime, run: (text: string) => Promise<RunResult>, signal?: AbortSignal): Promise<RunResult[]> {
+  const results: RunResult[] = [];
+  const fired: FiredWake[] = [];
+  let heard: (() => void) | undefined;
+  const off = runtime.onWake((wake) => {
+    fired.push(wake);
+    heard?.();
+  });
+  try {
+    while (!signal?.aborted) {
+      const next = fired.shift();
+      if (next) {
+        results.push(await run(next.text));
+        continue;
+      }
+      if (!runtime.wakes().length) break;
+      await new Promise<void>((resolve) => {
+        const hold = setInterval(() => (!runtime.wakes().length || signal?.aborted) && done(), 1000);
+        const done = () => {
+          clearInterval(hold);
+          signal?.removeEventListener('abort', done);
+          heard = undefined;
+          resolve();
+        };
+        heard = done;
+        signal?.addEventListener('abort', done, { once: true });
+      });
+    }
+  } finally {
+    off();
+  }
+  return results;
+}

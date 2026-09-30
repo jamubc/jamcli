@@ -8,6 +8,7 @@ import {
   type ContentBlock,
   type PermissionOption,
   type SessionUpdate,
+  type StopReason,
 } from '@agentclientprotocol/sdk';
 import type { AgentEvent, ApprovalDecision, RunResult } from '../core/types.js';
 import type { RunOptions } from '../core/runtime/index.js';
@@ -88,7 +89,7 @@ const writable = (output: NodeJS.WritableStream): WritableStream<Uint8Array> =>
  * `session/request_permission`.
  */
 export class AcpServer {
-  private readonly sessions = new Map<string, { controller: AcpSessionController; mapper: UpdateMapper }>();
+  private readonly sessions = new Map<string, { controller: AcpSessionController; mapper: UpdateMapper; lane: Promise<unknown>; stopWaking?: () => void }>();
   /** What the editor said it offers when it connected: its files and terminals, for one. */
   private capabilities: ClientCapabilities | undefined;
 
@@ -132,7 +133,17 @@ export class AcpServer {
       if (commands.length) await update(controller.id, { sessionUpdate: 'available_commands_update', availableCommands: commands });
     };
     const register = (controller: AcpSessionController, cwd: string, written: Map<string, string>) => {
-      this.sessions.set(controller.id, { controller, mapper: new UpdateMapper(cwd, written) });
+      const entry: { controller: AcpSessionController; mapper: UpdateMapper; lane: Promise<unknown>; stopWaking?: () => void } = { controller, mapper: new UpdateMapper(cwd, written), lane: Promise.resolve() };
+      this.sessions.set(controller.id, entry);
+      // A wake is a turn the session starts itself: the editor sees it as a message from the person, then the turn's updates.
+      entry.stopWaking = controller.onWake?.((wake) => {
+        void this.inLane(entry, async () => {
+          if (!this.sessions.has(controller.id)) return;
+          await update(controller.id, { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: wake.display } });
+          const result = await controller.run(wake.text, this.onEvent(client, controller, entry.mapper, update)).catch((error: any) => ({ status: 'error' as const, error: error?.message ?? String(error) }));
+          if (result.status === 'error' && result.error) await update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${result.error}\n` } });
+        });
+      });
     };
     /** The editor's files and terminals for a session, whose id is known once it is open. */
     const lent = (session: { id: string }, written: Map<string, string>) => editorBridge(client, this.capabilities, () => session.id, update, written);
@@ -209,51 +220,76 @@ export class AcpServer {
       },
 
       prompt: async (params) => {
-        const { controller, mapper } = this.session(params.sessionId);
-        const { text, context } = promptText(params.prompt);
-        // Asks for the same call reach the editor as one request, whose answer settles them all.
-        const asking = new Map<string, Promise<void>>();
-        const decided = new Set<string>();
-        const onEvent = (event: AgentEvent) => {
-          if (event.type === 'approval_request') {
-            void this.askOnce(client, controller.id, mapper, event, asking, decided);
-            return;
-          }
-          if (event.type === 'approval_decision') decided.add(event.callId);
-          for (const item of mapper.map(event)) void update(controller.id, item);
-        };
-        const runTurn = (prompt: string, turn: RunOptions = {}) => controller.run(context ? `${prompt}\n\n${context}` : prompt, onEvent, turn);
-        let result: RunResult | undefined;
-        if (controller.isCommand?.(text)) {
-          // A command runs as it does in the interface: what it shows is the reply, and a turn it sends is this prompt's turn.
-          await controller.runCommand!(text, {
-            entry: (entry) => {
-              if (entry.kind === 'event') for (const item of mapper.map(entry.event)) void update(controller.id, item);
-              else void update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${entryText(entry)}\n\n` } });
-            },
-            turn: async (prompt, turn) => {
-              result = await runTurn(prompt, turn);
-            },
-            mode: (mode) => void update(controller.id, { sessionUpdate: 'current_mode_update', currentModeId: mode }),
-            refresh: () => void update(controller.id, { sessionUpdate: 'config_option_update', configOptions: controller.configOptions }),
-          });
-          if (controller.exited) {
-            this.sessions.delete(controller.id);
-            await controller.close?.().catch(() => undefined);
-          }
-        } else {
-          result = await runTurn(text);
-        }
-        // A failed turn says why, as the interface does, so the editor shows the cause and not a bare refusal.
-        if (result?.status === 'error' && result.error) await update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${result.error}\n` } });
-        await queue;
-        return { stopReason: result ? stopReasonFor(result.status) : 'end_turn' };
+        const entry = this.session(params.sessionId);
+        // A wake that went off runs first, and one that goes off now waits for this prompt.
+        return this.inLane(entry, () => this.promptTurn(client, entry, params.prompt, update, () => queue));
       },
 
       cancel: async (params) => {
         this.sessions.get(params.sessionId)?.controller.cancel();
       },
     };
+  }
+
+  /** Run `work` after everything the session has in its lane, so no two turns overlap. */
+  private inLane<T>(entry: { lane: Promise<unknown> }, work: () => Promise<T>): Promise<T> {
+    const run = entry.lane.then(work, work);
+    entry.lane = run.catch(() => undefined);
+    return run;
+  }
+
+  /** What a turn's events become: session updates, and each call that asks, asked of the editor once. */
+  private onEvent(client: AgentSideConnection, controller: AcpSessionController, mapper: UpdateMapper, update: (sessionId: string, update: SessionUpdate) => Promise<void>) {
+    // Asks for the same call reach the editor as one request, whose answer settles them all.
+    const asking = new Map<string, Promise<void>>();
+    const decided = new Set<string>();
+    return (event: AgentEvent) => {
+      if (event.type === 'approval_request') {
+        void this.askOnce(client, controller.id, mapper, event, asking, decided);
+        return;
+      }
+      if (event.type === 'approval_decision') decided.add(event.callId);
+      for (const item of mapper.map(event)) void update(controller.id, item);
+    };
+  }
+
+  private async promptTurn(
+    client: AgentSideConnection,
+    entry: { controller: AcpSessionController; mapper: UpdateMapper; stopWaking?: () => void },
+    prompt: ContentBlock[],
+    update: (sessionId: string, update: SessionUpdate) => Promise<void>,
+    sent: () => Promise<void>
+  ): Promise<{ stopReason: StopReason }> {
+    const { controller, mapper } = entry;
+    const { text, context } = promptText(prompt);
+    const onEvent = this.onEvent(client, controller, mapper, update);
+    const runTurn = (prompt: string, turn: RunOptions = {}) => controller.run(context ? `${prompt}\n\n${context}` : prompt, onEvent, turn);
+    let result: RunResult | undefined;
+    if (controller.isCommand?.(text)) {
+      // A command runs as it does in the interface: what it shows is the reply, and a turn it sends is this prompt's turn.
+      await controller.runCommand!(text, {
+        entry: (entry) => {
+          if (entry.kind === 'event') for (const item of mapper.map(entry.event)) void update(controller.id, item);
+          else void update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${entryText(entry)}\n\n` } });
+        },
+        turn: async (prompt, turn) => {
+          result = await runTurn(prompt, turn);
+        },
+        mode: (mode) => void update(controller.id, { sessionUpdate: 'current_mode_update', currentModeId: mode }),
+        refresh: () => void update(controller.id, { sessionUpdate: 'config_option_update', configOptions: controller.configOptions }),
+      });
+      if (controller.exited) {
+        this.sessions.delete(controller.id);
+        entry.stopWaking?.();
+        await controller.close?.().catch(() => undefined);
+      }
+    } else {
+      result = await runTurn(text);
+    }
+    // A failed turn says why, as the interface does, so the editor shows the cause and not a bare refusal.
+    if (result?.status === 'error' && result.error) await update(controller.id, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `${result.error}\n` } });
+    await sent();
+    return { stopReason: result ? stopReasonFor(result.status) : 'end_turn' };
   }
 
   /**
