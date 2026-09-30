@@ -585,3 +585,123 @@ test('a draft left while the interface runs is taken by the session that /clear 
     await close();
   }
 }, 30_000);
+
+/** What the composer's text is, whatever its box shows of it. */
+const composerText = (setup: any): string => {
+  const find = (node: any): any => (node?.constructor?.name === 'TextareaRenderable' ? node : (node?.getChildren?.() ?? []).map(find).find(Boolean));
+  return find(setup.renderer.root).plainText;
+};
+const numbered = (count: number) => Array.from({ length: count }, (_, index) => `line ${index + 1}`).join('\n');
+const CHIP_12 = '[Pasted text #1: 12 lines]';
+const sentToModel = () => context.server.completions().at(-1)!.body.messages.at(-1).content;
+
+test('a short paste goes in as it was copied, with its line endings made one kind', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await setup.mockInput.pasteBracketedText('a\r\nb\rc');
+    await frameWith(setup, composerHolds('a\nb\nc'));
+    expect(composerText(setup)).toBe('a\nb\nc');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a large paste is a chip in the composer, and the model, the record, and recall all have the text', async () => {
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const big = numbered(12);
+    await setup.mockInput.pasteBracketedText(big);
+    await frameWith(setup, composerHolds(CHIP_12));
+    context.server.enqueue({ text: 'reply' });
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    expect(sentToModel()).toBe(big);
+    expect(runtime.prompts().map((prompt) => [prompt.text, prompt.state])).toEqual([[big, 'sent']]);
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, (frame) => frame.includes('history 1/1'));
+    expect(composerText(setup)).toBe(big);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a paste more than a thousand characters long is a chip too, and text around a chip is kept', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await setup.mockInput.typeText('see ');
+    await setup.mockInput.pasteBracketedText('y'.repeat(1_200));
+    await setup.mockInput.typeText(' please');
+    await frameWith(setup, composerHolds('see [Pasted text #1: 1 line] please'));
+    context.server.enqueue({ text: 'reply' });
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    expect(sentToModel()).toBe(`see ${'y'.repeat(1_200)} please`);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('pasting at a chip expands it in place', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const big = numbered(12);
+    await setup.mockInput.pasteBracketedText(big);
+    await frameWith(setup, composerHolds(CHIP_12));
+    await setup.mockInput.pasteBracketedText(big);
+    await frameWith(setup, () => composerText(setup) === big);
+    // It is text now: a further paste is an ordinary one.
+    await setup.mockInput.pasteBracketedText('tail');
+    await frameWith(setup, () => composerText(setup) === `${big}tail`);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a chip the person has changed is sent as it stands', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await setup.mockInput.pasteBracketedText(numbered(12));
+    await frameWith(setup, composerHolds(CHIP_12));
+    setup.mockInput.pressBackspace();
+    await frameWith(setup, composerHolds('[Pasted text #1: 12 lines'));
+    context.server.enqueue({ text: 'reply' });
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    expect(sentToModel()).toBe('[Pasted text #1: 12 lines');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('chips are numbered again after a send, and the draft on disk carries their text', async () => {
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const big = numbered(12);
+    await setup.mockInput.pasteBracketedText(big);
+    await frameWith(setup, composerHolds(CHIP_12));
+    await until(() => fs.existsSync(draftOf(runtime.sessionId)));
+    expect(JSON.parse(fs.readFileSync(draftOf(runtime.sessionId), 'utf8'))).toMatchObject({ text: CHIP_12, chips: { '1': big } });
+    context.server.enqueue({ text: 'reply' });
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    await setup.mockInput.pasteBracketedText(numbered(15));
+    await frameWith(setup, composerHolds('[Pasted text #1: 15 lines]'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a draft restored with a chip sends the text the chip stands for', async () => {
+  const big = numbered(12);
+  leaveDraft('2026-01-01-gone', `see ${CHIP_12}`, deadPid(), { '1': big });
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await frameWith(setup, composerHolds(`see ${CHIP_12}`));
+    context.server.enqueue({ text: 'reply' });
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    expect(sentToModel()).toBe(`see ${big}`);
+  } finally {
+    await close();
+  }
+}, 30_000);

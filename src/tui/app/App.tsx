@@ -6,7 +6,7 @@ import { adoptOrphanDraft, clearDraft, debugTranscript, saveDraft } from '../../
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import { fitPhrase, isMicro, microPhrase, microSetting } from './micro.js';
-import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
+import { decodePasteBytes, stripAnsiSequences, type PasteEvent, type ScrollBoxRenderable, type TextareaRenderable } from '@opentui/core';
 import type { Runtime } from '../../core/runtime/index.js';
 import { anchorsToTop, initialView, reduceView, type ViewState } from '../state/view.js';
 import { SessionController, statusOf, gitBranch } from './controller.js';
@@ -27,6 +27,7 @@ import { Picker, shownItems, PICKER_ROWS } from './Picker.js';
 import { MotionContext, PlainContext, THEMES, ThemeContext, chosenRow, framed, resolveTheme, selectable, useReducedMotion, useTheme, type Theme } from './theme.js';
 import { KEY_ACTIONS, keysFor, keysHelp, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
+import { chipAt, chipLabel, expandChips, isLarge, nextChipId, normalizeNewlines, type Chips } from './paste.js';
 import { cursorLines, describeRecall, isRecalled, recallDown, recallEscape, recallUp, type Move, type Recall } from './recall.js';
 import type { Phase, TodoView } from '../state/view.js';
 import type { WorkItem } from '../../core/work.js';
@@ -700,6 +701,8 @@ export function App(props: AppProps) {
   };
   // Another session has its own prompts, and starts without a walk.
   useEffect(() => setRecall(undefined), [runtime]);
+  /** The text each chip in the composer stands for, by its number. It goes with the draft: a walk through earlier prompts keeps it, a send or a clear empties it. */
+  const chipsRef = useRef<Chips>({});
 
   /**
    * What the person has typed and not sent is kept on disk while they type, at most a
@@ -707,18 +710,19 @@ export function App(props: AppProps) {
    * closed terminal, or a crash loses nothing. While a walk through earlier prompts shows
    * an old prompt, the draft kept is the one the walk set aside.
    */
-  const draftKept = useRef({ id: runtime.sessionId, text: '' });
-  const draftWritten = useRef({ id: runtime.sessionId, text: '' });
+  const draftKept = useRef<{ id: string; text: string; chips: Chips }>({ id: runtime.sessionId, text: '', chips: {} });
+  const draftWritten = useRef<{ id: string; text: string; chips: Chips }>({ id: runtime.sessionId, text: '', chips: {} });
   const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const writeDraft = () => {
     clearTimeout(draftTimer.current);
     draftTimer.current = undefined;
     const kept = draftKept.current;
-    if (kept.id === draftWritten.current.id && kept.text === draftWritten.current.text) return;
+    const written = draftWritten.current;
+    if (kept.id === written.id && kept.text === written.text && JSON.stringify(kept.chips) === JSON.stringify(written.chips)) return;
     try {
       // A project that is gone, as a test's is at its end, is not made again for a draft.
       if (!fs.existsSync(projectRoot)) return;
-      saveDraft(projectRoot, kept.id, { text: kept.text, chips: {} });
+      saveDraft(projectRoot, kept.id, { text: kept.text, chips: kept.chips });
       draftWritten.current = { ...kept };
     } catch {
       // A draft that cannot be kept must not stop the person typing.
@@ -727,15 +731,16 @@ export function App(props: AppProps) {
   const keepDraft = () => {
     const text = composer.current?.plainText ?? '';
     const walk = recallRef.current;
-    draftKept.current = { id: runtime.sessionId, text: walk && isRecalled(walk, text) ? walk.stash : text };
+    draftKept.current = { id: runtime.sessionId, text: walk && isRecalled(walk, text) ? walk.stash : text, chips: chipsRef.current };
     if (!draftTimer.current) draftTimer.current = setTimeout(writeDraft, DRAFT_SAVE_MS);
   };
   /** The text was sent or cleared: nothing is left to keep, and no write still waiting may put it back. */
   const settleDraft = () => {
     clearTimeout(draftTimer.current);
     draftTimer.current = undefined;
-    draftKept.current = { id: runtime.sessionId, text: '' };
-    draftWritten.current = { id: runtime.sessionId, text: '' };
+    chipsRef.current = {};
+    draftKept.current = { id: runtime.sessionId, text: '', chips: {} };
+    draftWritten.current = { id: runtime.sessionId, text: '', chips: {} };
     try {
       clearDraft(projectRoot, runtime.sessionId);
     } catch {
@@ -761,7 +766,7 @@ export function App(props: AppProps) {
       } catch {
         // Already gone.
       }
-      draftWritten.current = { id: runtime.sessionId, text: '' };
+      draftWritten.current = { id: runtime.sessionId, text: '', chips: {} };
     }
     if ((composer.current?.plainText ?? '') === '') {
       let found: ReturnType<typeof adoptOrphanDraft>;
@@ -771,6 +776,7 @@ export function App(props: AppProps) {
         found = undefined;
       }
       if (found) {
+        chipsRef.current = found.chips;
         composer.current?.setText(found.text);
         composer.current?.gotoBufferEnd();
         dispatch({ type: 'notice', level: 'info', text: `Restored the draft left unsent in session ${found.from}.` });
@@ -965,6 +971,32 @@ export function App(props: AppProps) {
     }, 0);
   };
 
+  /**
+   * A paste. Its line endings are made one kind. A large one becomes a chip, and a paste with
+   * the cursor on a chip, or right after it, expands that chip in place instead.
+   */
+  const onPaste = (event: PasteEvent) => {
+    event.preventDefault();
+    const area = composer.current;
+    if (!area) return;
+    const pasted = normalizeNewlines(stripAnsiSequences(decodePasteBytes(event.bytes)));
+    if (!pasted) return;
+    const text = area.plainText;
+    const hit = chipAt(text, area.logicalCursor.offset, chipsRef.current);
+    if (hit) {
+      const { [hit.id]: full, ...rest } = chipsRef.current;
+      chipsRef.current = rest;
+      area.replaceText(text.slice(0, hit.start) + full + text.slice(hit.end));
+      area.cursorOffset = hit.start + full.length;
+    } else if (isLarge(pasted)) {
+      const id = nextChipId(chipsRef.current);
+      chipsRef.current = { ...chipsRef.current, [id]: pasted };
+      area.insertText(chipLabel(id, pasted));
+    } else {
+      area.insertText(pasted);
+    }
+  };
+
   /** A line sent from the composer is recorded as typed, and ends any walk through earlier prompts. */
   const sentLine = (line: string) => {
     runtime.prompt(line, 'sent');
@@ -974,7 +1006,7 @@ export function App(props: AppProps) {
 
   /** Put a step of the walk in the composer; an edit the walk left behind is kept as a cleared prompt. */
   const applyRecall = (move: Move) => {
-    if (move.abandoned) runtime.prompt(move.abandoned, 'cleared');
+    if (move.abandoned) runtime.prompt(expandChips(move.abandoned, chipsRef.current), 'cleared');
     setRecall(move.recall);
     composer.current?.setText(move.text);
     composer.current?.gotoBufferEnd();
@@ -982,7 +1014,7 @@ export function App(props: AppProps) {
 
   const submit = () => {
     const typed = composer.current?.plainText ?? '';
-    const text = typed.trim();
+    const text = expandChips(typed, chipsRef.current).trim();
     if (!text) return;
     prefillBack.current = undefined;
     // Enter on an `@` word still being typed completes it rather than sending.
@@ -1020,8 +1052,8 @@ export function App(props: AppProps) {
   const clearComposer = () => {
     const text = composer.current?.plainText ?? '';
     const stash = recallRef.current?.stash;
-    if (stash?.trim()) runtime.prompt(stash, 'cleared');
-    if (text.trim() && !isRecalled(recallRef.current, text)) runtime.prompt(text, 'cleared');
+    if (stash?.trim()) runtime.prompt(expandChips(stash, chipsRef.current), 'cleared');
+    if (text.trim() && !isRecalled(recallRef.current, text)) runtime.prompt(expandChips(text, chipsRef.current), 'cleared');
     setRecall(undefined);
     composer.current?.setText('');
     setPalette({ draft: '', index: 0 });
@@ -1416,6 +1448,7 @@ export function App(props: AppProps) {
                 <box {...framed(plain, theme.border)} flexShrink={0} height={plain ? 3 : 5}>
                   <textarea
                     ref={composer}
+                    onPaste={onPaste}
                     focused={!overlay.current && !viewer && !agentView}
                     textColor={theme.text}
                     focusedTextColor={theme.text}

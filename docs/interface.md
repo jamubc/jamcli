@@ -66,6 +66,11 @@ opens that child's run with the prompt still below it to answer.
   first; the append goes through the tool path (`edit`, or `write_file` for a new or
   ambiguous file), so permissions and checkpoints apply. Escape leaves the file alone.
 - `@path` content and MCP resource text are redacted like tool output.
+- A paste of ten or more lines, or of more than 1,000 characters, shows in the composer as
+  a chip, `[Pasted text #1: 42 lines]`, so it does not fill the screen. It is sent, recorded,
+  and recalled as the text it stands for. Paste again with the cursor on the chip, or right
+  after it, and the chip expands in place. Change any of the chip's characters and it is
+  plain text, sent as it stands. A draft kept on disk keeps its chips.
 - Up on the first line puts the previous prompt you sent in the composer, exactly as it
   was typed or pasted, lines and all; a row over the composer says which of how many. Up
   again goes older, Down goes newer, and past the newest Down gives back what you had

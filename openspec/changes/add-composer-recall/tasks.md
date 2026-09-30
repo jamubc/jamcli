@@ -53,8 +53,8 @@ only, never Ollama.
 
 ## 7. Paste chips, counter, and growth
 
-- [ ] 7.1 Write tests with `mockInput.pasteBracketedText`: a paste under the threshold is inserted; ten lines and 1,000 characters each become a chip; sending expands it in the message, the recorded prompt, and the recalled entry; a paste at a chip expands it; an edited chip is sent as typed; the draft file restores chips; verify they fail on the current code
-- [ ] 7.2 Implement the chip in `App.tsx` (or a small `src/tui/app/paste.ts` if the logic passes about 60 lines), with its expansion in `submit`; verify 7.1 passes
+- [x] 7.1 Write tests with `mockInput.pasteBracketedText`: a paste under the threshold is inserted; ten lines and 1,000 characters each become a chip; sending expands it in the message, the recorded prompt, and the recalled entry; a paste at a chip expands it; an edited chip is sent as typed; the draft file restores chips; verify they fail on the current code
+- [x] 7.2 Implement the chip in `App.tsx` (or a small `src/tui/app/paste.ts` if the logic passes about 60 lines), with its expansion in `submit`; verify 7.1 passes
 - [ ] 7.3 Write tests that the composer is one row when empty, grows a line at a time to eight rows, scrolls after that, returns to one on send, and that the counter shows past two lines in styled and plain phrasing; verify they fail for a fixed height
 - [ ] 7.4 Replace the fixed height in `App.tsx` with `minHeight` and `maxHeight`, add the counter, and verify 7.3 passes and every snapshot in `src/tui/app/__tests__` still passes or changes only in the composer's height
 - [ ] 7.5 Update `## The composer` in `docs/interface.md` for chips, growth, and the counter; verify it matches the specs
