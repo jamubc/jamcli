@@ -65,7 +65,17 @@ export type UiSettings = NonNullable<Config['ui']>;
 export type ContextSettings = NonNullable<Config['context']>;
 
 /** `subtle` is the Ink interface's name for glow, and still accepted. */
-export type StatusTextStyleId = 'glow' | 'mono' | 'aurora' | 'rainbow' | 'minimal' | 'subtle' | `custom:${string}`;
+export type StatusTextStyleId = 'glow' | 'mono' | 'aurora' | 'rainbow' | 'minimal' | 'whimsy' | 'subtle' | `custom:${string}`;
+
+/**
+ * The phases a word style may give words of its own: thinking, writing (`streaming`), and
+ * running a tool (`tool`). Retrying and compacting keep their own words.
+ */
+export const STATUS_WORD_PHASES = ['thinking', 'streaming', 'tool'] as const;
+export type StatusWordPhase = (typeof STATUS_WORD_PHASES)[number];
+
+/** Words shown in place of a phase's own, one picked each time the phase begins. */
+export type StatusWords = Partial<Record<StatusWordPhase, string[]>>;
 /** The `big_` ids are the Ink interface's tall spinners, and still accepted as the spinner each stood on. */
 export type StatusSpinnerStyleId =
   | 'pulse'
@@ -82,6 +92,7 @@ export type StatusIndicatorStyleId = StatusTextStyleId | StatusSpinnerStyleId;
 export interface StatusIndicatorCustomDefinition {
   label?: string;
   shimmerColors?: string[];
+  words?: StatusWords;
   spinnerFrames?: string[];
   shimmer?: boolean;
   spinnerColors?: string[];

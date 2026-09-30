@@ -253,14 +253,14 @@ export const ConfigFileSchema = z
         thinking_width: z.number().int().min(20).max(400).describe('How many columns wide the live thinking window is, narrowed when the terminal is narrower. Defaults to 72.'),
         status_text_style: z
           .string()
-          .regex(/^(glow|mono|aurora|rainbow|minimal|subtle|custom:[\w.-]+)$/, 'a built-in text style (glow, mono, aurora, rainbow, minimal) or custom:<name>')
-          .describe('How the working indicator\'s words are lit: glow, mono, aurora, rainbow, minimal, or custom:<name>. Defaults to glow.'),
+          .regex(/^(glow|mono|aurora|rainbow|minimal|whimsy|subtle|custom:[\w.-]+)$/, 'a built-in text style (glow, mono, aurora, rainbow, minimal, whimsy) or custom:<name>')
+          .describe('How the working indicator\'s words are lit, and for whimsy which words it shows: glow, mono, aurora, rainbow, minimal, whimsy, or custom:<name>. Defaults to glow.'),
         status_spinner_style: z
           .string()
           .regex(/^(pulse|bloom|orbit|quad|classic|big_classic|big_orbit|big_pulse|custom:[\w.-]+)$/, 'a built-in spinner (pulse, bloom, orbit, quad, classic) or custom:<name>')
           .describe('The working indicator\'s spinner: pulse, bloom, orbit, quad, classic, or custom:<name>. Defaults to pulse.'),
         custom_status_styles: z
-          .record(z.string(), z.strictObject({ path: z.string().describe('A JSON file with label, shimmerColors (the words\' ramp from resting to lit), shimmer, spinnerFrames, spinnerColors (the ramp the spinner breathes through), and spinnerIntervalMs. A color is hex, or a theme role: text, dim, accent, warn, or error.'), label: z.string().optional() }))
+          .record(z.string(), z.strictObject({ path: z.string().describe('A JSON file with label, shimmerColors (the words\' ramp from resting to lit), shimmer, spinnerFrames, spinnerColors (the ramp the spinner breathes through), spinnerIntervalMs, and words (lists of words for thinking, streaming, and tool, one shown each time the phase begins). A color is hex, or a theme role: text, dim, accent, warn, or error.'), label: z.string().optional() }))
           .describe('Styles of your own, by name, each read from a JSON file. Name one as custom:<name>.'),
       })
       .partial()

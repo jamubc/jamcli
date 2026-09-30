@@ -55,6 +55,49 @@ test('while a turn works, the status line leads with the spinner and the phase i
   }
 }, 20_000);
 
+const close = (opened: { close: () => Promise<void> }) => opened.close();
+
+/** Arrows, with words of its own for thinking and for running a tool. */
+const worded = (thinking: string) =>
+  buildStatusStyle(
+    { id: 'custom:worded', label: 'Worded', shimmerColors: ['#ff0000'], shimmer: false, words: { thinking: [thinking], tool: ['tinkering'] }, source: 'custom' },
+    { id: 'custom:arrows', label: 'Arrows', spinnerFrames: ['<', '>'], spinnerColors: ['#00ff00'], intervalMs: 40, source: 'custom' }
+  );
+
+test("a style's words stand in for each phase's own, held across frames, fit the line, and are never read out", async () => {
+  const first = await open({ allowTools: ['run_command'] }, { statusStyle: worded('pondering') });
+  try {
+    context.server.enqueue({ delayMs: 600, toolCalls: [{ id: 'r1', name: 'run_command', arguments: { command: 'sleep 1' } }] }, { text: 'Done.' });
+    await send(first.setup, 'go');
+    // Each phase shows its style's word for as long as it lasts, while the spinner turns.
+    expect(await spins(first.setup, 'pondering')).toEqual(['<', '>']);
+    expect(await spins(first.setup, 'tinkering')).toEqual(['<', '>']);
+    await frameWith(first.setup, (value) => value.includes('Done.') && value.includes('· ready'));
+  } finally {
+    await close(first);
+  }
+  // A long word is measured as shown, so the rest of the status line gives way and stays on its row.
+  const narrow = await open({}, { statusStyle: worded('contemplating the question at hand'), size: { width: 70, height: 20 } });
+  try {
+    context.server.enqueue({ text: 'Done.', delayMs: 600 });
+    await send(narrow.setup, 'go');
+    const frame = await frameWith(narrow.setup, (value) => value.includes('contemplating the question at hand'));
+    expect(frame.trimEnd().split('\n').at(-1)).toMatch(/^[<>] contemplating the question at hand · default mode/);
+  } finally {
+    await close(narrow);
+  }
+  // Screen reader mode draws no indicator, and says what the phase is.
+  const read = await open({}, { statusStyle: worded('pondering'), screenReader: true });
+  try {
+    context.server.enqueue({ text: 'Done.', delayMs: 400 });
+    await send(read.setup, 'go');
+    const working = await frameWith(read.setup, (value) => value.includes(', thinking'));
+    expect(working).not.toContain('pondering');
+  } finally {
+    await close(read);
+  }
+}, 30_000);
+
 test('the spinner stops while the terminal window is unfocused and runs again when it is back', async () => {
   const { setup, close } = await open({}, { statusStyle: arrows });
   try {

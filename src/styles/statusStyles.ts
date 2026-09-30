@@ -1,9 +1,11 @@
 import { pathExists, readJson } from '../utils/fsx.js';
 import {
+  STATUS_WORD_PHASES,
   StatusIndicatorCustomDefinition,
   StatusIndicatorStyleRef,
   StatusSpinnerStyleId,
   StatusTextStyleId,
+  StatusWords,
   UiConfig,
 } from '../types/config.js';
 
@@ -12,6 +14,8 @@ export type StatusTextStyleDefinition = {
   label: string;
   shimmerColors: string[];
   shimmer: boolean;
+  /** Words shown in place of a phase's own; a phase not listed keeps its word. */
+  words?: StatusWords;
   source: 'builtin' | 'custom';
   path?: string;
 };
@@ -32,6 +36,7 @@ export type StatusStyleDefinition = {
   shimmerColors: string[];
   spinnerFrames: string[];
   shimmer: boolean;
+  words?: StatusWords;
   spinnerColors: string[];
   spinnerIntervalMs: number;
   source: 'builtin' | 'custom';
@@ -85,6 +90,30 @@ export const BUILTIN_TEXT_STYLES: Record<string, StatusTextStyleDefinition> = {
     shimmer: false,
     source: 'builtin',
   },
+  whimsy: {
+    id: 'whimsy',
+    label: 'Whimsy',
+    shimmerColors: ['dim', 'accent'],
+    shimmer: true,
+    words: {
+      thinking: ['thinking', 'pondering', 'mulling', 'musing', 'considering', 'reasoning', 'weighing'],
+      streaming: ['writing', 'composing', 'drafting', 'phrasing', 'penning'],
+      tool: ['running', 'working', 'tinkering', 'crunching', 'churning'],
+    },
+    source: 'builtin',
+  },
+};
+
+/** The words a custom file lists, kept only for the phases a style may name and only where there are words. */
+export const readWords = (raw: unknown): StatusWords | undefined => {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const words: StatusWords = {};
+  for (const phase of STATUS_WORD_PHASES) {
+    const listed = (raw as Record<string, unknown>)[phase];
+    const kept = Array.isArray(listed) ? listed.filter((word): word is string => typeof word === 'string' && word.trim() !== '').map((word) => word.trim()) : [];
+    if (kept.length) words[phase] = kept;
+  }
+  return Object.keys(words).length ? words : undefined;
 };
 
 export const BUILTIN_SPINNER_STYLES: Record<string, StatusSpinnerStyleDefinition> = {
@@ -162,6 +191,7 @@ export const buildStatusStyle = (
     spinnerFrames:
       spinnerStyle.spinnerFrames && spinnerStyle.spinnerFrames.length > 0 ? spinnerStyle.spinnerFrames : defaultSpinnerFrames,
     shimmer: textStyle.shimmer ?? true,
+    ...(textStyle.words ? { words: textStyle.words } : {}),
     spinnerColors,
     spinnerIntervalMs: spinnerStyle.intervalMs ?? 80,
     source: textStyle.source === 'custom' || spinnerStyle.source === 'custom' ? 'custom' : 'builtin',
@@ -207,11 +237,13 @@ export const resolveTextStyle = async (
   const shimmerColors = customDef.shimmerColors && customDef.shimmerColors.length > 0 ? customDef.shimmerColors : ['white'];
   const shimmer = customDef.shimmer ?? true;
   const label = ref?.label || customDef.label || `Custom text: ${name}`;
+  const words = readWords(customDef.words);
   return {
     id: styleId,
     label,
     shimmerColors,
     shimmer,
+    ...(words ? { words } : {}),
     source: 'custom',
     path: ref?.path,
   };

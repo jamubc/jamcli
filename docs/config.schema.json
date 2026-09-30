@@ -925,8 +925,8 @@
         },
         "status_text_style": {
           "type": "string",
-          "pattern": "^(glow|mono|aurora|rainbow|minimal|subtle|custom:[\\w.-]+)$",
-          "description": "How the working indicator's words are lit: glow, mono, aurora, rainbow, minimal, or custom:<name>. Defaults to glow."
+          "pattern": "^(glow|mono|aurora|rainbow|minimal|whimsy|subtle|custom:[\\w.-]+)$",
+          "description": "How the working indicator's words are lit, and for whimsy which words it shows: glow, mono, aurora, rainbow, minimal, whimsy, or custom:<name>. Defaults to glow."
         },
         "status_spinner_style": {
           "type": "string",
@@ -943,7 +943,7 @@
             "properties": {
               "path": {
                 "type": "string",
-                "description": "A JSON file with label, shimmerColors (the words' ramp from resting to lit), shimmer, spinnerFrames, spinnerColors (the ramp the spinner breathes through), and spinnerIntervalMs. A color is hex, or a theme role: text, dim, accent, warn, or error."
+                "description": "A JSON file with label, shimmerColors (the words' ramp from resting to lit), shimmer, spinnerFrames, spinnerColors (the ramp the spinner breathes through), spinnerIntervalMs, and words (lists of words for thinking, streaming, and tool, one shown each time the phase begins). A color is hex, or a theme role: text, dim, accent, warn, or error."
               },
               "label": {
                 "type": "string"

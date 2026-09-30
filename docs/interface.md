@@ -177,11 +177,18 @@ project. `/style <name>` picks one directly.
 | `aurora` | dim rising through blue to violet |
 | `rainbow` | dim rising through a spectrum |
 | `minimal` | dim, and still |
+| `whimsy` | glow, with words of its own for each phase: `pondering` or `mulling` while it thinks, `composing` while it writes, `tinkering` while a tool runs |
+
+The words are the phase's own unless a style says otherwise. A style's words are picked
+once each time a phase begins and kept until it changes, so the indicator still says
+whether JamCLI is thinking, writing, or running a tool. Retrying and compacting always keep
+their own words, and screen reader mode and reduced motion show the plain phase word.
 
 A style of your own is a JSON file named in `ui.custom_status_styles` and chosen as
 `custom:<name>`. It carries `spinnerFrames`, `spinnerColors` (the ramp the spinner
 breathes through), `spinnerIntervalMs`, `shimmerColors` (the words' ramp from resting to
-lit), and `shimmer`. A color is hex, or a theme role: `text`, `dim`, `accent`, `warn`, or
+lit), `shimmer`, and `words`: lists for `thinking`, `streaming`, and `tool`, as in
+`"words": { "thinking": ["pondering", "mulling"] }`, a phase left out keeping its own word. A color is hex, or a theme role: `text`, `dim`, `accent`, `warn`, or
 `error`. The Ink interface's names (`subtle`, `big_classic`, `big_orbit`, `big_pulse`) and
 its 16 terminal color names are still accepted.
 

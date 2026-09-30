@@ -1,5 +1,6 @@
 import { formatTokens, formatUsd } from '../../core/catalog/cost.js';
 import type { Phase, Row, StatusData, ToolPhase } from '../state/view.js';
+import { STATUS_WORD_PHASES, type StatusWordPhase, type StatusWords } from '../../types/config.js';
 
 /**
  * What the interface says, as plain text. Every state has a word as well as a mark, so
@@ -27,6 +28,15 @@ export const PHASE_WORDS: Record<Phase, string> = {
   retrying: 'retrying',
   compacting: 'compacting',
 };
+
+/**
+ * The word a style shows for a phase in place of its own: the `seed`th of the style's words
+ * for it, or nothing when it has none, as for retrying and compacting, which keep theirs.
+ */
+export function phaseWord(words: StatusWords | undefined, phase: Phase, seed: number): string | undefined {
+  const pool = (STATUS_WORD_PHASES as readonly Phase[]).includes(phase) ? words?.[phase as StatusWordPhase] : undefined;
+  return pool?.length ? pool[seed % pool.length] : undefined;
+}
 
 const NOTICE_MARKS = { info: 'i', warn: '!', error: '✗' } as const;
 

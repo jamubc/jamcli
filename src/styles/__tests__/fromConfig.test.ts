@@ -48,11 +48,17 @@ test('a style chosen in the Ink interface carries over, and the ui block wins ov
 });
 
 test("a style of the person's own is read from a file beside the user configuration, and one that cannot be read falls back", async () => {
-  fs.writeFileSync(path.join(process.env.JAMCLI_CONFIG_DIR!, 'dots.json'), JSON.stringify({ spinnerFrames: ['.', ':'], shimmerColors: ['#ff0000'] }));
+  // Words are kept for the three phases a style may name, and only where there are words.
+  const words = { thinking: ['pondering', '  '], streaming: [3, 'penning'], tool: 'tinkering', retrying: ['again'], compacting: ['squeezing'] };
+  fs.writeFileSync(path.join(process.env.JAMCLI_CONFIG_DIR!, 'dots.json'), JSON.stringify({ spinnerFrames: ['.', ':'], shimmerColors: ['#ff0000'], words }));
   const ui = { status_spinner_style: 'custom:dots', status_text_style: 'custom:dots', custom_status_styles: { dots: { path: 'dots.json' } } } as const;
   const style = await statusStyleFor(ui, {});
   expect(style.spinnerFrames).toEqual(['.', ':']);
   expect(style.shimmerColors).toEqual(['#ff0000']);
+  expect(style.words).toEqual({ thinking: ['pondering'], streaming: ['penning'] });
+  // The builtin that bundles words has a list for each phase; the default has none.
+  expect(Object.keys((await statusStyleFor({ status_text_style: 'whimsy' }, {})).words ?? {})).toEqual(['thinking', 'streaming', 'tool']);
+  expect((await statusStyleFor({}, {})).words).toBeUndefined();
   const missing = await statusStyleFor({ status_spinner_style: 'custom:gone', custom_status_styles: { gone: { path: 'gone.json' } } }, {});
   expect(missing.spinnerStyleId).toBe('pulse');
 });
