@@ -221,3 +221,54 @@ test('the observer hears every event of a turn, in order', async () => {
     await close();
   }
 }, 20_000);
+
+test('every line sent from the composer is recorded as typed: a message, a slash line, a shell line, a note, and a queued message', async () => {
+  fs.writeFileSync(path.join(context.root, 'README.md'), 'README: build with bun.\n');
+  const { setup, runtime, close } = await open({}, { size: { width: 110, height: 40 } });
+  try {
+    const typed = () => runtime.prompts().map((prompt) => [prompt.text, prompt.state]);
+
+    await setup.mockInput.typeText('/help');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Keys:'));
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => !frame.includes('Keys:'));
+    expect(typed()).toEqual([['/help', 'sent']]);
+
+    // An @ reference is expanded for the model; the record keeps what was typed.
+    context.server.enqueue({ text: 'Read it.', delayMs: 800 }, { text: 'Queued reply.' });
+    await setup.mockInput.typeText('read @README.md ');
+    setup.mockInput.pressEnter();
+    await setup.mockInput.typeText('and then this');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('queued, ↓ edit'));
+    await frameWith(setup, (frame) => frame.includes('Queued reply.'));
+    expect(context.server.completions()[0].body.messages.at(-1).content).toContain('README: build with bun.');
+    expect(typed()).toEqual([
+      ['/help', 'sent'],
+      ['read @README.md', 'sent'],
+      ['and then this', 'sent'],
+    ]);
+
+    await setup.mockInput.typeText('!printf recorded');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => /allow/i.test(frame) && frame.includes('printf recorded'));
+    await setup.mockInput.typeText('4');
+    await frameWith(setup, (frame) => !frame.includes('Allow run_command'));
+
+    await setup.mockInput.typeText('#remember the fixture');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Append to AGENTS.md?'));
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => !frame.includes('Append to AGENTS.md?'));
+
+    expect(typed().slice(3)).toEqual([
+      ['!printf recorded', 'sent'],
+      ['#remember the fixture', 'sent'],
+    ]);
+    // None of it reached the model as a message of its own beyond what was sent as one.
+    expect(runtime.session.messages.filter((message) => message.role === 'user').map((message) => String(message.content)).join('\n')).not.toContain('/help');
+  } finally {
+    await close();
+  }
+}, 40_000);

@@ -772,7 +772,7 @@ export function App(props: AppProps) {
   const openHistory = () =>
     pick({
       title: 'Earlier messages, newest first',
-      items: earlierMessages(projectRoot, { id: runtime.sessionId, messages: runtime.session.messages }),
+      items: earlierMessages(projectRoot, { id: runtime.sessionId, prompts: runtime.prompts(), messages: runtime.session.messages }),
       empty: 'Nothing sent yet in this project.',
       hint: 'Enter puts it in the composer',
       choose: (item) => {
@@ -880,6 +880,7 @@ export function App(props: AppProps) {
     // `#` opens a note to the project's AGENTS.md, through the tool path.
     const note = noteText(text);
     if (note) {
+      runtime.prompt(text, 'sent');
       composer.current?.setText('');
       setPalette({ draft: '', index: 0 });
       return void appendNote(note);
@@ -888,6 +889,7 @@ export function App(props: AppProps) {
     const listed = matchesFor(typed);
     const chosen = listed?.[palette.current.index];
     const line = listed && chosen && !findCommand(commands, parseCommand(text)?.name ?? '') ? `/${chosen.name}` : text;
+    runtime.prompt(line, 'sent');
     composer.current?.setText('');
     setPalette({ draft: '', index: 0 });
     if (line.startsWith('/')) return void runCommand(line);
