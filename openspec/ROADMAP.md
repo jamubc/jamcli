@@ -204,7 +204,8 @@ owner's decision.
 - **`web_fetch` outside auto mode** hands web content to the model unscreened. What R3
   decides for the trust gate decides this.
 - **Approval volume.** 58 prompts in four default-mode sessions, recorded as seed finding
-  1 under `add-findings-loop`.
+  1 under `add-findings-loop`. The children's share of it is addressed by
+  `label-and-batch-child-approvals` (D below).
 
 ### What the review would not build
 
@@ -559,6 +560,29 @@ is an agent name before it is a ref. Source:
 `mindstudio.ai/blog/claude-code-btw-command-save-tokens`, which describes the branch rather
 than extension behavior and the token claim, and does not describe the responder's prompt,
 so that part is ours to design and to justify.
+
+## Inserted units: the report of 2026-09-29
+
+The owner's report of 2026-09-29, after the review units closed, ordered two units, one at
+a time, once the message queue was committed green. It decided both designs: pre-flight
+grants for children rather than a mode that denies their asks without asking, and spinner
+verbs as an opt-in style rather than a default or a new setting.
+
+### D. `label-and-batch-child-approvals` (archived 2026-09-29)
+
+A child is labeled by a title the model gives it; an approval request names the child that
+asks; a grant settles every waiting ask it now allows; asks for the same call are one prompt;
+and before a fan-out the person is asked once about what its children need. A grant scoped
+to one fan-out's children was deferred until the ledger shows the need.
+
+### E. Spinner verbs
+
+Plain phase words stay the default. A verb pool per phase is an optional part of a text
+style in `custom_status_styles`, so no new configuration key is added (`src/types/config.ts`,
+`src/styles/statusStyles.ts`), with one builtin style that bundles verbs. One pick per phase
+change, from a counter seed; `retrying` and `compacting` stay literal; screen reader and
+reduced motion unchanged; the status line's width measured on the displayed word. A global
+verb list without phases is refused, since it hides what the agent is doing.
 
 ## Deliberately not planned
 

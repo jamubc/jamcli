@@ -908,6 +908,22 @@ and end SHALL be visible to the person.
 - **THEN** delegation depth is bounded by configuration
 - **AND** exceeding it returns an error instead of spawning another level
 
+#### Scenario: A child is labeled by its title
+- **WHEN** the model calls `task` with a title
+- **THEN** that title labels the child wherever the person sees it: the plan board, the list of running work, the transcript line of the call, and every prompt the child raises
+- **AND** when a caller gives no title, the child is labeled by its agent and the start of its prompt
+
+#### Scenario: Ask once before a fan-out
+- **WHEN** the `task` calls of one step name permission rules their children will need, and some of those rules would ask and would run once granted
+- **THEN** before any of those children starts, the person is asked once about those rules, naming how many agents start
+- **AND** the answers are to allow them for the session, to allow them for the project, or to let the children ask as they go
+- **AND** a rule a call would already run under, one a rule or the mode denies, or one no grant could change, is not offered
+- **AND** when no rule is left to offer, nothing is asked
+
+#### Scenario: Stop before a fan-out starts
+- **WHEN** the person stops the turn at the question before a fan-out
+- **THEN** no child of that step starts, and each of the step's calls is answered that it did not run
+
 ### Requirement: Project Rules Hierarchy
 JamCLI SHALL load project instruction files from the project root down to the working
 directory and inject them into the system prompt.
@@ -1991,8 +2007,10 @@ through configuration files, as one store, and SHALL show where each agent came 
 - **THEN** JamCLI names the file, the key, and the agents that exist
 
 ### Requirement: Delegated Approvals
-JamCLI SHALL ask the person about a foreground child's call that needs a decision on the
-surface of the session that delegated, and SHALL show there what the call went on to do.
+JamCLI SHALL ask the person about a child's call that needs a decision on the surface of
+the session that delegated, naming the child that asks, and SHALL show there what the call
+went on to do. A waiting ask that a later grant allows SHALL be settled without the person,
+and identical waiting asks SHALL be put to the person as one.
 
 #### Scenario: Answer a child's prompts in turn
 - **WHEN** a foreground child's calls need a person's decision, one after another
@@ -2003,6 +2021,22 @@ surface of the session that delegated, and SHALL show there what the call went o
 - **WHEN** a child's call the person answered finishes
 - **THEN** the delegating surface shows its result where the prompt was
 - **AND** the delegating session's transcript records the person's answer
+
+#### Scenario: A prompt names the child that asks
+- **WHEN** a child's call needs a decision
+- **THEN** the request names the child as data: its task id, its title, and its agent
+- **AND** every surface names the child from those, and the reason says only why the call asks
+
+#### Scenario: A grant settles the asks it now allows
+- **WHEN** asks are waiting and the person allows one of them, or adds a rule, for the session or the project
+- **THEN** every other waiting ask is decided again by the engine of the run that raised it
+- **AND** each one now allowed runs without the person, and its decision is recorded with the rule that allowed it and where that rule came from
+- **AND** its prompt is taken down on every surface that showed it
+
+#### Scenario: Identical asks are one prompt
+- **WHEN** several runs of one session ask about the same call in the same working tree at once
+- **THEN** the person is shown one prompt that says how many agents ask and names them
+- **AND** the answer applies to each of them, and each is recorded on its own
 
 ### Requirement: MCP Server Surface
 JamCLI SHALL serve the Model Context Protocol over stdio so that any MCP host can delegate
@@ -2201,6 +2235,22 @@ the row it belongs to, and SHALL color its frame by what the call does.
 - **WHEN** the person allows a call for the session or the project with a pattern
 - **THEN** the call's line in the transcript says it was allowed by them and names the pattern
 
+#### Scenario: The heading names the child
+- **WHEN** a child's call is asked about in the interface
+- **THEN** the prompt's heading names the child's title and its agent before the call
+- **AND** a key opens that child's view from the prompt, and the prompt is back when the view closes
+
+#### Scenario: One prompt for several agents
+- **WHEN** several agents' identical asks are shown as one prompt
+- **THEN** the heading says how many agents ask
+- **AND** the count of prompts waiting counts that prompt once
+
+#### Scenario: The question before a fan-out
+- **WHEN** the person is asked about the rules a fan-out's children need
+- **THEN** the prompt lists the rules and how many agents start
+- **AND** it offers three answers: allow for this session, allow for this project, ask as they go
+- **AND** Escape stops the turn, and never means ask as they go
+
 ### Requirement: Decision Ledger
 JamCLI SHALL record, with every decision it logs, the rule that decided and where that rule
 came from, and SHALL list the decisions recorded across a project's sessions on request.
@@ -2225,3 +2275,8 @@ came from, and SHALL list the decisions recorded across a project's sessions on 
 #### Scenario: The ledger only reads
 - **WHEN** the ledger runs
 - **THEN** it writes nothing to the project or its logs
+
+#### Scenario: A pre-flight grant is named in the ledger
+- **WHEN** a rule granted at the question before a fan-out allows a child's call
+- **THEN** that call's decision names the rule and says it was granted before that fan-out started
+- **AND** the answer to the question is itself recorded, with the rules it granted and the scope

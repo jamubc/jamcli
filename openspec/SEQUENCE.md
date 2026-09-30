@@ -58,10 +58,12 @@ per-surface clauses above were added for that reason. The record is in
 ## Open unit
 
 None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
-verbatim in `openspec/reviews/2026-09-29-architecture-review.md`. What opens next is the
-owner's choice: the queued `add-findings-loop` (unit 4), or what the task corpus's scores and
-a second person's transcripts ask for, which the review names as this file's input from now
-on. The owner also decides whether `land-interface-rhythm` (B), `add-btw` (C), and the
+verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so is
+`label-and-batch-child-approvals`, the first of the two units the owner's report of
+2026-09-29 ordered. The second, spinner verbs (`ROADMAP.md`, E), opens next. After it, what
+opens is the owner's choice: the queued `add-findings-loop` (unit 4), or what the task
+corpus's scores and a second person's transcripts ask for, which the review names as this
+file's input from now on. The owner also decides whether `land-interface-rhythm` (B), `add-btw` (C), and the
 shelved `add-windows-support` are dropped, as the review would have them.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
@@ -70,6 +72,41 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 27. `label-and-batch-child-approvals`
+
+Archived as `2026-09-29-label-and-batch-child-approvals`: 4 requirements modified (Delegated
+Task Execution, Delegated Approvals, Permission Prompt Presentation, Decision Ledger). Opened
+from the owner's report of 2026-09-29, after the message queue it names as step 1 was
+committed with the interface tests green and the working indicator typed to its phases
+(`8d366e5`). On the flash model before it, four children were four identical labels and
+four prompts, and after "Allow this session" three still waited.
+
+A child has a title the model gives it, required on the wire and optional in validation, so
+a small model that drops it only loses the name (`91c2d3b`). An approval request names the
+child that asks, as data, on every surface, and `o` looks in on it (`b0f0e16`). The engine
+announces added rules, and a waiting ask decides itself again with the engine of the run
+that raised it, so a grant settles what it now allows and withdraws the prompt up the chain
+(`e5eb1e7`). Asks for the same call are one prompt whose answer goes to each (`d2edbc3`). And
+`task` takes `needs`: before a fan-out starts, the person is asked once about the rules that
+would ask and that a grant would change, with three answers, session, project, or ask as
+they go, and the ledger names the fan-out on every call a pre-flight grant allowed
+(`386e787`).
+
+On the flash model after it, the model gave each child a title and a `needs` list without
+being told to; one session answer at the pre-flight ran four children with no prompt; with
+ask as they go, four identical asks were one prompt, and one answer settled them. The runs
+found two defects the tests had not: children describing the same `bun test` in different
+words, then passing `cwd: "."` or none, were still two prompts. A command's key is now what
+runs and where (`fd1f845`, `5f42e94`). The MCP session held one waiting approval, so a
+second child's ask replaced the first, which then waited forever; it now keeps them in
+order.
+
+Left open: ACP cannot take back a permission request, so an editor keeps showing one a grant
+settled meanwhile, and its answer is ignored. When the person names `task_result`, the flash
+model twice refused to start children because the task family is held back until a task
+starts (`src/core/runtime/offer.ts`); in the parent's log, the ledger names a child's
+answered call by its tool alone, since the call is not among the parent's messages.
 
 ### 26. `run-release`
 

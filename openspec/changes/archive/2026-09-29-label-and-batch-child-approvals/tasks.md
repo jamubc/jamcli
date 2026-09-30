@@ -36,6 +36,6 @@
 
 ## 7. The flood, after, and close
 
-- [ ] 7.1 Repeat 1.1 on this branch's build, restarting `jamcli mcp serve` first, with the orchestrator free to name `needs`. It is done when the recording shows the titled children on the board, prompts that name their child, identical asks as one prompt, and no prompt left after the grant.
-- [ ] 7.2 Run the four gates (`bun install`, `npx tsc --noEmit` at the baseline of 0, `bun test` under 150 s, `bun run build`) and `openspec validate label-and-batch-child-approvals --strict`.
-- [ ] 7.3 Record the unit in `openspec/SEQUENCE.md` and `openspec/ROADMAP.md`, and archive the change.
+- [x] 7.1 Repeat 1.1 on this branch's build, restarting `jamcli mcp serve` first, with the orchestrator free to name `needs`. It is done when the recording shows the titled children on the board, prompts that name their child, identical asks as one prompt, and no prompt left after the grant. Done on `opencode-go:deepseek-v4.1-flash` in four recordings: the model gave each child a title and a `needs` list on its own; one session answer at the pre-flight ran four children without a prompt, and the ledger named `granted before 4 agents started` on each child's call; with ask as they go, four identical asks were one prompt that one answer settled. The runs found two defects, each fixed with a test that fails without it: asks differing only in a command's `description`, then in a `cwd` of `.`, were separate prompts (`fd1f845`, `5f42e94`). They also found one outside this unit: when the person names `task_result`, the model can refuse to start children, because the task family is held back until a task starts (`src/core/runtime/offer.ts`).
+- [x] 7.2 Run the four gates (`bun install`, `npx tsc --noEmit` at the baseline of 0, `bun test` under 150 s, `bun run build`) and `openspec validate label-and-batch-child-approvals --strict`.
+- [x] 7.3 Record the unit in `openspec/SEQUENCE.md` and `openspec/ROADMAP.md`, and archive the change.
