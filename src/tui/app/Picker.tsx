@@ -73,7 +73,8 @@ export function Picker(props: {
   const start = useListWindow(props.selected, shown?.length ?? 0, PICKER_ROWS);
   const visible = shown?.slice(start, start + PICKER_ROWS) ?? [];
   const width = Math.min(48, Math.max(0, ...visible.map((item) => item.label.length + (item.current ? ' (in use)'.length : 0))));
-  const counted = shown && props.items && shown.length !== props.items.length ? ` (${shown.length} of ${props.items.length})` : '';
+  // A list that takes typed text shows every choice under the typed row, so nothing was narrowed to count.
+  const counted = shown && props.items && props.freeText === undefined && shown.length !== props.items.length ? ` (${shown.length} of ${props.items.length})` : '';
   const position = shown && shown.length > PICKER_ROWS ? `${props.selected + 1} of ${shown.length} · ` : '';
   const badge = plain ? 'Escape closes' : '[Esc]';
   return (

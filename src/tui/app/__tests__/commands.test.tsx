@@ -211,6 +211,13 @@ test('/note flags notes above the conversation, newest on top, keeps them in the
     const collapsed = await frameWith(setup, (frame) => frame.includes('1/4') && frame.includes('wheel for more'));
     expect(collapsed.split('⚑')).toHaveLength(2);
     expect(collapsed).toMatch(/⚑ 1\/4 \d\d:\d\d cost did not update/);
+    // /reflect asks how to read them first; typed text leaves every choice listed, so no count claims a filter.
+    await send(setup, '/reflect');
+    const framing = await frameWith(setup, (frame) => frame.includes('How should the reflection read your 4 tester notes?'));
+    expect(framing).toContain('Leave the notes out');
+    expect(framing).not.toMatch(/\(\d+ of \d+\)/);
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => !frame.includes('Leave the notes out'));
     // The header carries the session's name once it has one.
     await send(setup, '/rename flaky-ui');
     await frameWith(setup, (frame) => frame.includes(`session flaky-ui (${runtime.sessionId})`));
