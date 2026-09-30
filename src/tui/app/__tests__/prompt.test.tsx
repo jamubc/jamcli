@@ -319,7 +319,8 @@ test('ten children asking the same command are one prompt, and one answer for th
     const asked = await frameWith(setup, (value) => value.includes('10 agents ask › Allow run_command printf checked?'));
     // One prompt, however many agents ask: nothing else waits behind it.
     expect(asked).not.toContain('waiting ·');
-    expect(asked).toContain('Check 0 · quick');
+    // A row under the heading names the agents that ask, in the order they asked.
+    expect(asked).toMatch(/│ Check \d · quick {2}Check \d · quick/);
     setup.mockInput.pressKey('2');
     const done = await frameWith(setup, (value) => value.includes('All ten checked.'));
     expect(done).not.toContain('Allow run_command');
