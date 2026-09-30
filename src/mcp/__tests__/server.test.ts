@@ -36,6 +36,22 @@ test('a command runs as a person would run it, and its list is answered by the h
   expect(JSON.parse(fs.readFileSync(path.join(context.base, 'user', 'config.json'), 'utf8')).effort).toBe('low');
 }, 60_000);
 
+test('a wake set in a delegated session runs as a turn of it, and the host reads it in its next report', async () => {
+  const { call, start } = await serve();
+  const session = await start();
+  context.provider.enqueue({ text: 'The timer went off.' });
+  const set = await call('session_send', { session, text: '/wake in 1s say that the timer went off' });
+  expect(set.text).toContain('Set w1: in 1 s');
+  let seen = '';
+  for (let tries = 0; tries < 40 && !seen.includes('The timer went off.'); tries += 1) {
+    await Bun.sleep(100);
+    seen += (await call('session_state', { session, wait_ms: 0 })).text;
+  }
+  expect(seen).toContain('⏰ w1 · say that the timer went off');
+  expect(seen).toContain('The timer went off.');
+  expect(String(context.provider.completions().at(-1)!.body.messages.at(-1).content)).toStartWith('[Wake w1 went off: its timer ran out.');
+}, 60_000);
+
 test("a commit is the person's: the host cannot answer it, and the person is asked in their own host", async () => {
   const asked: ElicitationRequest[] = [];
   const { call, start } = await serve(async (request) => {
