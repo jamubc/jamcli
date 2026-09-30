@@ -34,8 +34,9 @@ What the notes ask, grouped, with the session each came from:
 ## What Changes
 
 - **Reflection reads framed notes.** `/reflect` in a session with notes first asks the
-  person, and only the person, how to read them: ideas for new JamCLI features, concerns
-  about how the model behaved, bugs in JamCLI, their own words, or leave them out. The
+  person how to read them, before the model sees any: ideas for new JamCLI features,
+  concerns about how the model behaved, bugs in JamCLI, their own words, or leave them out.
+  Headless answers it with `--choose`; a lesson drawn from a note still asks the person. The
   framing is recorded in the log as a `reflection` event. When the notes are kept,
   `session_signals` lists each as a `note` signal with its id, under the framing, and a
   lesson may cite it. The gates are unchanged: a lesson still cites, is still refused when

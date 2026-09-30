@@ -16,7 +16,7 @@ Baseline: `npx tsc --noEmit` reports 0 errors on `master` at `7be9de5`.
 - [ ] 2.1 `board.ts`: the flag board, one JSON file per session in the state directory,
   written through a temporary file; raise, lower, and read by session.
 - [ ] 2.2 `table.ts`: the session's wakes: set with a time or a flag condition, cancel,
-  list, a one-second check that fires what is due, limits (1 s to 7 days, 20 pending,
+  list, a check four times a second that fires what is due, limits (1 s to 7 days, 20 pending,
   known sessions only), and rebuild from the log on resume with missed timers reported.
 - [ ] 2.3 `awake.ts`: `caffeinate -i -w <pid>` on macOS while held, through an injected
   spawner, released when nothing holds it.

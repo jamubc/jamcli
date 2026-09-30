@@ -274,7 +274,7 @@ session's tester notes SHALL reach the reflection only as the person frames them
 
 #### Scenario: Frame the notes first
 - **WHEN** the person runs `/reflect` in a session that has tester notes
-- **THEN** only the person is asked how to read them: feature ideas, concerns about the model, bugs in JamCLI, their own words, or leave them out
+- **THEN** the person is asked how to read them before the model sees any: feature ideas, concerns about the model, bugs in JamCLI, their own words, or leave them out; headless answers with `--choose`
 - **AND** the answer is recorded as a `reflection` event before the turn starts
 
 #### Scenario: Reflect on framed notes
