@@ -10,7 +10,7 @@ import { storedKey } from '../../core/config/credentials.js';
 import { userConfigDir } from '../../utils/paths.js';
 import { choiceOf, effortFor, EFFORT_LEVELS, isEffortLevel, isThinkingChoice, THINKING_CHOICES, thinkingFor, type ThinkingChoice } from '../../core/routing/capabilities.js';
 import { describeRun, describeSource, loadAgents, type LoadedAgents } from '../../core/ext/agents.js';
-import { debugTranscript, readSessionIndex, readTranscript, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
+import { debugTranscript, readSessionIndex, readTranscript, resolveSessionRef, sessionFileFor, transcriptToMarkdown } from '../../core/transcript/index.js';
 import { CONFIG_ACTIONS, CONFIG_USAGE, runConfigCommand, type ConfigAction } from '../../cli/config.js';
 import type { McpCommandRequest } from '../../cli/mcp.js';
 import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from '../reports.js';
@@ -28,6 +28,7 @@ import { pr } from './pr.js';
 import { commandsList, hooksCommand, plugins, skills } from './extensions.js';
 import { workflowsCommand } from './workflows.js';
 import { reflect } from './reflect.js';
+import { color, flag, notesList, rename, report, wake } from './session.js';
 
 /** Refuse, and say so, while a turn runs. */
 const waitForTurn = (ctx: CommandContext, what: string): boolean => {
@@ -285,7 +286,7 @@ const clear: SlashCommand = {
 
 const resume: SlashCommand = {
   name: 'resume',
-  args: '[id|list]',
+  args: '[id|name|list]',
   summary: "Choose one of this project's sessions to open",
   source: 'built-in',
   async run(ctx, args) {
@@ -302,11 +303,17 @@ const resume: SlashCommand = {
       if (error) return ctx.notice('error', `Not opened: ${error}`);
       ctx.notice('info', `Resumed ${id}.`);
     };
-    if (args) return open(args);
+    if (args) {
+      // A name works where the id does, for a session of this project.
+      const found = resolveSessionRef(args, ctx.projectRoot);
+      if ('error' in found) return ctx.notice('warn', found.missing ? `No session ${args} in this project. /resume lists them.` : found.error);
+      if (path.resolve(found.session.projectRoot) !== path.resolve(ctx.projectRoot)) return ctx.notice('warn', `${args} is a session of ${found.session.projectRoot}; open it with jamcli --resume ${found.session.id} there.`);
+      return open(found.session.id);
+    }
     const now = Date.now();
     ctx.choose({
       title: 'Sessions in this project, latest first',
-      items: sessions().map((session) => ({ key: session.id, label: session.id, detail: sessionDetail(session, now), ...(session.id === ctx.runtime.sessionId ? { current: true } : {}) })),
+      items: sessions().map((session) => ({ key: session.id, label: session.name ? `${session.name} (${session.id})` : session.id, detail: sessionDetail(session, now), ...(session.id === ctx.runtime.sessionId ? { current: true } : {}) })),
       empty: 'No earlier sessions in this project.',
       hint: 'Enter opens it · /resume list prints them',
       choose: (item) => open(item.key),
@@ -713,15 +720,15 @@ const exportCommand: SlashCommand = {
 const note: SlashCommand = {
   name: 'note',
   aliases: ['notes'],
-  args: '<text>|clear',
-  summary: 'Flag a tester note at this point of the session; it is kept in the log and never reaches the model. clear hides them here',
+  args: '[<text>|clear]',
+  summary: 'Flag a tester note at this point of the session, kept in the log; alone, lists them. Only /reflect, as you frame them, shows them to the model',
   source: 'built-in',
   run(ctx, args) {
     if (args.toLowerCase() === 'clear') {
       ctx.clearNotes();
-      return ctx.notice('info', 'Notes hidden here. The session log keeps them; /copy debug shows them.');
+      return ctx.notice('info', 'Notes hidden here. The session log keeps them; /notes lists them.');
     }
-    if (!args) return ctx.notice('warn', 'Usage: /note <text> flags a note at this point; /notes clear hides them here.');
+    if (!args) return ctx.show(notesList(ctx.runtime.notes()));
     ctx.note(args);
   },
 };
@@ -773,6 +780,11 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   effort,
   reflect,
   note,
+  report,
+  rename,
+  color,
+  flag,
+  wake,
   doctor,
   exportCommand,
   exit,

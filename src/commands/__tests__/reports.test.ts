@@ -15,7 +15,7 @@ test('a command line splits into its name and the rest, and words keep what quot
 
 test('a typed prefix lists names that start with it first, then names that contain it, and aliases count', () => {
   const names = (typed: string) => matchCommands(BUILTIN_COMMANDS, typed).map((command) => command.name);
-  expect(names('/co')).toEqual(['context', 'cost', 'compact', 'commit', 'commands', 'config', 'copy']);
+  expect(names('/co')).toEqual(['context', 'cost', 'compact', 'commit', 'commands', 'config', 'copy', 'color']);
   expect(names('/ex')).toEqual(['export', 'exit', 'context']);
   expect(names('/qu')).toEqual(['exit']);
   expect(names('/ost')).toEqual(['cost']);

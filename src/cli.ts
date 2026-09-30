@@ -13,6 +13,7 @@ import {
   searchSessions,
 } from './core/session/store.js';
 import { resolveJamcliProjectRoot } from './utils/projectRoot.js';
+import { resolveSessionRef } from './core/transcript/index.js';
 import type { AgentEvent } from './core/types.js';
 import { JAMCLI_VERSION } from './core/version.js';
 import type { SpendSummary } from './core/catalog/cost.js';
@@ -265,7 +266,7 @@ export const USAGE = `Usage: jamcli [options]
       --screen-reader          Draw the interface as plain labeled lines, with no boxes or animation
       --max-turns <n>          Bound the number of turns
       --model <id>             Run this turn on a specific model
-      --resume <session-id>    Continue an existing session
+      --resume <id|name>       Continue an existing session, by its id or its /rename name
       --continue               Continue the most recent session
       --allow-tool <name>      Allow a tool for this run (repeatable)
       --deny-tool <name>       Deny a tool for this run (repeatable)
@@ -440,6 +441,19 @@ export const runCli = async (argv: string[]): Promise<number> => {
   }
 
   let sessionId = parsed.resume;
+  // A session's name works where its id does, for a session of this project.
+  if (sessionId) {
+    const found = resolveSessionRef(sessionId, projectRoot);
+    if ('error' in found) {
+      process.stderr.write(`${found.error}\n`);
+      return 1;
+    }
+    if (path.resolve(found.session.projectRoot) !== path.resolve(projectRoot)) {
+      process.stderr.write(`${parsed.resume} is a session of ${found.session.projectRoot}; resume it from there.\n`);
+      return 1;
+    }
+    sessionId = found.session.id;
+  }
   if (!sessionId && parsed.continueLast) {
     sessionId = (await latestSessionId(projectRoot)) ?? undefined;
     if (!sessionId) process.stderr.write('No earlier session in this project, so a new one was started.\n');
