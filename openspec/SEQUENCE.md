@@ -57,13 +57,18 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
-verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the two units the
-owner's report of 2026-09-29 ordered, `label-and-batch-child-approvals` and
-`add-spinner-verbs`. What opens next is the owner's choice: the queued `add-findings-loop` (unit 4), or what the task
-corpus's scores and a second person's transcripts ask for, which the review names as this
-file's input from now on. The owner also decides whether `land-interface-rhythm` (B), `add-btw` (C), and the
-shelved `add-windows-support` are dropped, as the review would have them.
+### 29. `add-composer-recall`
+
+Opened on the owner's request of 2026-09-29, on `feat/composer-recall`. It makes typing survive
+a click on the transcript, has the exit key clear a draft first, records what the person typed
+as a `prompt` event so Up and Down (and Ctrl+R) can recall it, keeps an unsent draft on disk
+across leaving, collapses large pastes into chips, grows the composer with its draft, and moves
+choosing an agent to Down with a one-line row per agent. Baseline when it opened: 0 type errors,
+1,204 tests passing (3 skipped, 2 todo, 0 failing) in 141 s. Done when its change is archived.
+
+The queued `add-findings-loop` (unit 4) and the review's leftovers wait behind it. The owner
+also decides whether `land-interface-rhythm` (B), `add-btw` (C), and the shelved
+`add-windows-support` are dropped, as the review would have them.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
 approve it before any task begins, and `git checkout 9d9f5c6 --

@@ -584,6 +584,15 @@ change, from a counter seed; `retrying` and `compacting` stay literal; screen re
 reduced motion unchanged; the status line's width measured on the displayed word. A global
 verb list without phases is refused, since it hides what the agent is doing.
 
+### F. `add-composer-recall`
+
+Raised by the owner on 2026-09-29, after D and E. The composer loses the person's words and
+place: a click on the transcript takes focus from it, Ctrl+C on a draft counts toward exit, and
+nothing recalls what was sent. Opens as unit 29 (`SEQUENCE.md`). It adds a `prompt` event to
+the session log as the record of what was typed, Up and Down recall, drafts kept on disk across
+leaving, paste chips, a composer that grows, and a one-line row per agent on the board with
+Down to choose one. No configuration key.
+
 ## Deliberately not planned
 
 - Graded effort beyond `off | on | auto`. Only Anthropic exposes it; a provider unit if
