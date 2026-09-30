@@ -402,19 +402,18 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
     // Allow once is no scope for a grant to many children over their whole run, so it grants nothing.
     const scope = read.allow && read.scope !== 'once' ? read.scope : undefined;
     const how = `granted before ${who} started`;
-    if (scope) ctx.dispatcher.grant?.(call, scope, listed, how);
-    ctx.emit({
-      type: 'approval_decision',
-      callId: call.id,
-      tool: call.name,
-      allow: Boolean(scope),
-      scope: scope ?? 'once',
-      by: read.by,
-      ...(scope ? { rule: listed, source: how } : { reason: 'not granted; the agents ask as they go' }),
-    });
-    ctx.emit({ type: 'tool_result', result: resultFor(call, scope ? 'ok' : 'denied', scope ? `Allowed for the ${scope}: ${listed}.` : 'Not granted: the agents ask as they go.') });
     // Only the person stopping the turn, not a surface that cannot ask, keeps the children from starting.
-    if (!read.allow && read.by === 'user' && !read.proceed) {
+    const stop = !read.allow && read.by === 'user' && !read.proceed;
+    if (scope) ctx.dispatcher.grant?.(call, scope, listed, how);
+    // A grant, and a stop, are decisions the log records; asking as they go decides nothing, and is only said.
+    if (scope || stop) {
+      ctx.emit({ type: 'approval_decision', callId: call.id, tool: call.name, allow: Boolean(scope), scope: scope ?? 'once', by: read.by, ...(scope ? { rule: listed, source: how } : {}) });
+    }
+    ctx.emit({
+      type: 'tool_result',
+      result: resultFor(call, stop ? 'denied' : 'ok', scope ? `Allowed for the ${scope}: ${listed}.` : stop ? 'Stopped before the agents started.' : 'Not granted: the agents ask as they go.'),
+    });
+    if (stop) {
       denial = { feedback: read.feedback, proceed: false };
       stopped = 'denied';
       return false;

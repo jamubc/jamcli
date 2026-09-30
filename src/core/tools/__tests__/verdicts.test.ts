@@ -167,8 +167,12 @@ test('before a fan-out, what its children need is asked once: granted with its s
 
   // Ask as they go: nothing granted, and both children start.
   const later = fanOut();
-  expect((await run(step, later, answering({ allow: false, proceed: true }))).outcome.results.map((result) => result.status)).toEqual(['ok', 'ok']);
+  const asGo = await run(step, later, answering({ allow: false, proceed: true }));
+  expect(asGo.outcome.results.map((result) => result.status)).toEqual(['ok', 'ok']);
   expect(later.granted).toEqual([]);
+  // Nothing was granted or refused, so no decision is recorded; the question's row says so.
+  expect(asGo.events.some((event) => event.type === 'approval_decision' && event.callId === 'a:needs')).toBe(false);
+  expect(asGo.events.find((event) => event.type === 'tool_result' && event.result.callId === 'a:needs')).toMatchObject({ result: { status: 'ok', output: 'Not granted: the agents ask as they go.' } });
 
   // Escape: no child starts, and each call is answered that it did not run.
   const stopped = fanOut();
