@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
 import { KeepAwake } from '../awake.js';
 import { flagName, flagsOf, setFlag } from '../board.js';
-import { WakeTable, parseDuration, type FiredWake } from '../table.js';
+import { WakeTable, parseDuration, spokenSeconds, type FiredWake } from '../table.js';
+import { describeCall } from '../../approval.js';
 import type { TranscriptEvent } from '../../transcript/events.js';
 
 /** A table on a clock the test moves, recording what it would write to the log. */
@@ -101,6 +102,15 @@ test('flags stay on the board until lowered, one lowercase word each', () => {
   setFlag('2026-09-30-bbbbbbbb', '/project', 'green', false);
   expect(Object.keys(flagsOf('2026-09-30-bbbbbbbb'))).toEqual(['done']);
   expect(flagsOf('2026-09-30-cccccccc')).toEqual({});
+});
+
+test('wake and flag calls read as words where the transcript and a prompt show them', () => {
+  const line = (name: string, args: Record<string, unknown>) => describeCall({ id: 'c', name, arguments: args });
+  expect(line('wake', { action: 'set', after_seconds: 600, prompt: 'check the deploy' })).toBe('wake in 10 min: check the deploy');
+  expect(line('wake', { action: 'set', sessions: ['builder', 'tester'], flag: 'green', prompt: 'compile' })).toBe('wake when builder, tester raise green: compile');
+  expect(line('wake', { action: 'cancel', id: 'w2' })).toBe('wake cancel w2');
+  expect(line('flag', { action: 'raise', flag: 'green' })).toBe('flag raise green');
+  expect(spokenSeconds(5400)).toBe('1 h 30 min');
 });
 
 test('the machine is kept awake while anything holds it, and let go when the last hold does', () => {

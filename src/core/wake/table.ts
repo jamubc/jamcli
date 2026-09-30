@@ -68,9 +68,21 @@ export function parseDuration(text: string): number | undefined {
   return parts.reduce((sum, part) => sum + Number(part[1]) * unit(part[2]), 0);
 }
 
+/** Seconds as a person says them: `45 s`, `10 min`, `1 h 30 min`, `2 d`. */
+export function spokenSeconds(seconds: number): string {
+  const whole = Math.max(0, Math.ceil(seconds));
+  if (whole < 60) return `${whole} s`;
+  if (whole < 3_600) return `${Math.round(whole / 60)} min`;
+  if (whole < 86_400) {
+    const minutes = Math.round((whole % 3_600) / 60);
+    return `${Math.floor(whole / 3_600)} h${minutes ? ` ${minutes} min` : ''}`;
+  }
+  return `${Math.round(whole / 86_400)} d`;
+}
+
 /** A wake as one line, for lists. */
 export function describeWake(wake: Wake, now: number): string {
-  const trigger = wake.at !== undefined ? `in ${Math.max(0, Math.ceil((wake.at - now) / 1000))} s` : `when ${wake.when!.sessions.join(', ')} raise ${wake.when!.flag}`;
+  const trigger = wake.at !== undefined ? `in ${spokenSeconds((wake.at - now) / 1000)}` : `when ${wake.when!.sessions.join(', ')} raise ${wake.when!.flag}`;
   return `${wake.id}: ${trigger}, set by ${wake.by === 'person' ? 'the person' : 'the model'}: ${wake.prompt.replace(/\s+/g, ' ').slice(0, 120)}`;
 }
 

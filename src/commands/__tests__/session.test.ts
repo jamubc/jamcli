@@ -83,7 +83,8 @@ test('/flag raises and lowers flags on the board, and /wake sets, lists, and can
   expect(said(entries)).toContain('No session named nobody-here.');
   await host.run('/wake in 1h later');
   await host.run('/wake list');
-  expect(said(entries)).toMatch(/w1: in \d s, set by the person: say hello\nw2: in \d+ s, set by the person: later/);
+  expect(said(entries)).toContain('Set w1: in 1 s, set by the person: say hello\n/wake cancel w1 removes it.');
+  expect(said(entries)).toMatch(/w1: in \d s, set by the person: say hello\nw2: in 1 h, set by the person: later/);
   await host.run('/wake cancel w2');
   const fired = await new Promise<string>((resolve) => runtime.onWake((wake) => resolve(wake.text)));
   expect(fired).toContain('say hello');

@@ -9,6 +9,7 @@ import { draftLesson } from './reflection/lesson.js';
 import { patchPaths } from './permissions/subjects.js';
 import { planFile } from './tools/plan.js';
 import { labelFor } from './tools/task.js';
+import { spokenSeconds } from './wake/table.js';
 
 /**
  * Builds what a surface shows when a tool call needs a decision: one line naming the
@@ -36,8 +37,21 @@ export function describeCall(call: ToolCall): string {
     return named.length ? `apply_patch ${named.join(', ')}` : 'apply_patch';
   }
   if (target) return `${call.name} ${target}`;
+  if (call.name === 'wake' || call.name === 'flag') return stateCall(call);
   const args = JSON.stringify(call.arguments ?? {});
   return args === '{}' ? call.name : `${call.name} ${clip(args, 120)}`;
+}
+
+/** A wake or flag call as words: `wake in 10 min: check the deploy`, `flag raise green`. */
+function stateCall(call: ToolCall): string {
+  const args = call.arguments ?? {};
+  const action = typeof args.action === 'string' ? args.action : '';
+  const sessions = Array.isArray(args.sessions) ? args.sessions.map(String).join(', ') : '';
+  if (call.name === 'flag') return ['flag', action, action === 'list' ? sessions : argString(call, 'flag') ?? ''].filter(Boolean).join(' ');
+  if (action === 'cancel') return `wake cancel ${argString(call, 'id') ?? ''}`.trim();
+  if (action !== 'set') return `wake ${action}`.trim();
+  const when = typeof args.after_seconds === 'number' ? `in ${spokenSeconds(args.after_seconds)}` : `when ${sessions} raise ${argString(call, 'flag') ?? ''}`;
+  return `wake ${when}: ${clip((argString(call, 'prompt') ?? '').replace(/\s+/g, ' '), 100)}`;
 }
 
 /** A rule list joined for one suggestion, without repeating a rule. */

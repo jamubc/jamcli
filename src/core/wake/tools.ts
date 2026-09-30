@@ -62,7 +62,7 @@ export function wakeTools(sources: WakeToolSources): RegisteredTool[] {
           by: 'model',
         });
         if ('error' in made) return error(made.error);
-        return { output: `Set ${describeWake(made.wake, now)}. End your turn now; the harness sends the prompt when it goes off.` };
+        return { output: `Set ${describeWake(made.wake, now)}\nEnd your turn now; the harness sends the prompt when it goes off.` };
       },
     },
     {
