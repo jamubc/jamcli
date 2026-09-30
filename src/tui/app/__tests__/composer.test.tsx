@@ -272,3 +272,125 @@ test('every line sent from the composer is recorded as typed: a message, a slash
     await close();
   }
 }, 40_000);
+
+/** The text in the composer's box: its rows between the frame's borders, without the transcript's. */
+const inComposer = (frame: string): string[] => {
+  const rows = frame.split('\n');
+  const lastRow = (test: (row: string, index: number) => boolean) => rows.map((row, index) => (test(row, index) ? index : -1)).reduce((a, b) => Math.max(a, b), -1);
+  const bottom = lastRow((row) => row.startsWith('└'));
+  const top = lastRow((row, index) => index < bottom && row.startsWith('┌'));
+  return rows.slice(top + 1, bottom).map((row) => row.replace(/^│ ?/, '').replace(/ *│$/, ''));
+};
+/** An empty composer shows its invitation in place of text. */
+const EMPTY = 'Message JamCLI · / commands · ? help';
+const composerHolds = (text: string) => (frame: string) => inComposer(frame).join('\n').trimEnd() === text;
+
+async function say(setup: any, text: string, reply: string) {
+  context.server.enqueue({ text: reply });
+  await setup.mockInput.typeText(text);
+  setup.mockInput.pressEnter();
+  await frameWith(setup, (frame) => frame.includes(reply));
+}
+
+test('Up recalls the last prompt over a draft, older ones follow, and Down and Escape bring the draft back', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await say(setup, 'one', 'reply one');
+    await say(setup, 'two', 'reply two');
+    await setup.mockInput.typeText('my draft');
+    setup.mockInput.pressArrow('up');
+    const newest = await frameWith(setup, (frame) => composerHolds('two')(frame) && frame.includes('history 1/2 · sent'));
+    expect(newest).toContain('↑ older');
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, composerHolds('one'));
+    setup.mockInput.pressArrow('up');
+    const oldest = await frameWith(setup, (frame) => composerHolds('one')(frame) && frame.includes('history 2/2'));
+    expect(oldest).not.toContain('↑ older');
+    setup.mockInput.pressArrow('down');
+    await frameWith(setup, composerHolds('two'));
+    setup.mockInput.pressArrow('down');
+    const back = await frameWith(setup, (frame) => composerHolds('my draft')(frame) && !frame.includes('history '));
+    expect(back).not.toContain('history ');
+
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, composerHolds('two'));
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => composerHolds('my draft')(frame) && !frame.includes('history '));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a prompt sent with several lines comes back with all of them', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    context.server.enqueue({ text: 'reply' });
+    await setup.mockInput.pasteBracketedText('first line\nsecond line\n  indented third');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, composerHolds('first line\nsecond line\n  indented third'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('with several lines in the composer, Up walks to the top line before it recalls anything', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await say(setup, 'earlier', 'reply');
+    await setup.mockInput.pasteBracketedText('alpha\nbeta\ngamma');
+    setup.mockInput.pressArrow('up');
+    setup.mockInput.pressArrow('up');
+    const moved = await frameWith(setup, () => true);
+    expect(moved).not.toContain('history ');
+    expect(inComposer(moved).join('\n')).toContain('alpha\nbeta\ngamma');
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, composerHolds('earlier'));
+    // The draft is kept: Escape returns all three lines.
+    setup.mockInput.pressEscape();
+    await frameWith(setup, composerHolds('alpha\nbeta\ngamma'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a recalled slash line shows no command list, and Up goes on to the prompt before it', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await say(setup, 'before', 'reply');
+    await setup.mockInput.typeText('/help');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('Keys:'));
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => !frame.includes('Keys:'));
+    setup.mockInput.pressArrow('up');
+    const slash = await frameWith(setup, composerHolds('/help'));
+    expect(slash).not.toContain('Commands (');
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, composerHolds('before'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('sending a recalled prompt sends it as it is and leaves no walk or draft behind', async () => {
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await say(setup, 'one', 'reply one');
+    await setup.mockInput.typeText('unsent draft');
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, composerHolds('one'));
+    context.server.enqueue({ text: 'reply again' });
+    setup.mockInput.pressEnter();
+    const sent = await frameWith(setup, (frame) => frame.includes('reply again'));
+    expect(sent).not.toContain('history ');
+    await frameWith(setup, composerHolds(EMPTY));
+    expect(runtime.session.messages.filter((message) => message.role === 'user').map((message) => message.content)).toEqual(['one', 'one']);
+    // The draft went with the send: Down has nothing to bring back.
+    setup.mockInput.pressArrow('down');
+    await frameWith(setup, composerHolds(EMPTY));
+  } finally {
+    await close();
+  }
+}, 30_000);

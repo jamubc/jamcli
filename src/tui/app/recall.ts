@@ -23,6 +23,24 @@ export interface Move {
   abandoned?: string;
 }
 
+/** What the textarea says of its cursor: the wrapped (visual) view, which lags an edit until the next render, and the logical one, which does not. */
+export interface CursorFacts {
+  visualRow: number;
+  virtualLineCount: number;
+  logicalRow: number;
+  lineCount: number;
+}
+
+/**
+ * Which line the cursor is on, and which is last. Wrapped lines count, so a long single line
+ * is several. Just after an edit the wrapped view has not caught up, which shows as fewer
+ * visual lines than logical ones, and the logical lines stand in until it does.
+ */
+export function cursorLines(cursor: CursorFacts): { row: number; last: number } {
+  if (cursor.virtualLineCount < cursor.lineCount) return { row: cursor.logicalRow, last: cursor.lineCount - 1 };
+  return { row: cursor.visualRow, last: cursor.virtualLineCount - 1 };
+}
+
 /** Whether the composer still holds the recalled prompt as it was recalled. */
 export const isRecalled = (recall: Recall | undefined, text: string): boolean => recall !== undefined && text === recall.shown;
 

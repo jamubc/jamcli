@@ -9,12 +9,14 @@ the transcript, the composer, the palettes, and the status line.
 |---|---|
 | Enter | Sends the message |
 | Shift+Enter, Ctrl+J | Adds a line |
-| Escape | Stops a running turn; closes a list or a picker |
+| Escape | Stops a running turn; closes a list or a picker; returns your draft from a recalled prompt |
 | Shift+Tab | Changes the permission mode |
-| Ctrl+R | Searches earlier messages |
+| Up on the first line | Recalls the previous prompt into the composer, exactly as it was typed; again for older ones |
+| Down on the last line | Walks back toward the newest recalled prompt, and past it returns your draft |
+| Ctrl+R | Searches earlier messages of this project's sessions |
 | Ctrl+O | The detailed transcript, every block open, and again to return |
 | Ctrl+T | Shows or hides the plan board: the checklist, and the agents running beside the turn |
-| Up, Down on an empty composer | Choose an agent on the board; Enter looks in on it, Escape lets go |
+| Down on an empty composer | Chooses an agent on the board; Up and Down move the choice, Up on the first lets go, Enter looks in on it, Escape lets go |
 | Page Up, Page Down | Scrolls the transcript; at the top, Page Up shows earlier rows |
 | Ctrl+L | Redraws the screen |
 | Ctrl+C twice | Leaves |
@@ -37,7 +39,7 @@ how long it has run, its tokens and cost, and behind a rail what it is doing rig
 call it is making, or the last line it said). Then the steps, indented, the running one with
 how long it has run and its check.
 
-Up and Down on an empty composer choose an agent; Enter, or a click on it, opens its run
+Down on an empty composer chooses an agent (Up is for earlier prompts, and lets go of the choice from the first agent); Enter, or a click on it, opens its run
 in place of the conversation: what it has done so far and each further event as it happens.
 While it runs, a line typed there is said to it, and it reads it with its next step, so you
 can steer or question a child mid-task; `/stop` there stops it. Escape returns, and closes
@@ -64,6 +66,14 @@ opens that child's run with the prompt still below it to answer.
   first; the append goes through the tool path (`edit`, or `write_file` for a new or
   ambiguous file), so permissions and checkpoints apply. Escape leaves the file alone.
 - `@path` content and MCP resource text are redacted like tool output.
+- Up on the first line puts the previous prompt you sent in the composer, exactly as it
+  was typed or pasted, lines and all; a row over the composer says which of how many. Up
+  again goes older, Down goes newer, and past the newest Down gives back what you had
+  written before the first Up, so nothing you were typing is lost until you send. Escape
+  gives it back at once. A prompt you recalled and then changed is kept as a cleared
+  prompt when you walk away from it. With several lines in the composer, Up moves up a
+  line first and recalls only from the top one. `/commands` and `!commands` are recalled
+  too. Ctrl+R searches wider, across the project's sessions.
 
 ## Lists, pickers, and prompts
 

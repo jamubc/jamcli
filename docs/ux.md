@@ -124,6 +124,7 @@ current bindings.
 | Escape | interrupt the turn, or close an overlay |
 | Escape Escape | rewind menu |
 | Shift+Tab | next permission mode |
+| Up on the first line, Down on the last | walk this session's prompts into the composer, and back to your draft |
 | Ctrl+R | search prompt history |
 | Ctrl+O | detailed transcript |
 | Ctrl+T | todo panel |

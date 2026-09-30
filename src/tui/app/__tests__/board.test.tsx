@@ -21,9 +21,9 @@ test('a child agent shows on the board with what it is doing and what it cost, a
     const board = await frameWith(setup, (frame) => frame.includes('Agents 1 running') && frame.includes('◐ quick count the files in src'));
     expect(board).toMatch(/│ (thinking|starting)/);
     // The header says how to choose one; Down chooses it, and the row itself then says what Enter does.
-    expect(board).toContain('↑↓ choose an agent, Enter looks in');
+    expect(board).toContain('↓ choose an agent, Enter looks in');
     setup.mockInput.pressArrow('down');
-    await frameWith(setup, (frame) => frame.includes('· Enter looks in') && !frame.includes('↑↓ choose an agent'));
+    await frameWith(setup, (frame) => frame.includes('· Enter looks in') && !frame.includes('↓ choose an agent'));
     setup.mockInput.pressEnter();
     const viewer = await frameWith(setup, (frame) => frame.includes('type below to talk to it'));
     expect(viewer).toContain('quick count the files in src');

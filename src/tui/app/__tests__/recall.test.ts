@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { TypedPrompt } from '../../../core/transcript/index.js';
-import { describeRecall, isRecalled, recallDown, recallEscape, recallUp } from '../recall.js';
+import { cursorLines, describeRecall, isRecalled, recallDown, recallEscape, recallUp } from '../recall.js';
 
 const sent = (text: string, ts = 0): TypedPrompt => ({ text, state: 'sent', ts });
 /** Newest first, as recall is handed them. */
@@ -92,4 +92,12 @@ test('the strip says which prompt of how many, how long ago, and whether it was 
   expect(describeRecall(at(2, ''), now, false)).toBe('history 3/3 · sent just now · ↓ newer');
   expect(describeRecall(at(1, 'my draft'), now, true)).toBe('History: prompt 2 of 3, cleared 3 hours ago. Up is older and Down is newer; after the newest, Down returns your draft, and Escape returns it now.');
   expect(describeRecall(at(0, ''), now, true)).toBe('History: prompt 1 of 3, sent 4 minutes ago. Up is older and Down is newer; Escape leaves history.');
+});
+
+test('the cursor line counts wrapped lines, and falls back to logical lines while the wrapped view lags an edit', () => {
+  // A long single line wrapped over three rows, the cursor on the last: it is not on the first line.
+  expect(cursorLines({ visualRow: 2, virtualLineCount: 3, logicalRow: 0, lineCount: 1 })).toEqual({ row: 2, last: 2 });
+  expect(cursorLines({ visualRow: 0, virtualLineCount: 3, logicalRow: 0, lineCount: 1 })).toEqual({ row: 0, last: 2 });
+  // Pasted three lines and not yet laid out: the wrapped view says one line, the logical one three.
+  expect(cursorLines({ visualRow: 0, virtualLineCount: 1, logicalRow: 2, lineCount: 3 })).toEqual({ row: 2, last: 2 });
 });

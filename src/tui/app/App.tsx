@@ -27,6 +27,7 @@ import { Picker, shownItems, PICKER_ROWS } from './Picker.js';
 import { MotionContext, PlainContext, THEMES, ThemeContext, chosenRow, framed, resolveTheme, selectable, useReducedMotion, useTheme, type Theme } from './theme.js';
 import { KEY_ACTIONS, keysFor, keysHelp, loadKeybindings, matchesAction, type KeyAction, type KeyLike, type Keybindings } from './keys.js';
 import { earlierMessages } from './history.js';
+import { cursorLines, describeRecall, isRecalled, recallDown, recallEscape, recallUp, type Move, type Recall } from './recall.js';
 import type { Phase, TodoView } from '../state/view.js';
 import type { WorkItem } from '../../core/work.js';
 import type { SessionNote } from '../../core/runtime/index.js';
@@ -207,7 +208,7 @@ function TodoPanel({
         ) : listed.length ? (
           <span fg={colors.text}>{[live.length ? `${live.length} running` : '', ended ? `${ended} done` : ''].filter(Boolean).join(', ')}</span>
         ) : null}
-        <span fg={colors.dim}>{`${words && todos?.length ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}${live.some((item) => item.kind === 'task') && !focus ? ' · ↑↓ choose an agent, Enter looks in' : ''}`}</span>
+        <span fg={colors.dim}>{`${words && todos?.length ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}${live.some((item) => item.kind === 'task') && !focus ? ' · ↓ choose an agent, Enter looks in' : ''}`}</span>
       </text>
       {listed.map((item) => {
         const state = workState(item, colors);
@@ -685,6 +686,18 @@ export function App(props: AppProps) {
   /** What Escape does while the composer holds text a command put there to finish, as /config's list does. */
   const prefillBack = useRef<(() => void) | undefined>(undefined);
   /**
+   * The walk back through earlier prompts, while Up has begun one. Keys read the ref, which
+   * changes at once; the state is there so the row over the composer is drawn.
+   */
+  const [recall, setRecallView] = useState<Recall | undefined>(undefined);
+  const recallRef = useRef<Recall | undefined>(undefined);
+  const setRecall = (next: Recall | undefined) => {
+    recallRef.current = next;
+    setRecallView(next);
+  };
+  // Another session has its own prompts, and starts without a walk.
+  useEffect(() => setRecall(undefined), [runtime]);
+  /**
    * The overlay open over the composer: the request, its choices once they arrive, the
    * filter typed so far, and the chosen row. Keys read the ref, which changes at once.
    */
@@ -811,7 +824,8 @@ export function App(props: AppProps) {
     palette.current = next;
     setPaletteView(next);
   };
-  const matchesFor = (draft: string) => (naming(draft) && palette.current.closed !== draft ? matchCommands(commands, draft) : undefined);
+  // A prompt recalled as it was sent is not a command being named, so it opens no list that would take Up and Down.
+  const matchesFor = (draft: string) => (naming(draft) && palette.current.closed !== draft && !isRecalled(recallRef.current, draft) ? matchCommands(commands, draft) : undefined);
   /** What `@` can name, read once per session when the first `@` is typed. */
   const [referenceItems, setReferenceItems] = useState<ReferenceItem[] | undefined>(undefined);
   const referencesLoading = useRef(false);
@@ -821,7 +835,7 @@ export function App(props: AppProps) {
   }, [runtime]);
   const referencesFor = (draft: string) => {
     const token = referenceToken(draft);
-    if (token === undefined || naming(draft) || palette.current.closed === draft) return undefined;
+    if (token === undefined || naming(draft) || palette.current.closed === draft || isRecalled(recallRef.current, draft)) return undefined;
     return matchReferences(referenceItems ?? [], token);
   };
   const onDraft = () => {
@@ -869,6 +883,20 @@ export function App(props: AppProps) {
     }, 0);
   };
 
+  /** A line sent from the composer is recorded as typed, and ends any walk through earlier prompts. */
+  const sentLine = (line: string) => {
+    runtime.prompt(line, 'sent');
+    setRecall(undefined);
+  };
+
+  /** Put a step of the walk in the composer; an edit the walk left behind is kept as a cleared prompt. */
+  const applyRecall = (move: Move) => {
+    if (move.abandoned) runtime.prompt(move.abandoned, 'cleared');
+    setRecall(move.recall);
+    composer.current?.setText(move.text);
+    composer.current?.gotoBufferEnd();
+  };
+
   const submit = () => {
     const typed = composer.current?.plainText ?? '';
     const text = typed.trim();
@@ -880,7 +908,7 @@ export function App(props: AppProps) {
     // `#` opens a note to the project's AGENTS.md, through the tool path.
     const note = noteText(text);
     if (note) {
-      runtime.prompt(text, 'sent');
+      sentLine(text);
       composer.current?.setText('');
       setPalette({ draft: '', index: 0 });
       return void appendNote(note);
@@ -889,7 +917,7 @@ export function App(props: AppProps) {
     const listed = matchesFor(typed);
     const chosen = listed?.[palette.current.index];
     const line = listed && chosen && !findCommand(commands, parseCommand(text)?.name ?? '') ? `/${chosen.name}` : text;
-    runtime.prompt(line, 'sent');
+    sentLine(line);
     composer.current?.setText('');
     setPalette({ draft: '', index: 0 });
     if (line.startsWith('/')) return void runCommand(line);
@@ -1029,7 +1057,8 @@ export function App(props: AppProps) {
     // Escape lets go of the choice between turns; while a turn runs it still stops the turn.
     const walkable = shownWork(state.work, Date.now(), sentAt).filter((item) => item.kind === 'task');
     const focused = agentFocusRef.current;
-    const walking = key.name === 'up' || key.name === 'down' || (focused && (key.name === 'return' || (key.name === 'escape' && !controller.running)));
+    // Up is for earlier prompts, so it walks the board only once a child is chosen; Down chooses one.
+    const walking = key.name === 'down' || (focused && (key.name === 'up' || key.name === 'return' || (key.name === 'escape' && !controller.running)));
     if (draft === '' && walkable.length && !approval && walking) {
       key.preventDefault();
       if (key.name === 'escape') return setAgentFocus(undefined);
@@ -1037,7 +1066,9 @@ export function App(props: AppProps) {
       const at = walkable.findIndex((item) => item.id === focused);
       // The first move lands on a running child, since that is the one worth looking in on.
       const running = walkable.findIndex((item) => item.endedAt === undefined);
-      const first = running >= 0 ? running : key.name === 'up' ? walkable.length - 1 : 0;
+      const first = running >= 0 ? running : 0;
+      // Up from the first child lets go of the choice, so the next Up is a prompt.
+      if (key.name === 'up' && at <= 0) return setAgentFocus(undefined);
       const next = at < 0 ? first : Math.min(Math.max(0, at + (key.name === 'up' ? -1 : 1)), walkable.length - 1);
       setBoard((shown) => (shown === 'hidden' ? 'auto' : shown));
       return setAgentFocus(walkable[next].id);
@@ -1049,6 +1080,11 @@ export function App(props: AppProps) {
       prefillBack.current = undefined;
       composer.current?.setText('');
       return back();
+    }
+    // Escape ends a walk through earlier prompts and gives the draft back.
+    if (key.name === 'escape' && recallRef.current && !controller.running) {
+      key.preventDefault();
+      return applyRecall(recallEscape(recallRef.current, draft)!);
     }
     // Help, on an empty composer, lists the commands and keys.
     if (bound('help', key) && draft === '') {
@@ -1094,6 +1130,27 @@ export function App(props: AppProps) {
       if (key.name === 'escape') {
         key.preventDefault();
         return setPalette({ draft, index: 0, closed: draft });
+      }
+    }
+    // Up on the first line recalls the previous prompt; Down on the last walks forward. A prompt
+    // still as it was recalled is walked from any line, so a long one is not crawled through.
+    if ((key.name === 'up' || key.name === 'down') && !key.shift && !key.ctrl && !key.meta) {
+      const walking = isRecalled(recallRef.current, draft);
+      const edit = composer.current;
+      const { row, last: lastRow } = edit
+        ? cursorLines({ visualRow: edit.visualCursor.visualRow, virtualLineCount: edit.virtualLineCount, logicalRow: edit.logicalCursor.row, lineCount: edit.lineCount })
+        : { row: 0, last: 0 };
+      const move =
+        key.name === 'up'
+          ? walking || row === 0
+            ? recallUp(recallRef.current, draft, runtime.prompts().slice().reverse())
+            : undefined
+          : walking || row >= lastRow
+          ? recallDown(recallRef.current, draft)
+          : undefined;
+      if (move) {
+        key.preventDefault();
+        return applyRecall(move);
       }
     }
     const up = bound('page_up', key);
@@ -1246,6 +1303,11 @@ export function App(props: AppProps) {
                     onScroll={(step) => setPalette({ ...palette.current, index: Math.min(Math.max(0, palette.current.index + step), Math.max(0, referenceMatches.length - 1)) })}
                     onPick={(index) => referenceMatches[index] && completeWith(referenceMatches[index])}
                   />
+                ) : null}
+                {recall ? (
+                  <text {...sel} fg={theme.dim} wrapMode="none" truncate>
+                    {describeRecall(recall, Date.now(), plain)}
+                  </text>
                 ) : null}
                 <box {...framed(plain, theme.border)} flexShrink={0} height={plain ? 3 : 5}>
                   <textarea
