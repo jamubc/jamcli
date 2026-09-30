@@ -74,6 +74,33 @@ export type TranscriptEvent =
    * that recall and history search read, and it is never sent to the model.
    */
   | { v: 2; type: 'prompt'; ts: number; text: string; state: 'sent' | 'cleared' }
+  /** The name the person gave the session with `/rename`; the last one holds. */
+  | { v: 2; type: 'name'; ts: number; name: string }
+  /** The color the person gave the session with `/color`; null returns to the theme's. The last one holds. */
+  | { v: 2; type: 'color'; ts: number; color: string | null }
+  /**
+   * How the person framed the tester notes for the reflection that follows; null when they
+   * left the notes out. The last one before a reflection's request decides what it reads.
+   */
+  | { v: 2; type: 'reflection'; ts: number; notes: string | null }
+  /** A flag this session raised or lowered on the machine's flag board. */
+  | { v: 2; type: 'flag'; ts: number; flag: string; raised: boolean }
+  /**
+   * A wake of this session: a prompt it runs later. `set` carries what it waits for, when a
+   * time (`at`, epoch ms) or sessions raising a flag (`when`); `fire`, `cancel`, and
+   * `missed` name it by id.
+   */
+  | {
+      v: 2;
+      type: 'wake';
+      ts: number;
+      id: string;
+      action: 'set' | 'cancel' | 'fire' | 'missed';
+      prompt?: string;
+      at?: number;
+      when?: { sessions: string[]; flag: string };
+      by?: 'person' | 'model';
+    }
   /**
    * What requests carry besides the conversation, as sent: the system prompt and the tool
    * definitions. Written when they differ from the last recorded, so it holds for every

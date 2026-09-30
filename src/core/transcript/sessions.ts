@@ -16,6 +16,10 @@ export interface SessionSummary {
   title?: string;
   firstUserMessage?: string;
   model?: string;
+  /** The name given with `/rename`. */
+  name?: string;
+  /** The color given with `/color`. */
+  color?: string;
 }
 
 export const historyDirFor = (projectRoot: string) => path.join(projectRoot, '.jamcli', 'history');
@@ -74,7 +78,9 @@ export function readSessionIndex(): SessionSummary[] {
  */
 export function recordSessionSummary(projectRoot: string, id: string, events: TranscriptEvent[]): void {
   const messages = events.flatMap((event) => (event.type === 'message' ? [event] : []));
-  if (!messages.length) return;
+  const { name, color } = identityOf(events);
+  // A named session is listed before its first message, so other sessions can refer to it.
+  if (!messages.length && !name) return;
   const firstUser = messages.find((event) => event.message.role === 'user')?.message.content ?? '';
   const tokens = events.reduce((sum, event) => sum + (event.type === 'usage' && !event.delegated ? event.usage.total_tokens || 0 : 0), 0);
   const model = [...messages].reverse().find((event) => event.message.model)?.message.model;
@@ -90,9 +96,12 @@ export function recordSessionSummary(projectRoot: string, id: string, events: Tr
     updated: new Date().toISOString(),
     totalTokens: tokens,
     messageCount: messages.length,
-    title: previous?.title || titleFrom(firstUser),
+    // A session named before its first message has no title until that message.
+    ...(previous?.title || firstUser ? { title: previous?.title || titleFrom(firstUser) } : {}),
     firstUserMessage: firstUser.slice(0, 200),
     ...(model ? { model } : {}),
+    ...(name ? { name } : {}),
+    ...(color ? { color } : {}),
   };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.appendFileSync(file, `${JSON.stringify({ v: INDEX_VERSION, ...summary })}\n`, 'utf8');
@@ -101,6 +110,57 @@ export function recordSessionSummary(projectRoot: string, id: string, events: Tr
   const temporary = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, `${next.map((entry) => JSON.stringify({ v: INDEX_VERSION, ...entry })).join('\n')}\n`, 'utf8');
   fs.renameSync(temporary, file);
+}
+
+/** The session's name and color, as the last `name` and `color` events left them. */
+export function identityOf(events: TranscriptEvent[]): { name?: string; color?: string } {
+  let name: string | undefined;
+  let color: string | undefined;
+  for (const event of events) {
+    if (event.type === 'name') name = event.name;
+    else if (event.type === 'color') color = event.color ?? undefined;
+  }
+  return { ...(name ? { name } : {}), ...(color ? { color } : {}) };
+}
+
+/** A session id as JamCLI makes them: the day it started and eight hex digits. */
+export const SESSION_ID = /\b\d{4}-\d{2}-\d{2}-[0-9a-f]{8}\b/g;
+
+const NAME = /^[A-Za-z0-9._-]{1,60}$/;
+
+/** A name as `/rename` keeps it: one word, spaces made `-`. Says why when it cannot be one. */
+export function sessionName(text: string): { name: string } | { error: string } {
+  const name = text.trim().replace(/\s+/g, '-');
+  if (!name) return { error: 'A name needs at least one character.' };
+  if (!NAME.test(name)) return { error: `${name} is not a name: use up to 60 letters, digits, and - _ . only.` };
+  if (new RegExp(`^${SESSION_ID.source}$`).test(name)) return { error: 'A name cannot look like a session id.' };
+  return { name };
+}
+
+/**
+ * The session a reference means: an id, or a name the index holds, compared without case.
+ * A session of `projectRoot` is preferred; a name two other projects share is ambiguous.
+ */
+export function resolveSessionRef(ref: string, projectRoot?: string): { session: SessionSummary } | { error: string; missing?: true } {
+  const wanted = ref.trim();
+  const index = readSessionIndex();
+  const here = (entry: SessionSummary) => projectRoot !== undefined && samePath(entry.projectRoot, projectRoot);
+  const pick = (matches: SessionSummary[], what: string): { session: SessionSummary } | { error: string } | undefined => {
+    if (!matches.length) return undefined;
+    const local = matches.filter(here);
+    if (local.length === 1) return { session: local[0] };
+    const pool = local.length ? local : matches;
+    if (pool.length === 1) return { session: pool[0] };
+    return { error: `${what} ${wanted} names ${pool.length} sessions: ${pool.map((entry) => `${entry.id} in ${entry.projectRoot}`).join(', ')}. Use the id.` };
+  };
+  const found = pick(index.filter((entry) => entry.id === wanted), 'The id') ?? pick(index.filter((entry) => entry.name?.toLowerCase() === wanted.toLowerCase()), 'The name');
+  if (found) return found;
+  // A log the index never listed, such as one written before the index, still opens by its id.
+  if (projectRoot !== undefined && /^[\w.-]+$/.test(wanted) && fs.existsSync(sessionFileFor(projectRoot, wanted))) {
+    const now = new Date().toISOString();
+    return { session: { id: wanted, projectRoot, projectName: path.basename(projectRoot), created: now, updated: now, totalTokens: 0, messageCount: 0 } };
+  }
+  return { error: `No session named ${wanted}.`, missing: true };
 }
 
 const canonical = (target: string): string => {

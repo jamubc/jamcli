@@ -87,6 +87,17 @@ export class TranscriptRecorder {
   }
 
   /**
+   * Record what the person or the model did to the session itself: its name or color, a
+   * reflection's framing, a flag, a wake. Each is worth a session file on its own, and a
+   * name or color reaches the index at once, so pickers show it.
+   */
+  recordFact(fact: Extract<NewTranscriptEvent, { type: 'name' | 'color' | 'reflection' | 'flag' | 'wake' }>): void {
+    this.started = true;
+    this.write(fact);
+    if (fact.type === 'name' || fact.type === 'color') this.guard(() => this.log.updateIndex());
+  }
+
+  /**
    * Record what the person typed. Like a note, it is worth a session file on its own, so a
    * slash command sent before any message is kept. The text the log already ends on, in the
    * same state, is not written a second time.
