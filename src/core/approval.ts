@@ -152,12 +152,17 @@ export function previewCall(call: ToolCall, projectRoot: string): ApprovalPrevie
 let counter = 0;
 
 /**
- * What makes two calls the same call: the working tree, the tool, and every argument but a
- * command's `description`, which is words for the person about what runs, not what runs.
+ * What makes two calls the same call: the working tree, the tool, and its arguments in any
+ * order. A command is what runs and where: its `description` is words for the person, and a
+ * `cwd` of `.` is the project root it runs in when none is given.
  */
 const callKey = (call: ToolCall, projectRoot: string): string => {
-  const { description: _words, ...runs } = call.arguments ?? {};
-  return JSON.stringify([projectRoot, call.name, call.name === 'run_command' ? runs : (call.arguments ?? {})]);
+  const args: Record<string, unknown> = { ...(call.arguments ?? {}) };
+  if (call.name === 'run_command') {
+    delete args.description;
+    args.cwd = path.resolve(projectRoot, typeof args.cwd === 'string' ? args.cwd : '.');
+  }
+  return JSON.stringify([projectRoot, call.name, Object.keys(args).sort().map((name) => [name, args[name]])]);
 };
 
 export function buildApprovalRequest(

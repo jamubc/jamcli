@@ -120,12 +120,12 @@ test('one answer settles every ask of the same call waiting in the session, each
   const waiting = new WaitingAsks();
   const asks: Extract<AgentEvent, { type: 'approval_request' }>[] = [];
   const hear = (event: AgentEvent) => void (event.type === 'approval_request' && asks.push(event));
-  const same = (id: string, command: string, description: string): ToolCall => ({ id, name: 'run_command', arguments: { command, description } });
+  const command = (id: string, args: Record<string, unknown>): ToolCall => ({ id, name: 'run_command', arguments: args });
   const target = dispatcher({ run_command: { decision: 'ask' } });
-  // The words a command carries for the person do not make it another call; the command does.
-  const first = run([same('b1', 'bun test', 'Run the test suite')], target, hear, waiting);
-  const second = run([same('b2', 'bun test', 'Run the bun test suite')], target, hear, waiting);
-  const other = run([same('b3', 'bun test --watch', 'Run the test suite')], target, hear, waiting);
+  // What runs, and where, makes a command the call it is; the words it carries for the person, a cwd of `.`, and the order of its arguments do not.
+  const first = run([command('b1', { command: 'bun test', description: 'Run the test suite' })], target, hear, waiting);
+  const second = run([command('b2', { cwd: '.', command: 'bun test', description: 'Run the bun test suite' })], target, hear, waiting);
+  const other = run([command('b3', { command: 'bun test --watch', description: 'Run the test suite' })], target, hear, waiting);
   await Bun.sleep(5);
   expect(asks).toHaveLength(3);
   expect(asks[0].request?.key).toBe(asks[1].request?.key);
