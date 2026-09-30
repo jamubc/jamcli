@@ -167,7 +167,7 @@ test('the board stays up beside a prompt, and lists what runs beside the turn wi
     setup.mockInput.pressKey('1');
     // Once it runs, the board lists it, with how long and how to stop it, and the status line counts it.
     const running = await frameWith(setup, (value) => value.includes('/jobs stop job_') && value.includes('Started.'));
-    expect(running).toMatch(/◐ command sleep 20 · \d+s · \/jobs stop job_/);
+    expect(running).toMatch(/◐ command sleep 20\s+\d+s · \/jobs stop job_/);
     expect(running).toContain('1 job');
     const id = /\/jobs stop (job_\w+)/.exec(running)![1];
     await setup.mockInput.typeText(`/jobs stop ${id}`);

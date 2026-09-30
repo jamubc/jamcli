@@ -74,6 +74,11 @@ export interface AppProps {
   copy?: Copier;
 }
 
+/** The most characters of what a child is doing now that its row shows. */
+const DOING_WIDTH = 28;
+const cut = (text: string, room: number): string => (text.length > room ? `${text.slice(0, Math.max(1, room - 1))}…` : text);
+const fitDoing = (detail: string): string => cut(detail, DOING_WIDTH);
+
 /** The most lines the composer grows to before it scrolls. */
 const COMPOSER_LINES = 8;
 
@@ -171,6 +176,9 @@ function TodoPanel({
   const sel = selectable(colors);
   const reduced = useReducedMotion();
   const clickable = useClickable();
+  const columns = useTerminalDimensions().width;
+  // An agent's row: the board's padding on both sides and the row's own indent.
+  const rowWidth = Math.max(20, columns - 4);
   const done = todos?.filter((todo) => todo.status === 'completed').length ?? 0;
   const running = todos?.find((todo) => todo.status === 'in_progress');
   const [now, setNow] = useState(Date.now());
@@ -217,22 +225,26 @@ function TodoPanel({
       {listed.map((item) => {
         const state = workState(item, colors);
         const chosen = item.id === focus;
-        const facts = workFacts(item, now);
+        const bar = chosenRow(colors, chosen);
+        // What a running child is doing right now is cut to a few words, so its label and its facts keep the room.
+        const doing = item.kind === 'task' && item.endedAt === undefined ? fitDoing(item.detail ?? 'starting') : undefined;
+        const asking = doing !== undefined && item.detail?.startsWith('asking') === true;
+        const rest = [...workFacts(item, now), ...(item.endedAt !== undefined ? [item.outcome ?? 'ended'] : item.kind === 'job' ? [`/jobs stop ${item.id}`] : []), ...(chosen ? ['Enter looks in'] : [])].join(' · ');
+        // One row: the state, the agent, and its label at the left, cut first; what it does now and its facts at the right, never cut.
+        const right = (doing !== undefined ? doing.length + 3 : 0) + rest.length;
+        // The label has what the row leaves after its mark, its agent, its facts, and a gap of two; a longer one ends in an ellipsis.
+        const label = cut(item.label, rowWidth - 2 - kindOf(item).length - 1 - right - 2 - 1);
         return (
-          <box key={item.id} flexDirection="column" flexShrink={0} marginTop={1} paddingLeft={2} {...clickable(() => onOpen(item.id))}>
-            <text {...sel} wrapMode="none" truncate {...chosenRow(colors, chosen)}>
+          <box key={item.id} flexDirection="row" justifyContent="space-between" flexShrink={0} paddingLeft={2} {...(bar.bg ? { backgroundColor: bar.bg } : {})} {...clickable(() => onOpen(item.id))}>
+            <text {...sel} wrapMode="none" truncate flexShrink={1} {...(bar.attributes !== undefined ? { attributes: bar.attributes } : {})}>
               <span fg={state.color}>{`${state.mark} `}</span>
               <span fg={colors.accent}>{kindOf(item)}</span>
-              <span fg={colors.text}>{` ${item.label}`}</span>
-              <span fg={colors.dim}>{` · ${facts.join(' · ')}${item.endedAt !== undefined ? ` · ${item.outcome ?? 'ended'}` : item.kind === 'job' ? ` · /jobs stop ${item.id}` : ''}${chosen ? ' · Enter looks in' : ''}`}</span>
+              <span fg={colors.text}>{` ${label}`}</span>
             </text>
-            {item.kind === 'task' ? (
-              <Rail>
-                <text {...sel} fg={item.detail?.startsWith('asking') ? colors.warn : colors.dim} wrapMode="none" truncate>
-                  {item.endedAt !== undefined ? (item.detail ?? 'done') : (item.detail ?? 'starting')}
-                </text>
-              </Rail>
-            ) : null}
+            <text {...sel} wrapMode="none" flexShrink={0} marginLeft={2} {...(bar.attributes !== undefined ? { attributes: bar.attributes } : {})}>
+              {doing !== undefined ? <span fg={asking ? colors.warn : colors.dim}>{`${doing} · `}</span> : null}
+              <span fg={colors.dim}>{rest}</span>
+            </text>
           </box>
         );
       })}
@@ -1194,8 +1206,11 @@ export function App(props: AppProps) {
       return;
     }
     const draft = composer.current?.plainText ?? '';
+    // The child chosen is one the board still lists: a choice its child has just outlived is already let go.
+    const walkable = listedWork.filter((item) => item.kind === 'task');
+    const focused = walkable.some((item) => item.id === agentFocusRef.current) ? agentFocusRef.current : undefined;
     // Down on an empty composer takes the last queued message back to edit, unsent.
-    if (key.name === 'down' && draft === '' && state.queued.length && !approval && !agentFocusRef.current) {
+    if (key.name === 'down' && draft === '' && state.queued.length && !approval && !focused) {
       key.preventDefault();
       const back = controller.takeQueued();
       if (back) composer.current?.setText(back);
@@ -1203,8 +1218,6 @@ export function App(props: AppProps) {
     }
     // On an empty composer, Up and Down walk the children on the board and Enter looks in on the chosen one.
     // Escape lets go of the choice between turns; while a turn runs it still stops the turn.
-    const walkable = listedWork.filter((item) => item.kind === 'task');
-    const focused = agentFocusRef.current;
     // Up is for earlier prompts, so it walks the board only once a child is chosen; Down chooses one.
     const walking = key.name === 'down' || (focused && (key.name === 'up' || key.name === 'return' || (key.name === 'escape' && !controller.running)));
     if (draft === '' && walkable.length && !approval && walking) {

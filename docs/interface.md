@@ -34,10 +34,11 @@ list: `{ "cycle_mode": "ctrl+y", "history": ["ctrl+r", "ctrl+s"] }`. The actions
 The board sits above the composer and appears on its own when the model writes a
 checklist or starts a child agent; Ctrl+T hides and shows it. Its first line is the plan
 in marks, each in the color of its state (green done, yellow running, dim waiting), and the
-count. Under it, each child agent running beside the turn: its state, its agent and task,
-how long it has run, its tokens and cost, and behind a rail what it is doing right now (the
-call it is making, or the last line it said). Then the steps, indented, the running one with
-how long it has run and its check.
+count. Under it, each child agent running beside the turn, on one row: its state, its agent
+and its title at the left, and at the right what it is doing right now (the call it is
+making, in the warning color while it asks for a decision), how long it has run, and its
+tokens and cost. A title too long for the row ends in an ellipsis before those facts are
+cut. Then the steps, indented, the running one with how long it has run and its check.
 
 Down on an empty composer chooses an agent (Up is for earlier prompts, and lets go of the choice from the first agent); Enter, or a click on it, opens its run
 in place of the conversation: what it has done so far and each further event as it happens.

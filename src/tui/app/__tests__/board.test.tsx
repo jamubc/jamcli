@@ -1,5 +1,6 @@
 import { expect, spyOn, test } from 'bun:test';
-import { frameWith, interfaceHarness } from './harness.js';
+import { THEMES } from '../theme.js';
+import { frameWith, interfaceHarness, type Setup } from './harness.js';
 
 const { context, open } = interfaceHarness();
 const size = { width: 110, height: 44 };
@@ -19,7 +20,7 @@ test('a child agent shows on the board with what it is doing and what it cost, a
     setup.mockInput.pressEnter();
     // The board appears on its own: the running child, its agent, its task, and its activity behind a rail.
     const board = await frameWith(setup, (frame) => frame.includes('Agents 1 running') && frame.includes('◐ quick count the files in src'));
-    expect(board).toMatch(/│ (thinking|starting)/);
+    expect(board).toMatch(/◐ quick count the files in src\s+(thinking|starting)/);
     // The header says how to choose one; Down chooses it, and the row itself then says what Enter does.
     expect(board).toContain('↓ choose an agent, Enter looks in');
     setup.mockInput.pressArrow('down');
@@ -36,8 +37,7 @@ test('a child agent shows on the board with what it is doing and what it cost, a
     await frameWith(setup, (frame) => frame.includes('Message JamCLI') && !frame.includes('Esc back'));
     // Once it ends, the board keeps it for a while with how it ended and what it cost.
     const done = await frameWith(setup, (frame) => frame.includes('The child counted twelve.') && frame.includes('● quick count the files in src'));
-    expect(done).toMatch(/● quick count the files in src · \d+s · 320 tokens/);
-    expect(done).toContain('· ok');
+    expect(done).toMatch(/● quick count the files in src\s+\d+s · 320 tokens · ok/);
     const heard = context.server.completions().map((request) => JSON.stringify(request.body));
     expect(heard.some((body) => body.includes('[The person watching says:\\ncount css too]'))).toBe(true);
   } finally {
@@ -245,6 +245,115 @@ test('with a message queued, Down takes it back and does not choose a child', as
     setup.mockInput.pressArrow('down');
     const back = await frameWith(setup, (frame) => !frame.includes('queued, ↓ edit') && /│ and then this/.test(frame));
     expect(back).not.toMatch(/count the files in src .* Enter looks in/);
+    for (const item of runtime.work()) runtime.stopWork(item.id);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+/** The rows of the last frame that hold this text. */
+const rowsWith = (setup: Setup, text: string): { y: number; row: string }[] =>
+  setup
+    .captureCharFrame()
+    .split('\n')
+    .flatMap((row, y) => (row.includes(text) ? [{ y, row }] : []));
+
+test('each agent is one row, with its facts at the right and nothing under it or between agents', async () => {
+  const { setup, runtime, close } = await open({ allowTools: ['task'] }, { size: { width: 100, height: 44 } });
+  try {
+    context.server.enqueue(
+      {
+        toolCalls: [
+          { id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'first, slow', background: true } },
+          { id: 't2', name: 'task', arguments: { agent: 'quick', prompt: 'second, slow', background: true } },
+        ],
+      },
+      { text: 'Done.', delayMs: 4_000 },
+      { text: 'Done.', delayMs: 4_000 },
+      { text: 'Done.', delayMs: 4_000 }
+    );
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    const frame = await frameWith(setup, (value) => value.includes('◐ quick first, slow') && value.includes('◐ quick second, slow'));
+    const [first] = rowsWith(setup, '◐ quick first, slow');
+    const [second] = rowsWith(setup, '◐ quick second, slow');
+    // Adjacent rows: no margin between agents, and no rail row under the first.
+    expect(second.y - first.y).toBe(1);
+    expect(frame).not.toMatch(/^\s*│ (thinking|starting)/m);
+    // The label is at the left and the time at the right of the same row.
+    expect(first.row).toMatch(/◐ quick first, slow\s+.*\d+s\s*$/);
+    for (const item of runtime.work()) runtime.stopWork(item.id);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a label too long for the row is cut before its facts are, at 60 and at 100 columns', async () => {
+  for (const width of [60, 100]) {
+    const { setup, runtime, close } = await open({ allowTools: ['task'] }, { size: { width, height: 44 } });
+    try {
+      // A title the model gave has no limit but its own good sense; an untitled child is already cut to sixty characters.
+      const title = 'count every single file under the source directory and report how many there are by extension for each package';
+      context.server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'count', title, background: true } }] }, { text: 'Done.', delayMs: 4_000 }, { text: 'Done.', delayMs: 4_000 });
+      await setup.mockInput.typeText('delegate it');
+      setup.mockInput.pressEnter();
+      await frameWith(setup, (value) => value.includes('◐ quick count every'));
+      const [row] = rowsWith(setup, '◐ quick count every');
+      expect(row.row.length).toBeLessThanOrEqual(width);
+      expect(row.row).toContain('…');
+      expect(row.row).toMatch(/starting · \d+s\s*$/);
+      expect(row.row).not.toContain('for each package');
+      for (const item of runtime.work()) runtime.stopWork(item.id);
+    } finally {
+      await close();
+    }
+  }
+}, 40_000);
+
+test('a child that is asking keeps the warning color on what it says, on its one row', async () => {
+  const { setup, runtime, close } = await open({ allowTools: ['task'] }, { size: { width: 110, height: 44 } });
+  try {
+    // The parent waits for the child, so the child's first step is its own: a command that asks.
+    context.server.enqueue(
+      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'print a word' } }] },
+      { toolCalls: [{ id: 'c1', name: 'run_command', arguments: { command: 'printf asked-word' } }] },
+      { text: 'Printed.' },
+      { text: 'Done.' }
+    );
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (value) => value.includes('asking'));
+    const [row] = rowsWith(setup, 'asking');
+    const at = row.row.indexOf('asking');
+    let column = 0;
+    let found: { fg: { equals(other: unknown): boolean } } | undefined;
+    for (const span of setup.captureSpans().lines[row.y].spans) {
+      if (at < column + span.width) {
+        found = span;
+        break;
+      }
+      column += span.width;
+    }
+    const { RGBA } = await import('@opentui/core');
+    expect(found!.fg.equals(RGBA.fromHex(THEMES.dark.warn as string))).toBe(true);
+    expect(row.row).toContain('quick print a word');
+    setup.mockInput.pressKey('4');
+    for (const item of runtime.work()) runtime.stopWork(item.id);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('screen reader mode keeps one line of words for each agent', async () => {
+  const { setup, runtime, close } = await open({ allowTools: ['task'] }, { size: { width: 200, height: 44 }, screenReader: true });
+  try {
+    context.server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'first, slow', background: true } }] }, { text: 'Done.', delayMs: 4_000 }, { text: 'Done.', delayMs: 4_000 });
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (value) => value.includes('Running: agent quick first, slow'));
+    const [row] = rowsWith(setup, 'Running: agent quick first, slow');
+    expect(row.row).toMatch(/Running: agent quick first, slow, \d+s/);
+    expect(row.row).toContain('stop it with /jobs stop');
     for (const item of runtime.work()) runtime.stopWork(item.id);
   } finally {
     await close();

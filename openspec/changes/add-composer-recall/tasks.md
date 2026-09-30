@@ -63,10 +63,10 @@ only, never Ollama.
 
 - [x] 8.1 Write failing tests in `src/tui/app/__tests__/board.test.tsx` for each defect: with reduced motion an ended child past 90 seconds leaves the board and cannot be chosen; a choice held on a child that expired or was sent past is let go and Enter does not open it; the hint shows when only ended children are listed; panel and keys list the same children; verify all four fail
 - [x] 8.2 Fix them in `App.tsx`: one list from one clock shared by panel and keys, the clock ticking while any ended child is listed, the choice cleared when it leaves that list, the hint tied to the list; verify 8.1 passes
-- [ ] 8.3 Write tests for the new keys: Down on an empty composer chooses the running child else the first; Up and Down move; Up on the first lets go; Enter opens; Escape lets go; a queued message comes back on Down before any choice; verify they fail on the current keys
-- [ ] 8.4 Move the board keys to Down per those tests and update the header hint; verify 8.3 passes and the existing navigation tests in `board.test.tsx` and `queue.test.tsx` pass
-- [ ] 8.5 Write tests that each agent is exactly one row, its label cuts before its facts at 60 and 100 columns, an asking agent keeps the warning color, the active step wraps to four rows, and plain mode keeps one line of words per agent; verify they fail on the three-row board
-- [ ] 8.6 Redraw the board's agent rows and the active step as designed; verify 8.5 passes and the frame of a board with two running children fits in the rows the old one took for one
+- [x] 8.3 Write tests for the new keys: Down on an empty composer chooses the running child else the first; Up and Down move; Up on the first lets go; Enter opens; Escape lets go; a queued message comes back on Down before any choice; verify they fail on the current keys
+- [x] 8.4 Move the board keys to Down per those tests and update the header hint; verify 8.3 passes and the existing navigation tests in `board.test.tsx` and `queue.test.tsx` pass
+- [x] 8.5 Write tests that each agent is exactly one row, its label cuts before its facts at 60 and 100 columns, an asking agent keeps the warning color, the active step wraps to four rows, and plain mode keeps one line of words per agent; verify they fail on the three-row board
+- [x] 8.6 Redraw the board's agent rows and the active step as designed; verify 8.5 passes and the frame of a board with two running children fits in the rows the old one took for one
 - [ ] 8.7 Update the board notes in `docs/interface.md` ("The plan board") for Down and the one-line rows; verify no line still says Up chooses an agent
 
 ## 9. Close the unit
