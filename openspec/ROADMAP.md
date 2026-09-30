@@ -575,7 +575,7 @@ asks; a grant settles every waiting ask it now allows; asks for the same call ar
 and before a fan-out the person is asked once about what its children need. A grant scoped
 to one fan-out's children was deferred until the ledger shows the need.
 
-### E. Spinner verbs
+### E. `add-spinner-verbs` (archived 2026-09-29)
 
 Plain phase words stay the default. A verb pool per phase is an optional part of a text
 style in `custom_status_styles`, so no new configuration key is added (`src/types/config.ts`,

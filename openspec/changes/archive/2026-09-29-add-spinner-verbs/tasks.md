@@ -11,5 +11,5 @@
 
 ## 3. Close
 
-- [ ] 3.1 Choose `whimsy` with `/style whimsy` in the interface on `opencode-go:deepseek-v4.1-flash` in a throwaway fixture through `jamcli mcp serve`'s `terminal_*` tools, send a prompt that thinks and runs a tool, and keep the recording; done when it shows a pooled word for each phase and `/style glow` returns the plain words.
-- [ ] 3.2 Run the four gates and `openspec validate add-spinner-verbs --strict`, record the unit in `openspec/SEQUENCE.md` and `openspec/ROADMAP.md`, and archive the change.
+- [x] 3.1 Choose `whimsy` with `/style whimsy` in the interface on `opencode-go:deepseek-v4.1-flash` in a throwaway fixture through `jamcli mcp serve`'s `terminal_*` tools, send a prompt that thinks and runs a tool, and keep the recording; done when it shows a pooled word for each phase and `/style glow` returns the plain words. Done: the indicator read `pondering` while the model thought and `churning` while `sleep 4` ran, and after `/style glow` it read `thinking`.
+- [x] 3.2 Run the four gates and `openspec validate add-spinner-verbs --strict`, record the unit in `openspec/SEQUENCE.md` and `openspec/ROADMAP.md`, and archive the change.

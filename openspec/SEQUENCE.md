@@ -58,10 +58,9 @@ per-surface clauses above were added for that reason. The record is in
 ## Open unit
 
 None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
-verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so is
-`label-and-batch-child-approvals`, the first of the two units the owner's report of
-2026-09-29 ordered. The second, spinner verbs (`ROADMAP.md`, E), opens next. After it, what
-opens is the owner's choice: the queued `add-findings-loop` (unit 4), or what the task
+verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the two units the
+owner's report of 2026-09-29 ordered, `label-and-batch-child-approvals` and
+`add-spinner-verbs`. What opens next is the owner's choice: the queued `add-findings-loop` (unit 4), or what the task
 corpus's scores and a second person's transcripts ask for, which the review names as this
 file's input from now on. The owner also decides whether `land-interface-rhythm` (B), `add-btw` (C), and the
 shelved `add-windows-support` are dropped, as the review would have them.
@@ -72,6 +71,22 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 28. `add-spinner-verbs`
+
+Archived as `2026-09-29-add-spinner-verbs`: 1 requirement modified (UI Style Configuration).
+The second unit of the owner's report of 2026-09-29, which decided the design: plain phase
+words stay the default, and words are an optional part of a word style, so no configuration
+key is added. A style lists words for thinking, writing, and running a tool; one is picked
+as the phase begins, from a count of phases begun, and held until it changes. Retrying and
+compacting keep their own words, screen reader mode and reduced motion show the phase word,
+and the builtin `whimsy` bundles a pool for each phase. The status line's room is measured
+on the word shown; the test for it fails when the room is measured on the phase word
+(`58cd835`). The schema's pattern for `status_text_style` had to learn `whimsy`, or `/style
+whimsy` would have saved a configuration the next load refused.
+
+On the flash model the indicator read `pondering` while the model thought and `churning`
+while a command ran, and `thinking` again after `/style glow`.
 
 ### 27. `label-and-batch-child-approvals`
 
