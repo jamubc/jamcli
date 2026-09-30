@@ -19,6 +19,17 @@ drops old messages leaves the prompts listed. Up in the composer and Ctrl+R sear
 read them; a session written before they were recorded lists its earlier messages
 instead. The Markdown export counts them and shows each cleared draft.
 
+## Drafts
+
+Text in the composer that has not been sent is kept in `.jamcli/history/<session>.draft`
+while you type (at most a quarter of a second behind), and written at once if the terminal
+closes, the process is told to end, or you leave with text in it. It is removed when the
+text is sent or cleared; a cleared draft stays in the log as a `cleared` prompt. The next
+interface opened in the project takes a draft whose process has ended, the newest first,
+into an empty composer and says which session it came from. A draft of an interface that is
+still running is left alone. The file holds what you typed as you typed it: see
+`security.md`.
+
 ## Resuming and branching
 
 - `jamcli -p --continue` continues the most recent session in the project; `--resume <id>`

@@ -45,11 +45,11 @@ only, never Ollama.
 
 ## 6. Drafts survive leaving
 
-- [ ] 6.1 Write tests for `src/core/transcript/draft.ts`: atomic write and read; remove on clear; adopt a draft whose pid is dead and take the file; leave a draft whose pid is alive; ignore a corrupt file; a `.draft` file is not listed as a session by `readSessionIndex` or `jamcli sessions list`; verify they fail for the missing module
-- [ ] 6.2 Implement `draft.ts` with `saveDraft`, `readDraft`, `clearDraft`, and `adoptOrphanDraft`; verify 6.1 passes
-- [ ] 6.3 Debounce a save from the composer's content change in `App.tsx`, remove it on send and clear, restore an adopted draft with a notice when a session opens with an empty composer, and add an exit flush called from `exit()` in `src/tui/app/start.tsx`; add tests in `composer.test.tsx` that type, wait past the debounce, and read the file, then open a second session and see the draft restored; verify both pass
-- [ ] 6.4 Test the flush: send SIGHUP to a real `startOpenTui` child process in a fixture project with text typed, and verify the draft file holds that text and a restart restores it
-- [ ] 6.5 Document drafts in `docs/sessions.md` and the secret-on-disk note in `docs/security.md`; verify each names the file, when it is removed, and that `.jamcli/` is gitignored
+- [x] 6.1 Write tests for `src/core/transcript/draft.ts`: atomic write and read; remove on clear; adopt a draft whose pid is dead and take the file; leave a draft whose pid is alive; ignore a corrupt file; a `.draft` file is not listed as a session by `readSessionIndex` or `jamcli sessions list`; verify they fail for the missing module
+- [x] 6.2 Implement `draft.ts` with `saveDraft`, `readDraft`, `clearDraft`, and `adoptOrphanDraft`; verify 6.1 passes
+- [x] 6.3 Debounce a save from the composer's content change in `App.tsx`, remove it on send and clear, restore an adopted draft with a notice when a session opens with an empty composer, and add an exit flush called from `exit()` in `src/tui/app/start.tsx`; add tests in `composer.test.tsx` that type, wait past the debounce, and read the file, then open a second session and see the draft restored; verify both pass
+- [x] 6.4 Test the flush: send SIGHUP to a real `startOpenTui` child process in a fixture project with text typed, and verify the draft file holds that text and a restart restores it
+- [x] 6.5 Document drafts in `docs/sessions.md` and the secret-on-disk note in `docs/security.md`; verify each names the file, when it is removed, and that `.jamcli/` is gitignored
 
 ## 7. Paste chips, counter, and growth
 

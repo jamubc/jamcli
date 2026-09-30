@@ -52,6 +52,14 @@ Every tool call is decided before it runs, deny first:
 - Tool output, referenced file content, MCP resource text, ACP updates, language server
   diagnostics, and session logs pass through the redactor, which replaces a credential's
   value with `[redacted:NAME]`.
+- What you type in the composer is kept as you typed it, as the message you send is. Until
+  it is sent, the interface keeps it in `.jamcli/history/<session>.draft`, so that a closed
+  terminal or a crash does not lose a long prompt. A credential you paste there is in that
+  file, and in the session log's `prompt` event once you send or clear the text. The file is
+  removed when the text is sent or cleared, is never read by the model, and sits under
+  `.jamcli/`, which JamCLI git-ignores; the redactor does not touch it. Delete a `.draft`
+  file to discard a draft, and a session's `.jsonl` file in the same directory if its log
+  should not keep what you typed.
 
 ## Extensions
 

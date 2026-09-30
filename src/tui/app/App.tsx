@@ -2,7 +2,7 @@
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { debugTranscript } from '../../core/transcript/index.js';
+import { adoptOrphanDraft, clearDraft, debugTranscript, saveDraft } from '../../core/transcript/index.js';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import { fitPhrase, isMicro, microPhrase, microSetting } from './micro.js';
@@ -72,6 +72,9 @@ export interface AppProps {
   /** Where copied text goes. Defaults to the system clipboard, then the terminal's. */
   copy?: Copier;
 }
+
+/** How long the draft in the composer may go unwritten while the person types. */
+const DRAFT_SAVE_MS = 250;
 
 /** How long a short confirmation, such as a copy, stays on the status line. */
 const FLASH_MS = 2_200;
@@ -697,6 +700,84 @@ export function App(props: AppProps) {
   };
   // Another session has its own prompts, and starts without a walk.
   useEffect(() => setRecall(undefined), [runtime]);
+
+  /**
+   * What the person has typed and not sent is kept on disk while they type, at most a
+   * quarter of a second behind, and written at once when the process ends, so leaving, a
+   * closed terminal, or a crash loses nothing. While a walk through earlier prompts shows
+   * an old prompt, the draft kept is the one the walk set aside.
+   */
+  const draftKept = useRef({ id: runtime.sessionId, text: '' });
+  const draftWritten = useRef({ id: runtime.sessionId, text: '' });
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const writeDraft = () => {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = undefined;
+    const kept = draftKept.current;
+    if (kept.id === draftWritten.current.id && kept.text === draftWritten.current.text) return;
+    try {
+      // A project that is gone, as a test's is at its end, is not made again for a draft.
+      if (!fs.existsSync(projectRoot)) return;
+      saveDraft(projectRoot, kept.id, { text: kept.text, chips: {} });
+      draftWritten.current = { ...kept };
+    } catch {
+      // A draft that cannot be kept must not stop the person typing.
+    }
+  };
+  const keepDraft = () => {
+    const text = composer.current?.plainText ?? '';
+    const walk = recallRef.current;
+    draftKept.current = { id: runtime.sessionId, text: walk && isRecalled(walk, text) ? walk.stash : text };
+    if (!draftTimer.current) draftTimer.current = setTimeout(writeDraft, DRAFT_SAVE_MS);
+  };
+  /** The text was sent or cleared: nothing is left to keep, and no write still waiting may put it back. */
+  const settleDraft = () => {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = undefined;
+    draftKept.current = { id: runtime.sessionId, text: '' };
+    draftWritten.current = { id: runtime.sessionId, text: '' };
+    try {
+      clearDraft(projectRoot, runtime.sessionId);
+    } catch {
+      // Nothing to remove, or nothing that can be.
+    }
+  };
+  useEffect(() => {
+    process.on('exit', writeDraft);
+    process.on('SIGHUP', writeDraft);
+    process.on('SIGTERM', writeDraft);
+    return () => {
+      process.off('exit', writeDraft);
+      process.off('SIGHUP', writeDraft);
+      process.off('SIGTERM', writeDraft);
+    };
+  }, []);
+  // A session opened here keeps the draft under its own name and takes up one an earlier session left behind.
+  useEffect(() => {
+    const before = draftKept.current.id;
+    if (before !== runtime.sessionId) {
+      try {
+        clearDraft(projectRoot, before);
+      } catch {
+        // Already gone.
+      }
+      draftWritten.current = { id: runtime.sessionId, text: '' };
+    }
+    if ((composer.current?.plainText ?? '') === '') {
+      let found: ReturnType<typeof adoptOrphanDraft>;
+      try {
+        found = adoptOrphanDraft(projectRoot, runtime.sessionId);
+      } catch {
+        found = undefined;
+      }
+      if (found) {
+        composer.current?.setText(found.text);
+        composer.current?.gotoBufferEnd();
+        dispatch({ type: 'notice', level: 'info', text: `Restored the draft left unsent in session ${found.from}.` });
+      }
+    }
+    keepDraft();
+  }, [runtime]);
   /**
    * The overlay open over the composer: the request, its choices once they arrive, the
    * filter typed so far, and the chosen row. Keys read the ref, which changes at once.
@@ -839,6 +920,7 @@ export function App(props: AppProps) {
     return matchReferences(referenceItems ?? [], token);
   };
   const onDraft = () => {
+    keepDraft();
     const draft = composer.current?.plainText ?? '';
     if (draft !== palette.current.draft) setPalette({ draft, index: 0, closed: palette.current.closed === draft ? draft : undefined });
     if (referenceToken(draft) !== undefined && !referenceItems && !referencesLoading.current) {
@@ -887,6 +969,7 @@ export function App(props: AppProps) {
   const sentLine = (line: string) => {
     runtime.prompt(line, 'sent');
     setRecall(undefined);
+    settleDraft();
   };
 
   /** Put a step of the walk in the composer; an edit the walk left behind is kept as a cleared prompt. */
@@ -942,6 +1025,7 @@ export function App(props: AppProps) {
     setRecall(undefined);
     composer.current?.setText('');
     setPalette({ draft: '', index: 0 });
+    settleDraft();
   };
 
   /** Stop the turn; what was queued behind it comes back to the composer, ahead of any draft. */

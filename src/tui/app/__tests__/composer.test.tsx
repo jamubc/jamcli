@@ -504,3 +504,84 @@ test('Up recalls the prompts from before a /compact, and from a session that is 
     await close();
   }
 }, 60_000);
+
+/** The history directory of the fixture project, where a session's log and draft live. */
+const historyDir = () => path.join(context.root, '.jamcli', 'history');
+const draftOf = (id: string) => path.join(historyDir(), `${id}.draft`);
+async function until(check: () => boolean, ms = 3_000): Promise<void> {
+  for (const end = Date.now() + ms; Date.now() < end && !check(); ) await Bun.sleep(20);
+}
+const leaveDraft = (id: string, text: string, pid: number, chips: Record<string, string> = {}) => {
+  fs.mkdirSync(historyDir(), { recursive: true });
+  fs.writeFileSync(draftOf(id), JSON.stringify({ pid, text, chips }));
+};
+const deadPid = () => Bun.spawnSync(['true']).pid ?? 999_999;
+
+test('what is typed is kept on disk as it is typed, and is gone once it is sent or cleared', async () => {
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const file = draftOf(runtime.sessionId);
+    await setup.mockInput.typeText('thirty minutes of typing');
+    await until(() => fs.existsSync(file));
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ pid: process.pid, text: 'thirty minutes of typing' });
+
+    context.server.enqueue({ text: 'reply' });
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    expect(fs.existsSync(file)).toBe(false);
+    // Nothing writes it back once the timer that was waiting would have run.
+    await Bun.sleep(500);
+    expect(fs.existsSync(file)).toBe(false);
+
+    await setup.mockInput.typeText('and then this');
+    await until(() => fs.existsSync(file));
+    setup.mockInput.pressCtrlC();
+    await frameWith(setup, composerHolds(EMPTY));
+    await Bun.sleep(500);
+    expect(fs.existsSync(file)).toBe(false);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a draft left by a session whose process has ended comes back in the next one, with a notice, and only once', async () => {
+  leaveDraft('2026-01-01-gone', 'the prompt that was half written\nover two lines', deadPid());
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const restored = await frameWith(setup, composerHolds('the prompt that was half written\nover two lines'));
+    expect(restored).toContain('Restored the draft left unsent in session 2026-01-01-gone.');
+    expect(fs.existsSync(draftOf('2026-01-01-gone'))).toBe(false);
+    // It is this session's draft now.
+    await until(() => fs.existsSync(draftOf(runtime.sessionId)));
+    expect(JSON.parse(fs.readFileSync(draftOf(runtime.sessionId), 'utf8')).text).toBe('the prompt that was half written\nover two lines');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a draft of a session that is still running is left alone', async () => {
+  leaveDraft('2026-01-01-running', 'someone else is typing this', process.pid);
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await setup.renderOnce();
+    expect(composerHolds(EMPTY)(setup.captureCharFrame())).toBe(true);
+    expect(fs.existsSync(draftOf('2026-01-01-running'))).toBe(true);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('a draft left while the interface runs is taken by the session that /clear opens', async () => {
+  const { setup, runtime, current, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const first = runtime.sessionId;
+    leaveDraft('2026-01-01-gone', 'left behind by a closed terminal', deadPid());
+    await setup.mockInput.typeText('/clear');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, composerHolds('left behind by a closed terminal'));
+    expect(current().sessionId).not.toBe(first);
+    expect(fs.existsSync(draftOf('2026-01-01-gone'))).toBe(false);
+  } finally {
+    await close();
+  }
+}, 30_000);
