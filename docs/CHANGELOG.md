@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- From the owner's tester notes of 2026-09-30. `/reflect` reads the session's tester notes
+  once you say how to read them, and a lesson may cite one. `/report` writes the notes with
+  the model, effort, context, cost, a message, and optionally the log. Past three, notes
+  fold into one row the wheel moves through, and `/notes` lists them. `/rename` names a
+  session and `/resume` takes the name; `/color` colors its border and status line. `/wake`
+  and the `wake` tool run a prompt later, after a time or once named sessions raise a flag
+  with `/flag` or the `flag` tool, on every surface. A prompt naming a session is told where
+  its log is. macOS stays awake while a turn runs or a wake waits.
+- A list that takes typed text no longer counts the typed row, as in "(5 of 4)".
 - `jamcli audit ledger` lists every decision the project's sessions recorded: each call that
   changed something or was refused, who decided, the rule and the file and key it came from,
   and the files it changed. `--session`, `--since`, `--refused`, and `--json` narrow and shape
