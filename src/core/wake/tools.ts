@@ -62,7 +62,8 @@ export function wakeTools(sources: WakeToolSources): RegisteredTool[] {
           by: 'model',
         });
         if ('error' in made) return error(made.error);
-        return { output: `Set ${describeWake(made.wake, now)}\nEnd your turn now; the harness sends the prompt when it goes off.` };
+        // From when it was set, so a timer of 1 s never reads as 2 across a millisecond.
+        return { output: `Set ${describeWake(made.wake, made.wake.setAt)}\nEnd your turn now; the harness sends the prompt when it goes off.` };
       },
     },
     {

@@ -140,7 +140,7 @@ export const wake: SlashCommand = {
     }
     if ('error' in made) return ctx.notice('warn', made.error);
     // The prompt ends the line as it was written, so what follows starts a line of its own.
-    ctx.notice('info', `Set ${describeWake(made.wake, now)}\n/wake cancel ${made.wake.id} removes it.`);
+    ctx.notice('info', `Set ${describeWake(made.wake, made.wake.setAt)}\n/wake cancel ${made.wake.id} removes it.`);
   },
 };
 
