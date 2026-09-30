@@ -164,6 +164,7 @@ export function buildApprovalRequest(
     preview: previewCall(call, options.projectRoot),
     reason: options.reason ?? 'this tool asks before it runs',
     suggestions: suggestPatterns(call),
-    ...(options.alwaysAsks ? { alwaysAsks: true } : {}),
+    // A call only the person answers is asked about on its own, however alike it is to another.
+    ...(options.alwaysAsks ? { alwaysAsks: true } : { key: JSON.stringify([options.projectRoot, call.name, call.arguments ?? {}]) }),
   };
 }

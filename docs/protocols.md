@@ -69,7 +69,9 @@ terminal manager.
   A call that asks becomes `session/request_permission` with allow once, allow for the
   session, reject, and reject-with-a-reason. A rejection with no feedback stops the turn.
   A child's call is titled by the child that asks, as in `Write the notes · quick ›
-  write_file a.txt`.
+  write_file a.txt`. Asks for the same call reach the editor as one request, whose answer
+  goes to each. ACP cannot take back a request once sent, so a request whose call a grant
+  settles meanwhile stays open in the editor, and its answer is ignored.
 - `available_commands_update` offers every built-in command, beside custom commands and
   MCP prompts. A prompt naming one runs it, as the interface would: what it shows arrives
   as message chunks, and a turn it sends is the prompt's turn. A list it offers is printed

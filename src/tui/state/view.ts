@@ -59,6 +59,8 @@ export interface PendingApproval {
   suggestions: string[];
   /** The child run that asks, when one does. */
   from?: ApprovalAsker;
+  /** What the call is: waiting asks with the same key are shown, and answered, as one. */
+  key?: string;
 }
 
 /** What the turn is doing now, for the status line. */
@@ -285,6 +287,7 @@ function applyEvent(state: ViewState, event: AgentEvent): ViewState {
         ...(request?.preview ? { preview: request.preview } : {}),
         suggestions: request?.suggestions ?? [],
         ...(request?.from ? { from: request.from } : {}),
+        ...(request?.key ? { key: request.key } : {}),
       };
       const known = state.rows.some(isTool(event.call.id));
       const proposed = approval.preview?.kind === 'diff' ? { diff: approval.preview.text } : {};

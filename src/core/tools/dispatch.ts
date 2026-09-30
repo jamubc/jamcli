@@ -87,6 +87,34 @@ export interface BatchContext {
   beforeChange?: (call: ToolCall) => Promise<void>;
   /** Called once the step's calls are done, when `beforeChange` was, such as to settle the checkpoint. */
   afterChange?: () => Promise<void>;
+  /** The session's waiting asks, so one answer settles every identical one. */
+  waiting?: WaitingAsks;
+}
+
+/**
+ * The asks of one session waiting for an answer, by key, so an answer to one settles every
+ * other that asks the same: ten children asking to run one command are answered once. It
+ * belongs to the runtime, not to a batch, because a background child still asks through the
+ * batch that started it after that batch returned.
+ */
+export class WaitingAsks {
+  private readonly waiting = new Map<string, Set<(decision: ApprovalDecision) => void>>();
+
+  /** Wait under `key` until settled. Returns how to stop waiting. */
+  add(key: string, settle: (decision: ApprovalDecision) => void): () => void {
+    const same = this.waiting.get(key) ?? new Set();
+    same.add(settle);
+    this.waiting.set(key, same);
+    return () => {
+      same.delete(settle);
+      if (!same.size) this.waiting.delete(key);
+    };
+  }
+
+  /** Settle every ask still waiting under `key` with the answer one of them was given. */
+  answer(key: string, decision: ApprovalDecision): void {
+    for (const settle of [...(this.waiting.get(key) ?? [])]) settle(decision);
+  }
 }
 
 export interface BatchOutcome {
@@ -315,7 +343,19 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
           reason: reason ?? ctx.dispatcher.approvalReason?.(call),
           alwaysAsks: ctx.dispatcher.alwaysAsks?.(call.name),
         });
-      ctx.emit({ type: 'approval_request', call, request, withdrawn: withdraw.signal, decide: (decision) => finish(decision) });
+      const key = request.key;
+      if (key && ctx.waiting) stops.push(ctx.waiting.add(key, finish));
+      ctx.emit({
+        type: 'approval_request',
+        call,
+        request,
+        withdrawn: withdraw.signal,
+        decide: (decision) => {
+          finish(decision);
+          // The same answer goes to every other ask of the same call, each recorded by its own run.
+          if (key) ctx.waiting?.answer(key, decision);
+        },
+      });
     });
 
   const delegates = (index: number) => ctx.dispatcher.policyClass?.(calls[index].name) === 'delegate';

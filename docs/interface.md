@@ -73,7 +73,10 @@ once, allow for the session, allow for the project, deny and let the turn go on,
 with feedback for the model, and shows the rule a grant would save; Escape denies and stops
 the turn. It shows a command whole, wrapped, and a command or a diff longer than the rows
 the transcript leaves scrolls with the wheel. A subagent's prompt is answered the same way,
-and each prompt goes once it is answered. An MCP server's request for input is a form in the
+and each prompt goes once it is answered. Agents asking for the same call at once are one
+prompt, whose heading says how many ask (`10 agents ask › Allow run_command bun test?`)
+over a row naming them: the answer goes to each of them, and `1 of N waiting` counts that
+prompt once. An MCP server's request for input is a form in the
 same place.
 
 ## The mouse

@@ -600,6 +600,9 @@ export function App(props: AppProps) {
   };
 
   const approval = state.approvals[0];
+  // Asks for the same call are one prompt: its answer settles them all, and the count of prompts counts it once.
+  const asking = approval?.key ? state.approvals.filter((item) => item.key === approval.key) : approval ? [approval] : [];
+  const prompts = new Set(state.approvals.map((item) => item.key ?? item.callId)).size;
   /**
    * Which suggested pattern the prompt offers, and whether it is taking feedback, for the
    * call it was chosen on. A new call starts over without an effect, so a key pressed as
@@ -1157,7 +1160,8 @@ export function App(props: AppProps) {
             {approval ? (
               <PermissionPrompt
                 approval={approval}
-                queued={state.approvals.length}
+                asking={asking}
+                queued={prompts}
                 syntax={syntax}
                 file={(state.rows.find((row) => row.kind === 'tool' && row.callId === approval.callId) as { path?: string } | undefined)?.path}
                 selected={selected}

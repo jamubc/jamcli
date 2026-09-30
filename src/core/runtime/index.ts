@@ -22,7 +22,7 @@ import { loadAgents, routableAgents } from '../ext/agents.js';
 import { taskDescription } from '../tools/task.js';
 import { pinnedState } from '../tools/plan.js';
 import { readTodos, stampTodos } from '../tools/todo.js';
-import { executeBatch } from '../tools/dispatch.js';
+import { executeBatch, WaitingAsks } from '../tools/dispatch.js';
 import { MAX_COMMAND_TIMEOUT_MS } from '../tools/command.js';
 import { Ledger, detectGates, handoffDue, handoffNote, registerVerifyMiddleware, renderHandoff, runGate, writeHandoff, type GateRow, type HandoffReason } from '../verify/index.js';
 import { effortFor, thinkingFor } from '../routing/capabilities.js';
@@ -213,6 +213,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   // What runs beside the turn. A child shares its parent's table, so its jobs are the person's to see and stop too.
   const workTable = options.parent?.work ?? new WorkTable();
+  /** What waits on an answer in this session, across its steps and rebuilds, so one answer settles every identical ask. */
+  const waitingAsks = new WaitingAsks();
   // Loaded once, so the agents the model is shown and the routing it gets stay in step.
   const agents = loadAgents(projectRoot, config);
   notices.push(...agents.problems);
@@ -449,6 +451,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       // Only Ollama sizes its window per request; the others ignore it.
       contextLength: sessionModel.info.contextWindow,
       dispatcher: toolSet.dispatcher,
+      waiting: waitingAsks,
       toolDefinitions: toolSet.definitions,
       maxSteps: options.maxSteps ?? loop?.max_steps ?? DEFAULT_AGENT_LOOP_CONFIG.max_steps,
       // A child out of steps still reports what it found; the parent would otherwise redo it.
@@ -548,7 +551,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     if (options.signal?.aborted) gateController.abort();
     const call: ToolCall = { id: `gate-${Date.now().toString(36)}`, name: 'run_command', arguments: { command, timeout_ms: MAX_COMMAND_TIMEOUT_MS } };
     try {
-      const batch = await executeBatch([call], { dispatcher: toolSet.dispatcher, emit, signal: gateController.signal, projectRoot: workRoot, session, hooks, redact });
+      const batch = await executeBatch([call], { dispatcher: toolSet.dispatcher, emit, signal: gateController.signal, projectRoot: workRoot, session, hooks, redact, waiting: waitingAsks });
       const [result] = batch.results;
       return { status: result.status ?? (result.success ? ('ok' as const) : ('error' as const)), output: result.output, durationMs: result.durationMs };
     } finally {

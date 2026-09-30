@@ -101,6 +101,11 @@ export interface ApprovalRequest {
   alwaysAsks?: boolean;
   /** The child run that asks, when a delegated run raised it. */
   from?: ApprovalAsker;
+  /**
+   * What the call is, as its working tree, tool, and arguments: asks with the same key ask
+   * the same thing, so one answer settles them all. None for a call only the person answers.
+   */
+  key?: string;
 }
 
 /** A child run as its prompts name it: its task id, the title it was given, and its agent. */

@@ -145,6 +145,41 @@ test('the ACP server initializes, opens a session, and streams a prompt with a p
   expect(messages.find((message) => message.id === 3).result.stopReason).toBe('end_turn');
 });
 
+test('two asks for the same call reach the editor as one request, whose answer settles both', async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const messages = collect(output);
+  // As the runtime does: one answer to either ask settles both, and each is recorded.
+  const identical = (): AcpSessionController => ({
+    ...approvableController(),
+    async run(_prompt: string, onEvent: (event: AgentEvent) => void): Promise<RunResult> {
+      const ask = (id: string) => {
+        const call = { id, name: 'run_command', arguments: { command: 'bun test' } };
+        return { call, request: { id, call, policyClass: 'execute' as const, summary: 'run_command bun test', reason: 'default mode asks before tools that run commands', suggestions: [], key: 'the same call' } };
+      };
+      const answer = await new Promise<boolean>((resolve) => {
+        for (const id of ['t1/c1', 't2/c1']) onEvent({ type: 'approval_request', ...ask(id), decide: (decision) => resolve(readDecision(decision).allow) });
+      });
+      for (const id of ['t1/c1', 't2/c1']) onEvent({ type: 'approval_decision', callId: id, tool: 'run_command', allow: answer, scope: 'once', by: 'user' });
+      return { status: 'ok', sessionId: 'session-1', response: '', turns: 1, usage };
+    },
+  });
+  const server = new AcpServer({ input, output, projectRoot: '/tmp/project', createSession: async () => identical() });
+  void server.start();
+  const send = (message: unknown) => input.write(`${JSON.stringify(message)}\n`);
+  send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: 1, clientCapabilities: {} } });
+  send({ jsonrpc: '2.0', id: 2, method: 'session/new', params: { cwd: '/tmp/project', mcpServers: [] } });
+  await waitFor(() => messages.some((message) => message.id === 2 && message.result));
+  send({ jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'go' }] } });
+  await waitFor(() => messages.some((message) => message.method === 'session/request_permission'));
+  const permission = messages.find((message) => message.method === 'session/request_permission');
+  send({ jsonrpc: '2.0', id: permission.id, result: { outcome: { outcome: 'selected', optionId: 'allow-once' } } });
+  await waitFor(() => messages.some((message) => message.id === 3 && message.result));
+  await Bun.sleep(20);
+  input.end();
+  expect(messages.filter((message) => message.method === 'session/request_permission')).toHaveLength(1);
+});
+
 test('a rejected permission turns the prompt into a refusal and no tool result is emitted', async () => {
   const input = new PassThrough();
   const output = new PassThrough();

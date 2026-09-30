@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { executeBatch, type DispatchVerdict, type ToolDispatcher } from '../dispatch.js';
+import { executeBatch, WaitingAsks, type DispatchVerdict, type ToolDispatcher } from '../dispatch.js';
 import { createSession } from '../../state.js';
 import type { AgentEvent, ToolCall } from '../../types.js';
 
@@ -20,7 +20,7 @@ const dispatcher = (verdicts: Record<string, DispatchVerdict>, classes: Record<s
   };
 };
 
-const run = async (calls: ToolCall[], target: ToolDispatcher, answer?: (event: AgentEvent) => void) => {
+const run = async (calls: ToolCall[], target: ToolDispatcher, answer?: (event: AgentEvent) => void, waiting?: WaitingAsks) => {
   const events: AgentEvent[] = [];
   const outcome = await executeBatch(calls, {
     dispatcher: target,
@@ -31,6 +31,7 @@ const run = async (calls: ToolCall[], target: ToolDispatcher, answer?: (event: A
     signal: new AbortController().signal,
     projectRoot: '/tmp/verdicts',
     session: createSession('/tmp/verdicts'),
+    ...(waiting ? { waiting } : {}),
   });
   return { events, outcome };
 };
@@ -113,4 +114,30 @@ test('allowed changes are recorded with who allowed them; reads and the plan are
   expect(recorded).toEqual([
     { type: 'approval_decision', callId: 'edit', tool: 'edit', allow: true, scope: 'once', by: 'flag', rule: 'edit', reason: 'edit allows it (--allow-tool edit)' },
   ]);
+});
+
+test('one answer settles every ask of the same call waiting in the session, each recorded, and no other', async () => {
+  const waiting = new WaitingAsks();
+  const asks: Extract<AgentEvent, { type: 'approval_request' }>[] = [];
+  const hear = (event: AgentEvent) => void (event.type === 'approval_request' && asks.push(event));
+  const same = (id: string, n: number): ToolCall => ({ id, name: 'build', arguments: { n } });
+  const target = dispatcher({ build: { decision: 'ask' } });
+  const first = run([same('b1', 1)], target, hear, waiting);
+  const second = run([same('b2', 1)], target, hear, waiting);
+  const other = run([same('b3', 2)], target, hear, waiting);
+  await Bun.sleep(5);
+  expect(asks).toHaveLength(3);
+  expect(asks[0].request?.key).toBe(asks[1].request?.key);
+  expect(asks[2].request?.key).not.toBe(asks[0].request?.key);
+  asks[0].decide(true);
+  const [one, two] = await Promise.all([first, second]);
+  for (const done of [one, two]) {
+    expect(done.outcome.results.map((result) => result.status)).toEqual(['ok']);
+    expect(done.events.find((event) => event.type === 'approval_decision')).toMatchObject({ allow: true, by: 'user', scope: 'once' });
+  }
+  expect(target.ran).toEqual(['build', 'build']);
+  // A different call still waits for its own answer.
+  expect(await Promise.race([other.then(() => 'settled'), Bun.sleep(20).then(() => 'waiting')])).toBe('waiting');
+  asks[2].decide(false);
+  expect((await other).outcome.results.map((result) => result.status)).toEqual(['denied']);
 });

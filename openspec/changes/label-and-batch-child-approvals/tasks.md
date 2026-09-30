@@ -23,9 +23,9 @@
 
 ## 5. Identical asks are one prompt
 
-- [ ] 5.1 Add `ApprovalRequest.key` (working tree, tool, arguments), computed where the request is built, and a per-runtime `WaitingAsks` registry passed through the agent's options into every `executeBatch`. An answer to one waiting ask settles every other with the same key, each recorded by its own continuation. Verify with a dispatch test: two identical waiting asks, one answered `allow once`, both run and both are recorded, while a differing ask still waits.
-- [ ] 5.2 Interface: group the prompt queue by `key`, say in the heading how many agents ask and name them, and count groups in `1 of N waiting`. Verify with the report's test in `src/tui/app/__tests__/prompt.test.tsx`, which fails on `master`: ten children ask the same command, one prompt says ten agents ask, one session answer leaves no prompt, and all ten run.
-- [ ] 5.3 ACP: keep one open `requestPermission` per key, and have a later ask with that key ask on its own only when its call was not decided meanwhile. Verify with an ACP test where two identical child asks reach the editor as one request, then document it in `docs/protocols.md`.
+- [x] 5.1 Add `ApprovalRequest.key` (working tree, tool, arguments), computed where the request is built, and a per-runtime `WaitingAsks` registry passed through the agent's options into every `executeBatch`. An answer to one waiting ask settles every other with the same key, each recorded by its own continuation. Verify with a dispatch test: two identical waiting asks, one answered `allow once`, both run and both are recorded, while a differing ask still waits.
+- [x] 5.2 Interface: group the prompt queue by `key`, say in the heading how many agents ask and name them, and count groups in `1 of N waiting`. Verify with the report's test in `src/tui/app/__tests__/prompt.test.tsx`, which fails on `master`: ten children ask the same command, one prompt says ten agents ask, one session answer leaves no prompt, and all ten run.
+- [x] 5.3 ACP: keep one open `requestPermission` per key, and have a later ask with that key ask on its own only when its call was not decided meanwhile. Verify with an ACP test where two identical child asks reach the editor as one request, then document it in `docs/protocols.md`.
 
 ## 6. The question before a fan-out
 

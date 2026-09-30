@@ -302,6 +302,35 @@ test("a grant settles the other children's prompts it now allows, and none is le
   }
 }, 30_000);
 
+test('ten children asking the same command are one prompt, and one answer for the session leaves none', async () => {
+  fs.mkdirSync(path.join(context.root, '.jamcli'), { recursive: true });
+  fs.writeFileSync(path.join(context.root, '.jamcli', 'config.json'), JSON.stringify({ delegation: { max_concurrent: 10 } }));
+  const { runtime, setup, close } = await open({ allowTools: ['task'] }, { size: { width: 120, height: 60 } });
+  try {
+    const tasks = Array.from({ length: 10 }, (_, n) => ({ id: `t${n}`, name: 'task', arguments: { agent: 'quick', title: `Check ${n}`, prompt: `check ${n}` } }));
+    context.server.enqueue(
+      { toolCalls: tasks },
+      ...tasks.map((_, n) => command(`p${n}`, 'printf checked')),
+      ...tasks.map(() => ({ text: 'checked' })),
+      { text: 'All ten checked.' }
+    );
+    await setup.mockInput.typeText('check ten things');
+    setup.mockInput.pressEnter();
+    const asked = await frameWith(setup, (value) => value.includes('10 agents ask › Allow run_command printf checked?'));
+    // One prompt, however many agents ask: nothing else waits behind it.
+    expect(asked).not.toContain('waiting ·');
+    expect(asked).toContain('Check 0 · quick');
+    setup.mockInput.pressKey('2');
+    const done = await frameWith(setup, (value) => value.includes('All ten checked.'));
+    expect(done).not.toContain('Allow run_command');
+    // Each child's call is recorded as answered by the person, once each.
+    const log = fs.readFileSync(path.join(context.root, '.jamcli', 'history', `${runtime.sessionId}.jsonl`), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    expect(log.filter((entry) => entry.type === 'approval' && entry.tool === 'run_command' && entry.by === 'user' && entry.allow)).toHaveLength(10);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('a long command wraps in the prompt, so all of it is read before it is allowed', async () => {
   const { setup, close } = await open({}, { size: { width: 100, height: 40 } });
   try {

@@ -76,6 +76,11 @@ that showed it. Ten children asking `bun test` at once are answered by one "Allo
 session". A waiting call a new deny would now refuse is not settled: it still waits for
 the person.
 
+Calls asked for at once that are the same call, the same tool with the same arguments in
+the same working tree, are put to you as one. Your answer, allow once included, goes to
+each of them, and each is recorded on its own. A tool that always asks, such as a commit,
+is asked about on its own every time.
+
 ## The sandbox
 
 On Linux, commands run under bubblewrap; on macOS, under Seatbelt. On Windows there is

@@ -51,6 +51,8 @@ type Choice = '1' | '2' | '3' | '4' | '5';
  */
 export function PermissionPrompt(props: {
   approval: PendingApproval;
+  /** Every waiting ask for the same call, this one first: one answer settles them all. */
+  asking?: PendingApproval[];
   queued: number;
   syntax: SyntaxStyle;
   file?: string;
@@ -67,7 +69,10 @@ export function PermissionPrompt(props: {
   const clickable = useClickable();
   const plain = usePlain();
   const { width: columns, height } = useTerminalDimensions();
-  const previewRows = Math.max(MIN_PREVIEW_ROWS, height - CHROME_ROWS - TRANSCRIPT_ROWS_KEPT - FIXED_ROWS);
+  const asking = props.asking?.length ? props.asking : [approval];
+  const many = asking.length > 1;
+  // Several agents asking at once are named on a row under the heading.
+  const previewRows = Math.max(MIN_PREVIEW_ROWS, height - CHROME_ROWS - TRANSCRIPT_ROWS_KEPT - FIXED_ROWS - (many && !plain ? 1 : 0));
   const room = Math.max(20, columns - 4);
   const [hovered, setHovered] = useState<Choice | undefined>(undefined);
   const choice = (key: Choice) => clickable(() => props.onChoose?.(key), { over: () => setHovered(key), out: () => setHovered((now) => (now === key ? undefined : now)) });
@@ -76,9 +81,10 @@ export function PermissionPrompt(props: {
   const diffHeight = diff ? (plain ? diff.split('\n').length + 1 : diffRows(diff)) : 0;
   const diffOverflow = diffHeight > previewRows;
   const asker = approval.from;
+  const named = asking.map((item) => (item.from ? (plain ? `${item.from.title}, agent ${item.from.agent}` : `${item.from.title} · ${item.from.agent}`) : 'this session'));
   const heading = plain
-    ? `Permission needed: ${asker ? `${asker.title}, agent ${asker.agent}, asks: ` : ''}Allow ${approval.summary}?`
-    : `${asker ? `${asker.title} · ${asker.agent} › ` : ''}Allow ${approval.summary}?`;
+    ? `Permission needed: ${many ? `${asking.length} agents, ${named.join('; ')}, ask: ` : asker ? `${named[0]}, asks: ` : ''}Allow ${approval.summary}?`
+    : `${many ? `${asking.length} agents ask › ` : asker ? `${named[0]} › ` : ''}Allow ${approval.summary}?`;
 
   const indent = plain ? 0 : 2;
   const commandOnce = !plain && approval.preview?.kind === 'command' ? omitRepeated(approval.preview.text, heading, room) : undefined;
@@ -109,6 +115,11 @@ export function PermissionPrompt(props: {
           <span fg={escaping ? theme.error : theme.dim}>{plain ? `${badge}${escaping ? ' (denying)' : ''}` : `[${escaping ? '✕ Esc' : 'Esc'}]`}</span>
         </text>
       </box>
+      {many && !plain ? (
+        <text {...sel} fg={theme.dim} wrapMode="none" truncate>
+          {named.join('  ')}
+        </text>
+      ) : null}
       {diff && diffOverflow ? (
         <scrollbox height={previewRows} flexShrink={0} verticalScrollbarOptions={{ visible: false }}>
           <DiffView diff={diff} file={file} syntax={syntax} />

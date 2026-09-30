@@ -1,7 +1,7 @@
 import type { Agent, AgentEvent, ChatMessage, JamSession, RunResult, RunStatus, TokenUsage, ToolCall } from './types.js';
 import { addModelUsage, addUsage, appendMessages } from './state.js';
 import { clockPast, prefixSetNow, type ChatProvider, type ProviderRequestOptions, type StreamChunk, type ToolDefinition } from './providers/types.js';
-import { executeBatch, type ToolDispatcher } from './tools/dispatch.js';
+import { executeBatch, type ToolDispatcher, type WaitingAsks } from './tools/dispatch.js';
 import { HeadTailBuffer } from './tools/command.js';
 import { requestCost } from './catalog/cost.js';
 import type { ModelPrice } from './catalog/types.js';
@@ -71,6 +71,8 @@ export interface AgentOptions {
   beforeChange?: (call: ToolCall) => Promise<void>;
   /** Called once that step's calls are done, to settle the checkpoint. */
   afterChange?: () => Promise<void>;
+  /** The session's waiting asks, so one answer settles every identical one, in whichever step asked. */
+  waiting?: WaitingAsks;
   /**
    * What ended beside the turn since it was last asked: background commands and child
    * agents, one line each. The lines reach the model with the next message it reads.
@@ -215,6 +217,7 @@ export class CoreAgent implements Agent {
       redact: this.redact,
       ...(this.options.beforeChange ? { beforeChange: this.options.beforeChange } : {}),
       ...(this.options.afterChange ? { afterChange: this.options.afterChange } : {}),
+      ...(this.options.waiting ? { waiting: this.options.waiting } : {}),
     });
     const [result] = batch.results;
     const status = result.status ?? (result.success ? 'ok' : 'error');
@@ -425,6 +428,7 @@ export class CoreAgent implements Agent {
         redact: this.redact,
         ...(this.options.beforeChange ? { beforeChange: this.options.beforeChange } : {}),
         ...(this.options.afterChange ? { afterChange: this.options.afterChange } : {}),
+        ...(this.options.waiting ? { waiting: this.options.waiting } : {}),
       });
       usedCalls += batch.ran;
 

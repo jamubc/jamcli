@@ -205,11 +205,15 @@ export class AcpServer {
       prompt: async (params) => {
         const { controller, mapper } = this.session(params.sessionId);
         const { text, context } = promptText(params.prompt);
+        // Asks for the same call reach the editor as one request, whose answer settles them all.
+        const asking = new Map<string, Promise<void>>();
+        const decided = new Set<string>();
         const onEvent = (event: AgentEvent) => {
           if (event.type === 'approval_request') {
-            void this.ask(client, controller.id, mapper, event);
+            void this.askOnce(client, controller.id, mapper, event, asking, decided);
             return;
           }
+          if (event.type === 'approval_decision') decided.add(event.callId);
           for (const item of mapper.map(event)) void update(controller.id, item);
         };
         const runTurn = (prompt: string, turn: RunOptions = {}) => controller.run(context ? `${prompt}\n\n${context}` : prompt, onEvent, turn);
@@ -244,6 +248,33 @@ export class AcpServer {
         this.sessions.get(params.sessionId)?.controller.cancel();
       },
     };
+  }
+
+  /**
+   * Ask the editor about a call, once per call however many ask it: an ask whose call is
+   * already before the editor waits for that answer, which settles it too, and asks on its
+   * own only if it was not.
+   */
+  private async askOnce(
+    client: AgentSideConnection,
+    sessionId: string,
+    mapper: UpdateMapper,
+    event: Extract<AgentEvent, { type: 'approval_request' }>,
+    asking: Map<string, Promise<void>>,
+    decided: Set<string>
+  ): Promise<void> {
+    const key = event.request?.key;
+    const open = key ? asking.get(key) : undefined;
+    if (open) {
+      await open;
+      // What that answer settled arrives before this one looks.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (decided.delete(event.call.id)) return;
+    }
+    const asked = this.ask(client, sessionId, mapper, event);
+    if (key) asking.set(key, asked);
+    await asked;
+    if (key && asking.get(key) === asked) asking.delete(key);
   }
 
   /** Ask the editor about a call. A cancelled or failed request denies it. */
