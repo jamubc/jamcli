@@ -5,3 +5,4 @@ export * from './log.js';
 export * from './recorder.js';
 export * from './markdown.js';
 export * from './debug.js';
+export * from './draft.js';
