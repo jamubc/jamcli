@@ -524,6 +524,15 @@ export function App(props: AppProps) {
     const bottom = box.y + box.height - 1;
     if (event.y < box.y || event.y > bottom) box.updateAutoScroll(event.x, Math.min(Math.max(event.y, box.y), bottom));
   };
+  /**
+   * A press in the transcript starts a selection and leaves the keyboard where it was. The
+   * renderer focuses whatever a press lands in, and the transcript's scrollbox can be focused,
+   * which would take typing from the composer until it was clicked.
+   */
+  const keepComposerFocus = (event: { preventDefault: () => void }) => {
+    selectingTranscript.current = true;
+    event.preventDefault();
+  };
   const endDrag = () => {
     if (!selectingTranscript.current) return;
     selectingTranscript.current = false;
@@ -1149,7 +1158,7 @@ export function App(props: AppProps) {
               </box>
             ) : null}
             {agentView && viewedAgent ? <AgentViewer runtime={runtime} item={viewedAgent} syntax={syntax} thinking={thinking} focus={(box) => (agentBox.current = box)} /> : null}
-            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling visible={!(agentView && viewedAgent)} onMouseDown={() => (selectingTranscript.current = true)} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
+            <scrollbox ref={transcript} flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling visible={!(agentView && viewedAgent)} onMouseDown={keepComposerFocus} {...(plain ? { verticalScrollbarOptions: { visible: false } } : { contentOptions: { paddingRight: 1 } })}>
               {hidden ? (
                 <text {...sel} fg={theme.dim}>{`${plain ? 'Note: ' : ''}${hidden} earlier row${hidden === 1 ? ' is' : 's are'} not drawn. ${keysFor(keys.bindings, 'page_up')} at the top draws ${Math.min(hidden, TRANSCRIPT_ROWS)} more.`}</text>
               ) : null}

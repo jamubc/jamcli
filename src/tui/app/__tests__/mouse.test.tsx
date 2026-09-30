@@ -41,6 +41,25 @@ test('dragging across the transcript copies what it selects, and the status line
   }
 }, 30_000);
 
+test('typing still reaches the composer after a click or a drag in the transcript', async () => {
+  const { setup, close } = await open();
+  try {
+    context.server.enqueue({ text: 'Alpha beta gamma delta.' });
+    await send(setup, 'hello');
+    await frameWith(setup, (frame) => frame.includes('Alpha beta gamma delta.'));
+    const at = where(setup, 'Alpha');
+    await setup.mockMouse.click(at.x + 2, at.y);
+    await setup.mockInput.typeText('after-click');
+    await frameWith(setup, (frame) => frame.includes('after-click'));
+    await Bun.sleep(600);
+    await setup.mockMouse.drag(at.x, at.y, at.x + 'Alpha beta'.length - 1, at.y);
+    await setup.mockInput.typeText('-after-drag');
+    await frameWith(setup, (frame) => frame.includes('after-click-after-drag'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('a selection dragged above the transcript keeps scrolling it, so a long reply is selected whole', async () => {
   const { setup, copied, close } = await open({}, { size: { width: 80, height: 20 } });
   try {

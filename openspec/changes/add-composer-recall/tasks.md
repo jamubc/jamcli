@@ -14,10 +14,10 @@ only, never Ollama.
 
 ## 2. Typing survives a click
 
-- [ ] 2.1 Add a test in `src/tui/app/__tests__/mouse.test.tsx` that clicks and drags in the transcript, then types with `mockInput.typeText`, and asserts the text is in the composer; verify it fails on the current code
-- [ ] 2.2 Add a test that a click on a tool block still shows or hides it; verify it passes before the fix and stays passing
-- [ ] 2.3 Call `preventDefault` on the transcript's mouse-down in `src/tui/app/App.tsx`; verify 2.1 passes, 2.2 still passes, and drag selection and copy tests in `mouse.test.tsx` pass. If 2.2 breaks, refocus the composer from `endDrag` instead and verify the same three
-- [ ] 2.4 Update the keys and composer notes in `docs/interface.md` (typing after a click needs no click back); verify `grep -n "click" docs/interface.md` shows no line saying a click is needed to type
+- [x] 2.1 Add a test in `src/tui/app/__tests__/mouse.test.tsx` that clicks and drags in the transcript, then types with `mockInput.typeText`, and asserts the text is in the composer; verify it fails on the current code
+- [x] 2.2 Add a test that a click on a tool block still shows or hides it; verify it passes before the fix and stays passing
+- [x] 2.3 Call `preventDefault` on the transcript's mouse-down in `src/tui/app/App.tsx`; verify 2.1 passes, 2.2 still passes, and drag selection and copy tests in `mouse.test.tsx` pass. If 2.2 breaks, refocus the composer from `endDrag` instead and verify the same three
+- [x] 2.4 Update the keys and composer notes in `docs/interface.md` (typing after a click needs no click back); verify `grep -n "click" docs/interface.md` shows no line saying a click is needed to type
 
 ## 3. Record what was typed
 

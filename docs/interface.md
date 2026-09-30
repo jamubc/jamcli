@@ -96,6 +96,8 @@ same place.
   does is plain before the click.
 - Click a tool's line to show or hide that tool's output, and a thinking line to show or
   hide that thinking. These are one block at a time; Ctrl+O opens them all at once.
+- A click or a drag in the transcript leaves the keyboard in the composer: what is typed next
+  goes there, with no click back on it.
 - Over anything a click acts on, the pointer is a hand, where the terminal draws one.
 - While the terminal window is unfocused the working indicator holds still.
 
