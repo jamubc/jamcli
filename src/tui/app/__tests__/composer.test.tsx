@@ -236,7 +236,7 @@ test('every line sent from the composer is recorded as typed: a message, a slash
     expect(typed()).toEqual([['/help', 'sent']]);
 
     // An @ reference is expanded for the model; the record keeps what was typed.
-    context.server.enqueue({ text: 'Read it.', delayMs: 800 }, { text: 'Queued reply.' });
+    context.server.enqueue({ text: 'Read it.', delayMs: 400 }, { text: 'Queued reply.' });
     await setup.mockInput.typeText('read @README.md ');
     setup.mockInput.pressEnter();
     await setup.mockInput.typeText('and then this');
@@ -530,14 +530,14 @@ test('what is typed is kept on disk as it is typed, and is gone once it is sent 
     await frameWith(setup, (frame) => frame.includes('reply'));
     expect(fs.existsSync(file)).toBe(false);
     // Nothing writes it back once the timer that was waiting would have run.
-    await Bun.sleep(500);
+    await Bun.sleep(320);
     expect(fs.existsSync(file)).toBe(false);
 
     await setup.mockInput.typeText('and then this');
     await until(() => fs.existsSync(file));
     setup.mockInput.pressCtrlC();
     await frameWith(setup, composerHolds(EMPTY));
-    await Bun.sleep(500);
+    await Bun.sleep(320);
     expect(fs.existsSync(file)).toBe(false);
   } finally {
     await close();
