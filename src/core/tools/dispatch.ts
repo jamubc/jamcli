@@ -45,8 +45,10 @@ export interface ToolDispatcher {
   policyClass?(name: string): PolicyClass | 'unknown';
   /** Whether the tool asks every time, whatever the rules and mode. */
   alwaysAsks?(name: string): boolean;
-  /** Remember a grant the user chose at approval time. */
-  grant?(call: ToolCall, scope: ApprovalScope, pattern?: string): void;
+  /** Remember a grant the user chose at approval time; `how` says how it was given, for where the rule came from. */
+  grant?(call: ToolCall, scope: ApprovalScope, pattern?: string, how?: string): void;
+  /** Of rules a fan-out's children say they will need, those worth asking the person to grant. */
+  grantable?(rules: string[]): string[];
   /** Hear each rule added from now on, a grant included, so an ask still waiting can be decided again. Returns how to stop. */
   onGrant?(listener: () => void): () => void;
   /** For a state-changing call that runs without asking: who allowed it, and by which rule. */
@@ -360,6 +362,66 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
 
   const delegates = (index: number) => ctx.dispatcher.policyClass?.(calls[index].name) === 'delegate';
 
+  /**
+   * Before a fan-out starts: ask once about the rules its children say they need that would
+   * still ask and that a grant would change. Allowed for the session or the project, each
+   * rule is granted with the fan-out named as where it came from; otherwise the children ask
+   * as they go. The person stopping the turn here starts none of them: `false`.
+   */
+  const preflight = async (group: number[]): Promise<boolean> => {
+    const needs = [
+      ...new Set(
+        group.flatMap((index) => {
+          const listed = hooked.get(index)!.call.arguments?.needs;
+          return Array.isArray(listed) ? listed.filter((item): item is string => typeof item === 'string') : [];
+        })
+      ),
+    ];
+    const rules = needs.length ? (ctx.dispatcher.grantable?.(needs) ?? []) : [];
+    if (!rules.length) return true;
+    const first = calls[group[0]];
+    const agents = group.length;
+    const who = agents === 1 ? 'the agent' : `${agents} agents`;
+    const listed = rules.join(', ');
+    const call: ToolCall = { id: `${first.id}:needs`, name: first.name, arguments: { needs: rules } };
+    const answer = await waitForDecision(call, {
+      id: call.id,
+      call,
+      policyClass: 'delegate',
+      summary: `what ${who} will need: ${listed}`,
+      preview: { kind: 'text', text: rules.join('\n') },
+      reason: `${agents === 1 ? 'it says' : 'they say'} they will need these, and each would ask`,
+      suggestions: [listed],
+      grants: { rules, agents },
+    });
+    if (answer === 'cancelled' || isSettled(answer)) {
+      stopped = 'cancelled';
+      return false;
+    }
+    const read = readDecision(answer);
+    // Allow once is no scope for a grant to many children over their whole run, so it grants nothing.
+    const scope = read.allow && read.scope !== 'once' ? read.scope : undefined;
+    const how = `granted before ${who} started`;
+    if (scope) ctx.dispatcher.grant?.(call, scope, listed, how);
+    ctx.emit({
+      type: 'approval_decision',
+      callId: call.id,
+      tool: call.name,
+      allow: Boolean(scope),
+      scope: scope ?? 'once',
+      by: read.by,
+      ...(scope ? { rule: listed, source: how } : { reason: 'not granted; the agents ask as they go' }),
+    });
+    ctx.emit({ type: 'tool_result', result: resultFor(call, scope ? 'ok' : 'denied', scope ? `Allowed for the ${scope}: ${listed}.` : 'Not granted: the agents ask as they go.') });
+    // Only the person stopping the turn, not a surface that cannot ask, keeps the children from starting.
+    if (!read.allow && read.by === 'user' && !read.proceed) {
+      denial = { feedback: read.feedback, proceed: false };
+      stopped = 'denied';
+      return false;
+    }
+    return true;
+  };
+
   /** Take the step's checkpoint before its first call that may change something. */
   const changeAhead = async (index: number) => {
     const current = hooked.get(index)!.call;
@@ -476,6 +538,14 @@ export async function executeBatch(calls: ToolCall[], ctx: BatchContext): Promis
         next = fate === 'cancelled' ? j : j + 1;
         if (fate === 'run') runnable.push(j);
         if (stopped) break;
+      }
+      if (runnable.length && !stopped && !(await preflight(runnable))) {
+        for (const index of runnable) {
+          const result = resultFor(calls[index], 'cancelled', stopped === 'denied' ? 'Not run: the person stopped the turn before the agents started.' : 'Not run: the turn was cancelled.');
+          ctx.emit({ type: 'tool_result', result });
+          settle(index, result);
+        }
+        runnable.length = 0;
       }
       if (runnable.length) {
         await changeAhead(runnable[0]);

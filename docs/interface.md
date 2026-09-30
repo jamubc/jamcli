@@ -76,7 +76,9 @@ the transcript leaves scrolls with the wheel. A subagent's prompt is answered th
 and each prompt goes once it is answered. Agents asking for the same call at once are one
 prompt, whose heading says how many ask (`10 agents ask › Allow run_command bun test?`)
 over a row naming them: the answer goes to each of them, and `1 of N waiting` counts that
-prompt once. An MCP server's request for input is a form in the
+prompt once. Before the children of one step start, the question about what they need
+lists the rules and offers 1 allow for this session, 2 allow for this project, and 3 ask
+as they go; `y` and `n` are 1 and 3, and Escape stops the turn before any starts. An MCP server's request for input is a form in the
 same place.
 
 ## The mouse

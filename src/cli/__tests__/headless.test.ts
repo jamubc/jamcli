@@ -109,14 +109,16 @@ test('a call that would ask is not made, the model is told why, and the run carr
 
 test("a child's call that would ask is denied too, and the denial names the child", async () => {
   server.enqueue(
-    { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', title: 'Update the notes', prompt: 'update a.txt' } }] },
+    { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', title: 'Update the notes', prompt: 'update a.txt', needs: ['edit(a.txt)'] } }] },
     { toolCalls: [{ id: 'e1', name: 'edit', arguments: { path: 'a.txt', find_string: 'old', replace_string: 'new' } }] },
     { text: 'The edit was refused.' },
     { text: 'The child could not edit it.' }
   );
   const { out, code } = await jam(['-p', 'delegate it', '--output-format', 'json', '--allowed-tools', 'task']);
   expect(code).toBe(0);
-  const [denial] = lastLine(out).permission_denials;
+  // Nobody can grant what it needs ahead, so the child starts and asks as it goes, and that is denied too.
+  const [needs, denial] = lastLine(out).permission_denials;
+  expect(needs).toMatchObject({ tool: 'task', call_id: 't1:needs', arguments: { needs: ['edit(a.txt)'] } });
   expect(denial).toMatchObject({ tool: 'edit', call_id: 't1/e1', from: { title: 'Update the notes', agent: 'quick' } });
   expect(denial.from.task).toStartWith('task-');
 });

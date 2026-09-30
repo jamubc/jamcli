@@ -240,8 +240,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   };
   const ruleEditor = new RuleEditor(permissions, projectRoot);
   /** A project grant applies at once and is written for later sessions. */
-  const grantProject = (text: string) => {
-    const problem = ruleEditor.grantProject(text);
+  const grantProject = (text: string, how?: string) => {
+    const problem = ruleEditor.grantProject(text, how);
     if (problem) emitting?.({ type: 'notice', level: 'warn', message: problem });
   };
   const buildTools = (): ToolSet => {

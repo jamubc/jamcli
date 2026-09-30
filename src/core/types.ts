@@ -106,6 +106,12 @@ export interface ApprovalRequest {
    * the same thing, so one answer settles them all. None for a call only the person answers.
    */
   key?: string;
+  /**
+   * Present on the question before a fan-out: the rules its children need that would ask,
+   * and how many start. Its answers grant them for the session or the project, or let the
+   * children ask as they go.
+   */
+  grants?: { rules: string[]; agents: number };
 }
 
 /** A child run as its prompts name it: its task id, the title it was given, and its agent. */

@@ -143,6 +143,23 @@ test('children asking at once each wait their turn, named, and a grant the host 
   expect(done.text).toContain('All printed.');
 }, 60_000);
 
+test('before a fan-out the host grants what its children need for the session, and allow_once is no answer to that', async () => {
+  const { call, start } = await serve();
+  fs.mkdirSync(path.join(context.project, '.jamcli'));
+  fs.writeFileSync(path.join(context.project, '.jamcli', 'config.json'), JSON.stringify({ permissions: { allow: ['task'] } }));
+  const session = await start();
+  const task = (id: string, letter: string) => ({ id, name: 'task', arguments: { agent: 'quick', title: `Print ${letter}`, prompt: `print ${letter}`, needs: ['run_command(printf *)'] } });
+  const print = (id: string, letter: string) => ({ toolCalls: [{ id, name: 'run_command', arguments: { command: `printf ${letter}` } }] });
+  context.provider.enqueue({ toolCalls: [task('t1', 'a'), task('t2', 'b')] }, print('p1', 'a'), print('p2', 'b'), { text: 'printed' }, { text: 'printed' }, { text: 'All printed.' });
+  const asked = await call('session_send', { session, text: 'print two letters' });
+  expect(asked.report.waiting.grants).toEqual({ rules: ['run_command(printf *)'], agents: 2 });
+  expect(asked.text).toContain('Waiting before 2 agents start: they will need run_command(printf *)');
+  expect((await call('session_answer', { session, approval: 'allow_once' })).error).toBe(true);
+  const done = await call('session_answer', { session, approval: 'allow_session', wait_ms: 15_000 });
+  expect(done.report).toMatchObject({ status: 'idle', ended: 'ok' });
+  expect(done.text).toContain('All printed.');
+}, 60_000);
+
 test('a stopped session says it was stopped and how to resume it', async () => {
   const { call, start } = await serve();
   const session = await start();

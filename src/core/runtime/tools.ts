@@ -115,8 +115,8 @@ export interface ToolSetOptions {
   descriptions?: Record<string, string>;
   /** The context every call runs with, less what each call supplies. */
   context: () => ToolContext;
-  /** Write a pattern the user granted for the project. */
-  grantProject?: (pattern: string) => void;
+  /** Write a pattern the user granted for the project, saying how it was granted. */
+  grantProject?: (pattern: string, how?: string) => void;
   /**
    * A dry run: a call that would change anything is not made, and is passed here for the
    * report instead. Reads and the agent's own plan still run.
@@ -176,12 +176,13 @@ export function createToolSet(options: ToolSetOptions): ToolSet {
       }
       return { decision: verdict.decision, by: verdict.by, ...(verdict.rule ? { rule: verdict.rule } : {}), ...(verdict.source ? { source: verdict.source } : {}), reason: verdict.reason };
     },
-    grant: (call, scope, pattern) => {
+    grant: (call, scope, pattern, how) => {
       const text = pattern ?? suggestPatterns(call)[0];
       if (!text) return;
-      if (scope === 'project' && options.grantProject) options.grantProject(text);
-      else permissions.grant(text);
+      if (scope === 'project' && options.grantProject) options.grantProject(text, how);
+      else permissions.grant(text, how);
     },
+    grantable: (rules) => permissions.grantable(rules, (tool) => offeredNames.has(canonical(tool))),
     onGrant: (listener) => permissions.onAdded(listener),
     execute: async (call, context) => {
       if (!offeredNames.has(canonical(call.name))) {

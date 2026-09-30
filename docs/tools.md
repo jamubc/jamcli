@@ -61,7 +61,7 @@ Turn any of these off the way any tool is turned off: a deny rule with no patter
 as `"deny": ["todo_write", "todo_read"]` in `permissions`, or `/permissions deny
 todo_write user` in the interface. A denied tool is not offered, and the prompt stops
 mentioning it.
-| `task` | delegate | Runs a child on an agent (its model chain and rules), the default when none is named, with an optional reasoning level and a narrowed policy, in the foreground or background. Its `title`, three to six words the model is asked for, labels the child on the board, in `/jobs`, on its transcript line, and on every prompt it raises; a call without one is labeled by the start of its prompt. |
+| `task` | delegate | Runs a child on an agent (its model chain and rules), the default when none is named, with an optional reasoning level and a narrowed policy, in the foreground or background. Its `title`, three to six words the model is asked for, labels the child on the board, in `/jobs`, on its transcript line, and on every prompt it raises; a call without one is labeled by the start of its prompt. Its `needs` lists the permission rules the child expects to need, such as `run_command(bun test)`; before the children of one step start, you are asked once about those that would ask (see `permissions.md`). |
 | `task_status`, `task_result`, `task_cancel` | read, delegate | For background tasks. |
 | `delegate` | delegate | Hands a task to another ACP agent. |
 | `delegate_status`, `delegate_result`, `delegate_cancel` | read, delegate | For delegated work. |

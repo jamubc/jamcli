@@ -44,6 +44,12 @@ export const PERMISSION_OPTIONS: PermissionOption[] = [
   { optionId: 'reject-always', name: 'Reject, and say so', kind: 'reject_always' },
 ];
 
+/** The question before a fan-out: grant what its children need for the session, or let them ask as they go. */
+export const PREFLIGHT_OPTIONS: PermissionOption[] = [
+  { optionId: 'allow-always', name: 'Allow for this session', kind: 'allow_always' },
+  { optionId: 'reject-once', name: 'Ask as they go', kind: 'reject_once' },
+];
+
 /**
  * The prompt's blocks as a turn takes them: what was typed, where a `/command` is read,
  * and the context the editor attached, added after it: embedded resources quoted, links named.
@@ -292,11 +298,13 @@ export class AcpServer {
           rawInput: permissionInput(event),
           locations: toolLocations(event.call, root),
         },
-        options: PERMISSION_OPTIONS,
+        options: event.request?.grants ? PREFLIGHT_OPTIONS : PERMISSION_OPTIONS,
       });
       const chosen = answer.outcome.outcome === 'selected' ? PERMISSION_OPTIONS.find((option) => option.optionId === (answer.outcome as { optionId: string }).optionId) : undefined;
       if (chosen?.kind === 'allow_once') decision = { allow: true };
       else if (chosen?.kind === 'allow_always') decision = { allow: true, scope: 'session' };
+      // Before a fan-out, a rejection grants nothing and lets the children start; a cancelled request still stops the turn.
+      else if (chosen?.kind === 'reject_once' && event.request?.grants) decision = { allow: false, proceed: true };
       else decision = { allow: false, ...(answer.outcome.outcome === 'cancelled' ? { feedback: 'The editor cancelled the request.' } : {}) };
     } catch {
       // The editor went away or answered with an error: the call does not run.

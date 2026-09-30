@@ -22,6 +22,8 @@ export type Waiting =
       personOnly: boolean;
       /** The child run that asks, when one does. */
       from?: ApprovalAsker;
+      /** The question before a fan-out: the rules its children need, and how many start. */
+      grants?: { rules: string[]; agents: number };
     }
   | { kind: 'choice'; id: string; title: string; items: ChoiceItem[]; personOnly: boolean };
 
@@ -119,6 +121,11 @@ export class DelegatedSession {
     const pending = this.approvals[0];
     if (!pending) throw new Error('No call is waiting for approval.');
     if (pending.waiting.personOnly) throw new Error(`${pending.waiting.tool} always asks the person, so only they answer it.`);
+    // Before a fan-out: grant what the children need for the session, or let them ask as they go.
+    if (pending.waiting.grants) {
+      if (decision === 'allow_once' || pattern !== undefined) throw new Error('This question grants what the children need for the session, or grants nothing: answer allow_session, or deny to let them ask as they go.');
+      return this.decide(decision === 'allow_session' ? { allow: true, scope: 'session' } : { allow: false, proceed: true });
+    }
     const offered = pending.waiting.suggestions;
     if (pattern !== undefined && decision !== 'allow_session') throw new Error('A pattern goes with allow_session.');
     if (pattern !== undefined && !offered.includes(pattern)) throw new Error(offered.length ? `${pattern} is not offered for this call. allow_session grants one of: ${offered.join(', ')}.` : 'No grant can cover this call, so it asks every time.');
@@ -215,6 +222,7 @@ export class DelegatedSession {
           suggestions: event.request?.suggestions ?? [],
           personOnly: Boolean(event.request?.alwaysAsks),
           ...(event.request?.from ? { from: event.request.from } : {}),
+          ...(event.request?.grants ? { grants: event.request.grants } : {}),
         },
         decide: event.decide,
       });

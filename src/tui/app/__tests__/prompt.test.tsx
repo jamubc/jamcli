@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
 import { frameWith, interfaceHarness, type Setup } from './harness.js';
+import { projectLedger } from '../../../cli/audit.js';
 
 const { context, open } = interfaceHarness();
 const command = (id: string, text: string) => ({ toolCalls: [{ id, name: 'run_command', arguments: { command: text } }] });
@@ -327,6 +328,37 @@ test('ten children asking the same command are one prompt, and one answer for th
     // Each child's call is recorded as answered by the person, once each.
     const log = fs.readFileSync(path.join(context.root, '.jamcli', 'history', `${runtime.sessionId}.jsonl`), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
     expect(log.filter((entry) => entry.type === 'approval' && entry.tool === 'run_command' && entry.by === 'user' && entry.allow)).toHaveLength(10);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('what a fan-out needs is asked once before it starts, and granted for the session its children run without asking', async () => {
+  const { setup, close } = await open({ allowTools: ['task'] }, { size: { width: 110, height: 44 } });
+  try {
+    const task = (id: string, letter: string) => ({ id, name: 'task', arguments: { agent: 'quick', title: `Print ${letter}`, prompt: `print ${letter}`, needs: ['run_command(printf *)'] } });
+    context.server.enqueue(
+      { toolCalls: [task('t1', 'a'), task('t2', 'b')] },
+      command('p1', 'printf a'),
+      command('p2', 'printf b'),
+      { text: 'printed' },
+      { text: 'printed' },
+      { text: 'Both printed.' }
+    );
+    await setup.mockInput.typeText('print two letters');
+    setup.mockInput.pressEnter();
+    const asked = await frameWith(setup, (value) => value.includes('Allow what 2 agents about to start will need?'));
+    expect(asked).toContain('run_command(printf *)');
+    expect(asked).toMatch(/1 {2}Allow for this session/);
+    expect(asked).toMatch(/3 {2}Ask as they go/);
+    expect(asked).not.toContain('Allow once');
+    setup.mockInput.pressKey('1');
+    const done = await frameWith(setup, (value) => value.includes('Both printed.'));
+    expect(done).not.toContain('Allow run_command');
+    // The ledger says, for each child's call, that it was allowed by what was granted before the fan-out started.
+    const calls = projectLedger(context.root).filter((entry) => entry.tool === 'run_command');
+    expect(calls).toHaveLength(2);
+    for (const entry of calls) expect(entry).toMatchObject({ allowed: true, by: 'user', rule: 'run_command(printf *)', source: 'granted before 2 agents started' });
   } finally {
     await close();
   }

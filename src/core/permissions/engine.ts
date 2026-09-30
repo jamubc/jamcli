@@ -3,7 +3,8 @@ import os from 'os';
 import type { ApprovalBy, PolicyClass, ToolCall } from '../types.js';
 import { MODE_DEFAULTS, modeRefusal, type ModeDefault, type PermissionMode } from './modes.js';
 import { parseRule, patternMatches, toolMatches, type Decision, type Rule, type RuleScope, type Subject } from './rules.js';
-import { subjectsOf } from './subjects.js';
+import { exampleCall, readsSubject, subjectsOf } from './subjects.js';
+import { analyzeCommand, isInterpreter } from './command.js';
 import { grantedRules } from './grants.js';
 
 export interface Verdict {
@@ -203,6 +204,34 @@ export class PermissionEngine {
     if (errors.length) return errors.join(' ');
     for (const rule of rules) this.add(rule);
     return undefined;
+  }
+
+  /**
+   * Of the rules a delegated run says it will need, those worth putting to the person: each
+   * parses, names one tool, names what it is about where that tool reads it (never only
+   * wildcards, never an interpreter left open), and stands for a call that asks today and
+   * would run once the rule is granted. A rule already allowed or denied, or one no grant can
+   * reach, is left out, as is one for a tool `offered` does not know. Each is kept once.
+   */
+  grantable(texts: string[], offered: (tool: string) => boolean = () => true): string[] {
+    const kept: string[] = [];
+    for (const text of texts) {
+      const parsed = parseRule(text, 'allow', 'session', 'what a fan-out needs');
+      if ('error' in parsed || kept.includes(parsed.rule.text)) continue;
+      const { rule } = parsed;
+      if (rule.tool.includes('*') || !offered(rule.tool)) continue;
+      const canonical = this.options.namesOf(rule.tool)[0];
+      if (readsSubject(canonical) && (!rule.pattern || /^[\s*./]*$/.test(rule.pattern))) continue;
+      if (canonical === 'run_command' && rule.pattern) {
+        const [program] = analyzeCommand(rule.pattern).parts[0]?.split(/\s+/) ?? [];
+        if (program && isInterpreter(program) && rule.pattern.includes('*')) continue;
+      }
+      const call = exampleCall(canonical, rule.pattern);
+      if (this.decide(call).decision !== 'ask') continue;
+      const granted = new PermissionEngine({ ...this.options, rules: [...this.shared.rules, rule], mode: this.shared.mode });
+      if (granted.decide(call).decision === 'allow') kept.push(rule.text);
+    }
+    return kept;
   }
 
   /** Rules that name no tool this session has, for reporting. */

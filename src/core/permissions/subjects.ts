@@ -79,3 +79,20 @@ export function subjectsOf(call: ToolCall, canonical: string, projectRoot: strin
   }
   return { subjects: [] };
 }
+
+/** Tools whose rules are about something inside the call: a command, a path, or a domain. */
+export const readsSubject = (canonical: string): boolean => canonical === 'run_command' || canonical === 'web_fetch' || PATH_TOOLS.has(canonical);
+
+/**
+ * A call a rule stands for, to decide as though it were made: the tool the rule names, with
+ * its pattern where that tool reads what a rule is about, a command, a path, or a URL on a
+ * domain.
+ */
+export function exampleCall(canonical: string, pattern: string | undefined): ToolCall {
+  const args: Record<string, unknown> = {};
+  if (pattern?.startsWith('domain:')) args.url = `https://${pattern.slice('domain:'.length).replace(/^\*\./, '')}/`;
+  else if (pattern && canonical === 'run_command') args.command = pattern;
+  else if (pattern && canonical === 'apply_patch') args.patch = `--- a/${pattern}\n+++ b/${pattern}\n`;
+  else if (pattern) args.path = pattern;
+  return { id: 'example', name: canonical, arguments: args };
+}

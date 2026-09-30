@@ -48,7 +48,8 @@ with the flag that would allow it, and the run carries on. `--allow-tool` and
 `--dangerously-bypass-permissions` bypasses asking (explicit denies still stop). Each
 denial is recorded with the mode as who decided, and appears in the result. A child's call
 is denied the same way, and its denial carries `from`: the child's task id, title, and
-agent.
+agent. The question before a fan-out is denied too, listed under `task` with the rules it
+asked for, and the children start and ask as they go.
 
 ## Dry runs
 

@@ -636,6 +636,13 @@ export function App(props: AppProps) {
   /** One of the prompt's five choices, by its key or a click on it. */
   const answerWith = (key: '1' | '2' | '3' | '4' | '5') => {
     if (!approval || selection().feedback) return;
+    // The question before a fan-out has three answers: grant what the children need for the session or the project, or let them ask as they go.
+    if (approval.grants) {
+      if (key === '1') answer({ allow: true, scope: 'session' });
+      else if (key === '2') answer({ allow: true, scope: 'project' });
+      else if (key === '3') answer({ allow: false, proceed: true });
+      return;
+    }
     const pattern = approval.suggestions[selection().selected];
     if (key === '1') answer({ allow: true, scope: 'once' });
     else if (key === '2' && pattern) answer({ allow: true, scope: 'session', pattern });
@@ -940,6 +947,7 @@ export function App(props: AppProps) {
       } else if (now.feedback) return;
       else if (key.name === '1' || key.name === 'y') answerWith('1');
       else if (key.name === '2' || key.name === '3' || key.name === '4') answerWith(key.name);
+      else if (key.name === 'n' && approval.grants) answerWith('3');
       else if (key.name === '5' || key.name === 'n') answerWith('5');
       else if (key.name === 'down') choose((from) => ({ selected: Math.min(from.selected + 1, Math.max(0, approval.suggestions.length - 1)) }));
       else if (key.name === 'up') choose((from) => ({ selected: Math.max(0, from.selected - 1) }));

@@ -141,3 +141,47 @@ test('one answer settles every ask of the same call waiting in the session, each
   asks[2].decide(false);
   expect((await other).outcome.results.map((result) => result.status)).toEqual(['denied']);
 });
+
+test('before a fan-out, what its children need is asked once: granted with its source, left to ask, or the turn stopped', async () => {
+  const fanOut = (): ToolDispatcher & { ran: string[]; granted: unknown[][] } => {
+    const granted: unknown[][] = [];
+    const base = dispatcher({}, { a: 'delegate', b: 'delegate' });
+    return { ...base, granted, grantable: (rules) => rules.filter((text) => text !== 'run_command(ls)'), grant: (...args) => void granted.push(args) };
+  };
+  const needs = (id: string, rules: string[]): ToolCall => ({ id, name: id, arguments: { needs: rules } });
+  const step = [needs('a', ['run_command(bun test)', 'run_command(ls)']), needs('b', ['run_command(bun test)', 'edit(src/**)'])];
+  const answering = (decision: Parameters<Extract<AgentEvent, { type: 'approval_request' }>['decide']>[0]) => (event: AgentEvent) => {
+    if (event.type === 'approval_request') event.decide(decision);
+  };
+
+  // Allowed for the session: each rule once, granted with the fan-out named, and both children run.
+  const session = fanOut();
+  const granted = await run(step, session, answering({ allow: true, scope: 'session' }));
+  const asked = granted.events.filter((event) => event.type === 'approval_request');
+  expect(asked).toHaveLength(1);
+  expect(asked[0]).toMatchObject({ call: { id: 'a:needs' }, request: { grants: { rules: ['run_command(bun test)', 'edit(src/**)'], agents: 2 } } });
+  expect(session.granted).toEqual([[expect.objectContaining({ id: 'a:needs' }), 'session', 'run_command(bun test), edit(src/**)', 'granted before 2 agents started']]);
+  expect(granted.events.find((event) => event.type === 'approval_decision' && event.callId === 'a:needs')).toMatchObject({ allow: true, scope: 'session', by: 'user', source: 'granted before 2 agents started' });
+  expect(session.ran).toEqual(['a', 'b']);
+
+  // Ask as they go: nothing granted, and both children start.
+  const later = fanOut();
+  expect((await run(step, later, answering({ allow: false, proceed: true }))).outcome.results.map((result) => result.status)).toEqual(['ok', 'ok']);
+  expect(later.granted).toEqual([]);
+
+  // Escape: no child starts, and each call is answered that it did not run.
+  const stopped = fanOut();
+  const none = await run(step, stopped, answering({ allow: false }));
+  expect(none.outcome.results.map((result) => [result.status, result.output])).toEqual([
+    ['cancelled', 'Not run: the person stopped the turn before the agents started.'],
+    ['cancelled', 'Not run: the person stopped the turn before the agents started.'],
+  ]);
+  expect(none.outcome.denial).toEqual({ proceed: false });
+  expect(stopped.ran).toEqual([]);
+
+  // Nothing worth granting: nothing is asked.
+  const quiet = fanOut();
+  const plain = await run([needs('a', ['run_command(ls)'])], quiet);
+  expect(plain.events.some((event) => event.type === 'approval_request')).toBe(false);
+  expect(quiet.ran).toEqual(['a']);
+});

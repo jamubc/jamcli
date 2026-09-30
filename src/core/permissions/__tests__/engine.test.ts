@@ -258,3 +258,29 @@ test('a grant made through a parent reaches listeners on a derived engine, and o
   parent.grant('run_command(ls *)');
   expect(heard).toBe(1);
 });
+
+test("of a fan-out's needs, only rules that would ask and that a grant would change are put to the person", () => {
+  const held = engine([rule('run_command(rm *)', 'deny'), rule('run_command(ls *)', 'allow')]);
+  const offered = (tool: string) => tool !== 'no_such_tool';
+  const needs = [
+    'run_command(bun test)',
+    'edit(src/**)',
+    'run_command(bun test)',
+    'run_command(ls src)',
+    'run_command(rm -rf build)',
+    'run_command(printf $(whoami))',
+    'run_command(node *)',
+    'run_command',
+    'run_command(*)',
+    'edit(**)',
+    'github__*',
+    'no_such_tool',
+    'not a rule(',
+  ];
+  // Kept once each: two that ask today and run once granted. Dropped: already allowed, denied,
+  // hidden code no grant reaches, an interpreter left open, bare or wildcard-only, a tool glob,
+  // a tool the session lacks, and what is not a rule.
+  expect(held.grantable(needs, offered)).toEqual(['run_command(bun test)', 'edit(src/**)']);
+  // In bypass mode nothing asks, so nothing is put to the person.
+  expect(engine([], 'bypass').grantable(['run_command(bun test)'])).toEqual([]);
+});

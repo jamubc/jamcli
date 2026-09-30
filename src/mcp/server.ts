@@ -27,7 +27,10 @@ export function reportText(report: SessionReport): string {
   const lines = [`Session ${report.session} is ${report.status}${report.ended && report.status === 'idle' ? ` (the last turn ended ${report.ended})` : ''}. Model ${report.model}${report.mode ? `, ${report.mode} mode` : ''}.`];
   if (report.output.trim()) lines.push('', report.output.trim());
   const waiting = report.waiting;
-  if (waiting?.kind === 'approval') {
+  if (waiting?.kind === 'approval' && waiting.grants) {
+    lines.push('', `Waiting before ${waiting.grants.agents === 1 ? 'an agent starts' : `${waiting.grants.agents} agents start`}: they will need ${waiting.grants.rules.join(', ')}, and each would ask.`);
+    lines.push('Answer with session_answer: approval allow_session grants them for the session; deny grants nothing, and they ask as they go.');
+  } else if (waiting?.kind === 'approval') {
     lines.push('', `Waiting for approval: ${waiting.from ? `${waiting.from.title} (agent ${waiting.from.agent}) asks to ` : ''}${waiting.summary}. ${waiting.reason}.`);
     if (waiting.preview?.text) lines.push(waiting.preview.text);
     if (waiting.personOnly) lines.push('Only the person answers this; they are being asked.');

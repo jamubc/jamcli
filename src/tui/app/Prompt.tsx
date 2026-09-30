@@ -81,8 +81,11 @@ export function PermissionPrompt(props: {
   const diffHeight = diff ? (plain ? diff.split('\n').length + 1 : diffRows(diff)) : 0;
   const diffOverflow = diffHeight > previewRows;
   const asker = approval.from;
+  const grants = approval.grants;
   const named = asking.map((item) => (item.from ? (plain ? `${item.from.title}, agent ${item.from.agent}` : `${item.from.title} · ${item.from.agent}`) : 'this session'));
-  const heading = plain
+  const heading = grants
+    ? `${plain ? 'Permission needed: ' : ''}Allow what ${grants.agents === 1 ? 'the agent' : `${grants.agents} agents`} about to start will need?`
+    : plain
     ? `Permission needed: ${many ? `${asking.length} agents, ${named.join('; ')}, ask: ` : asker ? `${named[0]}, asks: ` : ''}Allow ${approval.summary}?`
     : `${many ? `${asking.length} agents ask › ` : asker ? `${named[0]} › ` : ''}Allow ${approval.summary}?`;
 
@@ -92,7 +95,7 @@ export function PermissionPrompt(props: {
   const textRows = text ? text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / Math.max(1, room - indent))), 0) : 0;
   const textOverflow = textRows > previewRows;
   const waiting = `${asker ? (plain ? 'o looks in on it, ' : 'o look in · ') : ''}${queued > 1 ? `1 of ${queued} waiting · ` : ''}`;
-  const badge = plain ? 'Escape denies and stops' : '[Esc]';
+  const badge = plain ? (grants ? 'Escape stops the turn' : 'Escape denies and stops') : '[Esc]';
   const reason = approval.reason.charAt(0).toUpperCase() + approval.reason.slice(1);
 
   const pattern = approval.suggestions[selected];
@@ -150,6 +153,12 @@ export function PermissionPrompt(props: {
         <box flexDirection="column">
           <text {...sel} fg={theme.text}>Feedback for the model (Enter alone denies):</text>
           <input focused placeholder="feedback for the model" onSubmit={(value: unknown) => props.onFeedback(submitted(value))} />
+        </box>
+      ) : grants ? (
+        <box flexDirection="column">
+          {label('1', 'Allow for this session')}
+          {label('2', 'Allow for this project', '.jamcli/config.local.json')}
+          {label('3', 'Ask as they go', 'nothing is granted; each asks when it gets there')}
         </box>
       ) : (
         <box flexDirection="column">

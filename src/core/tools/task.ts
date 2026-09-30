@@ -76,6 +76,11 @@ const taskSchema: JsonSchema = {
     },
     background: { type: 'boolean', description: 'Start the child and return immediately with its id.' },
     max_turns: { type: 'integer', minimum: 1, description: 'Optional bound on child turns.' },
+    needs: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Permission rules the child will need that would ask, such as run_command(bun test) or edit(src/**). Before the children of one step start, the person is asked once to allow them.',
+    },
     isolation: {
       type: 'string',
       enum: ['none', 'worktree'],

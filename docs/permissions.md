@@ -81,6 +81,26 @@ the same working tree, are put to you as one. Your answer, allow once included, 
 each of them, and each is recorded on its own. A tool that always asks, such as a commit,
 is asked about on its own every time.
 
+### Before a fan-out
+
+The model may say, with each `task` call's `needs`, which rules its child will need, such
+as `run_command(bun test)` or `edit(src/**)`. Before the children of one step start, you are
+asked once about those rules, for all of them together. A rule is put to you only when a
+call it stands for would ask today and would run once it is granted: one already allowed,
+one a rule or the mode denies, one no grant can reach (a command that hides code), a bare
+or wildcard-only rule, an interpreter left open (`node *`), and a tool the session lacks are
+left out, and when none is left nothing is asked. There are three answers:
+
+- **Allow for this session**: each rule is granted until the session ends.
+- **Allow for this project**: each rule is written to `.jamcli/config.local.json`.
+- **Ask as they go**: nothing is granted; the children start and ask as they would have.
+
+Escape stops the turn and no child starts. There is no allow once: a grant to several
+children for their whole run is not once. A rule granted here names where it came from,
+`granted before 3 agents started`, so every call it allows says so in the session log and
+in `jamcli audit ledger`. Headless runs, which cannot ask, take the question as ask as they
+go.
+
 ## The sandbox
 
 On Linux, commands run under bubblewrap; on macOS, under Seatbelt. On Windows there is

@@ -180,6 +180,42 @@ test('two asks for the same call reach the editor as one request, whose answer s
   expect(messages.filter((message) => message.method === 'session/request_permission')).toHaveLength(1);
 });
 
+test('before a fan-out the editor is offered a grant for the session or nothing, and rejecting lets the children ask as they go', async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const messages = collect(output);
+  let heard: unknown;
+  const preflight = (): AcpSessionController => ({
+    ...approvableController(),
+    async run(_prompt: string, onEvent: (event: AgentEvent) => void): Promise<RunResult> {
+      const call = { id: 't1:needs', name: 'task', arguments: { needs: ['run_command(bun test)'] } };
+      heard = await new Promise((resolve) =>
+        onEvent({
+          type: 'approval_request',
+          call,
+          request: { id: call.id, call, policyClass: 'delegate', summary: 'what 2 agents will need: run_command(bun test)', reason: 'they say they will need these', suggestions: ['run_command(bun test)'], grants: { rules: ['run_command(bun test)'], agents: 2 } },
+          decide: resolve,
+        })
+      );
+      return { status: 'ok', sessionId: 'session-1', response: '', turns: 1, usage };
+    },
+  });
+  const server = new AcpServer({ input, output, projectRoot: '/tmp/project', createSession: async () => preflight() });
+  void server.start();
+  const send = (message: unknown) => input.write(`${JSON.stringify(message)}\n`);
+  send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: 1, clientCapabilities: {} } });
+  send({ jsonrpc: '2.0', id: 2, method: 'session/new', params: { cwd: '/tmp/project', mcpServers: [] } });
+  await waitFor(() => messages.some((message) => message.id === 2 && message.result));
+  send({ jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'go' }] } });
+  await waitFor(() => messages.some((message) => message.method === 'session/request_permission'));
+  const permission = messages.find((message) => message.method === 'session/request_permission');
+  expect(permission.params.options.map((option: { name: string }) => option.name)).toEqual(['Allow for this session', 'Ask as they go']);
+  send({ jsonrpc: '2.0', id: permission.id, result: { outcome: { outcome: 'selected', optionId: 'reject-once' } } });
+  await waitFor(() => messages.some((message) => message.id === 3 && message.result));
+  input.end();
+  expect(heard).toEqual({ allow: false, proceed: true });
+});
+
 test('a rejected permission turns the prompt into a refusal and no tool result is emitted', async () => {
   const input = new PassThrough();
   const output = new PassThrough();

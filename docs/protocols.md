@@ -32,7 +32,9 @@ does. Add it once, for example `claude mcp add jamcli -- jamcli mcp serve`.
   may take, narrowest first, as the interface's prompt offers them, and `allow_session`
   takes one as `pattern`, the first when absent. A child's call names the child that asks
   (`from`: its task id, title, and agent). Calls waiting at once are answered oldest first,
-  and one a grant settles meanwhile leaves the queue unanswered. `session_state` reports; `session_stop`
+  and one a grant settles meanwhile leaves the queue unanswered. The question before a
+  fan-out (`grants`: its rules and how many agents start) takes `allow_session`, which grants
+  them, or `deny`, which lets the children ask as they go; `allow_once` is refused. `session_state` reports; `session_stop`
   ends one, which stays in history, and a later call on it says how to resume it with
   `session_start`. Each is the same session an
   editor opens over ACP, with the same runtime, commands, and permissions. A call returns
@@ -71,7 +73,9 @@ terminal manager.
   A child's call is titled by the child that asks, as in `Write the notes · quick ›
   write_file a.txt`. Asks for the same call reach the editor as one request, whose answer
   goes to each. ACP cannot take back a request once sent, so a request whose call a grant
-  settles meanwhile stays open in the editor, and its answer is ignored.
+  settles meanwhile stays open in the editor, and its answer is ignored. The question
+  before a fan-out offers allow for this session and ask as they go; a cancelled request
+  stops the turn.
 - `available_commands_update` offers every built-in command, beside custom commands and
   MCP prompts. A prompt naming one runs it, as the interface would: what it shows arrives
   as message chunks, and a turn it sends is the prompt's turn. A list it offers is printed

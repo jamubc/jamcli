@@ -127,8 +127,8 @@ export class RuleEditor {
    * sessions. Returns what went wrong: a grant that does not parse is not made, and one that
    * cannot be written holds for this session only.
    */
-  grantProject(text: string): string | undefined {
-    const { rules, errors } = grantedRules(text, 'local', `${LOCAL_CONFIG} permissions.allow (granted at a prompt)`);
+  grantProject(text: string, how = 'granted at a prompt'): string | undefined {
+    const { rules, errors } = grantedRules(text, 'local', `${LOCAL_CONFIG} permissions.allow (${how})`);
     if (errors.length) return `The grant was not saved: ${errors.join(' ')}`;
     try {
       writeProjectGrant(this.projectRoot, rules.map((rule) => rule.text));
