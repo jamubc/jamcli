@@ -57,17 +57,13 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-### 29. `add-composer-recall`
-
-Opened on the owner's request of 2026-09-29, on `feat/composer-recall`. It makes typing survive
-a click on the transcript, has the exit key clear a draft first, records what the person typed
-as a `prompt` event so Up and Down (and Ctrl+R) can recall it, keeps an unsent draft on disk
-across leaving, collapses large pastes into chips, grows the composer with its draft, and moves
-choosing an agent to Down with a one-line row per agent. Baseline when it opened: 0 type errors,
-1,204 tests passing (3 skipped, 2 todo, 0 failing) in 141 s. Done when its change is archived.
-
-The queued `add-findings-loop` (unit 4) and the review's leftovers wait behind it. The owner
-also decides whether `land-interface-rhythm` (B), `add-btw` (C), and the shelved
+None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
+verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the units the
+owner's requests of 2026-09-29 ordered: `label-and-batch-child-approvals`, `add-spinner-verbs`,
+and `add-composer-recall`. What opens next is the owner's choice: the queued
+`add-findings-loop` (unit 4), or what the task corpus's scores and a second person's
+transcripts ask for, which the review names as this file's input from now on. The owner also
+decides whether `land-interface-rhythm` (B), `add-btw` (C), and the shelved
 `add-windows-support` are dropped, as the review would have them.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
@@ -76,6 +72,36 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 29. `add-composer-recall`
+
+Archived as `2026-09-29-add-composer-recall`: 2 requirements added (Prompt Recall, Unsent Draft
+Safety) and 3 modified (Terminal User Interface, Session History Persistence, Todo Acceptance
+Checks). From the owner's request of 2026-09-29 to modernize the input area. Closed at 0 type
+errors, as it opened, and 1,276 tests passing against 1,204, in 149.65 s against the 141 s it
+opened at. The machine was busy while it closed (load averages of 10 to 20): `master` measured
+151 s on it beside this branch's 151 s, so the margin under the 150 s budget is one run's, not
+a proof.
+
+Three premises in the request did not hold. The composer was never click-to-focus: a click on
+the transcript focused its scrollbox and nothing gave focus back (`preventDefault` on the press
+fixes it, and the mouse test types afterwards, which none did). History could not come from
+`session.messages`, which compaction empties and which holds the `@`-expanded text and the
+synthetic `!cmd` and `#note` messages, so a `prompt` event now records what was typed and both
+Up and Ctrl+R read it. And the spec promised that long pastes collapse into a preview, which
+the code never did; they are chips now. Reading the board found four defects: a clock that
+stopped with reduced motion so an ended child stayed drawn and could not be chosen, a choice
+that outlived its row so Enter opened an agent no longer listed, a hint that ignored ended
+children, and two clocks that disagreed. The product trial found a fifth: choosing from
+Ctrl+R overwrote the composer, including a draft just restored after a closed terminal.
+
+Left open. The terminal tools have no mouse, so the click fix is proved by the mock-mouse test
+and not through the program. A draft edited while a walk holds an older one set aside is the
+only draft kept on disk, so a crash then loses the set-aside one. A queued message taken back
+with Down was already recorded as sent, so resending it edited lists both. The draft file holds
+what was typed, a pasted credential included, at the same permissions as the log; that is
+documented in `docs/security.md`. A session that only ran a slash command now has a log file.
+Recall is one session's prompts; Ctrl+R is the wider search.
 
 ### 28. `add-spinner-verbs`
 
