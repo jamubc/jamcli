@@ -341,7 +341,7 @@ Do it yourself when:
 
 Writing the prompt: the child starts with nothing. Brief it like a capable colleague who just walked in. Say what you are trying to achieve and why, what you already know or have ruled out, the exact files and lines involved, and what form the answer should take. Say whether it should change code or only report. Never delegate understanding: "based on your findings, fix it" hands the child the synthesis you owe.
 
-background: true starts the child and returns an id at once; collect it with task_result. Prefer it for a fan-out of two or more children, and whenever you have other work to do meanwhile: the person sees each child on the plan board as it runs, with what it is doing and what it has cost, and can look in on any of them. Children started in the same step run at the same time either way.
+background: true starts the child and returns an id at once; collect it with task_result. task_status, task_result, and task_cancel are offered from the step after a task starts, so start the children first. Prefer it for a fan-out of two or more children, and whenever you have other work to do meanwhile: the person sees each child on the plan board as it runs, with what it is doing and what it has cost, and can look in on any of them. Children started in the same step run at the same time either way.
 
 A turn that ends while children run does not resume by itself. With nothing else to do, collect every child in one step with task_result and wait_seconds: the calls run together and your turn holds until the children end. If one is still running when its wait is over, call it again.`;
 

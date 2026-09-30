@@ -17,6 +17,8 @@ test('the built-ins render one line each with the chain they run on, and the def
   expect(text).toContain('Delegate when:');
   expect(text).toContain('Do it yourself when:');
   expect(text).toContain('Never delegate understanding');
+  // The family is held back until a task starts, so the model is told to start first rather than find task_result missing.
+  expect(text).toContain('offered from the step after a task starts, so start the children first');
 });
 
 test('reasoning shows in the chain, an undescribed agent is name and chain, and no default says to name one', () => {
