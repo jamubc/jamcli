@@ -32,6 +32,8 @@ export class TranscriptRecorder {
   private context: string | undefined;
   /** The session so far, as the end event summarizes it. */
   private readonly totals = { promptTokens: 0, cachedTokens: 0, contexts: 0, gates: 0, steers: 0 };
+  /** What each prompt asked about, by call, so a child's call, which is not among this session's messages, is named where it is decided. */
+  private readonly asked = new Map<string, string>();
 
   constructor(
     readonly log: SessionLog,
@@ -103,11 +105,17 @@ export class TranscriptRecorder {
         this.started = true;
         this.write({ type: 'message', message: event.message });
         return;
-      case 'approval_decision':
+      case 'approval_request':
+        if (event.request?.summary) this.asked.set(event.call.id, event.request.summary);
+        return;
+      case 'approval_decision': {
+        const target = this.asked.get(event.callId);
+        this.asked.delete(event.callId);
         this.write({
           type: 'approval',
           callId: event.callId,
           tool: event.tool,
+          ...(target ? { target } : {}),
           allow: event.allow,
           scope: event.scope,
           by: event.by,
@@ -118,6 +126,7 @@ export class TranscriptRecorder {
           ...(event.reason ? { reason: event.reason } : {}),
         });
         return;
+      }
       case 'usage': {
         const model = event.model ?? this.model;
         this.write({

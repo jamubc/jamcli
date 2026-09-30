@@ -268,6 +268,9 @@ test("a subagent's prompts name it, look in on it, can each be answered, and eac
     // The session that showed the prompts records how the person answered them.
     const log = fs.readFileSync(path.join(context.root, '.jamcli', 'history', `${runtime.sessionId}.jsonl`), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
     expect(log.filter((entry) => entry.type === 'approval' && entry.by === 'user').map((entry) => entry.callId)).toEqual(['t1/c1', 't1/c2']);
+    // The ledger names each by what was asked, though the child's calls are not among this session's messages.
+    const named = projectLedger(context.root).filter((entry) => entry.session === runtime.sessionId && entry.tool === 'run_command');
+    expect(named.map((entry) => entry.target)).toEqual(['run_command printf $(printf one)', 'run_command printf $(printf two)']);
   } finally {
     await close();
   }

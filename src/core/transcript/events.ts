@@ -39,6 +39,8 @@ export type TranscriptEvent =
       ts: number;
       callId: string;
       tool: string;
+      /** What the prompt named, as its summary; written since 2026-09-29, for a child's call above all. */
+      target?: string;
       allow: boolean;
       scope: ApprovalScope;
       by: string;

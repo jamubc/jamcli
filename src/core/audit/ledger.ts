@@ -62,7 +62,7 @@ export function ledgerOf(events: TranscriptEvent[], options: LedgerOptions = {})
         surface: event.surface,
         ts: event.ts,
         tool: event.tool,
-        target: describeCall(call),
+        target: calls.has(event.callId) ? describeCall(call) : (event.target ?? describeCall(call)),
         allowed: event.allow,
         by: event.by,
         ...(event.rule ? { rule: event.rule } : {}),
