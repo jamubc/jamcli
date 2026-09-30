@@ -55,9 +55,11 @@ test('a wait on a named session\'s flag, in another process, starts when that se
   expect((await jam(['-p', '/rename builder'])).code).toBe(0);
   server.enqueue({ text: 'Compiled the notes.' });
   const waiting = jam(['-p', '/wake when builder raise green: compile the notes', '--output-format', 'json']);
-  // Past the process's start and its first checks.
-  await Bun.sleep(1_000);
-  // Nothing has been asked of the model while the flag is down.
+  // The flag goes up only once the wait is set, so it is the flag that starts it. That a wait never
+  // goes off early is the wake table's own test.
+  const history = path.join(root, '.jamcli', 'history');
+  const waitSet = () => fs.existsSync(history) && fs.readdirSync(history).some((file) => fs.readFileSync(path.join(history, file), 'utf8').includes('"type":"wake"'));
+  for (let tries = 0; tries < 200 && !waitSet(); tries += 1) await Bun.sleep(25);
   expect(server.pending()).toBe(1);
   expect((await jam(['-p', '/flag green', '--resume', 'builder'])).code).toBe(0);
   const { out, code } = await waiting;
