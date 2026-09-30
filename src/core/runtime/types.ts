@@ -21,6 +21,8 @@ import type { ModelInfo } from '../catalog/index.js';
 import type { SpendSummary } from '../catalog/cost.js';
 import type { ObserveSettings } from '../observe/setup.js';
 import type { Observer, Span } from '../observe/observer.js';
+import type { AwakeSpawner, FiredWake, Wake, WakeSpec } from '../wake/index.js';
+import type { SessionColor } from './extras.js';
 
 /** The surface a runtime serves. It is recorded with every decision in the session log. */
 export type Surface = 'tui' | 'headless' | 'acp' | 'workflow' | 'child';
@@ -78,6 +80,8 @@ export interface RuntimeOptions {
   observer?: { observer: Observer; parentSpan?: Span };
   /** What an ACP editor lends the session's own tools: its files and its terminal. */
   editor?: EditorBridge;
+  /** What keeps the machine awake while the session works or waits; false for nothing. `caffeinate` on macOS when absent. */
+  keepAwake?: AwakeSpawner | false;
 }
 
 /** An MCP server's prompt. */
@@ -102,6 +106,8 @@ export interface RunOptions {
   tool?: { name: string; arguments: Record<string, unknown> };
   /** Hidden tools offered for this turn only, such as `/reflect`'s, so no other turn pays for their schemas. */
   offer?: string[];
+  /** A reflection's framing of the tester notes, recorded before the turn: null leaves them out. */
+  reflection?: { notes: string | null };
 }
 
 export interface ContextUsage {
@@ -266,6 +272,26 @@ export interface Runtime {
   prompts(): TypedPrompt[];
   /** The notes planted in this session, oldest first. */
   notes(): SessionNote[];
+  /** The name given with /rename. */
+  readonly name: string | undefined;
+  /** The color given with /color. */
+  readonly color: string | undefined;
+  /** Name the session. Returns why not when the name is not one, or another session of the project holds it. */
+  rename(name: string): string | undefined;
+  /** Color the session; nothing returns to the theme's. */
+  setColor(color: SessionColor | undefined): void;
+  /** The prompts this session runs later, pending. */
+  wakes(): Wake[];
+  /** Set a wake for the person. Returns why not when it cannot be kept. */
+  setWake(spec: Omit<WakeSpec, 'by'>): { wake: Wake } | { error: string };
+  /** Remove a pending wake by id, or all of them. Returns what was removed. */
+  cancelWake(id: string): Wake[];
+  /** Hear each wake as it goes off, to run it as a turn; returns how to stop. With nobody listening, a wake waits. */
+  onWake(listener: (wake: FiredWake) => void): () => void;
+  /** Each named session's raised flags, by id or name; this session's when none is named. */
+  flags(refs: string[]): { session: string; flags: string[] }[] | { error: string };
+  raiseFlag(flag: string): void;
+  lowerFlag(flag: string): void;
   close(): Promise<void>;
 }
 

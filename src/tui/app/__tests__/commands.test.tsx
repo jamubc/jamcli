@@ -257,8 +257,8 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
   try {
     await turn(setup, 'hello', 'Hi.');
     await send(setup, '/tools');
-    const tools = await frameWith(setup, (frame) => frame.includes('- read_file (read):'));
-    expect(tools).toContain('- read_file (read):');
+    const tools = await frameWith(setup, (frame) => frame.includes('- run_command (execute):'));
+    expect(tools).toContain('- run_command (execute):');
     await send(setup, '/mcp');
     await frameWith(setup, (frame) => frame.includes('No MCP servers configured.'));
     // The CLI's messages name the command as it is typed here.

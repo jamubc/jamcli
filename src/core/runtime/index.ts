@@ -14,6 +14,8 @@ import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../type
 import { createToolSet, registerMcpTools, type ToolSet } from './tools.js';
 import { childLauncher } from './children.js';
 import { SessionCheckpoints } from './checkpoints.js';
+import { sessionExtras } from './extras.js';
+import { sessionReferencesNote } from '../wake/index.js';
 import { SessionHooks } from './hooks.js';
 import { Elicitations } from './elicit.js';
 import { ToolOffer } from './offer.js';
@@ -531,6 +533,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     warn: (message) => emitting?.({ type: 'notice', level: 'warn', message }),
     busy: () => running,
   });
+  // Name, color, flags, wakes, and keeping the machine awake; the wake and flag tools join the registry.
+  const extras = sessionExtras({ projectRoot, surface: options.surface, resumed: Boolean(options.sessionId), log, recorder, registry, ...(options.keepAwake !== undefined ? { keepAwake: options.keepAwake } : {}) });
+  notices.push(...extras.notices);
+  reassemble();
   hooks.on(
     'turn_start',
     () => {
@@ -804,7 +810,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       emitting = emit;
       let restoreModel: string | undefined;
       const unsubscribes: (() => void)[] = [];
+      extras.turn(true);
       try {
+        // How the person framed the notes is recorded before the reflection's request, which reads it.
+        if (turn.reflection) recorder.recordFact({ type: 'reflection', notes: turn.reflection.notes });
         if (turn.model) {
           const before = sessionModel.ref;
           try {
@@ -838,6 +847,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           return { status: 'error', sessionId: log.id, response: '', turns: 0, usage: { ...session.usage }, error, session };
         }
         const expanded = turn.shell || turn.tool ? { prompt: input, notices: [] } : await expandReferences(input, cwd, redact, resourceReader);
+        // Sessions the prompt names are located for the model, so it reads their logs rather than searching for them.
+        const sessionsNamed = turn.shell || turn.tool ? undefined : sessionReferencesNote(input, log.id);
+        if (sessionsNamed) turnNotes.push(sessionsNamed);
         for (const message of expanded.notices) emit({ type: 'notice', level: 'warn', message });
         turns += 1;
         turnAgent = agent;
@@ -865,6 +877,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           reassemble();
         }
         if (restoreModel) switchModel(restoreModel);
+        extras.turn(false);
         running = false;
         emitting = undefined;
         turnAgent = undefined;
@@ -921,10 +934,26 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     prompt: (text, state) => recorder.recordPrompt(text, state),
     prompts: () => typedPrompts(log.events()),
     notes: () => log.events().flatMap((event) => (event.type === 'note' ? [{ text: event.text, ts: event.ts }] : [])),
+    get name() {
+      return extras.api.name;
+    },
+    get color() {
+      return extras.api.color;
+    },
+    rename: (name) => extras.api.rename(name),
+    setColor: (color) => extras.api.setColor(color),
+    wakes: () => extras.api.wakes(),
+    setWake: (spec) => extras.api.setWake(spec),
+    cancelWake: (id) => extras.api.cancelWake(id),
+    onWake: (listener) => extras.api.onWake(listener),
+    flags: (refs) => extras.api.flags(refs),
+    raiseFlag: (flag) => extras.api.raiseFlag(flag),
+    lowerFlag: (flag) => extras.api.lowerFlag(flag),
 
     async close() {
       // Cancelling a turn leaves jobs running; closing the session that owns them stops them.
       if (!options.parent) workTable.stopAll();
+      extras.close();
       await writeHandoffNow('session_end').catch(() => undefined);
       await hookVerdict(hooks, 'session_end', { session, status: 'closed', turns });
       await mcp?.close?.();
