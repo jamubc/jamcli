@@ -147,25 +147,23 @@ const todoColor = (status: TodoView['status'], colors: Theme) => (status === 'co
 function TodoPanel({
   todos,
   plan,
-  work,
   phase,
   plain,
   colors,
   focus,
-  sentAt,
+  listed,
   pinned,
   onOpen,
 }: {
   todos: TodoView[] | undefined;
   plan: ViewState['plan'];
-  work: ViewState['work'];
   phase: Phase;
   plain: boolean;
   colors: Theme;
   /** The child the keys chose, by its id. */
   focus?: string;
-  /** When the person last sent a message: children that ended before it are gone. */
-  sentAt: number;
+  /** The work the board lists: what runs, and what ended a moment ago and since the last message. The keys walk this same list. */
+  listed: WorkItem[];
   /** Opened with the todos key, so it stays up with nothing to list. */
   pinned: boolean;
   onOpen: (id: string) => void;
@@ -176,7 +174,6 @@ function TodoPanel({
   const done = todos?.filter((todo) => todo.status === 'completed').length ?? 0;
   const running = todos?.find((todo) => todo.status === 'in_progress');
   const [now, setNow] = useState(Date.now());
-  const listed = shownWork(work, now, sentAt);
   const live = listed.filter((item) => item.endedAt === undefined);
   const ended = listed.length - live.length;
   // The clock ticks only while something has a duration to show, and never in screen reader mode or with reduced motion.
@@ -215,7 +212,7 @@ function TodoPanel({
         ) : listed.length ? (
           <span fg={colors.text}>{[live.length ? `${live.length} running` : '', ended ? `${ended} done` : ''].filter(Boolean).join(', ')}</span>
         ) : null}
-        <span fg={colors.dim}>{`${words && todos?.length ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}${live.some((item) => item.kind === 'task') && !focus ? ' · ↓ choose an agent, Enter looks in' : ''}`}</span>
+        <span fg={colors.dim}>{`${words && todos?.length ? ` · ${words}` : ''}${plan ? ` · ${plan.path}` : ''}${listed.some((item) => item.kind === 'task') && !focus ? ' · ↓ choose an agent, Enter looks in' : ''}`}</span>
       </text>
       {listed.map((item) => {
         const state = workState(item, colors);
@@ -390,6 +387,17 @@ export function App(props: AppProps) {
     // The status line has the session's facts from the first frame, not after an effect.
     reduceView(initialView(statusOf(first)), { type: 'load', messages: first.session.messages, notes: first.notes() })
   );
+  // What the board lists and what the keys walk are one list, from one clock. The clock runs while
+  // any child has ended, since its minute and a half on the board is up whether or not motion is reduced.
+  const [boardClock, setBoardClock] = useState(Date.now());
+  const anyEnded = state.work.some((item) => item.endedAt !== undefined);
+  useEffect(() => {
+    if (!anyEnded) return;
+    setBoardClock(Date.now());
+    const timer = setInterval(() => setBoardClock(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [anyEnded]);
+  const listedWork = useMemo(() => shownWork(state.work, boardClock, sentAt), [state.work, boardClock, sentAt]);
   // A checklist that has just appeared, or a child agent that has just started, is shown without asking; the todos key hides the board again.
   const hasTodos = Boolean(state.todos?.length);
   const liveAgents = state.work.filter((item) => item.endedAt === undefined && item.kind === 'task').length;
@@ -590,9 +598,10 @@ export function App(props: AppProps) {
   const viewedAgent = agentView ? state.work.find((item) => item.id === agentView) : undefined;
   // A child that left the board is no longer chosen, and one that was forgotten closes its view.
   useEffect(() => {
-    if (agentFocus && !state.work.some((item) => item.id === agentFocus)) setAgentFocus(undefined);
+    // A child that left the board, by the time or by the next message, is no longer the one chosen.
+    if (agentFocus && !listedWork.some((item) => item.id === agentFocus)) setAgentFocus(undefined);
     if (agentView && !viewedAgent) setAgentView(undefined);
-  }, [state.work]);
+  }, [state.work, listedWork]);
   const openAgent = (id: string) => {
     if (!state.work.some((item) => item.id === id)) return;
     composer.current?.blur();
@@ -1194,7 +1203,7 @@ export function App(props: AppProps) {
     }
     // On an empty composer, Up and Down walk the children on the board and Enter looks in on the chosen one.
     // Escape lets go of the choice between turns; while a turn runs it still stops the turn.
-    const walkable = shownWork(state.work, Date.now(), sentAt).filter((item) => item.kind === 'task');
+    const walkable = listedWork.filter((item) => item.kind === 'task');
     const focused = agentFocusRef.current;
     // Up is for earlier prompts, so it walks the board only once a child is chosen; Down chooses one.
     const walking = key.name === 'down' || (focused && (key.name === 'up' || key.name === 'return' || (key.name === 'escape' && !controller.running)));
@@ -1314,7 +1323,7 @@ export function App(props: AppProps) {
     if (bound('todos', key)) {
       key.preventDefault();
       // The key hides a board that shows something, and pins one that is hidden or has gone empty.
-      const showing = board === 'pinned' || (board === 'auto' && (hasTodos || shownWork(state.work, Date.now(), sentAt).length > 0));
+      const showing = board === 'pinned' || (board === 'auto' && (hasTodos || listedWork.length > 0));
       return setBoard(showing ? 'hidden' : 'pinned');
     }
     if (bound('redraw', key)) renderer.requestRender();
@@ -1369,7 +1378,7 @@ export function App(props: AppProps) {
               ))}
             </scrollbox>
             {board !== 'hidden' && !viewer ? (
-              <TodoPanel todos={state.todos} plan={state.plan} work={state.work} phase={state.status.phase} plain={plain} colors={theme} focus={agentFocus} sentAt={sentAt} pinned={board === 'pinned'} onOpen={openAgent} />
+              <TodoPanel todos={state.todos} plan={state.plan} phase={state.status.phase} plain={plain} colors={theme} focus={agentFocus} listed={listedWork} pinned={board === 'pinned'} onOpen={openAgent} />
             ) : null}
             {state.queued.length && !viewer ? (
               <box flexDirection="column" flexShrink={0} paddingLeft={plain ? 0 : 2}>

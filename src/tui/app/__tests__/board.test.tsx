@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { frameWith, interfaceHarness } from './harness.js';
 
 const { context, open } = interfaceHarness();
@@ -101,6 +101,82 @@ test('a child that ended leaves the board once the person sends another message,
     const after = await frameWith(setup, (frame) => frame.includes('Glad you liked it.') && !frame.includes('● quick judge the jokes'));
     expect(after).not.toContain('Agents');
     expect(after).not.toContain('No checklist yet');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+/** Move the clock the board reads forward, as if that long had passed, and back when the test ends. */
+function wind(ms: number) {
+  const real = Date.now.bind(Date);
+  const spy = spyOn(Date, 'now').mockImplementation(() => real() + ms);
+  return () => spy.mockRestore();
+}
+const EXPIRES = 95_000;
+
+test('an ended child leaves the board when its minute and a half is up, with motion reduced too, and cannot be chosen after', async () => {
+  const { setup, close } = await open({ allowTools: ['task'] }, { size, reducedMotion: true });
+  let unwind = () => undefined as void;
+  try {
+    context.server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'judge the jokes' } }] }, { text: 'The SQL one wins.' }, { text: 'The child picked the SQL joke.' });
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('The child picked the SQL joke.') && frame.includes('● quick judge the jokes'));
+    unwind = wind(EXPIRES);
+    // The clock behind the board keeps going without motion: nothing is animated by it.
+    await frameWith(setup, (frame) => !frame.includes('● quick judge the jokes'), 5_000);
+    setup.mockInput.pressArrow('down');
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain('Enter looks in');
+  } finally {
+    unwind();
+    await close();
+  }
+}, 30_000);
+
+test('a choice held on a child that has left the board is let go, so Enter does not open it', async () => {
+  const { setup, runtime, close } = await open({ allowTools: ['task'] }, { size });
+  let unwind = () => undefined as void;
+  try {
+    context.server.enqueue(
+      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'first, quick' } }] },
+      { text: 'Done first.' },
+      { toolCalls: [{ id: 't2', name: 'task', arguments: { agent: 'quick', prompt: 'second, slow', background: true } }] },
+      { text: 'Done.', delayMs: 8_000 },
+      { text: 'Done.', delayMs: 8_000 }
+    );
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('● quick first, quick') && frame.includes('◐ quick second, slow'));
+    // Down lands on the running child; Up moves the choice to the ended one.
+    setup.mockInput.pressArrow('down');
+    await frameWith(setup, (frame) => /◐ quick second, slow .* Enter looks in/.test(frame));
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, (frame) => /● quick first, quick .* Enter looks in/.test(frame));
+    // Its minute and a half goes by while the other still runs.
+    unwind = wind(EXPIRES);
+    await frameWith(setup, (frame) => !frame.includes('● quick first, quick') && frame.includes('◐ quick second, slow'), 5_000);
+    setup.mockInput.pressEnter();
+    await setup.renderOnce();
+    await Bun.sleep(100);
+    await setup.renderOnce();
+    // Nothing was opened: the composer is still the composer.
+    expect(setup.captureCharFrame()).toContain('Message JamCLI');
+    for (const item of runtime.work()) runtime.stopWork(item.id);
+  } finally {
+    unwind();
+    await close();
+  }
+}, 40_000);
+
+test('the header names the keys whenever a child can be chosen, running or ended', async () => {
+  const { setup, close } = await open({ allowTools: ['task'] }, { size });
+  try {
+    context.server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'judge the jokes' } }] }, { text: 'The SQL one wins.' }, { text: 'The child picked the SQL joke.' });
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    const ended = await frameWith(setup, (frame) => frame.includes('The child picked the SQL joke.') && frame.includes('Agents 1 done'));
+    expect(ended).toContain('↓ choose an agent, Enter looks in');
   } finally {
     await close();
   }
