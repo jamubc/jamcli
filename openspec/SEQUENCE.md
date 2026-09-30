@@ -57,7 +57,11 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
+`answer-tester-notes`, on `feat/answer-tester-notes`: the eleven tester notes the owner
+planted on 2026-09-30 in sessions `2026-09-29-1a6a254d` and `2026-09-30-aa68115b`, as that
+change's proposal groups them. It is the transcript input the paragraph below names.
+
+Before it opened: none. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
 verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the units the
 owner's requests of 2026-09-29 ordered: `label-and-batch-child-approvals`, `add-spinner-verbs`,
 and `add-composer-recall`. What opens next is the owner's choice: the queued
