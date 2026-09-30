@@ -705,3 +705,59 @@ test('a draft restored with a chip sends the text the chip stands for', async ()
     await close();
   }
 }, 30_000);
+
+test('the composer is one line when empty, grows a line at a time to eight, scrolls after that, and shrinks when sent', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 40 } });
+  try {
+    const rows = () => inComposer(setup.captureCharFrame()).length;
+    await setup.renderOnce();
+    expect(rows()).toBe(1);
+    await setup.mockInput.typeText('one');
+    for (let lines = 2; lines <= 12; lines += 1) {
+      setup.mockInput.pressKey('j', { ctrl: true });
+      await setup.mockInput.typeText('more');
+      await setup.renderOnce();
+      await setup.renderOnce();
+      // A line at a time up to eight, then it scrolls.
+      expect(rows()).toBe(Math.min(lines, 8));
+    }
+    expect(rows()).toBe(8);
+    context.server.enqueue({ text: 'reply' });
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('reply'));
+    await frameWith(setup, () => rows() === 1);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('past two lines the composer counts the lines and characters that will be sent, chips at their full size', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await setup.mockInput.typeText('a');
+    setup.mockInput.pressKey('j', { ctrl: true });
+    await setup.mockInput.typeText('b');
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain(' chars');
+    setup.mockInput.pressKey('j', { ctrl: true });
+    await setup.mockInput.typeText('c');
+    await frameWith(setup, (frame) => frame.includes('3 lines · 5 chars'));
+    setup.mockInput.pressCtrlC();
+    await frameWith(setup, (frame) => composerHolds(EMPTY)(frame) && !frame.includes(' chars'));
+    const big = numbered(12);
+    await setup.mockInput.pasteBracketedText(big);
+    await frameWith(setup, (frame) => frame.includes(`12 lines · ${big.length} chars`));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('in screen reader mode the count is in words on a line of its own', async () => {
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 }, screenReader: true });
+  try {
+    await setup.mockInput.pasteBracketedText('a\nb\nc');
+    await frameWith(setup, (frame) => frame.includes('Draft: 3 lines, 5 characters.'));
+  } finally {
+    await close();
+  }
+}, 30_000);

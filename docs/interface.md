@@ -71,6 +71,10 @@ opens that child's run with the prompt still below it to answer.
   and recalled as the text it stands for. Paste again with the cursor on the chip, or right
   after it, and the chip expands in place. Change any of the chip's characters and it is
   plain text, sent as it stands. A draft kept on disk keeps its chips.
+- The composer is one line when empty and grows a line at a time as you write, to eight
+  lines, then scrolls. Past two lines its corner counts the lines and characters that will
+  be sent, a chip at its full size; screen reader mode says the same in words on a line of
+  its own.
 - Up on the first line puts the previous prompt you sent in the composer, exactly as it
   was typed or pasted, lines and all; a row over the composer says which of how many. Up
   again goes older, Down goes newer, and past the newest Down gives back what you had

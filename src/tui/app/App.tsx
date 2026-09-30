@@ -74,6 +74,9 @@ export interface AppProps {
   copy?: Copier;
 }
 
+/** The most lines the composer grows to before it scrolls. */
+const COMPOSER_LINES = 8;
+
 /** How long the draft in the composer may go unwritten while the person types. */
 const DRAFT_SAVE_MS = 250;
 
@@ -1321,6 +1324,10 @@ export function App(props: AppProps) {
     keys.bindings[action].filter((chord) => chord.name.length > 1 || /[a-z]/.test(chord.name)).map((chord) => ({ name: chord.name, ctrl: chord.ctrl, shift: chord.shift, meta: chord.meta, action: submitAs }));
 
   const plain = screenReader;
+  // Past two lines, the lines and characters that will be sent, chips at their full size.
+  const willSend = expandChips(palette.current.draft, chipsRef.current);
+  const draftLines = willSend.split('\n').length;
+  const counted = draftLines >= 3 ? (plain ? `Draft: ${draftLines} lines, ${willSend.length.toLocaleString('en-US')} characters.` : `${draftLines} lines · ${willSend.length.toLocaleString('en-US')} chars`) : undefined;
   const status = statusParts(state.status);
   // The indicator moves during work
   // Not drawn while Screen reader mode = true
@@ -1445,9 +1452,16 @@ export function App(props: AppProps) {
                     {describeRecall(recall, Date.now(), plain)}
                   </text>
                 ) : null}
-                <box {...framed(plain, theme.border)} flexShrink={0} height={plain ? 3 : 5}>
+                <box
+                  {...framed(plain, theme.border)}
+                  flexShrink={0}
+                  minHeight={plain ? 1 : 3}
+                  maxHeight={plain ? COMPOSER_LINES : COMPOSER_LINES + 2}
+                  {...(counted && !plain ? { bottomTitle: ` ${counted} `, bottomTitleAlignment: 'right' as const } : {})}
+                >
                   <textarea
                     ref={composer}
+                    maxHeight={COMPOSER_LINES}
                     onPaste={onPaste}
                     focused={!overlay.current && !viewer && !agentView}
                     textColor={theme.text}
@@ -1461,6 +1475,7 @@ export function App(props: AppProps) {
                     onContentChange={onDraft}
                   />
                 </box>
+                {counted && plain ? <text {...sel}>{counted}</text> : null}
               </box>
             )}
             <box height={1} flexShrink={0} flexDirection="row">
