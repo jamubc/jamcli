@@ -181,3 +181,72 @@ test('the header names the keys whenever a child can be chosen, running or ended
     await close();
   }
 }, 30_000);
+
+/** One child that has ended, on the board, after a message the person sent. */
+async function endedChild(setup: any) {
+  context.server.enqueue({ toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'judge the jokes' } }] }, { text: 'The SQL one wins.' }, { text: 'The child picked the SQL joke.' });
+  await setup.mockInput.typeText('delegate it');
+  setup.mockInput.pressEnter();
+  await frameWith(setup, (frame) => frame.includes('The child picked the SQL joke.') && frame.includes('Agents 1 done') && frame.includes('ready'));
+}
+const composerRow = (frame: string) => frame.split('\n').find((row) => /^│ (delegate it|Message JamCLI)/.test(row)) ?? '';
+
+test('Up from the first child lets go of the choice, and the next Up recalls the last prompt', async () => {
+  const { setup, close } = await open({ allowTools: ['task'] }, { size });
+  try {
+    await endedChild(setup);
+    setup.mockInput.pressArrow('down');
+    await frameWith(setup, (frame) => /● quick judge the jokes .* Enter looks in/.test(frame));
+    setup.mockInput.pressArrow('up');
+    const released = await frameWith(setup, (frame) => frame.includes('↓ choose an agent') && !/judge the jokes .* Enter looks in/.test(frame));
+    expect(composerRow(released)).toContain('Message JamCLI');
+    setup.mockInput.pressArrow('up');
+    const recalled = await frameWith(setup, (frame) => frame.includes('history 1/1'));
+    expect(composerRow(recalled)).toContain('delegate it');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('Escape lets go of the choice between turns, and Enter looks in on the chosen child', async () => {
+  const { setup, close } = await open({ allowTools: ['task'] }, { size });
+  try {
+    await endedChild(setup);
+    setup.mockInput.pressArrow('down');
+    await frameWith(setup, (frame) => /● quick judge the jokes .* Enter looks in/.test(frame));
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => frame.includes('↓ choose an agent') && !/judge the jokes .* Enter looks in/.test(frame));
+    // Chosen again, Enter opens its run in place of the conversation.
+    setup.mockInput.pressArrow('down');
+    await frameWith(setup, (frame) => /judge the jokes .* Enter looks in/.test(frame));
+    setup.mockInput.pressEnter();
+    const opened = await frameWith(setup, (frame) => !frame.includes('Message JamCLI') && frame.includes('judge the jokes'));
+    expect(opened).not.toContain('history ');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('with a message queued, Down takes it back and does not choose a child', async () => {
+  const { setup, runtime, close } = await open({ allowTools: ['task'] }, { size });
+  try {
+    context.server.enqueue(
+      { toolCalls: [{ id: 't1', name: 'task', arguments: { agent: 'quick', prompt: 'count the files in src' } }] },
+      { toolCalls: [{ id: 'g1', name: 'glob', arguments: { pattern: '*.ts' } }], delayMs: 2_500 },
+      { text: 'Twelve.' },
+      { text: 'The child counted twelve.' }
+    );
+    await setup.mockInput.typeText('delegate it');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('◐ quick count the files in src'));
+    await setup.mockInput.typeText('and then this');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => frame.includes('queued, ↓ edit'));
+    setup.mockInput.pressArrow('down');
+    const back = await frameWith(setup, (frame) => !frame.includes('queued, ↓ edit') && /│ and then this/.test(frame));
+    expect(back).not.toMatch(/count the files in src .* Enter looks in/);
+    for (const item of runtime.work()) runtime.stopWork(item.id);
+  } finally {
+    await close();
+  }
+}, 30_000);
