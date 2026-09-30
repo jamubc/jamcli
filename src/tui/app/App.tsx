@@ -1133,6 +1133,13 @@ export function App(props: AppProps) {
     }
     if (bound('exit', key)) {
       if (controller.running) return stopTurn();
+      // An open picker (Ctrl+R, @, command palette) is closed first.
+      if (overlay.current) {
+        key.preventDefault();
+        setOverlay(undefined);
+        overlay.current?.request.dismissed?.();
+        return;
+      }
       // Text in the composer, or set aside by a walk through earlier prompts, is cleared before the key counts toward leaving.
       if ((composer.current?.plainText ?? '') !== '' || recallRef.current?.stash.trim()) {
         exitArmed.current = false;

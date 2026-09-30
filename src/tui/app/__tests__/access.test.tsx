@@ -117,6 +117,21 @@ test('Ctrl+R searches earlier messages, newest first, and puts the chosen one in
   }
 }, 30_000);
 
+test('Ctrl+C closes the Ctrl+R overlay before counting toward exit', async () => {
+  const { setup, close } = await open({}, { size: tall });
+  try {
+    setup.mockInput.pressKey('r', { ctrl: true });
+    await frameWith(setup, (frame) => frame.includes('Earlier messages, newest first'));
+    setup.mockInput.pressKey('c', { ctrl: true });
+    await frameWith(setup, (frame) => !frame.includes('Earlier messages, newest first'));
+    // One Ctrl+C closed the overlay; the interface is still running (no exit yet).
+    setup.mockInput.pressKey('c', { ctrl: true });
+    await frameWith(setup, (frame) => frame.includes('again to exit'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('the checklist appears on its own when the model writes one, with its checks and the plan, and Ctrl+T hides and shows it', async () => {
   const { setup, close } = await open({}, { size: tall });
   try {
