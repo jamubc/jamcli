@@ -120,11 +120,12 @@ test('one answer settles every ask of the same call waiting in the session, each
   const waiting = new WaitingAsks();
   const asks: Extract<AgentEvent, { type: 'approval_request' }>[] = [];
   const hear = (event: AgentEvent) => void (event.type === 'approval_request' && asks.push(event));
-  const same = (id: string, n: number): ToolCall => ({ id, name: 'build', arguments: { n } });
-  const target = dispatcher({ build: { decision: 'ask' } });
-  const first = run([same('b1', 1)], target, hear, waiting);
-  const second = run([same('b2', 1)], target, hear, waiting);
-  const other = run([same('b3', 2)], target, hear, waiting);
+  const same = (id: string, command: string, description: string): ToolCall => ({ id, name: 'run_command', arguments: { command, description } });
+  const target = dispatcher({ run_command: { decision: 'ask' } });
+  // The words a command carries for the person do not make it another call; the command does.
+  const first = run([same('b1', 'bun test', 'Run the test suite')], target, hear, waiting);
+  const second = run([same('b2', 'bun test', 'Run the bun test suite')], target, hear, waiting);
+  const other = run([same('b3', 'bun test --watch', 'Run the test suite')], target, hear, waiting);
   await Bun.sleep(5);
   expect(asks).toHaveLength(3);
   expect(asks[0].request?.key).toBe(asks[1].request?.key);
@@ -135,7 +136,7 @@ test('one answer settles every ask of the same call waiting in the session, each
     expect(done.outcome.results.map((result) => result.status)).toEqual(['ok']);
     expect(done.events.find((event) => event.type === 'approval_decision')).toMatchObject({ allow: true, by: 'user', scope: 'once' });
   }
-  expect(target.ran).toEqual(['build', 'build']);
+  expect(target.ran).toEqual(['run_command', 'run_command']);
   // A different call still waits for its own answer.
   expect(await Promise.race([other.then(() => 'settled'), Bun.sleep(20).then(() => 'waiting')])).toBe('waiting');
   asks[2].decide(false);

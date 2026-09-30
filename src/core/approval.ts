@@ -151,6 +151,15 @@ export function previewCall(call: ToolCall, projectRoot: string): ApprovalPrevie
 
 let counter = 0;
 
+/**
+ * What makes two calls the same call: the working tree, the tool, and every argument but a
+ * command's `description`, which is words for the person about what runs, not what runs.
+ */
+const callKey = (call: ToolCall, projectRoot: string): string => {
+  const { description: _words, ...runs } = call.arguments ?? {};
+  return JSON.stringify([projectRoot, call.name, call.name === 'run_command' ? runs : (call.arguments ?? {})]);
+};
+
 export function buildApprovalRequest(
   call: ToolCall,
   options: { projectRoot: string; policyClass?: PolicyClass | 'unknown'; reason?: string; alwaysAsks?: boolean }
@@ -165,6 +174,6 @@ export function buildApprovalRequest(
     reason: options.reason ?? 'this tool asks before it runs',
     suggestions: suggestPatterns(call),
     // A call only the person answers is asked about on its own, however alike it is to another.
-    ...(options.alwaysAsks ? { alwaysAsks: true } : { key: JSON.stringify([options.projectRoot, call.name, call.arguments ?? {}]) }),
+    ...(options.alwaysAsks ? { alwaysAsks: true } : { key: callKey(call, options.projectRoot) }),
   };
 }

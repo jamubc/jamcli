@@ -77,7 +77,8 @@ session". A waiting call a new deny would now refuse is not settled: it still wa
 the person.
 
 Calls asked for at once that are the same call, the same tool with the same arguments in
-the same working tree, are put to you as one. Your answer, allow once included, goes to
+the same working tree, are put to you as one; a command's `description`, the words it
+carries for you, does not make it another call. Your answer, allow once included, goes to
 each of them, and each is recorded on its own. A tool that always asks, such as a commit,
 is asked about on its own every time.
 
