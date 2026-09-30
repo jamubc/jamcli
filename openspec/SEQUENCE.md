@@ -57,14 +57,11 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`answer-tester-notes`, on `feat/answer-tester-notes`: the eleven tester notes the owner
-planted on 2026-09-30 in sessions `2026-09-29-1a6a254d` and `2026-09-30-aa68115b`, as that
-change's proposal groups them. It is the transcript input the paragraph below names.
-
-Before it opened: none. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
+None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
 verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the units the
 owner's requests of 2026-09-29 ordered: `label-and-batch-child-approvals`, `add-spinner-verbs`,
-and `add-composer-recall`. What opens next is the owner's choice: the queued
+and `add-composer-recall`, and `answer-tester-notes`, from the owner's tester notes of
+2026-09-30. What opens next is the owner's choice: the queued
 `add-findings-loop` (unit 4), or what the task corpus's scores and a second person's
 transcripts ask for, which the review names as this file's input from now on. The owner also
 decides whether `land-interface-rhythm` (B), `add-btw` (C), and the shelved
@@ -76,6 +73,32 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 30. `answer-tester-notes`
+
+Archived as `2026-09-30-answer-tester-notes`: 5 requirements added (Session Reports, Session
+Identity, Keep Awake, Wakes and Flags, Session References) and 3 modified (Terminal User
+Interface, Session Reflection, Transcript Event Log). From the eleven tester notes the owner
+planted on 2026-09-30 in sessions `2026-09-29-1a6a254d` and `2026-09-30-aa68115b`, one of them
+typed as `/also` and so kept as a prompt. Closed at 0 type errors, as it opened, and 1,301
+tests passing against 1,276. Run back to back under a load average of 7, `master` measured
+149.36 s and this branch 149.38 s; the one failure on both, the screen reader terminal test
+whose process does not exit on two Ctrl+C, is older than this unit and is not its to fix.
+
+The check that mattered held: `session_signals` never listed a note, so `/reflect` had never
+read one, which the owner's "they better be there" suspected. The framing question was
+planned as person-only and is not: headless could never have answered it, and a lesson drawn
+from a note still asks the person. Driving the program found four defects the tests had not:
+a wake call drawn as raw JSON, a ten minute timer said as `600 s`, a confirmation that ran
+the prompt into the next sentence, and every typed-text list counting its typed row ("5 of
+4"). The full suite found a fifth, a 1 s timer confirmed as 2 s, from two reads of the clock.
+
+Left out, on purpose. `/recap` is being built in session `2026-09-30-aa68115b`, as that note
+says. Streamed text that settles in chunks rather than flickers was a `/reflect` focus, not a
+note, and needs the render path measured first. Left open: a wake names the sessions it
+waits on by id, not by name; flags are never cleared except by `/flag lower`, so a board
+grows with every session that raises one; the tool line for `wake` is words only for `wake`
+and `flag`, while other state tools keep their JSON.
 
 ### 29. `add-composer-recall`
 

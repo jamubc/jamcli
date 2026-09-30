@@ -67,7 +67,16 @@ explaining why, and one word where one word carries the state.
 #### Scenario: Pin a note
 - **WHEN** the user runs `/note` with text
 - **THEN** the note is pinned above the conversation, newest first, until `/notes clear` removes the notes
-- **AND** notes are never sent to the model
+- **AND** notes are never sent to the model, except to a reflection as the person frames them
+
+#### Scenario: Collapse many notes
+- **WHEN** more than three notes are pinned
+- **THEN** they take one row: the note in view, its place among them, and the count, newest first
+- **AND** the mouse wheel over the row moves through them one at a time, and hovering shows the one in view whole
+
+#### Scenario: List every note
+- **WHEN** the user runs `/notes`, or `/note` with nothing after it
+- **THEN** every note of the session is listed with its time, oldest first
 
 #### Scenario: Select and click
 - **WHEN** the user drags across the transcript
@@ -1307,6 +1316,10 @@ explained afterward and from which every other session view is derived.
 - **WHEN** tool output contains the value of a credential present in the environment or the credential store
 - **THEN** the value is replaced by a marker naming its source before it reaches the model or the log
 
+#### Scenario: Record session identity and wakes
+- **WHEN** the person renames or colors a session, frames notes for a reflection, raises or lowers a flag, or a wake is set, cancelled, goes off, or is missed
+- **THEN** a `name`, `color`, `reflection`, `flag`, or `wake` event is appended, and none of them is sent to the model as a message
+
 ### Requirement: Permission Modes
 JamCLI SHALL provide the permission modes `plan`, `default`, `accept-edits`, `auto`, and
 `bypass`, each setting a default decision per tool class, switchable during a session.
@@ -2154,7 +2167,8 @@ without recording anything new.
 
 ### Requirement: Session Reflection
 JamCLI SHALL, only when the user asks, reflect on the current session and propose delta
-edits to skills, rules, or agents that the user approves before anything is written.
+edits to skills, rules, or agents that the user approves before anything is written. The
+session's tester notes SHALL reach the reflection only as the person frames them.
 
 #### Scenario: Findings cite evidence
 - **WHEN** a reflection finding cites no recorded event, or an unknown one
@@ -2183,6 +2197,19 @@ edits to skills, rules, or agents that the user approves before anything is writ
 #### Scenario: Replace the prompt
 - **WHEN** the project or the user has a skill named `reflect`
 - **THEN** `/reflect` follows that skill instead of the built-in prompt
+
+#### Scenario: Frame the notes first
+- **WHEN** the person runs `/reflect` in a session that has tester notes
+- **THEN** the person is asked how to read them before the model sees any: feature ideas, concerns about the model, bugs in JamCLI, their own words, or leave them out; headless answers with `--choose`
+- **AND** the answer is recorded as a `reflection` event before the turn starts
+
+#### Scenario: Reflect on framed notes
+- **WHEN** the notes are kept
+- **THEN** `session_signals` lists each as a `note` signal with its id under the framing, and a lesson may cite it
+
+#### Scenario: Leave the notes out
+- **WHEN** the person chooses to leave them out, or the session has none
+- **THEN** no note reaches the model
 
 ### Requirement: Plan Artifacts
 JamCLI SHALL keep one plan per project as a markdown file the model writes with a
@@ -2455,3 +2482,112 @@ key loses it without a way back.
 #### Scenario: A cleared draft is not lost
 - **WHEN** the person clears a draft with the exit key
 - **THEN** the draft is removed from disk and kept in the session log as a cleared prompt
+
+### Requirement: Session Reports
+JamCLI SHALL write, when the person asks with `/report`, one Markdown report of the current
+session that carries every tester note with the facts needed to act on them.
+
+#### Scenario: Report a session
+- **WHEN** the person runs `/report`
+- **THEN** they are asked whether to include the session log, and for an optional message that Enter skips
+- **AND** `.jamcli/reports/<session>-<time>.md` is written with the session's id and name, the time, JamCLI's version, the model, the effort, the context usage at that moment, the cost, every note with its time, and the message
+
+#### Scenario: Give the message inline
+- **WHEN** the person runs `/report` followed by text
+- **THEN** that text is the report's message and only the log question is asked
+
+#### Scenario: Include the log
+- **WHEN** the person chooses to include the session log
+- **THEN** the report carries the session rendered as Markdown and the path of its log file
+
+#### Scenario: Report without a screen
+- **WHEN** `/report` runs headless or over ACP
+- **THEN** the questions are answered with `/choose` or `--choose`, and the report's text is shown with where it was written
+
+### Requirement: Session Identity
+JamCLI SHALL let the person name a session and give it a color, record both in its log,
+and accept the name wherever a session id is accepted.
+
+#### Scenario: Rename a session
+- **WHEN** the person runs `/rename fix-auth`
+- **THEN** a `name` event is recorded, the header shows the name beside the id, and the session index carries it
+
+#### Scenario: Keep names one word and unique
+- **WHEN** the name has spaces, other characters, or is held by another session of the project
+- **THEN** spaces become `-`, and a name with other characters or held elsewhere is refused with the reason
+
+#### Scenario: Resume by name
+- **WHEN** the person runs `/resume fix-auth` or `jamcli --resume fix-auth`
+- **THEN** the session named `fix-auth` opens, as it would by its id
+
+#### Scenario: Color a session
+- **WHEN** the person runs `/color blue`
+- **THEN** a `color` event is recorded, and the interface draws the composer's border in blue and tints the status line with it
+- **AND** a resumed session keeps its color, and `/color default` returns to the theme's
+
+#### Scenario: Color without a screen
+- **WHEN** `/color` runs headless or over ACP
+- **THEN** the color is recorded and the command says it shows where there is a screen
+
+### Requirement: Keep Awake
+JamCLI SHALL keep a macOS machine from idle sleep while a session works or waits on a
+wake, and SHALL release it when neither holds.
+
+#### Scenario: Stay awake through a turn
+- **WHEN** a turn runs on macOS and `caffeinate` is present
+- **THEN** `caffeinate -i -w <JamCLI's pid>` runs until the turn ends and no wake is pending
+
+#### Scenario: Stay awake for a wake
+- **WHEN** a wake is pending between turns
+- **THEN** the machine is kept awake until it goes off or is cancelled
+
+#### Scenario: Nothing to run
+- **WHEN** the platform is not macOS, `caffeinate` is absent, or the run is delegated
+- **THEN** nothing is started, and the session works as before
+
+### Requirement: Wakes and Flags
+JamCLI SHALL run a prompt in a session later, when a time comes or when named sessions
+have raised a flag, through a tool the model calls and a command the person types, and
+SHALL let sessions raise and lower flags any JamCLI on the machine can read.
+
+#### Scenario: Set a timer
+- **WHEN** the model calls `wake` with `set`, a prompt, and `after_seconds`, or the person runs `/wake in 10m <prompt>`
+- **THEN** a `wake` event is recorded with its id, and the prompt runs as a turn once the time has passed
+- **AND** it reaches the model as a bracketed harness line naming the wake, who set it, and why it went off, followed by the prompt
+
+#### Scenario: Only removal stops a wake
+- **WHEN** the person sends a message before a wake goes off
+- **THEN** the wake stays pending, and goes off unless `/wake cancel` or the tool's `cancel` removed it
+
+#### Scenario: Wait for flags
+- **WHEN** a wake names sessions and a flag, as `/wake when 2026-09-29-1a6a254d fix-auth raise green: <prompt>` does
+- **THEN** it goes off at the first check after every named session has that flag raised, and not before
+
+#### Scenario: Raise and lower flags
+- **WHEN** the person runs `/flag green`, or the model calls `flag` with `raise`
+- **THEN** the flag is raised on this session in the state directory's flag board and recorded as a `flag` event
+- **AND** it stays raised after the session closes, until `/flag lower green` or the tool's `lower` lowers it
+
+#### Scenario: Deliver on every surface
+- **WHEN** a wake goes off
+- **THEN** the interface sends it behind any running turn, headless waits for pending wakes before it exits, and ACP and the MCP server run it as a turn of the session
+
+#### Scenario: Resume with wakes
+- **WHEN** a session with pending wakes is resumed
+- **THEN** wakes still ahead are set again, and timers that came due while it was closed are reported as missed and recorded, not run
+
+#### Scenario: Refuse what cannot be kept
+- **WHEN** a wake names a session JamCLI does not know, asks for less than one second or more than seven days, or would make more than twenty pending
+- **THEN** it is refused with the reason, and nothing is set
+
+### Requirement: Session References
+JamCLI SHALL recognize session ids, and names the session index holds, in a prompt, and
+tell the model where each session is.
+
+#### Scenario: Tell the model about named sessions
+- **WHEN** a prompt names a known session
+- **THEN** the model receives, with that prompt, a bracketed harness line per session with its project, log path, note count, and raised flags
+
+#### Scenario: Highlight references
+- **WHEN** a sent message names a known session, or starts with a command
+- **THEN** the interface draws that word in the accent color
