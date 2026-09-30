@@ -55,6 +55,11 @@ never lose the unsent draft while they do.
 - **WHEN** the person presses the history search key
 - **THEN** the list of earlier messages of the project's sessions opens, drawn from the same recorded prompts
 
+#### Scenario: Choosing from the search keeps the draft it replaces
+- **WHEN** the composer holds text and the person chooses an earlier message from the search
+- **THEN** the composer holds the chosen message
+- **AND** the text it held is kept as a cleared prompt that Up recalls
+
 ### Requirement: Unsent Draft Safety
 The interface SHALL keep a draft the person has not sent, so that no exit, crash, or stray
 key loses it without a way back.

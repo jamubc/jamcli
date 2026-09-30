@@ -36,6 +36,7 @@ only, never Ollama.
 - [x] 4.3 Wire it into `App.tsx`'s key handler ahead of the board keys, with the command and reference lists keeping Up and Down, and draw the one-row strip above the composer in styled and plain phrasing; add `composer.test.tsx` tests that press Up, Down, and Escape through `mockInput` and read the frame; verify a multi-line pasted prompt returns whole, and a draft typed before Up returns after Down
 - [x] 4.4 Add a test that a cleared draft is recalled (after group 5) and that recall works after `/compact` and after `switchSession` to a resumed session; verify both pass
 - [x] 4.5 Update the key tables in `docs/interface.md` (rows for Up, Down, Ctrl+R) and `docs/ux.md`; verify the rows match the specs' wording and no row still says Up chooses an agent
+- [x] 4.6 Keep the draft that a Ctrl+R choice replaces, found in the product trial: `setAside` in `App.tsx`, shared with the exit key, and a test in `composer.test.tsx` that fails without it; verify the replaced draft is the newest prompt Up recalls
 
 ## 5. Ctrl+C clears
 

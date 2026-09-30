@@ -85,7 +85,8 @@ opens that child's run with the prompt still below it to answer.
   cleared prompt that Up brings back. A prompt you recalled and then changed is kept as a cleared
   prompt when you walk away from it. With several lines in the composer, Up moves up a
   line first and recalls only from the top one. `/commands` and `!commands` are recalled
-  too. Ctrl+R searches wider, across the project's sessions.
+  too. Ctrl+R searches wider, across the project's sessions, and choosing from it keeps the
+  draft it replaces as a cleared prompt.
 
 ## Lists, pickers, and prompts
 

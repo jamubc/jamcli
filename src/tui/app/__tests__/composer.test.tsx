@@ -761,3 +761,42 @@ test('in screen reader mode the count is in words on a line of its own', async (
     await close();
   }
 }, 30_000);
+
+test('choosing an earlier message from the search keeps the draft it replaces, as a cleared prompt', async () => {
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await say(setup, 'one', 'reply one');
+    await setup.mockInput.typeText('my unsent draft');
+    setup.mockInput.pressKey('r', { ctrl: true });
+    await frameWith(setup, (frame) => frame.includes('Earlier messages, newest first'));
+    setup.mockInput.pressEnter();
+    await frameWith(setup, composerHolds('one'));
+    expect(runtime.prompts().map((prompt) => [prompt.text, prompt.state])).toEqual([
+      ['one', 'sent'],
+      ['my unsent draft', 'cleared'],
+    ]);
+    // Nothing is gone: the draft is the newest thing Up recalls.
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, (frame) => composerHolds('my unsent draft')(frame) && frame.includes('cleared'));
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('choosing from the search with the composer empty, or holding the same text, records nothing', async () => {
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await say(setup, 'one', 'reply one');
+    setup.mockInput.pressKey('r', { ctrl: true });
+    await frameWith(setup, (frame) => frame.includes('Earlier messages, newest first'));
+    setup.mockInput.pressEnter();
+    await frameWith(setup, composerHolds('one'));
+    setup.mockInput.pressKey('r', { ctrl: true });
+    await frameWith(setup, (frame) => frame.includes('Earlier messages, newest first'));
+    setup.mockInput.pressEnter();
+    await frameWith(setup, composerHolds('one'));
+    expect(runtime.prompts().map((prompt) => [prompt.text, prompt.state])).toEqual([['one', 'sent']]);
+  } finally {
+    await close();
+  }
+}, 30_000);

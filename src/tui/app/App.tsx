@@ -911,7 +911,9 @@ export function App(props: AppProps) {
       empty: 'Nothing sent yet in this project.',
       hint: 'Enter puts it in the composer',
       choose: (item) => {
-        composer.current?.setText(item.value ?? item.label);
+        const chosen = item.value ?? item.label;
+        setAside(chosen);
+        composer.current?.setText(chosen);
         composer.current?.gotoBufferEnd();
       },
     });
@@ -1080,16 +1082,23 @@ export function App(props: AppProps) {
   };
 
   /**
-   * Empty the composer. What it held and what a walk had set aside are kept as cleared
-   * prompts, so nothing typed is gone for good; a prompt recalled and left as it was is
-   * in history already.
+   * Put aside what the composer holds before something else takes its place. What it held
+   * and what a walk had set aside are kept as cleared prompts, so nothing typed is gone for
+   * good; a prompt recalled and left as it was is in history already, and so is text that is
+   * to be put back as it is.
    */
-  const clearComposer = () => {
+  const setAside = (replacement = '') => {
     const text = composer.current?.plainText ?? '';
     const stash = recallRef.current?.stash;
     if (stash?.trim()) runtime.prompt(expandChips(stash, chipsRef.current), 'cleared');
-    if (text.trim() && !isRecalled(recallRef.current, text)) runtime.prompt(expandChips(text, chipsRef.current), 'cleared');
+    if (text.trim() && text !== replacement && !isRecalled(recallRef.current, text)) runtime.prompt(expandChips(text, chipsRef.current), 'cleared');
     setRecall(undefined);
+    chipsRef.current = {};
+  };
+
+  /** Empty the composer, keeping what it held. */
+  const clearComposer = () => {
+    setAside();
     composer.current?.setText('');
     setPalette({ draft: '', index: 0 });
     settleDraft();
