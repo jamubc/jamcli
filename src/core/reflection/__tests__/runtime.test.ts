@@ -116,3 +116,25 @@ test('an ordinary turn is not offered the reflection tools, and cannot call them
   const next = server.completions().at(-1)!.body.tools.map((tool: any) => tool.function.name);
   for (const name of REFLECTION_TOOLS) expect(next).toContain(name);
 });
+
+test('tester notes reach a reflection only as the person framed them, and a lesson may cite one', async () => {
+  const runtime = await createRuntime({ projectRoot: root, surface: 'headless', mcp: false });
+  runtime.note('the picker hid the composer');
+  const reflectWith = async (notes: string | null) => {
+    server.enqueue({ toolCalls: [{ id: 's1', name: 'session_signals', arguments: {} }] }, { text: 'seen' });
+    const events: AgentEvent[] = [];
+    await runtime.run('reflect', (event) => events.push(event), { offer: REFLECTION_TOOLS, label: '/reflect', reflection: { notes } });
+    return (events.find((event) => event.type === 'tool_result') as Extract<AgentEvent, { type: 'tool_result' }>).result.output;
+  };
+  // Left out, the note never reaches the model.
+  expect(await reflectWith(null)).not.toContain('the picker hid the composer');
+  const framed = await reflectWith('bugs in JamCLI itself');
+  expect(framed).toContain('framed for this reflection as: bugs in JamCLI itself');
+  const id = Number(/\[(\d+)\] note: the picker hid the composer/.exec(framed)?.[1]);
+  expect(Number.isInteger(id)).toBe(true);
+  // The note is evidence a lesson can cite; the person is still asked before anything is written.
+  server.enqueue({ toolCalls: [lesson('l1', [id])] }, { text: 'proposed' });
+  const cited = await turn(runtime, 'propose');
+  expect(cited.asked).toHaveLength(1);
+  expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toContain('- Read a file before editing it');
+});

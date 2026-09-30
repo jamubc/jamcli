@@ -41,8 +41,24 @@ const reflectedOn = (sources: ReflectionSources): TranscriptEvent[] => {
   return events;
 };
 
+/**
+ * The tester notes a reflection reads, with how the person framed them: the last
+ * `reflection` event decides, and one that left the notes out, or none at all, gives none.
+ */
+export function framedNotes(events: TranscriptEvent[]): { framing: string; notes: Signal[] } | undefined {
+  const framed = [...events].reverse().find((event): event is Extract<TranscriptEvent, { type: 'reflection' }> => event.type === 'reflection');
+  if (!framed?.notes) return undefined;
+  const notes = events.flatMap((event, id): Signal[] =>
+    event.type === 'note' ? [{ id, kind: 'note', detail: event.text, confidence: 'high', signature: `note/-/-/${id}` }] : []
+  );
+  return notes.length ? { framing: framed.notes, notes } : undefined;
+}
+
+/** What a lesson may cite: the failures, and the notes the person framed. */
+const citable = (events: TranscriptEvent[]): Signal[] => [...signalsOf(events), ...(framedNotes(events)?.notes ?? [])];
+
 export const lessonFor = (sources: ReflectionSources, args: Record<string, unknown>) =>
-  planLesson(args as unknown as LessonArgs, { projectRoot: sources.projectRoot, signals: signalsOf(reflectedOn(sources)), known: sources.known() });
+  planLesson(args as unknown as LessonArgs, { projectRoot: sources.projectRoot, signals: citable(reflectedOn(sources)), known: sources.known() });
 
 /** The tools a reflection turn is offered; no other turn sees them. */
 export const REFLECTION_TOOLS = ['session_signals', 'propose_lesson'];
@@ -51,14 +67,21 @@ export function reflectionTools(sources: ReflectionSources): RegisteredTool[] {
   return [
     {
       name: 'session_signals',
-      description: "What went wrong in this session, read from its log: tool errors, retries, denials, cancellations, likely corrections, and waste, each with an id to cite and what the model had said just before.",
+      description: "What went wrong in this session, read from its log: tool errors, retries, denials, cancellations, likely corrections, and waste, each with an id to cite and what the model had said just before. When the person framed the session's tester notes for this reflection, they follow, each with an id to cite.",
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       policy: 'read',
       runner: async () => {
         const events = reflectedOn(sources);
         const signals = signalsOf(events);
-        if (!signals.length) return { output: 'This session has no signals: nothing failed, was denied, or was cancelled.' };
-        return { output: signals.map((signal) => describe(events, signal)).join('\n') };
+        const framed = framedNotes(events);
+        const parts = [signals.length ? signals.map((signal) => describe(events, signal)).join('\n') : 'This session has no signals: nothing failed, was denied, or was cancelled.'];
+        if (framed) {
+          parts.push(
+            `Tester notes, which the person planted while using JamCLI and framed for this reflection as: ${framed.framing}\n` +
+              framed.notes.map((note) => `[${note.id}] note: ${note.detail}`).join('\n')
+          );
+        }
+        return { output: parts.join('\n\n') };
       },
     },
     {

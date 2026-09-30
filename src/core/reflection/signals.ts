@@ -2,7 +2,8 @@ import type { TranscriptEvent } from '../transcript/events.js';
 import { analyzeCommand } from '../permissions/command.js';
 import { readOnlyReason } from '../tools/readonly.js';
 
-export type SignalKind = 'tool_error' | 'denied' | 'cancelled' | 'retry' | 'correction' | 'waste' | 'gate_fail' | 'false_done' | 'limit' | 'context' | 'confabulation';
+/** `note` is a tester's note a reflection reads because the person framed it; the log's failures never produce one. */
+export type SignalKind = 'tool_error' | 'denied' | 'cancelled' | 'retry' | 'correction' | 'waste' | 'gate_fail' | 'false_done' | 'limit' | 'context' | 'confabulation' | 'note';
 
 export interface Signal {
   id: number;
