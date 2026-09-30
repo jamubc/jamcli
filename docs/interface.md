@@ -19,7 +19,7 @@ the transcript, the composer, the palettes, and the status line.
 | Down on an empty composer | Chooses an agent on the board; Up and Down move the choice, Up on the first lets go, Enter looks in on it, Escape lets go |
 | Page Up, Page Down | Scrolls the transcript; at the top, Page Up shows earlier rows |
 | Ctrl+L | Redraws the screen |
-| Ctrl+C twice | Leaves |
+| Ctrl+C | Stops a running turn; otherwise clears the composer; on an empty composer, twice leaves |
 | `?` on an empty composer | Lists the commands and keys |
 
 Keys a prompt or a list uses (1 to 5, Up and Down, Tab, Escape, and `o` on a child's
@@ -70,7 +70,8 @@ opens that child's run with the prompt still below it to answer.
   was typed or pasted, lines and all; a row over the composer says which of how many. Up
   again goes older, Down goes newer, and past the newest Down gives back what you had
   written before the first Up, so nothing you were typing is lost until you send. Escape
-  gives it back at once. A prompt you recalled and then changed is kept as a cleared
+  gives it back at once. Ctrl+C clears the composer, and a draft it clears is kept as a
+  cleared prompt that Up brings back. A prompt you recalled and then changed is kept as a cleared
   prompt when you walk away from it. With several lines in the composer, Up moves up a
   line first and recalls only from the top one. `/commands` and `!commands` are recalled
   too. Ctrl+R searches wider, across the project's sessions.

@@ -34,14 +34,14 @@ only, never Ollama.
 - [x] 4.1 Write unit tests for `src/tui/app/recall.ts`: first Up stashes and loads the newest; Up walks older and stops at the oldest; Down walks newer; Down past the newest restores the stash with its chips; Escape restores; a send drops the stash; Up on a later line or a wrapped first line moves the cursor and does not recall; verify they fail for the missing module
 - [x] 4.2 Implement `recall.ts`; verify 4.1 passes
 - [x] 4.3 Wire it into `App.tsx`'s key handler ahead of the board keys, with the command and reference lists keeping Up and Down, and draw the one-row strip above the composer in styled and plain phrasing; add `composer.test.tsx` tests that press Up, Down, and Escape through `mockInput` and read the frame; verify a multi-line pasted prompt returns whole, and a draft typed before Up returns after Down
-- [ ] 4.4 Add a test that a cleared draft is recalled (after group 5) and that recall works after `/compact` and after `switchSession` to a resumed session; verify both pass
+- [x] 4.4 Add a test that a cleared draft is recalled (after group 5) and that recall works after `/compact` and after `switchSession` to a resumed session; verify both pass
 - [x] 4.5 Update the key tables in `docs/interface.md` (rows for Up, Down, Ctrl+R) and `docs/ux.md`; verify the rows match the specs' wording and no row still says Up chooses an agent
 
 ## 5. Ctrl+C clears
 
-- [ ] 5.1 Write tests in `src/tui/app/__tests__/composer.test.tsx`: exit key with a running turn stops it and keeps the draft; with a draft and no turn clears it and does not arm exit; with an empty composer arms exit and a second press within two seconds leaves; verify the clear case fails on the current code
-- [ ] 5.2 Change the exit-key handler in `App.tsx` to that order and record a `cleared` prompt; verify 5.1 passes and the existing exit tests in `app.test.tsx` still pass
-- [ ] 5.3 Update the Ctrl+C row in `docs/interface.md` and `docs/ux.md`; verify the rows say a draft is cleared first
+- [x] 5.1 Write tests in `src/tui/app/__tests__/composer.test.tsx`: exit key with a running turn stops it and keeps the draft; with a draft and no turn clears it and does not arm exit; with an empty composer arms exit and a second press within two seconds leaves; verify the clear case fails on the current code
+- [x] 5.2 Change the exit-key handler in `App.tsx` to that order and record a `cleared` prompt; verify 5.1 passes and the existing exit tests in `app.test.tsx` still pass
+- [x] 5.3 Update the Ctrl+C row in `docs/interface.md` and `docs/ux.md`; verify the rows say a draft is cleared first
 
 ## 6. Drafts survive leaving
 

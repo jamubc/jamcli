@@ -929,6 +929,21 @@ export function App(props: AppProps) {
     void controller.submit(text);
   };
 
+  /**
+   * Empty the composer. What it held and what a walk had set aside are kept as cleared
+   * prompts, so nothing typed is gone for good; a prompt recalled and left as it was is
+   * in history already.
+   */
+  const clearComposer = () => {
+    const text = composer.current?.plainText ?? '';
+    const stash = recallRef.current?.stash;
+    if (stash?.trim()) runtime.prompt(stash, 'cleared');
+    if (text.trim() && !isRecalled(recallRef.current, text)) runtime.prompt(text, 'cleared');
+    setRecall(undefined);
+    composer.current?.setText('');
+    setPalette({ draft: '', index: 0 });
+  };
+
   /** Stop the turn; what was queued behind it comes back to the composer, ahead of any draft. */
   const stopTurn = () => {
     const back = controller.cancel();
@@ -958,6 +973,11 @@ export function App(props: AppProps) {
     }
     if (bound('exit', key)) {
       if (controller.running) return stopTurn();
+      // Text in the composer, or set aside by a walk through earlier prompts, is cleared before the key counts toward leaving.
+      if ((composer.current?.plainText ?? '') !== '' || recallRef.current?.stash.trim()) {
+        exitArmed.current = false;
+        return clearComposer();
+      }
       if (exitArmed.current) return onExit();
       exitArmed.current = true;
       dispatch({ type: 'notice', level: 'info', text: `Press ${keysFor(keys.bindings, 'exit')} again to exit.` });

@@ -394,3 +394,113 @@ test('sending a recalled prompt sends it as it is and leaves no walk or draft be
     await close();
   }
 }, 30_000);
+
+test('the exit key stops a running turn first, and leaves the draft as it was', async () => {
+  let exited = 0;
+  const { setup, close } = await open({}, { size: { width: 100, height: 30 }, onExit: () => void (exited += 1) });
+  try {
+    context.server.enqueue({ text: 'Too late.', delayMs: 3_000 });
+    await setup.mockInput.typeText('first');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => /thinking|streaming/.test(frame));
+    await setup.mockInput.typeText('still typing');
+    setup.mockInput.pressCtrlC();
+    const stopped = await frameWith(setup, (frame) => composerHolds('still typing')(frame) && frame.includes('ready'));
+    expect(stopped).not.toContain('Press Ctrl+C again');
+    expect(exited).toBe(0);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('the exit key clears a draft before it counts toward leaving, and Up brings the draft back', async () => {
+  let exited = 0;
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 }, onExit: () => void (exited += 1) });
+  try {
+    await setup.mockInput.typeText('half a thought');
+    setup.mockInput.pressCtrlC();
+    const cleared = await frameWith(setup, composerHolds(EMPTY));
+    expect(cleared).not.toContain('Press Ctrl+C again');
+    expect(exited).toBe(0);
+    expect(runtime.prompts().map((prompt) => [prompt.text, prompt.state])).toEqual([['half a thought', 'cleared']]);
+
+    // Only an empty composer counts toward leaving.
+    setup.mockInput.pressCtrlC();
+    await frameWith(setup, (frame) => frame.includes('Press Ctrl+C again to exit.'));
+    expect(exited).toBe(0);
+
+    // The cleared text is not lost: it is the newest thing Up recalls.
+    setup.mockInput.pressArrow('up');
+    const back = await frameWith(setup, (frame) => composerHolds('half a thought')(frame) && frame.includes('cleared'));
+    expect(back).toContain('history 1/1');
+    setup.mockInput.pressCtrlC();
+    await frameWith(setup, composerHolds(EMPTY));
+    // The prompt was in history already, so clearing it again adds nothing.
+    expect(runtime.prompts()).toHaveLength(1);
+    expect(exited).toBe(0);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('clearing while walking through earlier prompts ends the walk and keeps the draft that was set aside', async () => {
+  const { setup, runtime, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    await say(setup, 'one', 'reply one');
+    await setup.mockInput.typeText('my draft');
+    setup.mockInput.pressArrow('up');
+    await frameWith(setup, (frame) => composerHolds('one')(frame) && frame.includes('history 1/1'));
+    setup.mockInput.pressCtrlC();
+    await frameWith(setup, (frame) => composerHolds(EMPTY)(frame) && !frame.includes('history '));
+    expect(runtime.prompts().map((prompt) => [prompt.text, prompt.state])).toEqual([
+      ['one', 'sent'],
+      ['my draft', 'cleared'],
+    ]);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test('Up recalls the prompts from before a /compact, and from a session that is resumed', async () => {
+  const { setup, runtime, current, close } = await open({}, { size: { width: 100, height: 30 } });
+  try {
+    const first = runtime.sessionId;
+    const header = (frame: string) => frame.split('\n')[0];
+    await say(setup, 'one', 'reply one');
+    await say(setup, 'two', 'reply two');
+    context.server.enqueue({ text: 'A summary of one and two.' });
+    await setup.mockInput.typeText('/compact');
+    setup.mockInput.pressEnter();
+    for (let wait = 0; wait < 300 && !runtime.session.messages.some((message) => String(message.content).startsWith('Summary of the earlier conversation')); wait += 1) {
+      await setup.renderOnce();
+      await Bun.sleep(20);
+    }
+    expect(runtime.session.messages.some((message) => String(message.content).startsWith('Summary of the earlier conversation'))).toBe(true);
+
+    // The conversation was summarized; what was typed was not.
+    for (const expected of ['/compact', 'two', 'one']) {
+      setup.mockInput.pressArrow('up');
+      await frameWith(setup, composerHolds(expected));
+    }
+    setup.mockInput.pressEscape();
+    await frameWith(setup, (frame) => composerHolds(EMPTY)(frame) && !frame.includes('history '));
+
+    // A new session starts with none of them; resuming the first brings them back.
+    await setup.mockInput.typeText('/clear');
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => !header(frame).includes(first));
+    setup.mockInput.pressArrow('up');
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain('history ');
+    await setup.mockInput.typeText(`/resume ${first}`);
+    setup.mockInput.pressEnter();
+    await frameWith(setup, (frame) => header(frame).includes(first));
+    expect(current().sessionId).toBe(first);
+    for (const expected of ['/clear', '/compact', 'two', 'one']) {
+      setup.mockInput.pressArrow('up');
+      await frameWith(setup, composerHolds(expected));
+    }
+  } finally {
+    await close();
+  }
+}, 60_000);

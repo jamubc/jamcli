@@ -129,7 +129,7 @@ current bindings.
 | Ctrl+O | detailed transcript |
 | Ctrl+T | todo panel |
 | Ctrl+L | redraw |
-| Ctrl+C twice | exit |
+| Ctrl+C | stop the turn; else clear the composer; on an empty composer, twice exits |
 | `?` on an empty composer | help overlay |
 | `@` | file and resource completion |
 | `/` | command palette |

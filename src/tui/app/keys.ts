@@ -25,7 +25,7 @@ export const ACTION_WORDS: Record<KeyAction, string> = {
   page_up: 'scrolls the transcript up a page, and at the top shows earlier rows',
   page_down: 'scrolls it down a page',
   redraw: 'redraws the screen',
-  exit: 'leaves, pressed twice',
+  exit: 'clears the composer; on an empty one, leaves, pressed twice',
   help: 'lists the commands and keys, on an empty composer',
 };
 
