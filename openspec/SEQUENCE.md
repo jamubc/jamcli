@@ -57,7 +57,12 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-None. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
+`add-approval-solvers`: the owner's request of 2026-09-30 that auto mode's approvals be
+pluggable, one solver per file, with TypeSafe's Jev as one of them. It reverses the
+review's "would not build a learned approval mode" on purpose, as its proposal says. The
+owner queued a JamCLI SDK, a typed client over ACP, as the unit after it.
+
+Before it opened: none. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
 verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the units the
 owner's requests of 2026-09-29 ordered: `label-and-batch-child-approvals`, `add-spinner-verbs`,
 and `add-composer-recall`, and `answer-tester-notes`, from the owner's tester notes of
