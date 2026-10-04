@@ -292,6 +292,12 @@ export interface Runtime {
   flags(refs: string[]): { session: string; flags: string[] }[] | { error: string };
   raiseFlag(flag: string): void;
   lowerFlag(flag: string): void;
+  /** Queue steering instructions for the model to execute tools and keep going. */
+  steer(message: string): void;
+  /** Set or clear a standing goal that persists across turns. */
+  setGoal(goal?: string): void;
+  /** Get the current standing goal if set. */
+  getGoal(): string | undefined;
   close(): Promise<void>;
 }
 

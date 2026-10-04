@@ -31,7 +31,7 @@ export interface AgentOptions {
   maxToolCallsPerTurn?: number;
   truncationLimit?: number;
   systemPrompt?: string;
-  loop?: AgentLoopConfig;
+  loop?: Partial<AgentLoopConfig>;
   hooks?: HookBus;
   reasoning?: ProviderRequestOptions['reasoning'];
   effort?: ProviderRequestOptions['effort'];
@@ -85,6 +85,14 @@ export interface AgentOptions {
    * bracket form the other notes use: a model or mode change, a handoff. Drained on read.
    */
   turnNotes?: () => string[];
+  /** Corrective nudge when the model narrates intent without calling tools. */
+  intentAckContinuation?: 'off' | 'on' | 'auto' | boolean;
+  /** Stall guards for trailing narration, dropped calls, and identical call replay. */
+  stallGuards?: boolean;
+  /** Guardrails against runaway or repetitive tool loops. */
+  toolLoopGuardrails?: boolean;
+  /** Maximum corrective nudges allowed per turn. Defaults to 2. */
+  maxNudgesPerTurn?: number;
 }
 
 interface StepOutput {
@@ -94,6 +102,37 @@ interface StepOutput {
 }
 
 const userMessage = (content: string): ChatMessage => ({ role: 'user', content, timestamp: Date.now() });
+
+const ENFORCEMENT_FAMILIES = ['gpt', 'codex', 'gemini', 'gemma', 'grok', 'glm', 'qwen', 'deepseek', 'muse'];
+
+export function shouldNudgeIntent(setting: 'off' | 'on' | 'auto' | boolean | undefined, model?: string): boolean {
+  if (setting === true || setting === 'on') return true;
+  if (setting === false || setting === 'off') return false;
+  if (!model) return false;
+  const lower = model.toLowerCase();
+  if (lower.includes('claude')) return false;
+  return ENFORCEMENT_FAMILIES.some((family) => lower.includes(family));
+}
+
+/** Detects when the model writes code or markup representing a tool call in text instead of wire format. */
+export function hasDroppedToolCall(text: string): boolean {
+  if (!text) return false;
+  if (/<tool_call>|<\/tool_call>|```(?:tool_code|tool_call)/i.test(text)) return true;
+  if (/```(?:json)?\s*\{\s*"name"\s*:\s*"(?:run_command|read_file|edit|write_file|grep|glob|task)"/i.test(text)) return true;
+  if (/^(?:Action|Tool):\s*(?:run_command|read_file|edit|write_file|grep|glob|task)\b/im.test(text)) return true;
+  return false;
+}
+
+/** Detects when the reply narrates intent or trails off with a plan without calling tools. */
+export function narratesIntentWithoutAction(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  const intentPhrases = /(?:(?:let me|i(?:'ll| will| am going to)|now (?:i'll|i will|let's)|next[, ]+(?:i'll|i will)|we should now|proceed to|allow me to)\s+(?:now\s+)?(?:check|read|run|execute|update|modify|edit|create|write|inspect|look|search|verify|test|fix|implement|apply|examine)\b|(?:^|\n)(?:Next steps?:|Plan:|\d+\.\s+I will)\s+)/i;
+  if (intentPhrases.test(trimmed)) return true;
+  const trailingIntent = /(?:let me|i'll|i will|now let's|i am now going to)[^.\n]*[.…]?\s*$/i;
+  if (trailingIntent.test(trimmed)) return true;
+  return false;
+}
 
 /** How each wire format says a reply was cut off at the output limit: Anthropic, then OpenAI and Ollama. */
 const OUTPUT_LIMIT_REASONS = new Set(['max_tokens', 'length']);
@@ -118,6 +157,10 @@ export class CoreAgent implements Agent {
   private readonly maxToolCallsPerTurn: number;
   private readonly truncationLimit: number;
   private readonly redact: Redactor;
+  private readonly intentAckContinuation: 'off' | 'on' | 'auto' | boolean;
+  private readonly stallGuards: boolean;
+  private readonly toolLoopGuardrails: boolean;
+  private readonly maxNudgesPerTurn: number;
   private reasoningSince?: number;
   /** Whether this session has run elision at the planned crossing since its last compaction. */
   private elidedAhead = false;
@@ -129,6 +172,12 @@ export class CoreAgent implements Agent {
       options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn;
     this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars;
     this.redact = options.redact ?? createRedactor();
+    this.intentAckContinuation =
+      options.intentAckContinuation ?? loop?.intent_ack_continuation ?? DEFAULT_AGENT_LOOP_CONFIG.intent_ack_continuation ?? 'auto';
+    this.stallGuards = options.stallGuards ?? loop?.stall_guards ?? DEFAULT_AGENT_LOOP_CONFIG.stall_guards ?? true;
+    this.toolLoopGuardrails =
+      options.toolLoopGuardrails ?? loop?.tool_loop_guardrails ?? DEFAULT_AGENT_LOOP_CONFIG.tool_loop_guardrails ?? true;
+    this.maxNudgesPerTurn = options.maxNudgesPerTurn ?? 2;
     this.reasoningSince = options.reasoningSince;
   }
 
@@ -274,6 +323,9 @@ export class CoreAgent implements Agent {
     const cap = this.maxToolCallsPerTurn > 0 ? this.maxToolCallsPerTurn : undefined;
     let usedCalls = 0;
     let steps = 0;
+    let nudges = 0;
+    const callSignatures: string[] = [];
+    let consecutiveIdenticalCalls = 0;
     /** Whether a stop hook has already asked for more this turn, which the hook is told. */
     let stopHookActive = false;
     const context = this.options.context;
@@ -402,6 +454,27 @@ export class CoreAgent implements Agent {
           record(userMessage('[Your last tool call had no tool name and was ignored. Name the tool you want to call.]'));
           continue;
         }
+
+        // Dropped-call guard: detected tool markup or pseudo-call in text with no wire call
+        if (this.stallGuards && nudges < this.maxNudgesPerTurn && hasDroppedToolCall(step.text)) {
+          nudges += 1;
+          emit({ type: 'notice', level: 'info', message: 'Model formatted a tool call in text instead of wire format; nudging to call tool.' });
+          record(userMessage('[System: You indicated a tool call in your text but none was included in the API response. Issue the actual tool call now.]'));
+          continue;
+        }
+
+        // Intent acknowledgment continuation: narrating intent without tool calls
+        if (
+          nudges < this.maxNudgesPerTurn &&
+          shouldNudgeIntent(this.intentAckContinuation, this.options.model) &&
+          narratesIntentWithoutAction(step.text)
+        ) {
+          nudges += 1;
+          emit({ type: 'notice', level: 'info', message: 'Model narrated intent without calling tools; nudging to take action.' });
+          record(userMessage('[System: Continue now. Execute the required tool calls rather than describing what you will do.]'));
+          continue;
+        }
+
         // A stop hook may ask the model to carry on, with its reason as the next message.
         const stop = await hookVerdict(hooks, 'stop', { session: working, response: step.text, stopHookActive }, emit);
         const carryOn = stop.block ?? (stop.decision === 'deny' ? (stop.reason ?? 'a stop hook asked for more') : undefined);
@@ -411,6 +484,21 @@ export class CoreAgent implements Agent {
           continue;
         }
         return finish('ok', step.text, steps);
+      }
+
+      if (this.stallGuards) {
+        const signature = calls.map((c) => `${c.name}:${JSON.stringify(c.arguments)}`).join(';');
+        if (callSignatures.length && callSignatures[callSignatures.length - 1] === signature) {
+          consecutiveIdenticalCalls += 1;
+        } else {
+          consecutiveIdenticalCalls = 1;
+        }
+        callSignatures.push(signature);
+
+        if (this.toolLoopGuardrails && consecutiveIdenticalCalls >= 4) {
+          emit({ type: 'notice', level: 'warn', message: 'Repeated identical tool call loop detected; stopping turn to prevent infinite repetition.' });
+          return finish('limit', 'Stopped: repeating identical tool call loop detected without progress.', steps);
+        }
       }
 
       if (!dispatcher) {
@@ -444,6 +532,9 @@ export class CoreAgent implements Agent {
         const added = [...after.context, ...(after.block !== undefined ? [`A post_tool hook says: ${after.block}`] : [])];
         if (i === calls.length - 1 && endedNow.length) added.push(`[Work ended during this step:\n${endedNow.join('\n')}]`);
         if (i === calls.length - 1 && heardNow.length) added.push(`[The person watching says:\n${heardNow.join('\n')}]`);
+        if (i === calls.length - 1 && this.stallGuards && consecutiveIdenticalCalls === 3) {
+          added.push('[System: Identical tool call repeated 3 times. If this call did not produce the expected result, change parameters or try a different approach.]');
+        }
         if (added.length) output = `${output}\n\n${added.join('\n')}`;
         record({
           role: 'tool',

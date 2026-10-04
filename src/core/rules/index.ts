@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-export const DEFAULT_RULE_FILES = ['AGENTS.md', 'CLAUDE.md', '.jamcli/rules.md'];
+export const DEFAULT_RULE_FILES = ['SOUL.md', '.jamcli/soul.md', 'AGENTS.md', 'CLAUDE.md', '.jamcli/rules.md'];
 export const RULES_DIR = '.jamcli/rules';
 
 export interface RuleSection {

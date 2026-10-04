@@ -29,6 +29,7 @@ import { commandsList, hooksCommand, plugins, skills } from './extensions.js';
 import { workflowsCommand } from './workflows.js';
 import { reflect } from './reflect.js';
 import { color, flag, notesList, rename, report, wake } from './session.js';
+import { agentic, goal, steer } from './steer.js';
 
 /** Refuse, and say so, while a turn runs. */
 const waitForTurn = (ctx: CommandContext, what: string): boolean => {
@@ -53,7 +54,7 @@ const thisSession = (ctx: CommandContext): SessionChoice =>
   fs.existsSync(sessionFileFor(ctx.projectRoot, ctx.runtime.sessionId)) ? { sessionId: ctx.runtime.sessionId } : {};
 
 /** Reopen this session, so a change to the files it was built from applies. */
-async function reopen(ctx: CommandContext): Promise<void> {
+export async function reopen(ctx: CommandContext): Promise<void> {
   // Where the session is not replaced in place, a saved change takes effect in the next one, which is not a failure.
   if (!ctx.opensSessions) return ctx.notice('info', 'Saved. It applies to new sessions.');
   const error = await ctx.openSession(thisSession(ctx));
@@ -785,6 +786,9 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
   color,
   flag,
   wake,
+  steer,
+  goal,
+  agentic,
   doctor,
   exportCommand,
   exit,
