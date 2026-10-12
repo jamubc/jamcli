@@ -75,7 +75,7 @@ test('in a terminal, --screen-reader draws plain labeled lines with no boxes or 
   expect(plain.drawn).toContain('Message: Message JamCLI');
   expect(plain.drawn).not.toMatch(/[┌┐└┘│─▄█]/);
   expect(plain.code).toBe(0);
-  const framed = await inTerminal([], {}, (screen) => /default mode · .* · ready/.test(screen));
+  const framed = await inTerminal([], {}, (screen) => /default mode ·[\s\S]* ready/.test(screen));
   expect(framed.drawn).toMatch(/[┌┐└┘│─]/);
   expect(framed.code).toBe(0);
 }, 40_000);
