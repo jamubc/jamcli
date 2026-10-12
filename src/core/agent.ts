@@ -498,11 +498,8 @@ export class CoreAgent implements Agent {
           continue;
         }
 
-        // A guard has no tools to continue into, so there is nothing to nudge towards.
-        if (!tools) return finish('ok', step.text, steps);
-
         // Dropped-call guard: detected tool markup or pseudo-call in text with no wire call
-        if (this.stallGuards && nudges < this.maxNudgesPerTurn && hasDroppedToolCall(step.text)) {
+        if (tools && this.stallGuards && nudges < this.maxNudgesPerTurn && hasDroppedToolCall(step.text)) {
           nudges += 1;
           emit({ type: 'notice', level: 'info', message: 'Model formatted a tool call in text instead of wire format; nudging to call tool.' });
           record(harnessNote('[A stall guard asks you to issue the call: this reply wrote one as text and none was returned with it.]'));
@@ -511,6 +508,7 @@ export class CoreAgent implements Agent {
 
         // Intent acknowledgment continuation: narrating intent without tool calls
         if (
+          tools &&
           nudges < this.maxNudgesPerTurn &&
           shouldNudgeIntent(this.intentAckContinuation, this.options.model) &&
           narratesIntentWithoutAction(step.text)
