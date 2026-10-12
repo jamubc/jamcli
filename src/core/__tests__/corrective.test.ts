@@ -34,6 +34,24 @@ test('hasDroppedToolCall leaves a reply that explains or answers alone', () => {
   expect(hasDroppedToolCall('Done. I found the bug and fixed it.\n\n```json\n{"name": "edit", "arguments": {"path": "a.ts"}}\n```')).toBe(false);
 });
 
+test('an answer with Action: run_command on a line of its own is returned whole', async () => {
+  const answer = 'The analyzer flagged one line in the fixture:\nAction: run_command\nThat line is a sample the fixture keeps on purpose, so nothing needs to change.';
+  expect(hasDroppedToolCall(answer)).toBe(false);
+  const provider = createScriptedProvider([{ text: answer }]);
+  const agent = new CoreAgent({
+    provider,
+    model: 'deepseek-chat',
+    dispatcher: fakeDispatcher(),
+    toolDefinitions: toolDefs('run_command'),
+    stallGuards: true,
+  });
+  const result = await agent.run(createSession(project), 'why does the analyzer flag it?', () => undefined);
+
+  expect(result.status).toBe('ok');
+  expect(result.response).toBe(answer);
+  expect(provider.calls.length).toBe(1);
+});
+
 test('narratesIntentWithoutAction detects trailing plans and action narration', () => {
   expect(narratesIntentWithoutAction('Let me now read the file')).toBe(true);
   expect(narratesIntentWithoutAction('I will now update the configuration')).toBe(true);
@@ -171,6 +189,19 @@ test('dropped_call_guards nudges model when markdown tool call is emitted in tex
   expect(result.response).toBe('Found configuration.');
   expect(provider.calls.length).toBe(3);
   expect(provider.calls[1].messages.at(-1)?.content).toContain('[A stall guard asks you to issue the call:');
+});
+
+test('with no tools offered, neither guard nudges a reply that would trip it', async () => {
+  for (const reply of ['```json\n{"name": "read_file", "arguments": {"path": "a.txt"}}\n```', 'I will now inspect the project files']) {
+    const provider = createScriptedProvider([{ text: reply }, { text: 'nudged' }]);
+    const agent = new CoreAgent({ provider, model: 'deepseek-chat', stallGuards: true, intentAckContinuation: 'on' });
+    const result = await agent.run(createSession(project), 'look', () => undefined);
+
+    expect(result.status).toBe('ok');
+    expect(result.response).toBe(reply);
+    expect(provider.calls.length).toBe(1);
+    expect(result.session?.messages.some((m) => m.role === 'system')).toBe(false);
+  }
 });
 
 test('intent_ack_continuation caps at max nudges per turn to prevent loops', async () => {
