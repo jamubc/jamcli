@@ -64,27 +64,35 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
 
 ## 2. Make the guards opt-in and unable to eat an answer
 
-- [ ] 2.1 In `src/types/config.ts`, set `tool_use_enforcement`, `execution_guidance`, and
+- [x] 2.1 In `src/types/config.ts`, set `tool_use_enforcement`, `execution_guidance`, and
   `intent_ack_continuation` to `'off'` in `DEFAULT_AGENT_LOOP_CONFIG`, and delete
   `stall_guards` and `tool_loop_guardrails` from it. Verify with a test that fails without this:
   an agent built with no loop config nudges on nothing and stops on no loop, so a three-step
   reply that ends in "I'll now run the tests." returns exactly that text as `ok`.
-  Left: the three are `off`, but `stall_guards` and `tool_loop_guardrails` are set to `false`, not
-  deleted, and "an agent with no steering config never nudges" covers one step, not three.
+  Proof: the two keys are deleted, and the agent reads them as off when nothing sets them.
+  `corrective.test.ts`, "an agent with no steering config never nudges and never stops on a
+  loop", now runs three steps (it replaces the one-step version) and returns the final reply
+  whole, and "no steering setting is on until the person sets one" checks the two keys are
+  absent. Both fail with `fe89b99`'s defaults and readers put back, and pass here.
 
-- [ ] 2.2 Narrow `hasDroppedToolCall` and `narratesIntentWithoutAction` so a reply that
+- [x] 2.2 Narrow `hasDroppedToolCall` and `narratesIntentWithoutAction` so a reply that
   explains a tool call, or ends in "I'll ..." while delivering the answer, matches neither.
   Remove the zero-width space from the regex in `src/core/agent.ts:120` and from the fixture at
   `src/core/__tests__/corrective.test.ts:23`, which currently makes that test pass against
   itself. Verify with tests that fail without it, each over a reply that is a real answer:
   a fenced `{"name": "read_file"}` block inside an explanation, the line `Action: run_command`,
   and a reply ending in "I'll explain why in a moment.".
-  Left: the narrowing and the fenced-block and "I'll explain why" tests are in. No test puts
-  `Action: run_command` on a line of its own inside an answer, and see 0.4.
+  Proof: the narrowing and the fenced-block and "I'll explain why" tests came with `f90a3e1`.
+  `corrective.test.ts`, "an answer with Action: run_command on a line of its own is returned
+  whole", fails with `fe89b99`'s `hasDroppedToolCall` put back and passes here. There is no
+  zero-width space to remove: none is in `fe89b99`'s `agent.ts` or in the fixture, as slice 01
+  found (task 0.4).
 
-- [ ] 2.3 Have both guards skip a reply that has no tool definitions offered, since a turn with
+- [x] 2.3 Have both guards skip a reply that has no tool definitions offered, since a turn with
   no tools has nothing to continue into.
-  Left: see 0.4; no test covers it.
+  Proof: `corrective.test.ts`, "with no tools offered, neither guard nudges a reply that would
+  trip it", fails on its dropped-call reply with both guards' `tools &&` removed, fails on its
+  narration reply with only the intent guard's removed, and passes here.
 
 ## 3. The record
 
