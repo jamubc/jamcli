@@ -1,0 +1,16 @@
+src/commands/builtin/setup.ts
+  h_3524af15b776cc 87-90,96-98
+src/tui/app/__tests__/setup.test.tsx
+  h_3524af15b776cc 155-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b052a28c2c21b78f744469430484972bcde87e0",
+  "prompts": {},
+  "humans": {
+    "h_3524af15b776cc": {
+      "author": "jamubc <150970140+jamubc@users.noreply.github.com>"
+    }
+  }
+}
