@@ -1,0 +1,21 @@
+openspec/changes/answer-agentic-steering/tasks.md
+  s_3974f0adfc5bce::t_42ec1fa560c59d 35-134
+  s_3974f0adfc5bce::t_ac5d986da83935 5-32
+  s_3974f0adfc5bce::t_8cf36686c3f817 1-4,33-34,135-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f90a3e13d96404aeb59e57936f3ef2f186f4a052",
+  "prompts": {},
+  "sessions": {
+    "s_3974f0adfc5bce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60b2efb6-3dfc-457f-a7f8-fd38362f1eab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jamubc <150970140+jamubc@users.noreply.github.com>"
+    }
+  }
+}
