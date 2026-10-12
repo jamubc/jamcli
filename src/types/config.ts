@@ -64,8 +64,6 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   tool_use_enforcement: 'off',
   execution_guidance: 'off',
   intent_ack_continuation: 'off',
-  stall_guards: false,
-  tool_loop_guardrails: false,
 };
 
 /** The configuration a session reads: every layer merged over the defaults, in the shape the schema validates. */

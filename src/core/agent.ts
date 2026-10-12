@@ -217,9 +217,8 @@ export class CoreAgent implements Agent {
     this.redact = options.redact ?? createRedactor();
     this.intentAckContinuation =
       options.intentAckContinuation ?? loop?.intent_ack_continuation ?? DEFAULT_AGENT_LOOP_CONFIG.intent_ack_continuation ?? 'off';
-    this.stallGuards = options.stallGuards ?? loop?.stall_guards ?? DEFAULT_AGENT_LOOP_CONFIG.stall_guards ?? false;
-    this.toolLoopGuardrails =
-      options.toolLoopGuardrails ?? loop?.tool_loop_guardrails ?? DEFAULT_AGENT_LOOP_CONFIG.tool_loop_guardrails ?? false;
+    this.stallGuards = options.stallGuards ?? loop?.stall_guards ?? false;
+    this.toolLoopGuardrails = options.toolLoopGuardrails ?? loop?.tool_loop_guardrails ?? false;
     this.maxNudgesPerTurn = options.maxNudgesPerTurn ?? 2;
     this.reasoningSince = options.reasoningSince;
   }

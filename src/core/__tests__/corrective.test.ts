@@ -53,14 +53,16 @@ test('no steering setting is on until the person sets one', () => {
   expect(DEFAULT_AGENT_LOOP_CONFIG.tool_use_enforcement).toBe('off');
   expect(DEFAULT_AGENT_LOOP_CONFIG.execution_guidance).toBe('off');
   expect(DEFAULT_AGENT_LOOP_CONFIG.intent_ack_continuation).toBe('off');
-  expect(DEFAULT_AGENT_LOOP_CONFIG.stall_guards).toBe(false);
-  expect(DEFAULT_AGENT_LOOP_CONFIG.tool_loop_guardrails).toBe(false);
+  expect('stall_guards' in DEFAULT_AGENT_LOOP_CONFIG).toBe(false);
+  expect('tool_loop_guardrails' in DEFAULT_AGENT_LOOP_CONFIG).toBe(false);
 });
 
 test('an agent with no steering config never nudges and never stops on a loop', async () => {
+  const answer = "I read both files and changed the config. I'll now run the tests.";
   const provider = createScriptedProvider([
-    { text: 'I will now inspect the project files' },
-    { text: 'Here is what I found. The build is green.' },
+    { toolCalls: [{ name: 'read_file', arguments: { path: 'a.txt' } }] },
+    { toolCalls: [{ name: 'read_file', arguments: { path: 'b.txt' } }] },
+    { text: answer },
   ]);
   const agent = new CoreAgent({
     provider,
@@ -70,10 +72,10 @@ test('an agent with no steering config never nudges and never stops on a loop', 
   });
   const result = await agent.run(createSession(project), 'check the build', () => undefined);
 
-  // One step only: the narration was the answer and it reached the person whole.
   expect(result.status).toBe('ok');
-  expect(result.response).toBe('I will now inspect the project files');
-  expect(provider.calls.length).toBe(1);
+  expect(result.response).toBe(answer);
+  expect(provider.calls.length).toBe(3);
+  expect(result.session?.messages.some((m) => m.role === 'system')).toBe(false);
 });
 
 test('a steering note is the harness speaking, not a message in the person\'s voice', async () => {
