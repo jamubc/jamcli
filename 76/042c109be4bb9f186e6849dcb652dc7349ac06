@@ -1,0 +1,19 @@
+evals/scores/2026-10-12-opencode-go_deepseek-v4.1-flash.json
+  s_3974f0adfc5bce::t_4a7ce7bf3cc812 1-1196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76042c109be4bb9f186e6849dcb652dc7349ac06",
+  "prompts": {},
+  "sessions": {
+    "s_3974f0adfc5bce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60b2efb6-3dfc-457f-a7f8-fd38362f1eab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jamubc <150970140+jamubc@users.noreply.github.com>"
+    }
+  }
+}
