@@ -42,6 +42,8 @@ test('the interface takes --screen-reader, and any other unknown option is refus
 async function inTerminal(args: string[], env: Record<string, string>, until: (screen: string) => boolean) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-pty-'));
   fs.mkdirSync(path.join(base, 'project'));
+  fs.mkdirSync(path.join(base, 'user'));
+  fs.writeFileSync(path.join(base, 'user', 'config.json'), '{}');
   let raw = '';
   const decoder = new TextDecoder();
   const screen = () => raw.replace(/\x1b\[[0-9;?>$]*[A-Za-z]/g, '\n').replace(/\x1b[P\]][^\x07\x1b]*(\x07|\x1b\\)/g, '');
