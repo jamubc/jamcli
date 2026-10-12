@@ -1,0 +1,18 @@
+src/cli.ts
+  h_3524af15b776cc 237-238,240-242
+src/cli/__tests__/auth.test.ts
+  h_3524af15b776cc 62-75
+src/cli/auth.ts
+  h_3524af15b776cc 121-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be2cb25d8c68c0e8601632c98d0fe62437d2cb8c",
+  "prompts": {},
+  "humans": {
+    "h_3524af15b776cc": {
+      "author": "jamubc <150970140+jamubc@users.noreply.github.com>"
+    }
+  }
+}
