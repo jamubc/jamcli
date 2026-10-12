@@ -59,6 +59,20 @@ test('set stores a key typed at a prompt, get shows it masked, and remove takes 
   expect((await auth('get', ['openrouter'])).out.at(-1)).toBe('openrouter has no key.');
 });
 
+test('auth shorthand treats a provider as set and missing providers get focused guidance', async () => {
+  expect(parseArgs(['auth', 'openrouter']).authCommand).toEqual({ action: 'set', args: ['openrouter'] });
+
+  const login = await auth('login');
+  expect(login.code).toBe(2);
+  expect(login.err).toEqual(['Login works for openrouter only. Run: jamcli auth login openrouter']);
+
+  for (const action of ['set', 'get', 'remove'] as const) {
+    const result = await auth(action);
+    expect(result.code).toBe(2);
+    expect(result.err[0]).toBe(`Which provider? Run: jamcli auth ${action} <provider>\nProviders: openrouter, openai, anthropic, typesafe`);
+  }
+});
+
 test('a key the environment overrides is stored with a warning, and a bad key is refused', async () => {
   process.env.OPENROUTER_API_KEY = 'sk-or-v1-environment';
   expect((await auth('set', ['openrouter'])).err).toEqual(['The OPENROUTER_API_KEY environment variable also holds a key for openrouter, and is used first.']);
