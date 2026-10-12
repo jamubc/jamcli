@@ -61,11 +61,11 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   max_tool_calls_per_turn: 0,
   tool_result_max_chars: 30_000,
   command_timeout_ms: 120_000,
-  tool_use_enforcement: 'auto',
-  execution_guidance: 'auto',
-  intent_ack_continuation: 'auto',
-  stall_guards: true,
-  tool_loop_guardrails: true,
+  tool_use_enforcement: 'off',
+  execution_guidance: 'off',
+  intent_ack_continuation: 'off',
+  stall_guards: false,
+  tool_loop_guardrails: false,
 };
 
 /** The configuration a session reads: every layer merged over the defaults, in the shape the schema validates. */

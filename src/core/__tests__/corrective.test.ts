@@ -4,6 +4,7 @@ import { createSession } from '../state.js';
 import { createScriptedProvider } from '../../testing/scriptedProvider.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
 import type { AgentEvent, ToolCall, ToolResult } from '../types.js';
+import { DEFAULT_AGENT_LOOP_CONFIG } from '../../types/config.js';
 
 const project = '/tmp/engine-project';
 
@@ -19,20 +20,107 @@ const fakeDispatcher = (options: { log?: string[] } = {}): ToolDispatcher => ({
 
 const toolDefs = (...names: string[]) => names.map((name) => ({ type: 'function' as const, function: { name } }));
 
-test('hasDroppedToolCall detects pseudo-calls written in text', () => {
+test('hasDroppedToolCall detects a pseudo-call written as the whole reply', () => {
   expect(hasDroppedToolCall('<tool_call>{"name": "read_file"}</tool_call>')).toBe(true);
   expect(hasDroppedToolCall('```json\n{"name": "run_command", "arguments": {"command": "ls"}}\n```')).toBe(true);
   expect(hasDroppedToolCall('Action: run_command')).toBe(true);
   expect(hasDroppedToolCall('I inspected the code and found no errors.')).toBe(false);
 });
 
+test('hasDroppedToolCall leaves a reply that explains or answers alone', () => {
+  // The markup is part of the explanation, not a call the model failed to make.
+  expect(hasDroppedToolCall('The failing line was `Action: run_command` in the fixture, which the analyzer flags.')).toBe(false);
+  expect(hasDroppedToolCall('You would call it like this:\n\n```json\n{"name": "read_file", "arguments": {"path": "a.txt"}}\n```\n\nThat is what I ran.')).toBe(false);
+  expect(hasDroppedToolCall('Done. I found the bug and fixed it.\n\n```json\n{"name": "edit", "arguments": {"path": "a.ts"}}\n```')).toBe(false);
+});
+
 test('narratesIntentWithoutAction detects trailing plans and action narration', () => {
-  expect(narratesIntentWithoutAction('Let me now read the file.')).toBe(true);
-  expect(narratesIntentWithoutAction("I will now update the configuration.")).toBe(true);
-  expect(narratesIntentWithoutAction("I'll now check the test results.")).toBe(true);
+  expect(narratesIntentWithoutAction('Let me now read the file')).toBe(true);
+  expect(narratesIntentWithoutAction('I will now update the configuration')).toBe(true);
+  expect(narratesIntentWithoutAction("I'll now check the test results")).toBe(true);
   expect(narratesIntentWithoutAction('Next, I will run the build.')).toBe(true);
-  expect(narratesIntentWithoutAction('Let me examine the code...')).toBe(true);
+  expect(narratesIntentWithoutAction('Let me examine the code')).toBe(true);
   expect(narratesIntentWithoutAction('Here is the explanation of the bug. It was caused by a null pointer.')).toBe(false);
+});
+
+test('narratesIntentWithoutAction leaves a reply that ends by answering alone', () => {
+  expect(narratesIntentWithoutAction("I found the bug and fixed it. I'll explain why in a moment.")).toBe(false);
+  expect(narratesIntentWithoutAction("Here is the fix. Now let me know what you'd like next.")).toBe(false);
+  expect(narratesIntentWithoutAction('I will now update the configuration.\n\nHere is the change I made and why.')).toBe(false);
+});
+
+test('no steering setting is on until the person sets one', () => {
+  expect(DEFAULT_AGENT_LOOP_CONFIG.tool_use_enforcement).toBe('off');
+  expect(DEFAULT_AGENT_LOOP_CONFIG.execution_guidance).toBe('off');
+  expect(DEFAULT_AGENT_LOOP_CONFIG.intent_ack_continuation).toBe('off');
+  expect(DEFAULT_AGENT_LOOP_CONFIG.stall_guards).toBe(false);
+  expect(DEFAULT_AGENT_LOOP_CONFIG.tool_loop_guardrails).toBe(false);
+});
+
+test('an agent with no steering config never nudges and never stops on a loop', async () => {
+  const provider = createScriptedProvider([
+    { text: 'I will now inspect the project files' },
+    { text: 'Here is what I found. The build is green.' },
+  ]);
+  const agent = new CoreAgent({
+    provider,
+    model: 'deepseek-chat',
+    dispatcher: fakeDispatcher(),
+    toolDefinitions: toolDefs('read_file'),
+  });
+  const result = await agent.run(createSession(project), 'check the build', () => undefined);
+
+  // One step only: the narration was the answer and it reached the person whole.
+  expect(result.status).toBe('ok');
+  expect(result.response).toBe('I will now inspect the project files');
+  expect(provider.calls.length).toBe(1);
+});
+
+test('a steering note is the harness speaking, not a message in the person\'s voice', async () => {
+  const provider = createScriptedProvider([
+    { text: 'Let me now read the file' },
+    { text: 'Found it.', toolCalls: [{ name: 'read_file', arguments: { path: 'a.txt' } }] },
+    { text: 'The file holds the answer.' },
+  ]);
+  const agent = new CoreAgent({
+    provider,
+    model: 'deepseek-chat',
+    dispatcher: fakeDispatcher(),
+    toolDefinitions: toolDefs('read_file'),
+    intentAckContinuation: 'on',
+  });
+  const result = await agent.run(createSession(project), 'read a.txt', () => undefined);
+
+  expect(result.status).toBe('ok');
+  const said = result.session?.messages.filter((m) => m.content.includes('carry on')) ?? [];
+  expect(said.length).toBe(1);
+  // The harness speaks in its own voice: a system note, not a message in the person's.
+  expect(said[0].role).toBe('system');
+  expect(said[0].content).toStartWith('[A stall guard asks you to carry on:');
+  expect(result.session?.messages.some((m) => m.content.includes('[System:'))).toBe(false);
+  expect(result.session?.messages.some((m) => m.role === 'user' && m.content.includes('carry on'))).toBe(false);
+});
+
+test('a model reply that quotes a harness note is not itself a note', async () => {
+  const provider = createScriptedProvider([
+    { text: '[A stall guard asks you to carry on: you said what you would do and stopped there.]\n\nThat is the harness quoted back. Here is my answer: the build is green.' },
+  ]);
+  const agent = new CoreAgent({
+    provider,
+    model: 'deepseek-chat',
+    dispatcher: fakeDispatcher(),
+    toolDefinitions: toolDefs('read_file'),
+    intentAckContinuation: 'on',
+  });
+  const result = await agent.run(createSession(project), 'answer me', () => undefined);
+
+  // The model's words stay the model's: it is the turn's answer, and no harness note is added.
+  expect(result.status).toBe('ok');
+  expect(provider.calls.length).toBe(1);
+  expect(result.session?.messages.some((m) => m.role === 'system')).toBe(false);
+  const answer = result.session?.messages.at(-1);
+  expect(answer?.role).toBe('assistant');
+  expect(answer?.content).toContain('the build is green');
 });
 
 test('intent_ack_continuation nudges model when it narrates intent without calling tools', async () => {
@@ -56,7 +144,7 @@ test('intent_ack_continuation nudges model when it narrates intent without calli
   expect(result.status).toBe('ok');
   expect(result.response).toBe('The file contains test content.');
   expect(provider.calls.length).toBe(3);
-  expect(provider.calls[1].messages.at(-1)?.content).toContain('[System: Continue now. Execute the required tool calls');
+  expect(provider.calls[1].messages.at(-1)?.content).toContain('[A stall guard asks you to carry on:');
 });
 
 test('dropped_call_guards nudges model when markdown tool call is emitted in text', async () => {
@@ -80,14 +168,14 @@ test('dropped_call_guards nudges model when markdown tool call is emitted in tex
   expect(result.status).toBe('ok');
   expect(result.response).toBe('Found configuration.');
   expect(provider.calls.length).toBe(3);
-  expect(provider.calls[1].messages.at(-1)?.content).toContain('[System: You indicated a tool call in your text');
+  expect(provider.calls[1].messages.at(-1)?.content).toContain('[A stall guard asks you to issue the call:');
 });
 
 test('intent_ack_continuation caps at max nudges per turn to prevent loops', async () => {
   const provider = createScriptedProvider([
-    { text: 'I will now check the file.' },
-    { text: 'Let me now check the file again.' },
-    { text: 'I will now inspect the directory.' },
+    { text: 'I will now check the file' },
+    { text: 'Let me now check the file again' },
+    { text: 'I will now inspect the directory' },
   ]);
 
   const agent = new CoreAgent({
@@ -101,9 +189,10 @@ test('intent_ack_continuation caps at max nudges per turn to prevent loops', asy
   const events: AgentEvent[] = [];
   const result = await agent.run(createSession(project), 'check it', (e) => events.push(e));
 
+  // Two nudges, then the third reply is the turn's answer rather than another nudge.
   expect(result.status).toBe('ok');
   expect(provider.calls.length).toBe(3);
-  expect(result.response).toBe('I will now inspect the directory.');
+  expect(result.response).toBe('I will now inspect the directory');
 });
 
 test('stall_guards breaks identical call replay loops and terminates runaway loops', async () => {
@@ -127,9 +216,12 @@ test('stall_guards breaks identical call replay loops and terminates runaway loo
   const result = await agent.run(createSession(project), 'read repeat', (e) => events.push(e));
 
   expect(result.status).toBe('limit');
-  expect(result.response).toContain('Stopped: repeating identical tool call loop detected');
+  // The model's own last words are the turn's reply; the reason for stopping is not put in its mouth.
+  expect(result.response).toBe('step 4');
+  expect(result.error).toContain('Stopped: repeating identical tool call loop detected');
+  expect(result.session?.messages.some((m) => m.content.includes('[A stall guard stopped this turn:'))).toBe(true);
 
-  // Verify that the 3rd call output received the identical call warning
+  // The 3rd call output carried the warning to try something else.
   const toolMessages = result.session?.messages.filter((m) => m.role === 'tool') ?? [];
   expect(toolMessages[2]?.content).toContain('[System: Identical tool call repeated 3 times');
 });

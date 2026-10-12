@@ -62,18 +62,18 @@ test('buildRuntimePrompt excludes tool enforcement for claude under auto', () =>
   expect(prompt).toContain(TASK_COMPLETION_GUIDANCE_PROMPT);
 });
 
-test('DEFAULT_RULE_FILES includes SOUL.md and .jamcli/soul.md', () => {
-  expect(DEFAULT_RULE_FILES).toContain('SOUL.md');
-  expect(DEFAULT_RULE_FILES).toContain('.jamcli/soul.md');
+test('only AGENTS.md, CLAUDE.md, and .jamcli/rules.md are rule files', () => {
+  expect(DEFAULT_RULE_FILES).toEqual(['AGENTS.md', 'CLAUDE.md', '.jamcli/rules.md']);
 });
 
-test('loadRules loads SOUL.md standing instructions when present', () => {
+test('a SOUL.md in the project is not an instruction to the agent', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-soul-'));
   try {
     fs.writeFileSync(path.join(dir, 'SOUL.md'), '# Standing instruction\nAct, do not narrate.');
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'Read the project before guessing.');
     const report = loadRules(dir, dir);
-    expect(report.files.some((f) => f.displayPath === 'SOUL.md')).toBe(true);
-    expect(report.files.flatMap((f) => f.sections).some((s) => s.body.includes('Act, do not narrate.'))).toBe(true);
+    expect(report.files.map((f) => f.displayPath)).toEqual(['AGENTS.md']);
+    expect(report.files.flatMap((f) => f.sections).some((s) => s.body.includes('Act, do not narrate.'))).toBe(false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

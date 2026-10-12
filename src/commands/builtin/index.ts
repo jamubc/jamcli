@@ -16,7 +16,8 @@ import type { McpCommandRequest } from '../../cli/mcp.js';
 import { contextReport, costReport, modelDetail, modelReport, permissionsReport, PERMISSIONS_USAGE, providersReport, sessionDetail, sessionsReport, toolsReport } from '../reports.js';
 import { originOf, SCOPE_WORDS, settingsFromSchema, type Setting } from '../settings.js';
 import { findCommand, splitWords } from '../parse.js';
-import type { ChoiceItem, CommandContext, SessionChoice, SlashCommand } from '../types.js';
+import type { ChoiceItem, CommandContext, SlashCommand } from '../types.js';
+import { reopen, thisSession } from './reopen.js';
 import { THEME_NAMES, noColor } from '../../styles/themeNames.js';
 import type { ThemeName } from '../../types/config.js';
 import { setup } from './setup.js';
@@ -47,19 +48,6 @@ async function throughCli(ctx: CommandContext, run: (io: { out: (line: string) =
   if (out.length) ctx.show(rename(out.join('\n')));
   if (err.length) ctx.notice(code === 0 ? 'warn' : 'error', rename(err.join('\n')));
   return code;
-}
-
-/** This session, to open again; one with no turns has no file yet, so a new one stands in. */
-const thisSession = (ctx: CommandContext): SessionChoice =>
-  fs.existsSync(sessionFileFor(ctx.projectRoot, ctx.runtime.sessionId)) ? { sessionId: ctx.runtime.sessionId } : {};
-
-/** Reopen this session, so a change to the files it was built from applies. */
-export async function reopen(ctx: CommandContext): Promise<void> {
-  // Where the session is not replaced in place, a saved change takes effect in the next one, which is not a failure.
-  if (!ctx.opensSessions) return ctx.notice('info', 'Saved. It applies to new sessions.');
-  const error = await ctx.openSession(thisSession(ctx));
-  if (error) ctx.notice('warn', `Saved, but this session could not reopen with it: ${error}`);
-  else ctx.notice('info', 'Applied to this session.');
 }
 
 const SCOPES: EditableRuleScope[] = ['session', 'local', 'project', 'user'];

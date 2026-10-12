@@ -10,7 +10,7 @@ import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
 import { createRedactor } from '../redact.js';
 import { SessionLog, TranscriptRecorder, newSessionId, typedPrompts } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
-import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
+import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG, type AgentLoopConfig } from '../../types/config.js';
 import { createToolSet, registerMcpTools, type ToolSet } from './tools.js';
 import { childLauncher } from './children.js';
 import { SessionCheckpoints } from './checkpoints.js';
@@ -397,7 +397,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   // The project's own gates, detected once; their durations come from the ledger once the log is open.
   const gates = detectGates(workRoot);
   let ledger: Ledger | undefined;
-  const loop = config.agent_loop;
+  const loop: AgentLoopConfig = { ...DEFAULT_AGENT_LOOP_CONFIG, ...config.agent_loop };
   const buildPrompt = () =>
     buildRuntimePrompt({
       profile,

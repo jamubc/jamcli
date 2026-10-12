@@ -1,26 +1,26 @@
-import { loadConfig } from '../../core/config/load.js';
+import { loadConfig, userConfigFile } from '../../core/config/load.js';
 import { runConfigCommand } from '../../cli/config.js';
-import type { SlashCommand } from '../types.js';
-import { reopen } from './index.js';
+import type { CommandContext, SlashCommand } from '../types.js';
+import { reopen } from './reopen.js';
 
 export const steer: SlashCommand = {
   name: 'steer',
   args: '[instruction]',
-  summary: 'Queue a steering instruction for the model to execute tools and keep going',
+  summary: 'Queue a steering instruction',
   source: 'built-in',
   run(ctx, args) {
     if (!args?.trim()) {
-      return ctx.show('Usage: /steer <instruction>. Injects steering guidance for the model to execute tools and keep going.');
+      return ctx.show('Usage: /steer <instruction>. to steer the current conversation.');
     }
     ctx.runtime.steer(args.trim());
-    ctx.notice('info', 'Steering instruction queued for next model interaction.');
+    ctx.notice('info', 'Steering instruction queued.');
   },
 };
 
 export const goal: SlashCommand = {
   name: 'goal',
   args: '[<text>|clear]',
-  summary: 'Set or inspect a standing goal that persists across turns, or clear it',
+  summary: 'Set or manage a goal',
   source: 'built-in',
   run(ctx, args) {
     const trimmed = args?.trim();
@@ -38,61 +38,69 @@ export const goal: SlashCommand = {
   },
 };
 
+/** Each steering setting, the value `on` and `off` give it, and what it does. */
+const SETTINGS: { key: string; on: string; off: string; does: string }[] = [
+  { key: 'agent_loop.tool_use_enforcement', on: 'on', off: 'off', does: 'asks the model in the prompt to act rather than describe' },
+  { key: 'agent_loop.execution_guidance', on: 'on', off: 'off', does: 'guidance on persisting, counting with tools, and reading work back' },
+  { key: 'agent_loop.intent_ack_continuation', on: 'on', off: 'off', does: 'asks a model that narrated what it would do to carry on and do it' },
+  { key: 'agent_loop.stall_guards', on: 'true', off: 'false', does: 'catches a call written as text and the same call repeated' },
+  { key: 'agent_loop.tool_loop_guardrails', on: 'true', off: 'false', does: 'stops the turn when a call repeats without progress' },
+];
+
+/**
+ * Write every setting at the user scope, and name the ones that could not be written. These
+ * are the person's choices about how their models behave, so they belong in their own
+ * configuration and not in the repository they happen to be standing in.
+ */
+async function writeStack(ctx: CommandContext, value: 'on' | 'off'): Promise<string[]> {
+  const failed: string[] = [];
+  // runConfigCommand writes its advisories, such as a value another layer also sets, to the
+  // same stream as its errors, so only the exit code says whether this one landed.
+  const quiet = { out: () => undefined, err: () => undefined };
+  for (const setting of SETTINGS) {
+    const code = await runConfigCommand({ action: 'set', args: [setting.key, value === 'on' ? setting.on : setting.off, '--scope', 'user'] }, ctx.projectRoot, quiet);
+    if (code !== 0) failed.push(setting.key);
+  }
+  return failed;
+}
+
 export const agentic: SlashCommand = {
   name: 'agentic',
-  args: '[on|off|status]',
-  summary: 'Configure agentic tool use enforcement, execution guidance, stall guards, and loop guardrails',
+  args: '[on|off]',
+  summary: 'Enable Autonomy',
   source: 'built-in',
   async run(ctx, args) {
     const action = args?.trim().toLowerCase();
-    if (action === 'on') {
-      const io = { out: () => undefined, err: (err: string) => ctx.notice('error', err) };
-      const code = await runConfigCommand({ action: 'set', args: ['agent_loop.tool_use_enforcement', 'on'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.execution_guidance', 'on'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.intent_ack_continuation', 'on'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.stall_guards', 'true'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.tool_loop_guardrails', 'true'] }, ctx.projectRoot, io);
-      if (code === 0) {
-        ctx.notice('info', 'Agentic mode enabled: tool use enforcement, execution guidance, intent continuation, stall guards, and loop guardrails are ON.');
-        if (ctx.runtime.permissionMode !== 'auto' && ctx.runtime.permissionMode !== 'bypass') {
-          ctx.notice('info', `Tip: You are currently in ${ctx.runtime.permissionMode} permission mode. Run /mode auto if stops for tool permissions feel like stalls.`);
-        }
-        await reopen(ctx);
-      }
-      return;
-    }
-    if (action === 'off') {
-      const io = { out: () => undefined, err: (err: string) => ctx.notice('error', err) };
-      await runConfigCommand({ action: 'set', args: ['agent_loop.tool_use_enforcement', 'off'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.execution_guidance', 'off'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.intent_ack_continuation', 'off'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.stall_guards', 'false'] }, ctx.projectRoot, io);
-      await runConfigCommand({ action: 'set', args: ['agent_loop.tool_loop_guardrails', 'false'] }, ctx.projectRoot, io);
-      ctx.notice('info', 'Agentic mode disabled: tool use enforcement and corrective layers are OFF.');
+    if (action === 'on' || action === 'off') {
+      const failed = await writeStack(ctx, action);
+      // The session reopens either way: what was saved applies, and what was not is named.
       await reopen(ctx);
+      const done = action === 'on' ? 'Autonomy is on' : 'Autonomy is off';
+      if (failed.length) {
+        const missing = failed.map((key) => `  ${key}`).join('\n');
+        ctx.notice('warn', `${done} in ${userConfigFile()}, except these, which were not saved:\n${missing}`);
+        return;
+      }
+      ctx.notice('info', `${done}, in ${userConfigFile()}.`);
       return;
     }
-    const currentLoop = loadConfig({ projectRoot: ctx.projectRoot }).config.agent_loop;
-    const enforcement = currentLoop?.tool_use_enforcement ?? 'auto';
-    const guidance = currentLoop?.execution_guidance ?? 'auto';
-    const continuation = currentLoop?.intent_ack_continuation ?? 'auto';
-    const guards = currentLoop?.stall_guards ?? true;
-    const guardrails = currentLoop?.tool_loop_guardrails ?? true;
-    const lines = [
-      'Agentic stack status:',
-      `- Tool use enforcement: ${enforcement} (prepends prompt block to eliminate narration)`,
-      `- Execution guidance: ${guidance} (persistence, arithmetic tools, verification read-backs)`,
-      `- Intent ack continuation: ${continuation} (nudges model when reply describes intent without calls)`,
-      `- Stall guards: ${guards ? 'on' : 'off'} (catches trailing plans, dropped calls, identical call loops)`,
-      `- Tool loop guardrails: ${guardrails ? 'on' : 'off'} (bounds repeating loops)`,
-      `- Current permission mode: ${ctx.runtime.permissionMode}`,
-      '',
-      'Commands:',
-      '- /agentic on: activate all agentic steering and corrective layers',
-      '- /agentic off: turn off agentic layers',
-      '- /steer <instruction>: nudge the model during or across turns',
-      '- /goal [<text>|clear]: maintain or clear a standing goal across turns',
-    ];
-    ctx.show(lines.join('\n'));
+    if (action) return ctx.notice('warn', `/agentic takes on or off, not ${action}.`);
+    const currentLoop = loadConfig({ projectRoot: ctx.projectRoot }).config.agent_loop ?? {};
+    const shown = (key: string, does: string): string => {
+      const short = key.replace('agent_loop.', '');
+      const value = (currentLoop as Record<string, unknown>)[short];
+      return `- ${short}: ${value === undefined ? 'off (default)' : value} (${does})`;
+    };
+    ctx.show(
+      [
+        'Steering and guards off, see:',
+        ...SETTINGS.map((setting) => shown(setting.key, setting.does)),
+        '',
+        `Saved in ${userConfigFile()}. This session is in ${ctx.runtime.permissionMode} mode.`,
+        '',
+        '/agentic on turns all five on, /agentic off turns them off, and neither writes to the project.',
+        '/steer <text> queues an instruction for the next turn, /goal <text> keeps one across turns.',
+      ].join('\n'),
+    );
   },
 };

@@ -31,7 +31,7 @@ export interface AgentOptions {
   maxToolCallsPerTurn?: number;
   truncationLimit?: number;
   systemPrompt?: string;
-  loop?: Partial<AgentLoopConfig>;
+  loop?: AgentLoopConfig;
   hooks?: HookBus;
   reasoning?: ProviderRequestOptions['reasoning'];
   effort?: ProviderRequestOptions['effort'];
@@ -103,6 +103,9 @@ interface StepOutput {
 
 const userMessage = (content: string): ChatMessage => ({ role: 'user', content, timestamp: Date.now() });
 
+/** A note the harness speaks in its own voice, never put in the person's. */
+const harnessNote = (content: string): ChatMessage => ({ role: 'system', content, timestamp: Date.now() });
+
 const ENFORCEMENT_FAMILIES = ['gpt', 'codex', 'gemini', 'gemma', 'grok', 'glm', 'qwen', 'deepseek', 'muse'];
 
 export function shouldNudgeIntent(setting: 'off' | 'on' | 'auto' | boolean | undefined, model?: string): boolean {
@@ -114,20 +117,60 @@ export function shouldNudgeIntent(setting: 'off' | 'on' | 'auto' | boolean | und
   return ENFORCEMENT_FAMILIES.some((family) => lower.includes(family));
 }
 
+/**
+ * What a dropped call is written as, and what is left of the reply once it is taken out.
+ * A model that dropped a call wrote one and stopped, so nothing but it is in the reply. A model
+ * explaining, quoting, or reporting a call has prose around it, and that prose is the answer the
+ * person came for, so the markup is part of the explanation and not a call that went missing.
+ */
+const CALL_MARKUP = [
+  /<tool_call>|<\/tool_call>/gi,
+  /```(?:tool_code|tool_call)[\s\S]*?```/gi,
+  /```(?:json)?\s*\{[\s\S]*?"name"\s*:\s*"(?:run_command|read_file|edit|write_file|edit_file|grep|glob|task|web_fetch|web_search)"[\s\S]*?```/gi,
+  /^(?:Action|Tool)\s*:\s*(?:run_command|read_file|edit|write_file|edit_file|grep|glob|task|web_fetch|web_search)\b.*$/gim,
+];
+
+/**
+ * Words of prose a reply carries besides the markup, below which it is the markup alone. A lead
+ * in such as "Let me check" is under it; a sentence that reports what was found is over it.
+ */
+const PROSE_BESIDE_MARKUP = 8;
+
+const proseWords = (text: string): number =>
+  text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean).length;
+
 /** Detects when the model writes code or markup representing a tool call in text instead of wire format. */
 export function hasDroppedToolCall(text: string): boolean {
   if (!text) return false;
-  if (/<tool_call>|<\/tool_call>|```(?:tool_code|tool_call)/i.test(text)) return true;
-  if (/```(?:json)?\s*\{\s*"name"\s*:\s*"(?:run_command|read_file|edit|write_file|grep|glob|task)"/i.test(text)) return true;
-  if (/^(?:Action|Tool):\s*(?:run_command|read_file|edit|write_file|grep|glob|task)\b/im.test(text)) return true;
-  return false;
+  let marks = 0;
+  let left = text;
+  for (const markup of CALL_MARKUP) {
+    const found = left.match(markup);
+    if (found?.length) marks += found.length;
+    left = left.replace(markup, ' ');
+  }
+  return marks > 0 && proseWords(left) < PROSE_BESIDE_MARKUP;
 }
+
+/**
+ * Whether a reply says what it is about to do and stops, rather than doing it. A reply that also
+ * delivers an answer, which is what the second paragraph of "I will update the config" followed
+ * by the change, is the answer and is left alone.
+ */
+const DELIVERS_AN_ANSWER = /\n|\b(?:here(?:'s| is)|done|found|fixed|passed|failed|summary|result|answer(?:ed)?|because|caused by)\b/i;
 
 /** Detects when the reply narrates intent or trails off with a plan without calling tools. */
 export function narratesIntentWithoutAction(text: string): boolean {
   if (!text) return false;
   const trimmed = text.trim();
-  const intentPhrases = /(?:(?:let me|i(?:'ll| will| am going to)|now (?:i'll|i will|let's)|next[, ]+(?:i'll|i will)|we should now|proceed to|allow me to)\s+(?:now\s+)?(?:check|read|run|execute|update|modify|edit|create|write|inspect|look|search|verify|test|fix|implement|apply|examine)\b|(?:^|\n)(?:Next steps?:|Plan:|\d+\.\s+I will)\s+)/i;
+  if (DELIVERS_AN_ANSWER.test(trimmed)) return false;
+  const intentPhrases = /(?:(?:let me|i(?:'ll| will| am going to)|now (?:i'll| i will|let's)|next[, ]+(?:i'll|i will)|we should now|proceed to|allow me to)\s+(?:now\s+)?(?:check|read|run|execute|update|modify|edit|create|write|inspect|look|search|verify|test|fix|implement|apply|examine)\b|(?:^|\n)(?:Next steps?:|Plan:|\d+\.\s+I will)\s+)/i;
   if (intentPhrases.test(trimmed)) return true;
   const trailingIntent = /(?:let me|i'll|i will|now let's|i am now going to)[^.\n]*[.…]?\s*$/i;
   if (trailingIntent.test(trimmed)) return true;
@@ -173,10 +216,10 @@ export class CoreAgent implements Agent {
     this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars;
     this.redact = options.redact ?? createRedactor();
     this.intentAckContinuation =
-      options.intentAckContinuation ?? loop?.intent_ack_continuation ?? DEFAULT_AGENT_LOOP_CONFIG.intent_ack_continuation ?? 'auto';
-    this.stallGuards = options.stallGuards ?? loop?.stall_guards ?? DEFAULT_AGENT_LOOP_CONFIG.stall_guards ?? true;
+      options.intentAckContinuation ?? loop?.intent_ack_continuation ?? DEFAULT_AGENT_LOOP_CONFIG.intent_ack_continuation ?? 'off';
+    this.stallGuards = options.stallGuards ?? loop?.stall_guards ?? DEFAULT_AGENT_LOOP_CONFIG.stall_guards ?? false;
     this.toolLoopGuardrails =
-      options.toolLoopGuardrails ?? loop?.tool_loop_guardrails ?? DEFAULT_AGENT_LOOP_CONFIG.tool_loop_guardrails ?? true;
+      options.toolLoopGuardrails ?? loop?.tool_loop_guardrails ?? DEFAULT_AGENT_LOOP_CONFIG.tool_loop_guardrails ?? false;
     this.maxNudgesPerTurn = options.maxNudgesPerTurn ?? 2;
     this.reasoningSince = options.reasoningSince;
   }
@@ -455,11 +498,14 @@ export class CoreAgent implements Agent {
           continue;
         }
 
+        // A guard has no tools to continue into, so there is nothing to nudge towards.
+        if (!tools) return finish('ok', step.text, steps);
+
         // Dropped-call guard: detected tool markup or pseudo-call in text with no wire call
         if (this.stallGuards && nudges < this.maxNudgesPerTurn && hasDroppedToolCall(step.text)) {
           nudges += 1;
           emit({ type: 'notice', level: 'info', message: 'Model formatted a tool call in text instead of wire format; nudging to call tool.' });
-          record(userMessage('[System: You indicated a tool call in your text but none was included in the API response. Issue the actual tool call now.]'));
+          record(harnessNote('[A stall guard asks you to issue the call: this reply wrote one as text and none was returned with it.]'));
           continue;
         }
 
@@ -471,7 +517,7 @@ export class CoreAgent implements Agent {
         ) {
           nudges += 1;
           emit({ type: 'notice', level: 'info', message: 'Model narrated intent without calling tools; nudging to take action.' });
-          record(userMessage('[System: Continue now. Execute the required tool calls rather than describing what you will do.]'));
+          record(harnessNote('[A stall guard asks you to carry on: you said what you would do and stopped there.]'));
           continue;
         }
 
@@ -497,7 +543,10 @@ export class CoreAgent implements Agent {
 
         if (this.toolLoopGuardrails && consecutiveIdenticalCalls >= 4) {
           emit({ type: 'notice', level: 'warn', message: 'Repeated identical tool call loop detected; stopping turn to prevent infinite repetition.' });
-          return finish('limit', 'Stopped: repeating identical tool call loop detected without progress.', steps);
+          // What the model last said is the turn's reply. The harness's reason for stopping rides
+          // along as a note, so the transcript does not put a harness sentence in the model's mouth.
+          record(userMessage('[A stall guard stopped this turn: the same call was issued four times running without progress.]'));
+          return finish('limit', step.text, steps, 'Stopped: repeating identical tool call loop detected without progress.');
         }
       }
 
