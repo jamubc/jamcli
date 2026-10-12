@@ -170,7 +170,7 @@ export function narratesIntentWithoutAction(text: string): boolean {
   if (!text) return false;
   const trimmed = text.trim();
   if (DELIVERS_AN_ANSWER.test(trimmed)) return false;
-  const intentPhrases = /(?:(?:let me|i(?:'ll| will| am going to)|now (?:i'll| i will|let's)|next[, ]+(?:i'll|i will)|we should now|proceed to|allow me to)\s+(?:now\s+)?(?:check|read|run|execute|update|modify|edit|create|write|inspect|look|search|verify|test|fix|implement|apply|examine)\b|(?:^|\n)(?:Next steps?:|Plan:|\d+\.\s+I will)\s+)/i;
+  const intentPhrases = /(?:(?:let me|i(?:'ll| will| am going to)|now (?:i'll|i will|let's)|next[, ]+(?:i'll|i will)|we should now|proceed to|allow me to)\s+(?:now\s+)?(?:check|read|run|execute|update|modify|edit|create|write|inspect|look|search|verify|test|fix|implement|apply|examine)\b|(?:^|\n)(?:Next steps?:|Plan:|\d+\.\s+I will)\s+)/i;
   if (intentPhrases.test(trimmed)) return true;
   const trailingIntent = /(?:let me|i'll|i will|now let's|i am now going to)[^.\n]*[.…]?\s*$/i;
   if (trailingIntent.test(trimmed)) return true;
