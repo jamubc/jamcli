@@ -67,3 +67,61 @@ default to off, so a project that sets none behaves as it did before this requir
 - **WHEN** the person runs `/steer <text>` during a turn
 - **THEN** the text is carried to the model with the next turn's notes, and the person is told it
   will apply to the next turn rather than the running one
+
+## MODIFIED Requirements
+
+### Requirement: Credential Storage
+JamCLI SHALL read provider credentials from environment variables or the operating
+system's credential store, SHALL NOT write a credential into a project file, and SHALL
+report credentials stored in project files.
+
+#### Scenario: Store a key
+- **WHEN** the user runs `jamcli auth set <provider>`
+- **THEN** the key is stored in the credential store, or in a file readable only by the user when no store exists, with a warning
+
+#### Scenario: A provider alone stores a key
+- **WHEN** the user runs `jamcli auth <provider>` with no action
+- **THEN** it stores a key for that provider, as `jamcli auth set <provider>` does
+
+#### Scenario: An action with no provider names the choices
+- **WHEN** the user runs `jamcli auth set`, `jamcli auth get`, or `jamcli auth remove` with no provider
+- **THEN** it exits with code 2, asks which provider, and lists the providers to choose from, instead of printing the whole usage
+- **AND** `jamcli auth login` with no provider says that login works for openrouter only, and names the command
+
+#### Scenario: Log in with OpenRouter
+- **WHEN** the user runs `jamcli auth login openrouter`
+- **THEN** JamCLI completes OpenRouter's PKCE flow through the browser and stores the resulting key
+
+#### Scenario: Never write a key into the project
+- **WHEN** the user runs `jamcli config set` with a provider key, alone or inside a section
+- **THEN** it is written to the user configuration file when no scope is given
+- **AND** a project or local scope is refused, naming the command that stores the key instead
+
+#### Scenario: Key in a project file
+- **WHEN** a provider key is found in a project configuration file
+- **THEN** it still works, and `jamcli doctor` and `jamcli audit` report it as a finding
+- **AND** each session says which file holds it and how to move it, without showing the key
+
+### Requirement: First-Run Onboarding
+JamCLI SHALL guide a first interactive run to a working provider and model without
+writing project files.
+
+#### Scenario: Local provider found
+- **WHEN** the interface starts with no user configuration and Ollama is reachable
+- **THEN** it lists Ollama's models that support tool calling and offers to use one
+
+#### Scenario: Nothing configured
+- **WHEN** no provider is reachable or configured
+- **THEN** the interface explains how to start Ollama or set a provider key, and does not fail silently
+
+#### Scenario: A hosted key is set and Ollama is not answering
+- **WHEN** Ollama is not reachable and a hosted provider key is set
+- **THEN** setup offers that provider, says to start Ollama to use local models, and does not ask for a key
+
+#### Scenario: Choices are stored for the user
+- **WHEN** onboarding completes
+- **THEN** the choices are written to user configuration only
+
+#### Scenario: Where a choice is saved is said only when there is one
+- **WHEN** setup has nothing to offer but "Not now"
+- **THEN** it does not say where a choice is saved

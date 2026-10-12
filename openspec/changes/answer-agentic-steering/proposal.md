@@ -54,6 +54,13 @@ silent about the new commands, and that is where this unit adds them.
   which of the five settings it could not write instead of claiming the stack is enabled.
 - **The three commands are documented,** in `docs/commands-and-skills.md`, with what each one
   does, what the guards do and do not touch, and that the settings are off by default.
+- **`jamcli auth` reads a provider alone as `set`** (`be2cb25`), and a bare `set`, `get`,
+  `remove`, or `login` names the providers to choose from instead of printing the whole usage.
+  The owner moved this fix into the unit on 2026-10-12.
+- **`/setup` gives the advice that fits** (`3b052a2`): with a hosted key set and Ollama not
+  answering, it says to start Ollama for local models rather than asking for a key, and it says
+  where the choice is saved only when there is a choice. The owner moved this fix into the unit
+  on 2026-10-12.
 
 ## Not in this unit
 
@@ -66,8 +73,6 @@ silent about the new commands, and that is where this unit adds them.
   not, and a person reading "nudge the model during or across turns" would expect it to.
 - **`/agentic`'s permission-mode tip.** It advises `/mode auto`, which changes what runs
   without asking. That advice belongs to the owner or to `/mode`, not to a toggle command.
-- **The uncommitted `auth` and `setup` changes** in the working tree. They are sound and they
-  belong to their own units, which do not exist yet.
 
 ## Capabilities
 
@@ -77,15 +82,19 @@ None. JamCLI keeps one capability.
 
 ### Modified Capabilities
 
-- `jamcli`: adds the Model Steering requirement.
+- `jamcli`: adds the Model Steering requirement, and modifies Credential Storage and First-Run
+  Onboarding.
 
 ## Impact
 
 - Spec: Model Steering is added, as a requirement with scenarios for each guard's firing and
-  not firing.
+  not firing. Credential Storage gains the `jamcli auth <provider>` and bare-action scenarios,
+  and First-Run Onboarding the hosted-key and nothing-to-choose scenarios.
 - Code: `src/core/agent.ts` (the three guards, their defaults, and the note they record),
   `src/core/rules/index.ts` (`SOUL.md` removed), `src/commands/builtin/steer.ts` (scope, the
   partial-failure report, and the cycle), `src/core/runtime/index.ts` (the complete loop it
-  passes), and `docs/config.schema.json`, regenerated with `bun run config-schema`.
+  passes), and `docs/config.schema.json`, regenerated with `bun run config-schema`. The `auth`
+  fix is in `src/cli.ts` and `src/cli/auth.ts`, and the `setup` fix in
+  `src/commands/builtin/setup.ts`.
 - Docs: `docs/commands-and-skills.md`.
 - No dependency. Five keys inside `agent_loop`, a block that exists.

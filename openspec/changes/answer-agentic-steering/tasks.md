@@ -8,27 +8,46 @@ This checkpoint was committed with the test gate failing, by the owner's choice,
 could be handed over. Install, typecheck (0 errors) and build pass. The ticks below name the
 test that proves each one; each of those tests was run against `fe89b99` and fails there.
 
-- [ ] 0.1 `bun test` fails one test: `src/__tests__/entry.test.ts:75`, "in a terminal,
+- [x] 0.1 `bun test` fails one test: `src/__tests__/entry.test.ts:75`, "in a terminal,
   --screen-reader draws plain labeled lines with no boxes or bars, and Ctrl+C twice exits",
   expected exit code 0, received "still running". It fails the same way on `master` and on
   `fe89b99`, and unit 30 in `SEQUENCE.md` records it as older than that unit. Fix it with a
   test that fails without the fix.
+  Proof: the cause was in the test. With no user configuration the interface boots a first run
+  and opens the setup picker, and since `d8e891b` the first Ctrl+C closes an open picker, so two
+  presses only armed leaving. The test now starts with a user `config.json`; it fails on
+  `76042c1` and passes on this checkpoint.
 
-- [ ] 0.2 The full suite took 159.6 s on the owner's machine at a load average of 2.8, over the
+- [x] 0.2 The full suite took 159.6 s on the owner's machine at a load average of 2.8, over the
   150 s budget in `project.md`; unit 30 closed at 149.4 s. Measure it on an idle machine and
   bring it back under the budget. `src/tui/app/__tests__/board.test.tsx`, "a label too long for
   the row is cut before its facts are", timed out once under full-suite load and passed three
   times alone.
+  Proof: on `76042c1`, 157.86 s at a load average of 3.40 to 5.30 and 154.32 s at 4.62 to 5.53,
+  the board test timing out in both; after, 144.13 s at 3.11 to 4.57 with nothing failing. The
+  framed half of the screen-reader test never matched its boot pattern and waited 10 s every
+  run; it now reads the status line across its drawn segments. The board test timed out when a
+  reply left from its 60-column pass answered the 100-column prompt; it now waits for both
+  replies to be taken before it stops the child. No test was removed.
 
-- [ ] 0.3 The owner asked on 2026-10-12 that the `auth` and `setup` changes join this unit, and
+- [x] 0.3 The owner asked on 2026-10-12 that the `auth` and `setup` changes join this unit, and
   they are committed on this branch as their own commits. Bring "Not in this unit" in
   `proposal.md`, task 6.5, and the spec delta into line with that.
+  Proof: `proposal.md` names both fixes in "What Changes", "Capabilities", and "Impact", and no
+  longer lists them in "Not in this unit"; task 6.5 is rewritten; the spec delta modifies
+  Credential Storage and First-Run Onboarding, each with a scenario for what its commit changed.
 
-- [ ] 0.4 Two defects in the work so far. `src/core/agent.ts`: `if (!tools) return finish(...)`
+- [x] 0.4 Two defects in the work so far. `src/core/agent.ts`: `if (!tools) return finish(...)`
   sits before the stop hook, so a turn with no tools offered never runs a stop hook; task 2.3
   asks only that the guards skip it. And the intent regex now reads `now (?:i'll| i will|let's)`,
   with a space that `fe89b99` did not have, so that branch needs two spaces after "now". The
   zero-width space task 2.2 names is not in `fe89b99` or in the fixture.
+  Proof: `agentHarness.test.ts`, "an agent with no tool definitions and a stop hook that asks to
+  continue runs the hook", fails on `76042c1`, where the hook never runs, and passes here. The
+  stray space is removed with no test, since none can fail on it: the earlier
+  `i(?:'ll| will| am going to)` alternative already matches every reply that branch could, and
+  six phrasings return `true` before and after. A search for U+200B finds none in `fe89b99`'s
+  `agent.ts` or `corrective.test.ts`, or in this checkpoint's.
 
 ## 1. Take back what the commit should not have changed
 
@@ -141,6 +160,6 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
   `/steer` and `/goal` are accepted, a turn on a model that narrates its intent reaches the
   person intact with the guards off. Keep the recording as the evidence.
 
-- [ ] 6.5 `SEQUENCE.md`'s "Open unit" names this one, and the two uncommitted working-tree
-  changes (`src/cli.ts`, `src/cli/auth.ts`, `src/commands/builtin/setup.ts`, and its test) are
-  named in "Not in this unit" here and left alone.
+- [ ] 6.5 `SEQUENCE.md`'s "Open unit" names this one, and says that the `auth` fix (`be2cb25`,
+  `src/cli.ts` and `src/cli/auth.ts`) and the `setup` fix (`3b052a2`,
+  `src/commands/builtin/setup.ts`) are in it.
