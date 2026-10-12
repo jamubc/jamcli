@@ -84,13 +84,18 @@ export function setupChoices(survey: Survey): { items: ChoiceItem[]; note: strin
 
   const notes: string[] = [];
   if (!ollama.reachable) {
-    notes.push(`Ollama is not answering at ${ollama.endpoint}. Install it from ollama.com and start it with ollama serve, or set ${HOSTED_KEYS}; then run /setup. (${ollama.problem})`);
+    const advice = survey.keys.length
+      ? 'Start it with ollama serve to use local models.'
+      : `Start it with ollama serve, or set ${HOSTED_KEYS}; then run /setup.`;
+    notes.push(`Ollama is not answering at ${ollama.endpoint}. ${advice}`);
   } else if (!ollama.models.length) {
     notes.push(`Ollama answers at ${ollama.endpoint} but has no models yet.`);
   }
   const toolless = ollama.models.filter((model) => model.tools === false).length;
   if (toolless) notes.push(`${toolless} installed model${toolless === 1 ? '' : 's'} cannot call tools, so ${toolless === 1 ? 'it is' : 'they are'} not listed.`);
-  notes.push('The choice is saved in your user configuration only.');
+  if (items.some((item) => item.key !== 'skip')) {
+    notes.push('The choice is saved in your user configuration only.');
+  }
   return { items, note: notes.join(' ') };
 }
 

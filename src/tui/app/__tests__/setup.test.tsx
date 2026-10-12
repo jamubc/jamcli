@@ -152,3 +152,25 @@ test('a suggested model already installed is marked, not offered for download', 
   expect(items[1].detail).toBe('on this machine · tool support unknown');
   expect(note).toBe('The choice is saved in your user configuration only.');
 });
+
+test('with Ollama down and no keys, setupChoices warning is concise and omits user config note', () => {
+  const survey = {
+    ollama: { endpoint: 'http://localhost:11434', reachable: false, pulls: false, models: [], problem: 'Unable to connect. Is the computer able to access the url?' },
+    keys: [],
+    memoryBytes: 16 * GB,
+  };
+  const { items, note } = setupChoices(survey);
+  expect(items.map((item) => item.label)).toEqual(['Not now']);
+  expect(note).toBe('Ollama is not answering at http://localhost:11434. Start it with ollama serve, or set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY; then run /setup.');
+});
+
+test('with Ollama down and hosted keys set, setupChoices advises starting Ollama to use local models', () => {
+  const survey = {
+    ollama: { endpoint: 'http://localhost:11434', reachable: false, pulls: false, models: [], problem: 'Unable to connect. Is the computer able to access the url?' },
+    keys: [{ provider: 'anthropic', detail: '$ANTHROPIC_API_KEY' }],
+    memoryBytes: 16 * GB,
+  };
+  const { items, note } = setupChoices(survey);
+  expect(items.map((item) => item.label)).toEqual(['anthropic: choose a model', 'Not now']);
+  expect(note).toBe('Ollama is not answering at http://localhost:11434. Start it with ollama serve to use local models. The choice is saved in your user configuration only.');
+});
