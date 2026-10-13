@@ -121,11 +121,16 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
 
 ## 4. The code
 
-- [ ] 4.1 Restore `loop?: AgentLoopConfig` on `AgentOptions` in `src/core/agent.ts`, and pass a
+- [x] 4.1 Restore `loop?: AgentLoopConfig` on `AgentOptions` in `src/core/agent.ts`, and pass a
   complete loop from `src/core/runtime/index.ts` by merging over
   `DEFAULT_AGENT_LOOP_CONFIG`. Verify with a test that fails without it: a partial loop is
   rejected by the type, and the runtime's agent still reads every key it did before.
-  Left: the type and the merge are in; no test proves a partial loop is rejected.
+  Proof: `agent.test.ts`, "an agent reads the complete loop it is given, and a partial loop is
+  refused by the type", holds a `@ts-expect-error` on a partial loop; with `loop` widened to
+  `Partial<AgentLoopConfig>`, `npx tsc --noEmit` fails on that line (TS2578). `config.test.ts`,
+  "an agent_loop that sets one key leaves every other key at its default", fails without the
+  merge, where a qwen session gets the tool-use enforcement and execution guidance prompts, and
+  passes here.
 
 - [x] 4.2 Move `reopen` out of `src/commands/builtin/index.ts` into a module both can import,
   so `steer.ts` no longer imports the registry that imports it. Verify with
