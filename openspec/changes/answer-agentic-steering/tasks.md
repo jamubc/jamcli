@@ -179,10 +179,19 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
 - [ ] 6.3 The four gates: `bun install`, `npx tsc --noEmit` at 0, `bun test` passing and under
   its time budget, `bun run build`, and `openspec validate answer-agentic-steering --strict`.
 
-- [ ] 6.4 Drive the built JamCLI through `jamcli mcp serve`'s `terminal_*` in a fixture project
+- [x] 6.4 Drive the built JamCLI through `jamcli mcp serve`'s `terminal_*` in a fixture project
   with its own `JAMCLI_STATE_DIR` and a copied `JAMCLI_CONFIG_DIR`: `/agentic` lists the stack,
   `/steer` and `/goal` are accepted, a turn on a model that narrates its intent reaches the
   person intact with the guards off. Keep the recording as the evidence.
+  Proof: dev-qa drove the built `dist/` twice through `jamcli mcp serve`'s `terminal_*`, in a
+  fixture project outside the clone with its own state directory and a fresh user configuration
+  (never a copy of the owner's). The model was the repository's test double,
+  `src/testing/fakeProvider.ts`, started from a launcher outside the clone. The first drive, on
+  `8590127` (recording `proof/6.4-drive-t1.cast`), found that a reopen dropped the goal and that
+  turn notes read as the person's words. The second, on `16089c6` after those fixes (recording
+  `proof/6.4-drive2-t1.cast`, with `6.4-drive2-session.jsonl`, `6.4-drive2-model-requests.log`
+  and `6.4-drive2-export.md`), saw all three behaviours, the goal and a queued `/steer` kept
+  across `/agentic on`, and each note kept apart from the person's words.
 
 - [x] 6.5 `SEQUENCE.md`'s "Open unit" names this one, and says that the `auth` fix (`be2cb25`,
   `src/cli.ts` and `src/cli/auth.ts`) and the `setup` fix (`3b052a2`,
