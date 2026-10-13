@@ -13,7 +13,7 @@ export const steer: SlashCommand = {
       return ctx.show('Usage: /steer <instruction>. to steer the current conversation.');
     }
     ctx.runtime.steer(args.trim());
-    ctx.notice('info', 'Steering instruction queued.');
+    ctx.notice('info', 'Steering instruction queued for the next turn.');
   },
 };
 

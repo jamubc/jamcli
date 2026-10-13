@@ -9,7 +9,7 @@ const { context, open } = hostFixture();
 test('/steer queues steering instructions on the runtime', async () => {
   const { host, runtime, entries } = await open();
   await host.run('/steer use bash tools to run the test');
-  expect(said(entries)).toContain('Steering instruction queued');
+  expect(said(entries)).toContain('Steering instruction queued for the next turn.');
 
   // Verify that next turn receives the steering instruction
   const runPrompt = await runtime.run('check progress');
