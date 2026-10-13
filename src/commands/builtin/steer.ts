@@ -89,7 +89,8 @@ export const agentic: SlashCommand = {
     const shown = (key: string, does: string): string => {
       const short = key.replace('agent_loop.', '');
       const value = (currentLoop as Record<string, unknown>)[short];
-      return `- ${short}: ${value === undefined ? 'off (default)' : value} (${does})`;
+      const said = value === undefined ? 'off (default)' : value === true ? 'on' : value === false ? 'off' : value;
+      return `- ${short}: ${said} (${does})`;
     };
     ctx.show(
       [

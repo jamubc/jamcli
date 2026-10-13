@@ -58,7 +58,9 @@ test('/agentic on saves into the user configuration and writes nothing to the pr
 
   entries.length = 0;
   await host.run('/agentic');
-  expect(said(entries)).toContain('stall_guards: true');
+  expect(said(entries)).toContain('stall_guards: on');
+  expect(said(entries)).toContain('tool_loop_guardrails: on');
+  expect(said(entries)).not.toMatch(/: (true|false) /);
   expect(said(entries)).not.toContain('stall_guards: off (default)');
   expect(said(entries)).not.toContain('guards off');
 });
