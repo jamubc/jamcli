@@ -542,7 +542,7 @@ export class CoreAgent implements Agent {
           emit({ type: 'notice', level: 'warn', message: 'Repeated identical tool call loop detected; stopping turn to prevent infinite repetition.' });
           // What the model last said is the turn's reply. The harness's reason for stopping rides
           // along as a note, so the transcript does not put a harness sentence in the model's mouth.
-          record(userMessage('[A stall guard stopped this turn: the same call was issued four times running without progress.]'));
+          record(harnessNote('[A stall guard stopped this turn: the same call was issued four times running without progress.]'));
           return finish('limit', step.text, steps, 'Stopped: repeating identical tool call loop detected without progress.');
         }
       }
@@ -750,7 +750,8 @@ export class CoreAgent implements Agent {
   /** The request for a step: the system prompt first, then the conversation in order. */
   private project(messages: ChatMessage[]): ChatMessage[] {
     const system = this.options.systemPrompt;
-    return system ? [{ role: 'system', content: system, timestamp: 0 }, ...messages] : messages;
+    const sent = messages.map((message): ChatMessage => (message.role === 'system' ? { ...message, role: 'user' } : message));
+    return system ? [{ role: 'system', content: system, timestamp: 0 }, ...sent] : sent;
   }
 
   private async streamStep(

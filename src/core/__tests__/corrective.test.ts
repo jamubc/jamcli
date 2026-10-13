@@ -120,9 +120,8 @@ test('a steering note is the harness speaking, not a message in the person\'s vo
 });
 
 test('a model reply that quotes a harness note is not itself a note', async () => {
-  const provider = createScriptedProvider([
-    { text: '[A stall guard asks you to carry on: you said what you would do and stopped there.]\n\nThat is the harness quoted back. Here is my answer: the build is green.' },
-  ]);
+  const quoted = '[A stall guard asks you to carry on: you said what you would do and stopped there.]\n\nThat is the harness quoted back. Here is my answer: the build is green.';
+  const provider = createScriptedProvider([{ text: quoted }, { text: 'Still green.' }]);
   const agent = new CoreAgent({
     provider,
     model: 'deepseek-chat',
@@ -139,6 +138,9 @@ test('a model reply that quotes a harness note is not itself a note', async () =
   const answer = result.session?.messages.at(-1);
   expect(answer?.role).toBe('assistant');
   expect(answer?.content).toContain('the build is green');
+
+  await agent.run(result.session!, 'and now?', () => undefined);
+  expect(provider.calls[1].messages.filter((m) => m.content === quoted).map((m) => m.role)).toEqual(['assistant']);
 });
 
 test('intent_ack_continuation nudges model when it narrates intent without calling tools', async () => {
@@ -250,7 +252,7 @@ test('stall_guards breaks identical call replay loops and terminates runaway loo
   // The model's own last words are the turn's reply; the reason for stopping is not put in its mouth.
   expect(result.response).toBe('step 4');
   expect(result.error).toContain('Stopped: repeating identical tool call loop detected');
-  expect(result.session?.messages.some((m) => m.content.includes('[A stall guard stopped this turn:'))).toBe(true);
+  expect(result.session?.messages.filter((m) => m.content.includes('[A stall guard stopped this turn:')).map((m) => m.role)).toEqual(['system']);
 
   // The 3rd call output carried the warning to try something else.
   const toolMessages = result.session?.messages.filter((m) => m.role === 'tool') ?? [];

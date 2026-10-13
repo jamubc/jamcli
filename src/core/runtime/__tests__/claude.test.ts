@@ -74,6 +74,21 @@ const replayed = () =>
     .filter((block: any) => block.type === 'thinking')
     .map((block: any) => block.signature);
 
+test('a steering nudge is recorded as the harness, and reaches the next request in the conversation, not the system prompt', async () => {
+  configure('claude-opus-5-5', { agent_loop: { intent_ack_continuation: 'on' } });
+  const runtime = await start({ allowTools: ['read_file'] });
+  server.enqueue({ text: 'I will now inspect the project files' }, { text: 'The project is empty.' });
+  const result = await runtime.run('what is in the project?');
+
+  expect(result.response).toBe('The project is empty.');
+  const notes = runtime.session.messages.filter((message) => message.content.startsWith('[A stall guard asks you to carry on:'));
+  expect(notes.map((message) => message.role)).toEqual(['system']);
+  const [first, second] = server.completions().filter((request) => request.body.stream);
+  expect(JSON.stringify(second.body.system)).not.toContain('stall guard');
+  expect(second.body.messages.length).toBe(first.body.messages.length + 2);
+  expect(second.body.messages.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'text', text: notes[0].content }] });
+});
+
 test('signed thinking is replayed while its prefix holds, and left out once the prefix changes', async () => {
   configure('claude-opus-5-5');
   const runtime = await start();
