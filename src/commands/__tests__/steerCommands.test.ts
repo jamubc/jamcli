@@ -1,6 +1,7 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
+import * as configCli from '../../cli/config.js';
 import { hostFixture, said } from './fixture.js';
 
 const { context, open } = hostFixture();
@@ -109,6 +110,27 @@ test('/agentic names a setting it could not save and keeps the rest', async () =
   expect(text).toContain('except these, which were not saved:');
   for (const key of ['tool_use_enforcement', 'execution_guidance', 'intent_ack_continuation', 'stall_guards', 'tool_loop_guardrails']) {
     expect(text).toContain(`agent_loop.${key}`);
+  }
+});
+
+test('/agentic names the one setting the store refused, and saves the other four', async () => {
+  const real = configCli.runConfigCommand;
+  const store = spyOn(configCli, 'runConfigCommand').mockImplementation(async (request, root, io) =>
+    request.args[0] === 'agent_loop.execution_guidance' ? 1 : real(request, root, io)
+  );
+  try {
+    const { host, entries } = await open();
+    await host.run('/agentic on');
+
+    const saved = JSON.parse(fs.readFileSync(path.join(process.env.JAMCLI_CONFIG_DIR!, 'config.json'), 'utf8')) as any;
+    expect(saved.agent_loop).toEqual({ tool_use_enforcement: 'on', intent_ack_continuation: 'on', stall_guards: true, tool_loop_guardrails: true });
+    const text = said(entries);
+    expect(text).toContain('except these, which were not saved:\n  agent_loop.execution_guidance');
+    for (const key of ['tool_use_enforcement', 'intent_ack_continuation', 'stall_guards', 'tool_loop_guardrails']) {
+      expect(text).not.toContain(`agent_loop.${key}`);
+    }
+  } finally {
+    store.mockRestore();
   }
 });
 
