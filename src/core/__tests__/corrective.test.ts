@@ -76,12 +76,9 @@ test('no steering setting is on until the person sets one', () => {
 });
 
 test('an agent with no steering config never nudges and never stops on a loop', async () => {
-  const answer = "I read both files and changed the config. I'll now run the tests.";
-  const provider = createScriptedProvider([
-    { toolCalls: [{ name: 'read_file', arguments: { path: 'a.txt' } }] },
-    { toolCalls: [{ name: 'read_file', arguments: { path: 'b.txt' } }] },
-    { text: answer },
-  ]);
+  const answer = "I read the file and changed the config. I'll now run the tests.";
+  const read = { toolCalls: [{ name: 'read_file', arguments: { path: 'a.txt' } }] };
+  const provider = createScriptedProvider([read, read, read, read, { text: answer }]);
   const agent = new CoreAgent({
     provider,
     model: 'deepseek-chat',
@@ -92,8 +89,9 @@ test('an agent with no steering config never nudges and never stops on a loop', 
 
   expect(result.status).toBe('ok');
   expect(result.response).toBe(answer);
-  expect(provider.calls.length).toBe(3);
+  expect(provider.calls.length).toBe(5);
   expect(result.session?.messages.some((m) => m.role === 'system')).toBe(false);
+  expect(result.session?.messages.some((m) => m.content.includes('Identical tool call'))).toBe(false);
 });
 
 test('a steering note is the harness speaking, not a message in the person\'s voice', async () => {
