@@ -57,24 +57,20 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`answer-agentic-steering`, on `feat/agentic-beta`: it makes `fe89b99`'s steering, corrective
-nudges, and stall guards safe and specified. It also carries the `auth` fix (`be2cb25`) and the
-`setup` fix (`3b052a2`), which the owner moved into it on 2026-10-12.
+`add-approval-solvers`: the owner's request of 2026-09-30 that auto mode's approvals be
+pluggable, one solver per file, with TypeSafe's Jev as one of them. It reverses the
+review's "would not build a learned approval mode" on purpose, as its proposal says. The
+owner queued a JamCLI SDK, a typed client over ACP, as the unit after it.
 
-The owner's next unit is `add-approval-solvers`: the owner's request of 2026-09-30 that auto
-mode's approvals be pluggable, one solver per file, with TypeSafe's Jev as one of them. It
-reverses the review's "would not build a learned approval mode" on purpose, as its proposal
-says. The owner queued a JamCLI SDK, a typed client over ACP, as the unit after it.
-
-Before `answer-agentic-steering` opened: none. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
+Before it opened: none. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
 verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the units the
 owner's requests of 2026-09-29 ordered: `label-and-batch-child-approvals`, `add-spinner-verbs`,
-and `add-composer-recall`, and `answer-tester-notes`, from the owner's tester notes of
-2026-09-30. After `add-approval-solvers` and the SDK, what opens is the owner's choice: the queued
-`add-findings-loop` (unit 4), or what the task corpus's scores and a second person's
-transcripts ask for, which the review names as this file's input from now on. The owner also
-decides whether `land-interface-rhythm` (B), `add-btw` (C), and the shelved
-`add-windows-support` are dropped, as the review would have them.
+and `add-composer-recall`, then `answer-tester-notes`, from the owner's tester notes of
+2026-09-30, and `answer-agentic-steering` (unit 31). After `add-approval-solvers` and the SDK,
+what opens is the owner's choice: the queued `add-findings-loop` (unit 4), or what the task
+corpus's scores and a second person's transcripts ask for, which the review names as this file's
+input from now on. The owner also decides whether `land-interface-rhythm` (B), `add-btw` (C),
+and the shelved `add-windows-support` are dropped, as the review would have them.
 
 `add-windows-support` is shelved, not in the active changes tree: it waits for the owner to
 approve it before any task begins, and `git checkout 9d9f5c6 --
@@ -82,6 +78,48 @@ openspec/changes/add-windows-support` restores its proposal from the commit that
 it. The review would not build it.
 
 ## Closed units
+
+### 31. `answer-agentic-steering`
+
+Archived as `2026-10-12-answer-agentic-steering`: 1 requirement added (Model Steering) and 2
+modified (Credential Storage, First-Run Onboarding). From `fe89b99`, a commit written outside an
+OpenSpec change that added steering, corrective nudges, and stall guards, and the review that
+found nine problems in it, four of them unsafe to merge. It also carries the `auth` fix
+(`be2cb25`) and the `setup` fix (`3b052a2`), which the owner moved into it on 2026-10-12. Closed
+at 0 type errors, as it opened, and 1,344 tests passing against 1,301, in 146.12 s at a load
+average of 2.1 to 2.8. The screen reader terminal test unit 30 left failing passes now: the test
+booted a first run, and the setup picker took the first Ctrl+C.
+
+Four premises did not hold. The zero-width space the review saw in the intent regex was never
+there, in `fe89b99` or in its fixture; the slip was a stray space in a branch nothing reaches.
+`agent_loop.max_nudges_per_turn`, which the delta named, is no setting at all: the cap is two
+nudges a turn, counted across both guards. Anthropic lifted every nudge into the system prompt,
+so the harness spoke as the system and not in the conversation; a note is now recorded as the
+harness's own and sent at its place. And a turn offered no tools never ran its stop hook.
+Driving the built program twice through `jamcli mcp serve`, with the repository's fake provider
+as the model, found what the tests had not. A reopen, such as `/agentic on`, dropped the
+standing goal and any queued `/steer`. Every note at a turn's start (the goal, steering, a mode
+or model change, a handoff, sessions named, work ended) was joined onto the person's message,
+so on read-back, in the export, and in `/copy` it read as their words. Reading ahead of the
+drive found two more: `/steer` never said it waits for the next turn, and `/agentic` headed its
+list "off" over settings that were on. The drive also showed two of those settings as `true`
+beside three shown as `on`. The second drive found all of it fixed and nothing new. The setup
+note got back the install hint and the reason Ollama is not answering that `3b052a2` had
+dropped, in the plain voice the owner asked for, with Ollama one provider among many.
+
+Left out, on purpose. Whether the guards help is not argued here; `/agentic` and the task
+corpus would answer it. `/steer` still reaches only the next turn. On a first run a person needs
+three Ctrl+C to leave, since the first closes the setup picker; the owner kept that as designed.
+Left open: `tool_loop_guardrails` does nothing without `stall_guards`, though `/agentic` lists
+it as a setting of its own; `[System: Identical tool call repeated 3 times ...]` is still
+appended to a tool result, the form the proposal called a forging surface; the interface's
+read-back skips `system` rows, so a resumed session shows no trace of a nudge or a note; the
+goal and queued steering cross a reopen in `src/tui/app/App.tsx`, which holds only while the
+interface is the one surface that reopens; a note at a turn's start on the Anthropic dialect
+rests on its merging of consecutive messages, not on a test; `be2cb25` left a code comment in
+`src/cli.ts`; and `.claude/skills/jamcli-trials/trial.ts` likely still imports
+`HarnessOverrides`, deleted in unit 17. The suite's margin under 150 s is thin on a shared
+machine: runs on this branch went from 144 s to 176 s with the load beside them.
 
 ### 30. `answer-tester-notes`
 
