@@ -71,9 +71,12 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
   reply that ends in "I'll now run the tests." returns exactly that text as `ok`.
   Proof: the two keys are deleted, and the agent reads them as off when nothing sets them.
   `corrective.test.ts`, "an agent with no steering config never nudges and never stops on a
-  loop", now runs three steps (it replaces the one-step version) and returns the final reply
-  whole, and "no steering setting is on until the person sets one" checks the two keys are
-  absent. Both fail with `fe89b99`'s defaults and readers put back, and pass here.
+  loop", replaces the one-step version: it repeats one call four times, then returns the final
+  reply whole as `ok`, with no note and no repeated-call warning. It fails with the agent's
+  fallback for the guards back at `true` (the loop guard stops the turn, and the stall guard
+  alone adds its warning), with `fe89b99`'s defaults and readers put back, and with only the
+  intent default on. "no steering setting is on until the person sets one" checks the two keys
+  are absent, and fails with `fe89b99`'s defaults. Both pass here.
 
 - [x] 2.2 Narrow `hasDroppedToolCall` and `narratesIntentWithoutAction` so a reply that
   explains a tool call, or ends in "I'll ..." while delivering the answer, matches neither.
