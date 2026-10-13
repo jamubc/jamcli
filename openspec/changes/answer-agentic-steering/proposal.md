@@ -59,7 +59,7 @@ silent about the new commands, and that is where this unit adds them.
   `login` says that login works for openrouter only and names the command.
   The owner moved this fix into the unit on 2026-10-12.
 - **`/setup` gives the advice that fits** (`3b052a2`): with a hosted key set and Ollama not
-  answering, it says to install and start Ollama for local models rather than asking for a key,
+  answering, it says to install and start Ollama rather than asking for a key,
   and it says where the choice is saved only when there is a choice. With a key or without one,
   the note keeps the install hint and the reason Ollama is not answering, which `3b052a2` had
   dropped (the owner, 2026-10-13). The owner moved this fix into the unit

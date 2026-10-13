@@ -119,7 +119,7 @@ writing project files.
 
 #### Scenario: A hosted key is set and Ollama is not answering
 - **WHEN** Ollama is not reachable and a hosted provider key is set
-- **THEN** setup offers that provider, says where to install Ollama and how to start it to use local models, gives the reason it is not answering, and does not ask for a key
+- **THEN** setup offers that provider, says where to install Ollama and how to start it, gives the reason it is not answering, and does not ask for a key
 
 #### Scenario: Choices are stored for the user
 - **WHEN** onboarding completes

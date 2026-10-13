@@ -85,7 +85,7 @@ export function setupChoices(survey: Survey): { items: ChoiceItem[]; note: strin
   const notes: string[] = [];
   if (!ollama.reachable) {
     const advice = survey.keys.length
-      ? 'Install it from ollama.com and start it with ollama serve to use local models.'
+      ? 'Install it from ollama.com and start it with ollama serve.'
       : `Install it from ollama.com and start it with ollama serve, or set ${HOSTED_KEYS}; then run /setup.`;
     notes.push(`Ollama is not answering at ${ollama.endpoint}. ${advice} (${ollama.problem})`);
   } else if (!ollama.models.length) {

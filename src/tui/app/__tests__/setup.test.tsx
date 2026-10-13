@@ -175,6 +175,6 @@ test('with Ollama down and a hosted key set, the note gives the install hint and
   const { items, note } = setupChoices(survey);
   expect(items.map((item) => item.label)).toEqual(['anthropic: choose a model', 'Not now']);
   expect(note).toBe(
-    'Ollama is not answering at http://localhost:11434. Install it from ollama.com and start it with ollama serve to use local models. (Unable to connect. Is the computer able to access the url?) The choice is saved in your user configuration only.'
+    'Ollama is not answering at http://localhost:11434. Install it from ollama.com and start it with ollama serve. (Unable to connect. Is the computer able to access the url?) The choice is saved in your user configuration only.'
   );
 });
