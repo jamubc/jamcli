@@ -99,13 +99,18 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
 
 ## 3. The record
 
-- [ ] 3.1 Replace the `userMessage('[System: ...]')` nudges in `src/core/agent.ts` with the
-  harness's own note form, drained with `turnNotes`. Verify with a test that fails without it:
-  a nudge is a note, not a message whose role is `user`, and a model reply containing the note's
-  own text is not itself drained as a note.
-  Left: the nudges are `role: 'system'` messages, not notes drained with `turnNotes`, and
-  `anthropic.ts` lifts every system message into the system prompt. The loop-stop note is still
-  a `userMessage`.
+- [x] 3.1 Replace the `userMessage('[System: ...]')` nudges in `src/core/agent.ts` with the
+  harness's own note form, recorded at its place in the turn. Verify with a test that fails
+  without it: a nudge is a note, not a message whose role is `user`, and a model reply containing
+  the note's own text is not itself recorded as a note.
+  Proof: the two nudges and the loop-stop note are recorded as `role: 'system'` harness notes, and
+  the agent sends a recorded note to the provider as a `user` message at its place.
+  `claude.test.ts`, "a steering nudge is recorded as the harness, and reaches the next request in
+  the conversation, not the system prompt", fails with the change set aside, where Anthropic's
+  `system` ends with the nudge, and passes here. "stall_guards breaks identical call replay loops
+  and terminates runaway loops" now checks the stop note is `system`, and fails the same way.
+  "a model reply that quotes a harness note is not itself a note" passes both ways and cannot
+  fail on this change: nothing decides a note from its text.
 
 - [x] 3.2 Return the model's last text from the identical-loop guard, not the harness's sentence
   about the loop, and carry the explanation as a notice and in the turn's reason. Verify with a

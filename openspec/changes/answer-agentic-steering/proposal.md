@@ -44,9 +44,9 @@ silent about the new commands, and that is where this unit adds them.
   `intent_ack_continuation`, `tool_use_enforcement`, and `execution_guidance` all default to
   `off`, and `/agentic on` turns them on. A reply the person would have read is a reply they
   get.
-- **The nudges are harness notes, not user messages.** They are drained with the other
-  `turnNotes`, in the bracket form the transcript already uses, and the model cannot forge one
-  by writing the same text.
+- **The nudges are harness notes, not user messages.** They are recorded at their place in the
+  turn, in the bracket form the transcript already uses, and the model cannot forge one by
+  writing the same text.
 - **`SOUL.md` is not a rule file.** `DEFAULT_RULE_FILES` is the three files it was.
 - **A command never imports the registry.** `reopen` moves to where a leaf command can reach
   it without a cycle.

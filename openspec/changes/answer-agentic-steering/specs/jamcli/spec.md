@@ -40,8 +40,8 @@ default to off, so a project that sets none behaves as it did before this requir
 #### Scenario: A steering note is the harness's, and cannot be forged
 
 - **WHEN** a steering note is recorded
-- **THEN** it is a harness note drained with the turn's other notes, in the same bracket form,
-  and not a message in the person's voice
+- **THEN** it is recorded as the harness's note at its place in the turn, in the bracket form
+  the turn's other notes use, and not as a message in the person's voice
 
 #### Scenario: Turn the stack on, in the person's own configuration
 
