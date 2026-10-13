@@ -57,16 +57,20 @@ per-surface clauses above were added for that reason. The record is in
 
 ## Open unit
 
-`add-approval-solvers`: the owner's request of 2026-09-30 that auto mode's approvals be
-pluggable, one solver per file, with TypeSafe's Jev as one of them. It reverses the
-review's "would not build a learned approval mode" on purpose, as its proposal says. The
-owner queued a JamCLI SDK, a typed client over ACP, as the unit after it.
+`answer-agentic-steering`, on `feat/agentic-beta`: it makes `fe89b99`'s steering, corrective
+nudges, and stall guards safe and specified. It also carries the `auth` fix (`be2cb25`) and the
+`setup` fix (`3b052a2`), which the owner moved into it on 2026-10-12.
 
-Before it opened: none. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
+The owner's next unit is `add-approval-solvers`: the owner's request of 2026-09-30 that auto
+mode's approvals be pluggable, one solver per file, with TypeSafe's Jev as one of them. It
+reverses the review's "would not build a learned approval mode" on purpose, as its proposal
+says. The owner queued a JamCLI SDK, a typed client over ACP, as the unit after it.
+
+Before `answer-agentic-steering` opened: none. The twelve review units at the top of `ROADMAP.md` are archived, from the review kept
 verbatim in `openspec/reviews/2026-09-29-architecture-review.md`, and so are the units the
 owner's requests of 2026-09-29 ordered: `label-and-batch-child-approvals`, `add-spinner-verbs`,
 and `add-composer-recall`, and `answer-tester-notes`, from the owner's tester notes of
-2026-09-30. What opens next is the owner's choice: the queued
+2026-09-30. After `add-approval-solvers` and the SDK, what opens is the owner's choice: the queued
 `add-findings-loop` (unit 4), or what the task corpus's scores and a second person's
 transcripts ask for, which the review names as this file's input from now on. The owner also
 decides whether `land-interface-rhythm` (B), `add-btw` (C), and the shelved

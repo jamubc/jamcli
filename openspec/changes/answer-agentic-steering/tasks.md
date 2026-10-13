@@ -184,6 +184,16 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
   `/steer` and `/goal` are accepted, a turn on a model that narrates its intent reaches the
   person intact with the guards off. Keep the recording as the evidence.
 
-- [ ] 6.5 `SEQUENCE.md`'s "Open unit" names this one, and says that the `auth` fix (`be2cb25`,
+- [x] 6.5 `SEQUENCE.md`'s "Open unit" names this one, and says that the `auth` fix (`be2cb25`,
   `src/cli.ts` and `src/cli/auth.ts`) and the `setup` fix (`3b052a2`,
   `src/commands/builtin/setup.ts`) are in it.
+  Proof: "Open unit" names `answer-agentic-steering` with both fixes, and `add-approval-solvers`
+  as the owner's next unit; `openspec/changes/add-approval-solvers/` is unchanged.
+
+- [x] 6.6 Keep the install hint and the reason in `/setup`'s note when Ollama is not answering,
+  with a hosted key set and without one, which `3b052a2` dropped (the owner, 2026-10-13), and
+  still ask for no key when one is set.
+  Proof: `setup.test.tsx`, "with Ollama down and no keys, the note gives the install hint and
+  the reason, and no saved-choice line" and "with Ollama down and a hosted key set, the note
+  gives the install hint and the reason, and asks for no key", fail on `3b052a2`'s note code and
+  pass here.
