@@ -153,7 +153,7 @@ test('a suggested model already installed is marked, not offered for download', 
   expect(note).toBe('The choice is saved in your user configuration only.');
 });
 
-test('with Ollama down and no keys, setupChoices warning is concise and omits user config note', () => {
+test('with Ollama down and no keys, the note gives the install hint and the reason, and no saved-choice line', () => {
   const survey = {
     ollama: { endpoint: 'http://localhost:11434', reachable: false, pulls: false, models: [], problem: 'Unable to connect. Is the computer able to access the url?' },
     keys: [],
@@ -161,10 +161,12 @@ test('with Ollama down and no keys, setupChoices warning is concise and omits us
   };
   const { items, note } = setupChoices(survey);
   expect(items.map((item) => item.label)).toEqual(['Not now']);
-  expect(note).toBe('Ollama is not answering at http://localhost:11434. Start it with ollama serve, or set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY; then run /setup.');
+  expect(note).toBe(
+    'Ollama is not answering at http://localhost:11434. Install it from ollama.com and start it with ollama serve, or set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY; then run /setup. (Unable to connect. Is the computer able to access the url?)'
+  );
 });
 
-test('with Ollama down and hosted keys set, setupChoices advises starting Ollama to use local models', () => {
+test('with Ollama down and a hosted key set, the note gives the install hint and the reason, and asks for no key', () => {
   const survey = {
     ollama: { endpoint: 'http://localhost:11434', reachable: false, pulls: false, models: [], problem: 'Unable to connect. Is the computer able to access the url?' },
     keys: [{ provider: 'anthropic', detail: '$ANTHROPIC_API_KEY' }],
@@ -172,5 +174,7 @@ test('with Ollama down and hosted keys set, setupChoices advises starting Ollama
   };
   const { items, note } = setupChoices(survey);
   expect(items.map((item) => item.label)).toEqual(['anthropic: choose a model', 'Not now']);
-  expect(note).toBe('Ollama is not answering at http://localhost:11434. Start it with ollama serve to use local models. The choice is saved in your user configuration only.');
+  expect(note).toBe(
+    'Ollama is not answering at http://localhost:11434. Install it from ollama.com and start it with ollama serve to use local models. (Unable to connect. Is the computer able to access the url?) The choice is saved in your user configuration only.'
+  );
 });
