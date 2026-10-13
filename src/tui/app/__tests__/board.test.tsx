@@ -303,6 +303,7 @@ test('a label too long for the row is cut before its facts are, at 60 and at 100
       expect(row.row).toContain('…');
       expect(row.row).toMatch(/starting · \d+s\s*$/);
       expect(row.row).not.toContain('for each package');
+      while (context.server.pending() > 0) await Bun.sleep(10);
       for (const item of runtime.work()) runtime.stopWork(item.id);
     } finally {
       await close();

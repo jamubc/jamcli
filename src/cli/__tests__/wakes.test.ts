@@ -31,7 +31,8 @@ const jam = (args: string[]) => {
 const result = (out: string) => JSON.parse(out.trim().split('\n').at(-1)!);
 const lastPrompt = () => {
   const messages = server.completions().at(-1)!.body.messages;
-  return String(messages.at(-1).content);
+  const replied = messages.findLastIndex((message: any) => message.role === 'assistant');
+  return String(messages.slice(replied + 1).find((message: any) => message.role !== 'system').content);
 };
 
 test('a timer the model sets runs as a turn of the same headless run, which ends once none is pending', async () => {

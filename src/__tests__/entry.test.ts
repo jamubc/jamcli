@@ -42,6 +42,8 @@ test('the interface takes --screen-reader, and any other unknown option is refus
 async function inTerminal(args: string[], env: Record<string, string>, until: (screen: string) => boolean) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'jamcli-pty-'));
   fs.mkdirSync(path.join(base, 'project'));
+  fs.mkdirSync(path.join(base, 'user'));
+  fs.writeFileSync(path.join(base, 'user', 'config.json'), '{}');
   let raw = '';
   const decoder = new TextDecoder();
   const screen = () => raw.replace(/\x1b\[[0-9;?>$]*[A-Za-z]/g, '\n').replace(/\x1b[P\]][^\x07\x1b]*(\x07|\x1b\\)/g, '');
@@ -73,7 +75,7 @@ test('in a terminal, --screen-reader draws plain labeled lines with no boxes or 
   expect(plain.drawn).toContain('Message: Message JamCLI');
   expect(plain.drawn).not.toMatch(/[┌┐└┘│─▄█]/);
   expect(plain.code).toBe(0);
-  const framed = await inTerminal([], {}, (screen) => /default mode · .* · ready/.test(screen));
+  const framed = await inTerminal([], {}, (screen) => /default mode ·[\s\S]* ready/.test(screen));
   expect(framed.drawn).toMatch(/[┌┐└┘│─]/);
   expect(framed.code).toBe(0);
 }, 40_000);

@@ -330,6 +330,25 @@ test('/tools, /mcp, /agents, and /doctor report, and /config reads and changes s
   }
 }, 40_000);
 
+test('a reopen keeps the standing goal and a queued /steer', async () => {
+  const { setup, current, close } = await open({}, { size: tall });
+  try {
+    await send(setup, '/goal keep the build green');
+    await frameWith(setup, (frame) => frame.includes('Standing goal set: keep the build green'));
+    await send(setup, '/steer run the tests first');
+    await frameWith(setup, (frame) => frame.includes('Steering instruction queued for the next turn.'));
+    const before = current();
+    await send(setup, '/agentic on');
+    await frameWith(setup, (frame) => frame.includes('Applied to this session.') && current() !== before);
+    await turn(setup, 'go on', 'Done.');
+    const sent = JSON.stringify(context.server.completions().at(-1)!.body.messages);
+    expect(sent).toContain('[Standing goal: keep the build green]');
+    expect(sent).toContain('[Steering instruction: run the tests first]');
+  } finally {
+    await close();
+  }
+}, 30_000);
+
 test('/profile lists the profiles, and switches this session to one without writing anything', async () => {
   const profiles = path.join(process.env.JAMCLI_CONFIG_DIR!, 'profiles');
   fs.mkdirSync(profiles);

@@ -118,7 +118,15 @@ export async function runAuthCommand(request: AuthCommandRequest, projectRoot: s
   }
 
   if (!provider) {
-    io.err(AUTH_USAGE);
+    if (request.action === 'login') {
+      io.err(`Login works for openrouter only. Run: jamcli auth login openrouter`);
+    } else if (request.action === 'set') {
+      io.err(`Which provider? Run: jamcli auth set <provider>\nProviders: ${[...BUILT_IN, ...endpoints].join(', ')}`);
+    } else if (request.action === 'get' || request.action === 'remove') {
+      io.err(`Which provider? Run: jamcli auth ${request.action} <provider>\nProviders: ${[...BUILT_IN, ...endpoints].join(', ')}`);
+    } else {
+      io.err(AUTH_USAGE);
+    }
     return 2;
   }
   if (!/^[\w.-]+$/.test(provider)) {

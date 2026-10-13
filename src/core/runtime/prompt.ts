@@ -2,6 +2,13 @@ import type { Profile } from '../../types/config.js';
 import type { ToolSummary } from './tools.js';
 import type { PermissionMode } from '../permissions/modes.js';
 
+export interface SteeringInputs {
+  toolUseEnforcement?: 'off' | 'on' | 'auto' | boolean;
+  executionGuidance?: 'off' | 'on' | 'auto' | boolean;
+  taskCompletionGuidance?: boolean;
+  parallelToolCallGuidance?: boolean;
+}
+
 export interface PromptInputs {
   profile?: Profile | null;
   rulesText?: string;
@@ -16,15 +23,58 @@ export interface PromptInputs {
   gates?: string;
   /** `provider:model` of the session, so the model knows which one it is and when that changes. */
   model?: string;
+  /** Steering layers for tool enforcement and execution guidance. */
+  steering?: SteeringInputs;
 }
 
 const DEFAULT_IDENTITY =
   'You are JamCLI, a coding agent working in the user\'s project. You are precise, you check your work, and you say plainly what you did and did not do.';
 
+export const TOOL_ENFORCEMENT_FAMILIES = ['gpt', 'codex', 'gemini', 'gemma', 'grok', 'glm', 'qwen', 'deepseek', 'muse'];
+
+export const TOOL_USE_ENFORCEMENT_PROMPT =
+  'You MUST use your tools to take action: do not describe what you would do or plan to do without actually doing it. Never end your turn with a promise of future action: execute it now. Every response should either (a) contain tool calls that make progress, or (b) deliver a final result.';
+
+export const EXECUTION_GUIDANCE_PROMPT = [
+  'Execution guidance:',
+  '- Persist with tools across turns until the goal is verified.',
+  '- Use tools for arithmetic, counting, and data transformation instead of mental calculation.',
+  '- Read back files after external writes or commands to verify modifications.',
+  '- When reconciling counts or lists, inspect the raw data directly with tools.',
+].join('\n');
+
+export const TASK_COMPLETION_GUIDANCE_PROMPT = [
+  'Task completion guidance:',
+  '- Complete tasks thoroughly: do not stop at placeholder stubs or unfinished mocks.',
+  '- Never fabricate file contents, command results, or test outcomes: observe them directly.',
+].join('\n');
+
+export const PARALLEL_TOOL_CALL_GUIDANCE_PROMPT =
+  '- When tool calls are independent, batch them together in parallel to minimize latency.';
+
+export function isModelInFamily(model: string | undefined, families: string[]): boolean {
+  if (!model) return false;
+  const lower = model.toLowerCase();
+  if (lower.includes('claude')) return false;
+  return families.some((family) => lower.includes(family));
+}
+
+export function shouldEnforceToolUse(setting: 'off' | 'on' | 'auto' | boolean | undefined, model?: string): boolean {
+  if (setting === true || setting === 'on') return true;
+  if (setting === false || setting === 'off') return false;
+  return isModelInFamily(model, TOOL_ENFORCEMENT_FAMILIES);
+}
+
+export function shouldIncludeExecutionGuidance(setting: 'off' | 'on' | 'auto' | boolean | undefined, model?: string): boolean {
+  if (setting === true || setting === 'on') return true;
+  if (setting === false || setting === 'off') return false;
+  return isModelInFamily(model, TOOL_ENFORCEMENT_FAMILIES);
+}
+
 const offers = (tools: ToolSummary[]) => (name: string) => tools.some((tool) => tool.name === name);
 
 /** Guidance that names only the tools this session actually offers. The todo list and ask_user carry their own rules in their descriptions. */
-const toolGuidance = (tools: ToolSummary[], gates?: string): string => {
+const toolGuidance = (tools: ToolSummary[], gates?: string, steering?: SteeringInputs, model?: string): string => {
   const has = offers(tools);
   const lines = ['Working with tools:', '- Inspect the project with tools instead of guessing at its contents.'];
   const readers = ['read_file', 'grep', 'glob'].filter(has);
@@ -41,6 +91,15 @@ const toolGuidance = (tools: ToolSummary[], gates?: string): string => {
   lines.push('- When a note says the model or the mode changed, the messages above it were written under the old one. Do not describe them as errors.');
   lines.push('- When a tool can do something, call it rather than describing the call.');
   lines.push('- If no tool is needed, answer directly.');
+  if (steering?.parallelToolCallGuidance !== false) {
+    lines.push(PARALLEL_TOOL_CALL_GUIDANCE_PROMPT);
+  }
+  if (steering?.taskCompletionGuidance !== false) {
+    lines.push(TASK_COMPLETION_GUIDANCE_PROMPT);
+  }
+  if (shouldIncludeExecutionGuidance(steering?.executionGuidance, model)) {
+    lines.push(EXECUTION_GUIDANCE_PROMPT);
+  }
   if (gates) lines.push('', gates);
   return lines.join('\n');
 };
@@ -88,10 +147,14 @@ export const planNote = (tools: ToolSummary[]): string => {
  * the tools, the rules, the mode, or the model do, so a provider's cache holds across steps.
  */
 export function buildRuntimePrompt(inputs: PromptInputs): string {
-  const parts = [inputs.profile?.system_prompt_override?.trim() || DEFAULT_IDENTITY];
+  const parts: string[] = [];
+  if (inputs.tools.length && shouldEnforceToolUse(inputs.steering?.toolUseEnforcement, inputs.model)) {
+    parts.push(TOOL_USE_ENFORCEMENT_PROMPT);
+  }
+  parts.push(inputs.profile?.system_prompt_override?.trim() || DEFAULT_IDENTITY);
   const rules = inputs.rulesText?.trim();
   if (rules) parts.push(rules);
-  if (inputs.tools.length) parts.push(toolGuidance(inputs.tools, inputs.gates));
+  if (inputs.tools.length) parts.push(toolGuidance(inputs.tools, inputs.gates, inputs.steering, inputs.model));
   if (inputs.mode === 'plan') parts.push(planNote(inputs.tools));
   // The person's own date: the UTC one is tomorrow in an American evening and yesterday in an Asian morning.
   const now = inputs.date ?? new Date();

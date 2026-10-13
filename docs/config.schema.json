@@ -374,6 +374,41 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "description": "Output tokens to ask for per reply, capped by the model's own limit."
+        },
+        "tool_use_enforcement": {
+          "type": "string",
+          "enum": [
+            "off",
+            "on",
+            "auto"
+          ],
+          "description": "Prepend prompt block requiring tool use instead of narration. auto enables for prone models."
+        },
+        "execution_guidance": {
+          "type": "string",
+          "enum": [
+            "off",
+            "on",
+            "auto"
+          ],
+          "description": "System prompt guidance for tool persistence, arithmetic, and verification."
+        },
+        "intent_ack_continuation": {
+          "type": "string",
+          "enum": [
+            "off",
+            "on",
+            "auto"
+          ],
+          "description": "Runtime correction that nudges the model to execute tools if it narrates intent without calling them."
+        },
+        "stall_guards": {
+          "type": "boolean",
+          "description": "Catch trailing narration, dropped calls, and break identical call replay loops."
+        },
+        "tool_loop_guardrails": {
+          "type": "boolean",
+          "description": "Guardrails against repetitive or runaway tool call loops."
         }
       },
       "additionalProperties": false

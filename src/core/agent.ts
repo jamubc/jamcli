@@ -85,6 +85,14 @@ export interface AgentOptions {
    * bracket form the other notes use: a model or mode change, a handoff. Drained on read.
    */
   turnNotes?: () => string[];
+  /** Corrective nudge when the model narrates intent without calling tools. */
+  intentAckContinuation?: 'off' | 'on' | 'auto' | boolean;
+  /** Stall guards for trailing narration, dropped calls, and identical call replay. */
+  stallGuards?: boolean;
+  /** Guardrails against runaway or repetitive tool loops. */
+  toolLoopGuardrails?: boolean;
+  /** Maximum corrective nudges allowed per turn. Defaults to 2. */
+  maxNudgesPerTurn?: number;
 }
 
 interface StepOutput {
@@ -94,6 +102,80 @@ interface StepOutput {
 }
 
 const userMessage = (content: string): ChatMessage => ({ role: 'user', content, timestamp: Date.now() });
+
+/** A note the harness speaks in its own voice, never put in the person's. */
+const harnessNote = (content: string): ChatMessage => ({ role: 'system', content, timestamp: Date.now() });
+
+const ENFORCEMENT_FAMILIES = ['gpt', 'codex', 'gemini', 'gemma', 'grok', 'glm', 'qwen', 'deepseek', 'muse'];
+
+export function shouldNudgeIntent(setting: 'off' | 'on' | 'auto' | boolean | undefined, model?: string): boolean {
+  if (setting === true || setting === 'on') return true;
+  if (setting === false || setting === 'off') return false;
+  if (!model) return false;
+  const lower = model.toLowerCase();
+  if (lower.includes('claude')) return false;
+  return ENFORCEMENT_FAMILIES.some((family) => lower.includes(family));
+}
+
+/**
+ * What a dropped call is written as, and what is left of the reply once it is taken out.
+ * A model that dropped a call wrote one and stopped, so nothing but it is in the reply. A model
+ * explaining, quoting, or reporting a call has prose around it, and that prose is the answer the
+ * person came for, so the markup is part of the explanation and not a call that went missing.
+ */
+const CALL_MARKUP = [
+  /<tool_call>|<\/tool_call>/gi,
+  /```(?:tool_code|tool_call)[\s\S]*?```/gi,
+  /```(?:json)?\s*\{[\s\S]*?"name"\s*:\s*"(?:run_command|read_file|edit|write_file|edit_file|grep|glob|task|web_fetch|web_search)"[\s\S]*?```/gi,
+  /^(?:Action|Tool)\s*:\s*(?:run_command|read_file|edit|write_file|edit_file|grep|glob|task|web_fetch|web_search)\b.*$/gim,
+];
+
+/**
+ * Words of prose a reply carries besides the markup, below which it is the markup alone. A lead
+ * in such as "Let me check" is under it; a sentence that reports what was found is over it.
+ */
+const PROSE_BESIDE_MARKUP = 8;
+
+const proseWords = (text: string): number =>
+  text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean).length;
+
+/** Detects when the model writes code or markup representing a tool call in text instead of wire format. */
+export function hasDroppedToolCall(text: string): boolean {
+  if (!text) return false;
+  let marks = 0;
+  let left = text;
+  for (const markup of CALL_MARKUP) {
+    const found = left.match(markup);
+    if (found?.length) marks += found.length;
+    left = left.replace(markup, ' ');
+  }
+  return marks > 0 && proseWords(left) < PROSE_BESIDE_MARKUP;
+}
+
+/**
+ * Whether a reply says what it is about to do and stops, rather than doing it. A reply that also
+ * delivers an answer, which is what the second paragraph of "I will update the config" followed
+ * by the change, is the answer and is left alone.
+ */
+const DELIVERS_AN_ANSWER = /\n|\b(?:here(?:'s| is)|done|found|fixed|passed|failed|summary|result|answer(?:ed)?|because|caused by)\b/i;
+
+/** Detects when the reply narrates intent or trails off with a plan without calling tools. */
+export function narratesIntentWithoutAction(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (DELIVERS_AN_ANSWER.test(trimmed)) return false;
+  const intentPhrases = /(?:(?:let me|i(?:'ll| will| am going to)|now (?:i'll|i will|let's)|next[, ]+(?:i'll|i will)|we should now|proceed to|allow me to)\s+(?:now\s+)?(?:check|read|run|execute|update|modify|edit|create|write|inspect|look|search|verify|test|fix|implement|apply|examine)\b|(?:^|\n)(?:Next steps?:|Plan:|\d+\.\s+I will)\s+)/i;
+  if (intentPhrases.test(trimmed)) return true;
+  const trailingIntent = /(?:let me|i'll|i will|now let's|i am now going to)[^.\n]*[.…]?\s*$/i;
+  if (trailingIntent.test(trimmed)) return true;
+  return false;
+}
 
 /** How each wire format says a reply was cut off at the output limit: Anthropic, then OpenAI and Ollama. */
 const OUTPUT_LIMIT_REASONS = new Set(['max_tokens', 'length']);
@@ -118,6 +200,10 @@ export class CoreAgent implements Agent {
   private readonly maxToolCallsPerTurn: number;
   private readonly truncationLimit: number;
   private readonly redact: Redactor;
+  private readonly intentAckContinuation: 'off' | 'on' | 'auto' | boolean;
+  private readonly stallGuards: boolean;
+  private readonly toolLoopGuardrails: boolean;
+  private readonly maxNudgesPerTurn: number;
   private reasoningSince?: number;
   /** Whether this session has run elision at the planned crossing since its last compaction. */
   private elidedAhead = false;
@@ -129,6 +215,11 @@ export class CoreAgent implements Agent {
       options.maxToolCallsPerTurn ?? loop?.max_tool_calls_per_turn ?? DEFAULT_AGENT_LOOP_CONFIG.max_tool_calls_per_turn;
     this.truncationLimit = options.truncationLimit ?? loop?.tool_result_max_chars ?? DEFAULT_AGENT_LOOP_CONFIG.tool_result_max_chars;
     this.redact = options.redact ?? createRedactor();
+    this.intentAckContinuation =
+      options.intentAckContinuation ?? loop?.intent_ack_continuation ?? DEFAULT_AGENT_LOOP_CONFIG.intent_ack_continuation ?? 'off';
+    this.stallGuards = options.stallGuards ?? loop?.stall_guards ?? false;
+    this.toolLoopGuardrails = options.toolLoopGuardrails ?? loop?.tool_loop_guardrails ?? false;
+    this.maxNudgesPerTurn = options.maxNudgesPerTurn ?? 2;
     this.reasoningSince = options.reasoningSince;
   }
 
@@ -263,17 +354,22 @@ export class CoreAgent implements Agent {
     }
     // Work that ended between turns is news the model reads with the prompt.
     const ended = this.options.news?.() ?? [];
-    if (ended.length) prompt = [prompt, `[Work ended since your last turn:\n${ended.join('\n')}]`].filter(Boolean).join('\n\n');
     const heard = this.options.heard?.() ?? [];
-    if (heard.length) prompt = [prompt, `[The person watching says:\n${heard.join('\n')}]`].filter(Boolean).join('\n\n');
-    const notes = this.options.turnNotes?.() ?? [];
-    if (notes.length) prompt = [prompt, ...notes].filter(Boolean).join('\n\n');
+    const notes = [
+      ...(ended.length ? [`[Work ended since your last turn:\n${ended.join('\n')}]`] : []),
+      ...(heard.length ? [`[The person watching says:\n${heard.join('\n')}]`] : []),
+      ...(this.options.turnNotes?.() ?? []),
+    ];
     if (prompt) record(userMessage(prompt));
+    for (const note of notes) record(harnessNote(note));
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
     const cap = this.maxToolCallsPerTurn > 0 ? this.maxToolCallsPerTurn : undefined;
     let usedCalls = 0;
     let steps = 0;
+    let nudges = 0;
+    const callSignatures: string[] = [];
+    let consecutiveIdenticalCalls = 0;
     /** Whether a stop hook has already asked for more this turn, which the hook is told. */
     let stopHookActive = false;
     const context = this.options.context;
@@ -402,6 +498,28 @@ export class CoreAgent implements Agent {
           record(userMessage('[Your last tool call had no tool name and was ignored. Name the tool you want to call.]'));
           continue;
         }
+
+        // Dropped-call guard: detected tool markup or pseudo-call in text with no wire call
+        if (tools && this.stallGuards && nudges < this.maxNudgesPerTurn && hasDroppedToolCall(step.text)) {
+          nudges += 1;
+          emit({ type: 'notice', level: 'info', message: 'Model formatted a tool call in text instead of wire format; nudging to call tool.' });
+          record(harnessNote('[A stall guard asks you to issue the call: this reply wrote one as text and none was returned with it.]'));
+          continue;
+        }
+
+        // Intent acknowledgment continuation: narrating intent without tool calls
+        if (
+          tools &&
+          nudges < this.maxNudgesPerTurn &&
+          shouldNudgeIntent(this.intentAckContinuation, this.options.model) &&
+          narratesIntentWithoutAction(step.text)
+        ) {
+          nudges += 1;
+          emit({ type: 'notice', level: 'info', message: 'Model narrated intent without calling tools; nudging to take action.' });
+          record(harnessNote('[A stall guard asks you to carry on: you said what you would do and stopped there.]'));
+          continue;
+        }
+
         // A stop hook may ask the model to carry on, with its reason as the next message.
         const stop = await hookVerdict(hooks, 'stop', { session: working, response: step.text, stopHookActive }, emit);
         const carryOn = stop.block ?? (stop.decision === 'deny' ? (stop.reason ?? 'a stop hook asked for more') : undefined);
@@ -411,6 +529,24 @@ export class CoreAgent implements Agent {
           continue;
         }
         return finish('ok', step.text, steps);
+      }
+
+      if (this.stallGuards) {
+        const signature = calls.map((c) => `${c.name}:${JSON.stringify(c.arguments)}`).join(';');
+        if (callSignatures.length && callSignatures[callSignatures.length - 1] === signature) {
+          consecutiveIdenticalCalls += 1;
+        } else {
+          consecutiveIdenticalCalls = 1;
+        }
+        callSignatures.push(signature);
+
+        if (this.toolLoopGuardrails && consecutiveIdenticalCalls >= 4) {
+          emit({ type: 'notice', level: 'warn', message: 'Repeated identical tool call loop detected; stopping turn to prevent infinite repetition.' });
+          // What the model last said is the turn's reply. The harness's reason for stopping rides
+          // along as a note, so the transcript does not put a harness sentence in the model's mouth.
+          record(harnessNote('[A stall guard stopped this turn: the same call was issued four times running without progress.]'));
+          return finish('limit', step.text, steps, 'Stopped: repeating identical tool call loop detected without progress.');
+        }
       }
 
       if (!dispatcher) {
@@ -444,6 +580,9 @@ export class CoreAgent implements Agent {
         const added = [...after.context, ...(after.block !== undefined ? [`A post_tool hook says: ${after.block}`] : [])];
         if (i === calls.length - 1 && endedNow.length) added.push(`[Work ended during this step:\n${endedNow.join('\n')}]`);
         if (i === calls.length - 1 && heardNow.length) added.push(`[The person watching says:\n${heardNow.join('\n')}]`);
+        if (i === calls.length - 1 && this.stallGuards && consecutiveIdenticalCalls === 3) {
+          added.push('[System: Identical tool call repeated 3 times. If this call did not produce the expected result, change parameters or try a different approach.]');
+        }
         if (added.length) output = `${output}\n\n${added.join('\n')}`;
         record({
           role: 'tool',
@@ -613,7 +752,8 @@ export class CoreAgent implements Agent {
   /** The request for a step: the system prompt first, then the conversation in order. */
   private project(messages: ChatMessage[]): ChatMessage[] {
     const system = this.options.systemPrompt;
-    return system ? [{ role: 'system', content: system, timestamp: 0 }, ...messages] : messages;
+    const sent = messages.map((message): ChatMessage => (message.role === 'system' ? { ...message, role: 'user' } : message));
+    return system ? [{ role: 'system', content: system, timestamp: 0 }, ...sent] : sent;
   }
 
   private async streamStep(

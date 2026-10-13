@@ -58,6 +58,19 @@ test('the hook bus sees the turn, the tool, and the result in order', async () =
   expect(seen).toEqual(['turn_start', 'pre_tool:read_file', 'post_tool:read_file']);
 });
 
+test('an agent with no tool definitions and a stop hook that asks to continue runs the hook', async () => {
+  const hooks = createHookBus();
+  const asked: boolean[] = [];
+  hooks.on('stop', (payload) => (asked.push(payload.stopHookActive), payload.stopHookActive ? undefined : { block: 'the tests have not been run' }));
+  const provider = createScriptedProvider([{ text: 'All done.' }, { text: 'Ran them; all done.' }]);
+  const agent = new CoreAgent({ provider, hooks, model: 'm' });
+  const result = await agent.run(createSession('/tmp/hook-project', 'hook-stop'), 'finish', () => {});
+  expect(asked).toEqual([false, true]);
+  expect(result.status).toBe('ok');
+  expect(result.response).toBe('Ran them; all done.');
+  expect(provider.calls[1].messages.at(-1)?.content).toBe('[A stop hook asks you to continue: the tests have not been run]');
+});
+
 test('a throwing hook becomes a notice, never answer text, and the turn finishes (F25)', async () => {
   const hooks = createHookBus();
   hooks.on('turn_start', () => {

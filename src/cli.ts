@@ -234,10 +234,12 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       return parsed;
     }
     if (token === 'auth') {
-      const action = argv[i + 1];
+      const next = argv[i + 1];
+      const isAction = AUTH_ACTIONS.includes(next as AuthAction);
       parsed.authCommand = {
-        action: AUTH_ACTIONS.includes(action as AuthAction) ? (action as AuthAction) : undefined,
-        args: argv.slice(i + 2),
+        action: isAction ? (next as AuthAction) : next ? 'set' : undefined,
+        // When next is a provider name (not a verb), treat it as the provider arg for 'set'.
+        args: isAction ? argv.slice(i + 2) : next ? argv.slice(i + 1) : [],
       };
       return parsed;
     }

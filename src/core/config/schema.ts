@@ -126,6 +126,21 @@ export const AgentLoopSchema = z
     tool_result_max_chars: positiveInt().describe('Characters of one tool result kept in context.'),
     command_timeout_ms: positiveInt().describe('Default timeout for a command.'),
     max_output_tokens: positiveInt().describe("Output tokens to ask for per reply, capped by the model's own limit."),
+    tool_use_enforcement: z
+      .enum(['off', 'on', 'auto'])
+      .describe('Prepend prompt block requiring tool use instead of narration. auto enables for prone models.'),
+    execution_guidance: z
+      .enum(['off', 'on', 'auto'])
+      .describe('System prompt guidance for tool persistence, arithmetic, and verification.'),
+    intent_ack_continuation: z
+      .enum(['off', 'on', 'auto'])
+      .describe('Runtime correction that nudges the model to execute tools if it narrates intent without calling them.'),
+    stall_guards: z
+      .boolean()
+      .describe('Catch trailing narration, dropped calls, and break identical call replay loops.'),
+    tool_loop_guardrails: z
+      .boolean()
+      .describe('Guardrails against repetitive or runaway tool call loops.'),
   })
   .partial();
 

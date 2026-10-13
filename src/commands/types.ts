@@ -14,6 +14,7 @@ export interface SessionChoice {
   sessionId?: string;
   /** Open it with this profile, for the rest of the surface's life. */
   profile?: string;
+  reopen?: boolean;
 }
 
 /** One choice a command offers. */

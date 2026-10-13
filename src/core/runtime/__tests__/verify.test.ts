@@ -130,9 +130,11 @@ test('a handoff left as a reset reaches the next session with its first prompt, 
   expect(next.notices.some((notice) => notice.includes('handoff'))).toBe(true);
   server.enqueue({ text: 'Picking up.' }, { text: 'Second turn.' });
   const { events } = await run(next, 'continue');
-  const prompt = events.find((event) => event.type === 'message' && event.message.role === 'user') as Extract<AgentEvent, { type: 'message' }>;
-  expect(prompt.message.content).toContain(`continue\n\n[Handoff from the previous session ${runtime.sessionId}:\n# Handoff`);
-  expect(prompt.message.content).toContain('Request: fix it');
+  const recorded = events.flatMap((event) => (event.type === 'message' ? [event.message] : []));
+  expect(recorded[0]).toMatchObject({ role: 'user', content: 'continue' });
+  expect(recorded[1].role).toBe('system');
+  expect(recorded[1].content).toStartWith(`[Handoff from the previous session ${runtime.sessionId}:\n# Handoff`);
+  expect(recorded[1].content).toContain('Request: fix it');
   expect(events.filter((event) => event.type === 'steer' && event.handler === 'M1')).toHaveLength(1);
   const again = await run(next, 'and again');
   const second = again.events.find((event) => event.type === 'message' && event.message.role === 'user') as Extract<AgentEvent, { type: 'message' }>;

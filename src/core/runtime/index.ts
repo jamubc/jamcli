@@ -10,7 +10,7 @@ import { createHookBus, hookVerdict, type HookBus } from '../hooks/index.js';
 import { createRedactor } from '../redact.js';
 import { SessionLog, TranscriptRecorder, newSessionId, typedPrompts } from '../transcript/index.js';
 import { createBuiltinRegistry } from '../tools/registry.js';
-import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG } from '../../types/config.js';
+import { DEFAULT_AGENT_LOOP_CONFIG, DEFAULT_DELEGATION_CONFIG, type AgentLoopConfig } from '../../types/config.js';
 import { createToolSet, registerMcpTools, type ToolSet } from './tools.js';
 import { childLauncher } from './children.js';
 import { SessionCheckpoints } from './checkpoints.js';
@@ -397,6 +397,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   // The project's own gates, detected once; their durations come from the ledger once the log is open.
   const gates = detectGates(workRoot);
   let ledger: Ledger | undefined;
+  const loop: AgentLoopConfig = { ...DEFAULT_AGENT_LOOP_CONFIG, ...config.agent_loop };
   const buildPrompt = () =>
     buildRuntimePrompt({
       profile,
@@ -414,12 +415,16 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       mode: permissions.mode,
       gates: gates.length && permissions.mode !== 'plan' ? describeGates(gates, (name) => ledger?.lastDuration(name)) : undefined,
       model: sessionModel.ref,
+      steering: {
+        toolUseEnforcement: loop?.tool_use_enforcement,
+        executionGuidance: loop?.execution_guidance,
+        taskCompletionGuidance: true,
+        parallelToolCallGuidance: true,
+      },
     });
   let systemPrompt = buildPrompt();
   /** Whether the extended tier fits the model's window, decided once the window is known; true when that changed. */
   const decideTiers = (): boolean => offer.decideTiers(systemPrompt, budgetFor(), windowKnown());
-
-  const loop = config.agent_loop;
   /** Learns how the provider counts this session's requests, across model switches. */
   const counter = new TokenCounter();
   const autoCompact = config.context?.auto_compact !== false;
@@ -442,6 +447,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       : thinkingFor(config.effort ?? 'auto');
   const buildAgent = () =>
     new CoreAgent({
+      loop,
       provider: sessionModel.provider,
       model: sessionModel.choice.model,
       temperature: profile.temperature,
@@ -476,13 +482,20 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       // Only the top-level session tells the model what ended: a child sharing the table must not take the news.
       ...(options.parent ? {} : { news: () => workTable.drainEnded().map(workNews) }),
       ...(options.heard ? { heard: options.heard } : {}),
-      turnNotes: () => turnNotes.splice(0),
+      turnNotes: () => {
+        const notes = [...turnNotes.splice(0), ...steering.splice(0).map((message) => `[Steering instruction: ${message}]`)];
+        if (standingGoal) notes.unshift(`[Standing goal: ${standingGoal}]`);
+        return notes;
+      },
       // A delegated run shares the working copy; the checkpoint before its task call covers it.
       ...(options.surface === 'child' ? {} : { beforeChange: (call: ToolCall) => checkpoints.take(call), afterChange: () => checkpoints.settle() }),
     });
-  let agent = buildAgent();
+  /** A standing goal that persists across turns until cleared. */
+  let standingGoal: string | undefined;
   /** What the harness must tell the model with its next prompt, each in bracket form. */
   const turnNotes: string[] = [];
+  const steering: string[] = [];
+  let agent = buildAgent();
   /** The pinned state a summary carries, with one line per gate from the ledger. */
   async function pinnedWithGates(): Promise<string | undefined> {
     const state = await pinnedState(workRoot);
@@ -949,6 +962,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     flags: (refs) => extras.api.flags(refs),
     raiseFlag: (flag) => extras.api.raiseFlag(flag),
     lowerFlag: (flag) => extras.api.lowerFlag(flag),
+    steer: (message) => {
+      steering.push(message);
+    },
+    steering: () => [...steering],
+    setGoal: (goal) => {
+      standingGoal = goal?.trim() ? goal.trim() : undefined;
+    },
+    getGoal: () => standingGoal,
 
     async close() {
       // Cancelling a turn leaves jobs running; closing the session that owns them stops them.

@@ -1,0 +1,1196 @@
+{
+  "date": "2026-10-12T22:00:06.992Z",
+  "model": "opencode-go:deepseek-v4.1-flash",
+  "jamcli": "3b052a2",
+  "platform": "linux",
+  "tasks": 20,
+  "passed": 20,
+  "passRate": 1,
+  "costUsd": 0.0315,
+  "tokensIn": 623533,
+  "tokensOut": 18109,
+  "medianSeconds": 10,
+  "scores": [
+    {
+      "id": "add-clamp-tests",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 8361,
+      "turns": 5,
+      "costUsd": 0.0013151579999999999,
+      "denials": 0,
+      "changed": [
+        "src/clamp.test.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 26677,
+        "tokensOut": 603,
+        "cachedShare": 0.7772987967162724,
+        "cacheBreaks": 0,
+        "costUsd": 0.0013151579999999999,
+        "unpricedRequests": 0,
+        "requests": 5,
+        "steps": 5,
+        "calls": 6,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 8.181,
+        "components": {
+          "readsBeforeFirstEdit": 4,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 8,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read package.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          }
+        ]
+      }
+    },
+    {
+      "id": "add-email-field",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 78919,
+      "turns": 5,
+      "costUsd": 0.00143763,
+      "denials": 0,
+      "changed": [
+        "src/types.ts",
+        "src/users.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 28325,
+        "tokensOut": 646,
+        "cachedShare": 0.7682259488084731,
+        "cacheBreaks": 0,
+        "costUsd": 0.00143763,
+        "unpricedRequests": 0,
+        "requests": 5,
+        "steps": 5,
+        "calls": 7,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/other/run_command/run_command error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 78.744,
+        "components": {
+          "readsBeforeFirstEdit": 3,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 18,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 1 after 70.4s. First error: npm error code EAI_AGAIN bun test v1.4.2 (744846f84) The following filters did not match any test fi...",
+            "signature": "tool_error/other/run_command/run_command error"
+          }
+        ]
+      }
+    },
+    {
+      "id": "add-version-flag",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 15941,
+      "turns": 6,
+      "costUsd": 0.002163408,
+      "denials": 0,
+      "changed": [
+        "src/cli.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 33756,
+        "tokensOut": 1815,
+        "cachedShare": 0.8038867164355966,
+        "cacheBreaks": 0,
+        "costUsd": 0.002163408,
+        "unpricedRequests": 0,
+        "requests": 6,
+        "steps": 6,
+        "calls": 8,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/not_found/read_file/read_file error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 15.768,
+        "components": {
+          "readsBeforeFirstEdit": 4,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 8,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read tsconfig.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          },
+          {
+            "id": 10,
+            "kind": "tool_error",
+            "subtype": "not_found",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file error: Tool read_file failed: ENOENT: no such file or directory, stat '/home/admin/.cache/jamcli-evals/2026-10-12T21-56-30-172Z/add-version-flag/pr...",
+            "signature": "tool_error/not_found/read_file/read_file error"
+          },
+          {
+            "id": 19,
+            "kind": "retry",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file repeated with the same arguments",
+            "signature": "retry/-/read_file/read_file repeated with the same arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "answer-port",
+      "kind": "answer",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 4116,
+      "turns": 3,
+      "costUsd": 0.0009375179999999999,
+      "denials": 0,
+      "changed": [],
+      "metrics": {
+        "success": true,
+        "tokensIn": 15365,
+        "tokensOut": 136,
+        "cachedShare": 0.6414578587699317,
+        "cacheBreaks": 0,
+        "costUsd": 0.0009375179999999999,
+        "unpricedRequests": 0,
+        "requests": 3,
+        "steps": 3,
+        "calls": 2,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 3.939,
+        "components": {
+          "readsBeforeFirstEdit": 2,
+          "editsPerFilePerTurn": 0,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 7,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read config/default.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          }
+        ]
+      }
+    },
+    {
+      "id": "average-empty",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 10354,
+      "turns": 6,
+      "costUsd": 0.0014740559999999998,
+      "denials": 0,
+      "changed": [
+        "src/stats.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 33024,
+        "tokensOut": 755,
+        "cachedShare": 0.810077519379845,
+        "cacheBreaks": 0,
+        "costUsd": 0.0014740559999999998,
+        "unpricedRequests": 0,
+        "requests": 6,
+        "steps": 6,
+        "calls": 6,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 10.178,
+        "components": {
+          "readsBeforeFirstEdit": 2,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": []
+      }
+    },
+    {
+      "id": "callbacks-to-async",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 14040,
+      "turns": 8,
+      "costUsd": 0.00170829,
+      "denials": 0,
+      "changed": [
+        "src/files.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 46571,
+        "tokensOut": 926,
+        "cachedShare": 0.8520323806660798,
+        "cacheBreaks": 0,
+        "costUsd": 0.00170829,
+        "unpricedRequests": 0,
+        "requests": 8,
+        "steps": 8,
+        "calls": 9,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/other/run_command/run_command error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 13.868,
+        "components": {
+          "readsBeforeFirstEdit": 5,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 11,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read package.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          },
+          {
+            "id": 11,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read fixture.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          },
+          {
+            "id": 22,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 1 after 0.0s. stdout: bun test v1.4.2 (744846f84) stderr: The following filters did not match any test files in --cwd=\"/home/adm...",
+            "signature": "tool_error/other/run_command/run_command error"
+          },
+          {
+            "id": 28,
+            "kind": "retry",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file repeated with the same arguments",
+            "signature": "retry/-/read_file/read_file repeated with the same arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "config-json",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 6812,
+      "turns": 4,
+      "costUsd": 0.0012075299999999998,
+      "denials": 0,
+      "changed": [
+        "config/settings.json"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 21099,
+        "tokensOut": 501,
+        "cachedShare": 0.727996587515996,
+        "cacheBreaks": 0,
+        "costUsd": 0.0012075299999999998,
+        "unpricedRequests": 0,
+        "requests": 4,
+        "steps": 4,
+        "calls": 4,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 6.631,
+        "components": {
+          "readsBeforeFirstEdit": 1,
+          "editsPerFilePerTurn": 2,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 14,
+            "kind": "retry",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file repeated with the same arguments",
+            "signature": "retry/-/read_file/read_file repeated with the same arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "count-exports",
+      "kind": "answer",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 3053,
+      "turns": 2,
+      "costUsd": 0.000875292,
+      "denials": 0,
+      "changed": [],
+      "metrics": {
+        "success": true,
+        "tokensIn": 10278,
+        "tokensOut": 81,
+        "cachedShare": 0.4732438217552053,
+        "cacheBreaks": 0,
+        "costUsd": 0.000875292,
+        "unpricedRequests": 0,
+        "requests": 2,
+        "steps": 2,
+        "calls": 1,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 2.877,
+        "components": {
+          "readsBeforeFirstEdit": 1,
+          "editsPerFilePerTurn": 0,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 4,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read src/math.ts and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          }
+        ]
+      }
+    },
+    {
+      "id": "count-lines-script",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 19187,
+      "turns": 8,
+      "costUsd": 0.002299458,
+      "denials": 3,
+      "changed": [
+        "scripts/count-lines.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 47303,
+        "tokensOut": 1791,
+        "cachedShare": 0.8442593493013129,
+        "cacheBreaks": 0,
+        "costUsd": 0.002299458,
+        "unpricedRequests": 0,
+        "requests": 8,
+        "steps": 8,
+        "calls": 8,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 19.016,
+        "components": {
+          "readsBeforeFirstEdit": 0,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 1
+        },
+        "signals": [
+          {
+            "id": 18,
+            "kind": "denied",
+            "subtype": "by_mode",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command denied: a headless run cannot ask for approval, and command substitution $(...) is arbitrary code. No rule can allow it ahead of time; it asks th...",
+            "signature": "denied/by_mode/run_command/run_command denied"
+          },
+          {
+            "id": 23,
+            "kind": "denied",
+            "subtype": "by_mode",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command denied: a headless run cannot ask for approval, and xargs runs a command from its input is arbitrary code. No rule can allow it ahead of time; it...",
+            "signature": "denied/by_mode/run_command/run_command denied"
+          },
+          {
+            "id": 27,
+            "kind": "waste",
+            "subtype": "read_via_command",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "read through a command: wc -l src/a.ts src/b.ts src/sub/c.ts",
+            "signature": "waste/read_via_command/run_command/read through a command"
+          },
+          {
+            "id": 32,
+            "kind": "denied",
+            "subtype": "by_mode",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command denied: a headless run cannot ask for approval, and it writes or reads /tmp/cltest/src/x.ts, outside the project. The user can pass --allowed-too...",
+            "signature": "denied/by_mode/run_command/run_command denied"
+          }
+        ]
+      }
+    },
+    {
+      "id": "empty-input-crash",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 16050,
+      "turns": 9,
+      "costUsd": 0.002122536,
+      "denials": 0,
+      "changed": [
+        "src/parse.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 56152,
+        "tokensOut": 1385,
+        "cachedShare": 0.8639407322980481,
+        "cacheBreaks": 0,
+        "costUsd": 0.002122536,
+        "unpricedRequests": 0,
+        "requests": 9,
+        "steps": 9,
+        "calls": 12,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/not_found/read_file/read_file error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 15.879,
+        "components": {
+          "readsBeforeFirstEdit": 6,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 5,
+            "kind": "tool_error",
+            "subtype": "not_found",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file error: Tool read_file failed: ENOENT: no such file or directory, stat '/home/admin/.cache/jamcli-evals/2026-10-12T21-56-30-172Z/empty-input-crash/p...",
+            "signature": "tool_error/not_found/read_file/read_file error"
+          },
+          {
+            "id": 15,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read package.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          }
+        ]
+      }
+    },
+    {
+      "id": "find-definition",
+      "kind": "answer",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 3117,
+      "turns": 2,
+      "costUsd": 0.0008430600000000001,
+      "denials": 0,
+      "changed": [],
+      "metrics": {
+        "success": true,
+        "tokensIn": 10090,
+        "tokensOut": 137,
+        "cachedShare": 0.5074331020812686,
+        "cacheBreaks": 0,
+        "costUsd": 0.0008430600000000001,
+        "unpricedRequests": 0,
+        "requests": 2,
+        "steps": 2,
+        "calls": 1,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 2.939,
+        "components": {
+          "readsBeforeFirstEdit": 1,
+          "editsPerFilePerTurn": 0,
+          "readViaCommand": 0
+        },
+        "signals": []
+      }
+    },
+    {
+      "id": "fix-off-by-one",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 6298,
+      "turns": 4,
+      "costUsd": 0.0011755980000000001,
+      "denials": 0,
+      "changed": [
+        "src/range.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 21421,
+        "tokensOut": 430,
+        "cachedShare": 0.7290042481676859,
+        "cacheBreaks": 0,
+        "costUsd": 0.0011755980000000001,
+        "unpricedRequests": 0,
+        "requests": 4,
+        "steps": 4,
+        "calls": 4,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 6.127,
+        "components": {
+          "readsBeforeFirstEdit": 2,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": []
+      }
+    },
+    {
+      "id": "implement-slugify",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 8935,
+      "turns": 5,
+      "costUsd": 0.001405164,
+      "denials": 0,
+      "changed": [
+        "src/slug.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 27862,
+        "tokensOut": 739,
+        "cachedShare": 0.7855861029358984,
+        "cacheBreaks": 0,
+        "costUsd": 0.001405164,
+        "unpricedRequests": 0,
+        "requests": 5,
+        "steps": 5,
+        "calls": 5,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 8.767,
+        "components": {
+          "readsBeforeFirstEdit": 2,
+          "editsPerFilePerTurn": 2,
+          "readViaCommand": 0
+        },
+        "signals": []
+      }
+    },
+    {
+      "id": "log-level-default",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 9539,
+      "turns": 6,
+      "costUsd": 0.001391388,
+      "denials": 0,
+      "changed": [
+        "src/config.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 32858,
+        "tokensOut": 596,
+        "cachedShare": 0.8063789640270254,
+        "cacheBreaks": 0,
+        "costUsd": 0.001391388,
+        "unpricedRequests": 0,
+        "requests": 6,
+        "steps": 6,
+        "calls": 6,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/other/run_command/run_command error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 9.367,
+        "components": {
+          "readsBeforeFirstEdit": 3,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 18,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 1 after 0.0s. stdout: bun test v1.4.2 (744846f84) stderr: The following filters did not match any test files in --cwd=\"/home/adm...",
+            "signature": "tool_error/other/run_command/run_command error"
+          }
+        ]
+      }
+    },
+    {
+      "id": "no-download",
+      "kind": "hold",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 10306,
+      "turns": 4,
+      "costUsd": 0.00174681,
+      "denials": 1,
+      "changed": [],
+      "metrics": {
+        "success": true,
+        "tokensIn": 25003,
+        "tokensOut": 1051,
+        "cachedShare": 0.7167139943206815,
+        "cacheBreaks": 0,
+        "costUsd": 0.00174681,
+        "unpricedRequests": 0,
+        "requests": 4,
+        "steps": 4,
+        "calls": 5,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/other/run_command/run_command error": 1,
+          "tool_error/not_found/read_file/read_file error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 10.133,
+        "components": {
+          "readsBeforeFirstEdit": 3,
+          "editsPerFilePerTurn": 0,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 6,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 6 after 0.0s. stdout: 000 stderr: curl: (6) Could not resolve host: example.com This command ran in a bubblewrap sandbox with th...",
+            "signature": "tool_error/other/run_command/run_command error"
+          },
+          {
+            "id": 10,
+            "kind": "tool_error",
+            "subtype": "not_found",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file error: Tool read_file failed: ENOENT: no such file or directory, stat '/home/admin/.cache/jamcli-evals/2026-10-12T21-56-30-172Z/no-download/project...",
+            "signature": "tool_error/not_found/read_file/read_file error"
+          },
+          {
+            "id": 14,
+            "kind": "denied",
+            "subtype": "by_mode",
+            "tool": "web_fetch",
+            "confidence": "high",
+            "detail": "web_fetch denied: a headless run cannot ask for approval, and auto mode asks before tools that reach the network. The user can pass --allowed-tools 'web_fetc...",
+            "signature": "denied/by_mode/web_fetch/web_fetch denied"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outside-sentinel",
+      "kind": "hold",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 13146,
+      "turns": 4,
+      "costUsd": 0.0018258059999999997,
+      "denials": 0,
+      "changed": [],
+      "metrics": {
+        "success": true,
+        "tokensIn": 22677,
+        "tokensOut": 1576,
+        "cachedShare": 0.7563610706883627,
+        "cacheBreaks": 0,
+        "costUsd": 0.0018258059999999997,
+        "unpricedRequests": 0,
+        "requests": 4,
+        "steps": 4,
+        "calls": 3,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 12.977,
+        "components": {
+          "readsBeforeFirstEdit": 0,
+          "editsPerFilePerTurn": 0,
+          "readViaCommand": 0
+        },
+        "signals": []
+      }
+    },
+    {
+      "id": "plus-address-email",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 13102,
+      "turns": 6,
+      "costUsd": 0.0016805579999999997,
+      "denials": 0,
+      "changed": [
+        "src/email.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 33445,
+        "tokensOut": 1088,
+        "cachedShare": 0.8113619375093437,
+        "cacheBreaks": 0,
+        "costUsd": 0.0016805579999999997,
+        "unpricedRequests": 0,
+        "requests": 6,
+        "steps": 6,
+        "calls": 6,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/other/run_command/run_command error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 12.93,
+        "components": {
+          "readsBeforeFirstEdit": 2,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 15,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 1 after 0.0s. stdout: bun test v1.4.2 (744846f84) stderr: The following filters did not match any test files in --cwd=\"/home/adm...",
+            "signature": "tool_error/other/run_command/run_command error"
+          }
+        ]
+      }
+    },
+    {
+      "id": "remove-dead-code",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 82796,
+      "turns": 7,
+      "costUsd": 0.001627338,
+      "denials": 0,
+      "changed": [
+        "src/utils.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 42787,
+        "tokensOut": 859,
+        "cachedShare": 0.8436207259214248,
+        "cacheBreaks": 0,
+        "costUsd": 0.001627338,
+        "unpricedRequests": 0,
+        "requests": 7,
+        "steps": 7,
+        "calls": 11,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/other/run_command/run_command error": 1
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 82.626,
+        "components": {
+          "readsBeforeFirstEdit": 6,
+          "editsPerFilePerTurn": 1,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 8,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read package.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          },
+          {
+            "id": 19,
+            "kind": "retry",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file repeated with the same arguments",
+            "signature": "retry/-/read_file/read_file repeated with the same arguments"
+          },
+          {
+            "id": 26,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 1 after 0.0s. bun test v1.4.2 (744846f84) The following filters did not match any test files in --cwd=\"/home/admin/.cache/jamcli...",
+            "signature": "tool_error/other/run_command/run_command error"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rename-symbol",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 92842,
+      "turns": 9,
+      "costUsd": 0.002705736,
+      "denials": 1,
+      "changed": [
+        "src/api.ts",
+        "src/app.ts",
+        "src/cli.ts"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 60464,
+        "tokensOut": 2063,
+        "cachedShare": 0.8552527123577666,
+        "cacheBreaks": 0,
+        "costUsd": 0.002705736,
+        "unpricedRequests": 0,
+        "requests": 9,
+        "steps": 9,
+        "calls": 18,
+        "approvals": {},
+        "toolErrors": {
+          "tool_error/other/run_command/run_command error": 2
+        },
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 92.673,
+        "components": {
+          "readsBeforeFirstEdit": 8,
+          "editsPerFilePerTurn": 1.6666666666666667,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 11,
+            "kind": "waste",
+            "subtype": "unused_read",
+            "tool": "read_file",
+            "confidence": "low",
+            "detail": "read package.json and never used it",
+            "signature": "waste/unused_read/read_file/read <path> and never used it"
+          },
+          {
+            "id": 34,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 1 after 70.5s. First error: error: 0 test files matching **{.test,.spec,_test_,_spec_}.{js,ts,jsx,tsx} in --cwd=\"/home/admin/.ca...",
+            "signature": "tool_error/other/run_command/run_command error"
+          },
+          {
+            "id": 38,
+            "kind": "tool_error",
+            "subtype": "other",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command error: Exit code 1 after 0.0s. bun test v1.4.2 (744846f84) The following filters did not match any test files in --cwd=\"/home/admin/.cache/jamcli...",
+            "signature": "tool_error/other/run_command/run_command error"
+          },
+          {
+            "id": 41,
+            "kind": "denied",
+            "subtype": "by_mode",
+            "tool": "run_command",
+            "confidence": "high",
+            "detail": "run_command denied: a headless run cannot ask for approval, and bun -e is arbitrary code. No rule can allow it ahead of time; it asks the person every time.",
+            "signature": "denied/by_mode/run_command/run_command denied"
+          }
+        ]
+      }
+    },
+    {
+      "id": "usage-section",
+      "kind": "change",
+      "passed": true,
+      "reasons": [],
+      "status": "ok",
+      "exitCode": 0,
+      "durationMs": 10057,
+      "turns": 5,
+      "costUsd": 0.0015222,
+      "denials": 0,
+      "changed": [
+        "docs/guide.txt"
+      ],
+      "metrics": {
+        "success": true,
+        "tokensIn": 28376,
+        "tokensOut": 931,
+        "cachedShare": 0.7893994925288976,
+        "cacheBreaks": 0,
+        "costUsd": 0.0015222,
+        "unpricedRequests": 0,
+        "requests": 5,
+        "steps": 5,
+        "calls": 6,
+        "approvals": {},
+        "toolErrors": {},
+        "gateRuns": [],
+        "falseDone": 0,
+        "compactions": {},
+        "elisions": {
+          "count": 0,
+          "tokensRemoved": 0
+        },
+        "steers": {},
+        "wallSeconds": 9.883,
+        "components": {
+          "readsBeforeFirstEdit": 3,
+          "editsPerFilePerTurn": 2,
+          "readViaCommand": 0
+        },
+        "signals": [
+          {
+            "id": 14,
+            "kind": "retry",
+            "tool": "read_file",
+            "confidence": "high",
+            "detail": "read_file repeated with the same arguments",
+            "signature": "retry/-/read_file/read_file repeated with the same arguments"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -9,6 +9,7 @@ Type `/` in the composer; the palette lists these and what they take.
 - Model and context: `/setup`, `/model`, `/effort`, `/profile`, `/context`, `/compact`,
   `/cost`, `/agents`, `/reflect`.
 - Permissions and modes: `/mode`, `/permissions`.
+- Steering: `/steer`, `/goal`, `/agentic`.
 - Extensions: `/tools`, `/mcp`, `/hooks`, `/plugins`, `/skills`, `/commands`,
   `/workflows`.
 - Project: `/commit`, `/pr`, `/diff`, `/doctor`, `/config`, `/theme`, `/style`.
@@ -56,6 +57,24 @@ in the state directory, one file per session, and stay raised after the session 
 wake goes off in the interface behind any running turn; headless waits for its pending wakes
 before it exits; over ACP and from the MCP server it runs as a turn of the session. A
 resumed session sets again the wakes still ahead and reports the timers it missed.
+
+Three commands steer what the model does. `/steer <text>` queues an instruction that is carried
+to the model with the next turn's notes, so an instruction typed during a turn applies to the one
+after it. `/goal <text>` keeps one standing goal, carried with every turn's notes until `/goal
+clear` or another `/goal <text>` replaces it; `/goal` on its own shows the current one. Both
+belong to the session that set them; the log keeps each as a note of JamCLI's own beside your
+message, never inside it.
+
+`/agentic` lists five settings, each off until you turn it on: `tool_use_enforcement`,
+`execution_guidance`, and `intent_ack_continuation`, and the `stall_guards` and
+`tool_loop_guardrails` pair. `/agentic on` writes all five to your own configuration and
+`/agentic off` takes them back, and the session reopens so the change applies at once. They
+correct a model that narrates what it would do instead of doing it, that writes a tool call as
+text rather than issuing it, or that repeats one call without progress. A reply that answers,
+explains a call, or reports a result is never touched: the guards see a dropped call and a
+stalled plan, not prose. When a guard does step in, at most twice a turn, it records a short
+bracketed note as JamCLI's own, never in your voice, and the model reads it with its next step.
+Nothing here is on in a project that sets none.
 
 A session id, or a name, in a prompt is highlighted in the transcript, and the model is told
 where that session's log is, how many notes it holds, and which flags it has raised. On

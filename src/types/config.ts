@@ -43,6 +43,16 @@ export interface AgentLoopConfig {
   command_timeout_ms?: number;
   /** Output tokens to ask for per reply. The model's own limit caps it. Defaults to 32,000. */
   max_output_tokens?: number;
+  /** Prepend prompt block requiring tool use instead of narration. auto enables for prone models. */
+  tool_use_enforcement?: 'off' | 'on' | 'auto';
+  /** System prompt guidance for tool persistence, arithmetic, and verification. */
+  execution_guidance?: 'off' | 'on' | 'auto';
+  /** Corrective nudge when model narrates intent without calling tools. */
+  intent_ack_continuation?: 'off' | 'on' | 'auto';
+  /** Stall guards for trailing narration, dropped calls, and identical call replay. */
+  stall_guards?: boolean;
+  /** Guardrails against runaway or repetitive tool loops. */
+  tool_loop_guardrails?: boolean;
 }
 
 /** Sized for multi-step work: reading, editing, and testing within one turn. */
@@ -51,6 +61,9 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   max_tool_calls_per_turn: 0,
   tool_result_max_chars: 30_000,
   command_timeout_ms: 120_000,
+  tool_use_enforcement: 'off',
+  execution_guidance: 'off',
+  intent_ack_continuation: 'off',
 };
 
 /** The configuration a session reads: every layer merged over the defaults, in the shape the schema validates. */
