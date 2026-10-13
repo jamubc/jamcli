@@ -54,8 +54,9 @@ silent about the new commands, and that is where this unit adds them.
   which of the five settings it could not write instead of claiming the stack is enabled.
 - **The three commands are documented,** in `docs/commands-and-skills.md`, with what each one
   does, what the guards do and do not touch, and that the settings are off by default.
-- **`jamcli auth` reads a provider alone as `set`** (`be2cb25`), and a bare `set`, `get`,
-  `remove`, or `login` names the providers to choose from instead of printing the whole usage.
+- **`jamcli auth` reads a provider alone as `set`** (`be2cb25`), and a bare `set`, `get`, or
+  `remove` names the providers to choose from instead of printing the whole usage, while a bare
+  `login` says that login works for openrouter only and names the command.
   The owner moved this fix into the unit on 2026-10-12.
 - **`/setup` gives the advice that fits** (`3b052a2`): with a hosted key set and Ollama not
   answering, it says to start Ollama for local models rather than asking for a key, and it says
