@@ -186,9 +186,11 @@ test('a background command is listed, told to the model when it ends, outlives a
     // The model hears of the end with its next prompt, from the session that owns the job.
     server.enqueue({ text: 'noted' });
     await runtime.run('and?', () => {});
-    const prompt = server.completions().at(-1)!.body.messages.findLast((message: any) => message.role === 'user').content;
-    expect(prompt).toContain(`and?\n\n[Work ended since your last turn:\n${job.id} (sleep 30) ended by signal SIGTERM after `);
-    expect(prompt).toContain('Read its output with command_output.');
+    const sent = server.completions().at(-1)!.body.messages;
+    const note = sent[sent.findIndex((message: any) => message.content === 'and?') + 1];
+    expect(note.role).toBe('user');
+    expect(note.content).toStartWith(`[Work ended since your last turn:\n${job.id} (sleep 30) ended by signal SIGTERM after `);
+    expect(note.content).toContain('Read its output with command_output.');
     // Cancelling a turn leaves the job it started running.
     server.enqueue(background('b2'), { text: 'again', delayMs: 5_000 });
     const turn = runtime.run('again', () => {});

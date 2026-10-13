@@ -354,12 +354,14 @@ export class CoreAgent implements Agent {
     }
     // Work that ended between turns is news the model reads with the prompt.
     const ended = this.options.news?.() ?? [];
-    if (ended.length) prompt = [prompt, `[Work ended since your last turn:\n${ended.join('\n')}]`].filter(Boolean).join('\n\n');
     const heard = this.options.heard?.() ?? [];
-    if (heard.length) prompt = [prompt, `[The person watching says:\n${heard.join('\n')}]`].filter(Boolean).join('\n\n');
-    const notes = this.options.turnNotes?.() ?? [];
-    if (notes.length) prompt = [prompt, ...notes].filter(Boolean).join('\n\n');
+    const notes = [
+      ...(ended.length ? [`[Work ended since your last turn:\n${ended.join('\n')}]`] : []),
+      ...(heard.length ? [`[The person watching says:\n${heard.join('\n')}]`] : []),
+      ...(this.options.turnNotes?.() ?? []),
+    ];
     if (prompt) record(userMessage(prompt));
+    for (const note of notes) record(harnessNote(note));
     await emitHookEvent(hooks, 'turn_start', { session: working, prompt, messages: working.messages }, emit);
     const tools = dispatcher && this.options.toolDefinitions?.length ? this.options.toolDefinitions : undefined;
     const cap = this.maxToolCallsPerTurn > 0 ? this.maxToolCallsPerTurn : undefined;

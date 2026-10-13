@@ -100,7 +100,7 @@ test('a read repeated in one turn reads the file again, so an edit the person ma
   await runtime.close();
 });
 
-test('a model or mode switch is told to the model with its next prompt, and the prompt names the model', async () => {
+test('a model or mode switch, a goal, and a steer reach the model as notes of their own after the prompt, and the prompt names the model', async () => {
   configure({ api_registry: { ollama: { endpoint: server.ollamaBaseUrl }, openai: { base_url: server.openaiBaseUrl, key_env_var: 'JAMCLI_TEST_OPENAI_KEY' } }, models: { 'ollama:fake-model': { context_window: 64_000 } } });
   process.env.JAMCLI_TEST_OPENAI_KEY = 'sk-test-0123456789abcdef';
   const runtime = await start();
@@ -110,13 +110,20 @@ test('a model or mode switch is told to the model with its next prompt, and the 
   expect(first.messages.find((message: any) => message.role === 'system').content).toContain('- Model: ollama:fake-model');
   runtime.setModel('openai:gpt-fake');
   runtime.setPermissionMode('accept-edits');
+  runtime.setGoal('keep the build green');
+  runtime.steer('run the tests first');
   server.enqueue({ text: 'second', forModel: 'gpt-fake' });
   const { events } = await run(runtime, 'again');
-  const prompt = events.find((event) => event.type === 'message' && event.message.role === 'user') as Extract<AgentEvent, { type: 'message' }>;
-  expect(prompt.message.content).toBe(
-    'again\n\n[Model changed: ollama:fake-model to openai:gpt-fake. Messages above were written by ollama:fake-model.]\n\n[Mode changed: default to accept-edits. Earlier calls were decided under default.]'
-  );
+  const notes = [
+    '[Standing goal: keep the build green]',
+    '[Model changed: ollama:fake-model to openai:gpt-fake. Messages above were written by ollama:fake-model.]',
+    '[Mode changed: default to accept-edits. Earlier calls were decided under default.]',
+    '[Steering instruction: run the tests first]',
+  ];
+  const recorded = events.flatMap((event) => (event.type === 'message' ? [event.message] : []));
+  expect(recorded.slice(0, 5).map((message) => [message.role, message.content])).toEqual([['user', 'again'], ...notes.map((note) => ['system', note])]);
   const second = server.completions().at(-1)!.body;
+  expect(second.messages.slice(-5).map((message: any) => [message.role, message.content])).toEqual([['user', 'again'], ...notes.map((note) => ['user', note])]);
   const system = second.messages.find((message: any) => message.role === 'system').content;
   expect(system).toContain('- Model: openai:gpt-fake');
   await runtime.close();

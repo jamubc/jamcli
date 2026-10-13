@@ -62,8 +62,8 @@ Three commands steer what the model does. `/steer <text>` queues an instruction 
 to the model with the next turn's notes, so an instruction typed during a turn applies to the one
 after it. `/goal <text>` keeps one standing goal, carried with every turn's notes until `/goal
 clear` or another `/goal <text>` replaces it; `/goal` on its own shows the current one. Both
-belong to the session that set them; the log keeps them only as part of the prompt they were
-carried with.
+belong to the session that set them; the log keeps each as a note of JamCLI's own beside your
+message, never inside it.
 
 `/agentic` lists five settings, each off until you turn it on: `tool_use_enforcement`,
 `execution_guidance`, and `intent_ack_continuation`, and the `stall_guards` and

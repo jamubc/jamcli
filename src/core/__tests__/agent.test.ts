@@ -263,7 +263,8 @@ test('what ended beside the turn reaches the model with the next message it read
   const agent = new CoreAgent({ provider, model: 'm', dispatcher: fakeDispatcher(), toolDefinitions: toolDefs('read_a', 'read_b'), news: () => queue.shift() ?? [] });
   const result = await agent.run(createSession(project), 'hi', () => {});
   const messages = result.session!.messages;
-  expect(messages[0]).toMatchObject({ role: 'user', content: `hi\n\n[Work ended since your last turn:\n${between}]` });
+  expect(messages[0]).toMatchObject({ role: 'user', content: 'hi' });
+  expect(messages[1]).toMatchObject({ role: 'system', content: `[Work ended since your last turn:\n${between}]` });
   const tools = messages.filter((message) => message.role === 'tool');
   expect(tools[0].content).toBe('read_a output');
   expect(tools[1].content).toBe(`read_b output\n\n[Work ended during this step:\n${during}]`);

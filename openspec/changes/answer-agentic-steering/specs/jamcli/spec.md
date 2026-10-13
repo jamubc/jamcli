@@ -64,12 +64,14 @@ default to off, so a project that sets none behaves as it did before this requir
 - **WHEN** the person runs `/goal <text>`
 - **THEN** the text is carried to the model with the next turn's notes and again after it, until
   `/goal clear` or another `/goal <text>` replaces it
+- **AND** each turn records it as a note of its own after the person's message, not as part of it
 
 #### Scenario: A steering instruction reaches the next turn
 
 - **WHEN** the person runs `/steer <text>` during a turn
 - **THEN** the text is carried to the model with the next turn's notes, and the person is told it
   will apply to the next turn rather than the running one
+- **AND** that turn records it as a note of its own after the person's message, not as part of it
 
 ## MODIFIED Requirements
 
