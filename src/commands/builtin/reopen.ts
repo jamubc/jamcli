@@ -4,7 +4,7 @@ import type { CommandContext, SessionChoice } from '../types.js';
 
 /** This session, to open again; one with no turns has no file yet, so a new one stands in. */
 export const thisSession = (ctx: CommandContext): SessionChoice =>
-  fs.existsSync(sessionFileFor(ctx.projectRoot, ctx.runtime.sessionId)) ? { sessionId: ctx.runtime.sessionId } : {};
+  fs.existsSync(sessionFileFor(ctx.projectRoot, ctx.runtime.sessionId)) ? { sessionId: ctx.runtime.sessionId, reopen: true } : { reopen: true };
 
 /**
  * Reopen this session, so a change to the files it was built from applies. A command that

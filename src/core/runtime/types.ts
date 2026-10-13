@@ -294,6 +294,7 @@ export interface Runtime {
   lowerFlag(flag: string): void;
   /** Queue steering instructions for the model to execute tools and keep going. */
   steer(message: string): void;
+  steering(): string[];
   /** Set or clear a standing goal that persists across turns. */
   setGoal(goal?: string): void;
   /** Get the current standing goal if set. */

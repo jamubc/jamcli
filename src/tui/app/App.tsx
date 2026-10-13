@@ -684,6 +684,10 @@ export function App(props: AppProps) {
         return error?.message ?? String(error);
       }
       if (choice.profile) profile.current = choice.profile;
+      if (choice.reopen) {
+        next.setGoal(runtime.getGoal());
+        for (const message of runtime.steering()) next.steer(message);
+      }
       setRuntime(next);
       dispatch({ type: 'load', messages: next.session.messages, notes: next.notes() });
       await runtime.close().catch(() => undefined);

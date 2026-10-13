@@ -483,7 +483,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       ...(options.parent ? {} : { news: () => workTable.drainEnded().map(workNews) }),
       ...(options.heard ? { heard: options.heard } : {}),
       turnNotes: () => {
-        const notes = turnNotes.splice(0);
+        const notes = [...turnNotes.splice(0), ...steering.splice(0).map((message) => `[Steering instruction: ${message}]`)];
         if (standingGoal) notes.unshift(`[Standing goal: ${standingGoal}]`);
         return notes;
       },
@@ -494,6 +494,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let standingGoal: string | undefined;
   /** What the harness must tell the model with its next prompt, each in bracket form. */
   const turnNotes: string[] = [];
+  const steering: string[] = [];
   let agent = buildAgent();
   /** The pinned state a summary carries, with one line per gate from the ledger. */
   async function pinnedWithGates(): Promise<string | undefined> {
@@ -962,8 +963,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     raiseFlag: (flag) => extras.api.raiseFlag(flag),
     lowerFlag: (flag) => extras.api.lowerFlag(flag),
     steer: (message) => {
-      turnNotes.push(`[Steering instruction: ${message}]`);
+      steering.push(message);
     },
+    steering: () => [...steering],
     setGoal: (goal) => {
       standingGoal = goal?.trim() ? goal.trim() : undefined;
     },
