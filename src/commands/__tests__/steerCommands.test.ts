@@ -35,7 +35,7 @@ test('/agentic lists each setting, off by default', async () => {
   const { host, entries } = await open();
   await host.run('/agentic');
   const text = said(entries);
-  expect(text).toContain('Steering and guards off, see:');
+  expect(text).toContain('Steering and guards:');
   expect(text).toContain('tool_use_enforcement: off (default)');
   expect(text).toContain('stall_guards: off (default)');
   expect(text).toContain('neither writes to the project');
@@ -60,6 +60,7 @@ test('/agentic on saves into the user configuration and writes nothing to the pr
   await host.run('/agentic');
   expect(said(entries)).toContain('stall_guards: true');
   expect(said(entries)).not.toContain('stall_guards: off (default)');
+  expect(said(entries)).not.toContain('guards off');
 });
 
 test('/agentic off returns every setting to off', async () => {

@@ -93,7 +93,7 @@ export const agentic: SlashCommand = {
     };
     ctx.show(
       [
-        'Steering and guards off, see:',
+        'Steering and guards:',
         ...SETTINGS.map((setting) => shown(setting.key, setting.does)),
         '',
         `Saved in ${userConfigFile()}. This session is in ${ctx.runtime.permissionMode} mode.`,
