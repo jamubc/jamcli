@@ -147,12 +147,15 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
   Proof: `steerCommands.test.ts`, "/agentic on saves into the user configuration and writes
   nothing to the project".
 
-- [ ] 5.2 Check the return code of each of the five writes and name the ones that failed,
+- [x] 5.2 Check the return code of each of the five writes and name the ones that failed,
   instead of reporting the stack enabled on the first one's code alone. Verify with a test that
   fails without it: a store that refuses one key leaves the others written and the notice
   naming the key that was not.
-  Left: each code is checked and failures named, but "/agentic names a setting it could not save"
-  makes every write fail; no test refuses one key and checks the others were written.
+  Proof: `steerCommands.test.ts`, "/agentic names the one setting the store refused, and saves
+  the other four", refuses `agent_loop.execution_guidance` and lets the other writes reach the
+  real store. It fails with the check undone to judge by the first write's code alone, and
+  passes here. "/agentic names a setting it could not save and keeps the rest" stays: it is the
+  only test of a refusal from the real store, with all five named.
 
 - [x] 5.3 Drop the `/mode auto` tip from `/agentic on`. Verify with a test that fails without
   it: running `/agentic on` in default mode says nothing about permission modes.
