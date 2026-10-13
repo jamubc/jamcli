@@ -176,8 +176,14 @@ test that proves each one; each of those tests was run against `fe89b99` and fai
   Proof: `bun run config-schema` on this checkpoint leaves `docs/config.schema.json` unchanged;
   the schema carries no defaults.
 
-- [ ] 6.3 The four gates: `bun install`, `npx tsc --noEmit` at 0, `bun test` passing and under
+- [x] 6.3 The four gates: `bun install`, `npx tsc --noEmit` at 0, `bun test` passing and under
   its time budget, `bun run build`, and `openspec validate answer-agentic-steering --strict`.
+  Proof: the operator's closing run on `c1bd25c` with a clean tree, in a quiet window (2026-10-13).
+  `bun install --frozen-lockfile` made no changes; `npx tsc --noEmit` exited 0 with 0 errors;
+  `bun test` passed 1,344, skipped 1, with 2 todo and 0 failing, 1,347 tests across 201 files in
+  146.12 s at a load average of 2.11 before and 2.78 after; `bun run build` built `dist/index.js`
+  and 30 chunks; `bun scripts/check-rules.ts master..HEAD` held; and the change validated under
+  `--strict`. The `bun test` output is in `/home/crew/gates-close-c1bd25c.log`.
 
 - [x] 6.4 Drive the built JamCLI through `jamcli mcp serve`'s `terminal_*` in a fixture project
   with its own `JAMCLI_STATE_DIR` and a copied `JAMCLI_CONFIG_DIR`: `/agentic` lists the stack,
