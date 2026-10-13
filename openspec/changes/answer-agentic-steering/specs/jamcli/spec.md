@@ -28,7 +28,7 @@ default to off, so a project that sets none behaves as it did before this requir
 - **WHEN** steering is on, the model writes a tool call as markup in its reply instead of
   calling the tool, and the reply holds no other answer
 - **THEN** the harness records one note telling it to issue the call, and carries on within the
-  same turn, at most `agent_loop.max_nudges_per_turn` times per turn
+  same turn, with at most two nudges per turn, counted across both guards
 
 #### Scenario: An identical call loop stops instead of running forever
 
@@ -42,6 +42,9 @@ default to off, so a project that sets none behaves as it did before this requir
 - **WHEN** a steering note is recorded
 - **THEN** it is recorded as the harness's note at its place in the turn, in the bracket form
   the turn's other notes use, and not as a message in the person's voice
+- **AND** the model reads it at its next step as a message in the conversation, not as part of
+  the system prompt
+- **AND** a model reply containing a note's words is recorded as the model's reply, not as a note
 
 #### Scenario: Turn the stack on, in the person's own configuration
 
