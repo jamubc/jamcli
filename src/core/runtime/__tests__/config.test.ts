@@ -6,6 +6,7 @@ import { createRuntime } from '../index.js';
 import { startFakeProvider, type FakeProviderServer } from '../../../testing/fakeProvider.js';
 import type { AgentEvent } from '../../types.js';
 import { fileStore, forgetStoredKeys } from '../../config/credentials.js';
+import { EXECUTION_GUIDANCE_PROMPT, TOOL_USE_ENFORCEMENT_PROMPT } from '../prompt.js';
 
 let server: FakeProviderServer;
 let root: string;
@@ -73,6 +74,18 @@ test("a deny rule in the user's configuration holds in every project, and bad va
   expect(results).toHaveLength(1);
   expect((results[0] as Extract<AgentEvent, { type: 'tool_result' }>).result.status).toBe('denied');
   expect(fs.existsSync(path.join(root, 'x.txt'))).toBe(false);
+});
+
+test('an agent_loop that sets one key leaves every other key at its default', async () => {
+  userConfig({ api_registry: { ollama: { endpoint: server.ollamaBaseUrl } }, model: 'ollama:qwen3', agent_loop: { max_output_tokens: 1_000 } });
+  const runtime = await start({ allowTools: ['read_file'] });
+  server.enqueue({ text: 'ok' });
+  await runtime.run('hi');
+  const body = server.completions().at(-1)!.body;
+  expect(body.options.num_predict).toBe(1_000);
+  expect(body.messages[0].role).toBe('system');
+  expect(body.messages[0].content).not.toContain(TOOL_USE_ENFORCEMENT_PROMPT);
+  expect(body.messages[0].content).not.toContain(EXECUTION_GUIDANCE_PROMPT);
 });
 
 test('a key stored with jamcli auth serves its provider, and never reaches the model', async () => {

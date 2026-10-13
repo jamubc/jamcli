@@ -168,6 +168,16 @@ test('a read, search, edit, and test cycle finishes under the default limits (F9
   expect(DEFAULT_AGENT_LOOP_CONFIG).toMatchObject({ max_steps: 50, max_tool_calls_per_turn: 0, tool_result_max_chars: 30_000 });
 });
 
+test('an agent reads the complete loop it is given, and a partial loop is refused by the type', async () => {
+  // @ts-expect-error
+  new CoreAgent({ loop: { max_steps: 1 } });
+  const provider = createScriptedProvider([{ toolCalls: [{ name: 'read_a', arguments: {} }] }, { text: 'never asked' }]);
+  const agent = new CoreAgent({ provider, dispatcher: fakeDispatcher(), toolDefinitions: toolDefs('read_a'), model: 'm', loop: { ...DEFAULT_AGENT_LOOP_CONFIG, max_steps: 1 } });
+  const result = await agent.run(createSession(project), 'go', () => {});
+  expect(result.status).toBe('limit');
+  expect(provider.calls).toHaveLength(1);
+});
+
 test('consecutive read-only calls run concurrently', async () => {
   const provider = createScriptedProvider([
     { toolCalls: [{ name: 'read_a', arguments: {} }, { name: 'read_b', arguments: {} }] },
